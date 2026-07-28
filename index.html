@@ -1,0 +1,1772 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="HD Graf Cehennemi — spoiler kontrollü, kaynak gösteren ve LLM destekli dizi bilgi grafı." />
+  <meta name="theme-color" content="#090d14" />
+  <meta property="og:title" content="HD Graf Cehennemi" />
+  <meta property="og:description" content="İzlediğin yere kadar. Kaynağıyla. Graf üzerinde." />
+  <meta property="og:type" content="website" />
+  <title>HD Graf Cehennemi</title>
+
+  <style>
+    :root {
+      --bg: #070a0f;
+      --surface: #0e131d;
+      --surface-2: #141b28;
+      --surface-3: #1a2332;
+      --text: #f6f7fb;
+      --muted: #9ba7b8;
+      --line: rgba(255, 255, 255, 0.10);
+      --line-strong: rgba(255, 255, 255, 0.18);
+      --violet: #8b5cf6;
+      --cyan: #22d3ee;
+      --green: #34d399;
+      --rose: #fb7185;
+      --amber: #fbbf24;
+      --max: 1180px;
+      --radius: 24px;
+      --shadow: 0 28px 90px rgba(0,0,0,.38);
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--bg);
+    }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 18% -10%, rgba(139, 92, 246, .20), transparent 32rem),
+        radial-gradient(circle at 92% 8%, rgba(34, 211, 238, .12), transparent 28rem),
+        var(--bg);
+      line-height: 1.55;
+      overflow-x: hidden;
+    }
+
+    ::selection {
+      background: rgba(34, 211, 238, .28);
+      color: white;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button, input { font: inherit; }
+
+    .container {
+      width: min(calc(100% - 36px), var(--max));
+      margin-inline: auto;
+    }
+
+    .nav-wrap {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      border-bottom: 1px solid transparent;
+      background: rgba(7, 10, 15, .72);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      transition: border-color .2s ease;
+    }
+
+    .nav-wrap.scrolled { border-color: var(--line); }
+
+    nav {
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      letter-spacing: -.02em;
+    }
+
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      background:
+        linear-gradient(145deg, rgba(139,92,246,.34), rgba(34,211,238,.14)),
+        var(--surface-2);
+      border: 1px solid rgba(139,92,246,.45);
+      box-shadow: 0 10px 34px rgba(139,92,246,.18);
+    }
+
+    .brand-mark svg { width: 24px; height: 24px; }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    .nav-links a:hover { color: white; }
+
+    .nav-cta,
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      min-height: 44px;
+      padding: 0 17px;
+      border-radius: 14px;
+      border: 1px solid var(--line-strong);
+      background: rgba(255,255,255,.04);
+      color: white;
+      font-weight: 750;
+      cursor: pointer;
+      transition: transform .18s ease, border-color .18s ease, background .18s ease;
+    }
+
+    .button:hover, .nav-cta:hover {
+      transform: translateY(-2px);
+      border-color: rgba(34,211,238,.55);
+      background: rgba(34,211,238,.08);
+    }
+
+    .button.primary {
+      border-color: rgba(139,92,246,.65);
+      background: linear-gradient(135deg, rgba(139,92,246,.95), rgba(99,102,241,.88));
+      box-shadow: 0 16px 44px rgba(139,92,246,.24);
+    }
+
+    .button.primary:hover {
+      border-color: rgba(255,255,255,.46);
+      background: linear-gradient(135deg, #9468f8, #6b70f4);
+    }
+
+    .button svg, .nav-cta svg { width: 18px; height: 18px; }
+
+    .hero {
+      min-height: calc(100vh - 72px);
+      display: grid;
+      grid-template-columns: 1.02fr .98fr;
+      align-items: center;
+      gap: 54px;
+      padding-block: 84px 72px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      color: #d7dffc;
+      background: rgba(139,92,246,.10);
+      border: 1px solid rgba(139,92,246,.26);
+      font-size: 13px;
+      font-weight: 750;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 5px rgba(52,211,153,.12);
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 780px;
+      font-size: clamp(50px, 7vw, 92px);
+      line-height: .98;
+      letter-spacing: -.065em;
+    }
+
+    .gradient-text {
+      background: linear-gradient(90deg, #c4b5fd 0%, #67e8f9 58%, #a7f3d0 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .hero-copy > p {
+      max-width: 680px;
+      margin: 26px 0 0;
+      color: var(--muted);
+      font-size: clamp(18px, 2vw, 22px);
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 32px;
+    }
+
+    .hero-note {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-top: 28px;
+      color: #c8d1de;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .hero-note span {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .hero-note i {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--cyan);
+      box-shadow: 0 0 0 5px rgba(34,211,238,.08);
+    }
+
+    .app-shell {
+      position: relative;
+      overflow: hidden;
+      min-height: 590px;
+      border-radius: 30px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: #0a0f18;
+      box-shadow: var(--shadow);
+      isolation: isolate;
+    }
+
+    .app-shell::before {
+      content: "";
+      position: absolute;
+      inset: -40% -35% auto auto;
+      width: 360px;
+      height: 360px;
+      border-radius: 50%;
+      background: rgba(139,92,246,.20);
+      filter: blur(80px);
+      z-index: -1;
+    }
+
+    .window-bar {
+      height: 50px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #0b111b;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .window-dots { display: flex; gap: 7px; }
+    .window-dots span {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #3c4656;
+    }
+    .window-dots span:first-child { background: var(--rose); }
+    .window-dots span:nth-child(2) { background: var(--amber); }
+    .window-dots span:nth-child(3) { background: var(--green); }
+
+    .window-title {
+      color: #b7c0cc;
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .05em;
+    }
+
+    .demo-toolbar {
+      min-height: 66px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(14,19,29,.92);
+    }
+
+    .series-select {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 750;
+    }
+
+    .series-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 11px;
+      display: grid;
+      place-items: center;
+      background: rgba(251,113,133,.12);
+      color: #fecdd3;
+      border: 1px solid rgba(251,113,133,.25);
+    }
+
+    .episode-picker {
+      display: flex;
+      gap: 6px;
+      padding: 4px;
+      border-radius: 12px;
+      background: #080c13;
+      border: 1px solid var(--line);
+    }
+
+    .episode-button {
+      border: 0;
+      border-radius: 9px;
+      padding: 7px 10px;
+      color: #8e9aab;
+      background: transparent;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .episode-button:hover { color: white; }
+    .episode-button.active {
+      color: white;
+      background: rgba(139,92,246,.30);
+      box-shadow: inset 0 0 0 1px rgba(139,92,246,.42);
+    }
+
+    .app-body {
+      min-height: 472px;
+      display: grid;
+      grid-template-columns: 1fr 210px;
+    }
+
+    .graph-stage {
+      position: relative;
+      min-height: 472px;
+      overflow: hidden;
+      background:
+        linear-gradient(rgba(255,255,255,.026) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.026) 1px, transparent 1px),
+        radial-gradient(circle at 50% 42%, rgba(34,211,238,.08), transparent 36%);
+      background-size: 28px 28px, 28px 28px, auto;
+    }
+
+    .graph-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .edge {
+      stroke: rgba(118, 139, 167, .55);
+      stroke-width: 1.5;
+      transition: opacity .35s ease;
+    }
+
+    .edge.faded { opacity: .10; }
+
+    .edge-label {
+      fill: #8492a7;
+      font-size: 8px;
+      font-weight: 750;
+      letter-spacing: .03em;
+      paint-order: stroke;
+      stroke: #0a0f18;
+      stroke-width: 4px;
+    }
+
+    .node-group {
+      cursor: pointer;
+      transition: opacity .35s ease;
+    }
+
+    .node-group.faded { opacity: 0; pointer-events: none; }
+    .node-group:hover .node-circle { stroke-width: 3; filter: brightness(1.15); }
+
+    .node-circle {
+      fill: #131c29;
+      stroke: #22d3ee;
+      stroke-width: 2;
+      transition: .2s ease;
+      filter: drop-shadow(0 10px 16px rgba(0,0,0,.30));
+    }
+
+    .node-circle.secondary { stroke: #8b5cf6; }
+    .node-circle.event { stroke: #34d399; fill: #10241e; }
+    .node-circle.location { stroke: #fbbf24; fill: #251d0f; }
+
+    .node-text {
+      fill: white;
+      font-size: 9px;
+      font-weight: 800;
+      text-anchor: middle;
+      pointer-events: none;
+    }
+
+    .node-type {
+      fill: #8694a7;
+      font-size: 6px;
+      font-weight: 700;
+      text-anchor: middle;
+      pointer-events: none;
+    }
+
+    .graph-hint {
+      position: absolute;
+      left: 14px;
+      bottom: 14px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      color: #8f9bad;
+      background: rgba(7,10,15,.78);
+      border: 1px solid var(--line);
+      font-size: 10px;
+    }
+
+    .detail-panel {
+      padding: 18px;
+      background: #0c121c;
+      border-left: 1px solid var(--line);
+    }
+
+    .detail-kicker {
+      color: var(--cyan);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+    }
+
+    .detail-panel h3 {
+      margin: 7px 0 4px;
+      font-size: 18px;
+      letter-spacing: -.03em;
+    }
+
+    .detail-subtitle {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .detail-block {
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+    }
+
+    .detail-block strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #8f9bad;
+    }
+
+    .claim-row {
+      margin-top: 8px;
+      padding: 10px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.035);
+      border: 1px solid rgba(255,255,255,.06);
+      font-size: 10px;
+      color: #cbd4e1;
+    }
+
+    .source-link {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-top: 9px;
+      color: #9fe7f3;
+      font-size: 10px;
+    }
+
+    .source-link span:first-child {
+      flex: 0 0 auto;
+      width: 18px;
+      height: 18px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      background: rgba(34,211,238,.10);
+      border: 1px solid rgba(34,211,238,.18);
+    }
+
+    .detail-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+      padding: 5px 8px;
+      border-radius: 999px;
+      color: #b9f6d8;
+      background: rgba(52,211,153,.10);
+      border: 1px solid rgba(52,211,153,.22);
+      font-size: 9px;
+      font-weight: 800;
+    }
+
+    section {
+      padding-block: 108px;
+    }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: .8fr 1.2fr;
+      align-items: end;
+      gap: 40px;
+      margin-bottom: 46px;
+    }
+
+    .section-label {
+      color: var(--cyan);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: clamp(38px, 5vw, 64px);
+      line-height: 1.02;
+      letter-spacing: -.05em;
+    }
+
+    .section-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 19px;
+    }
+
+    .problem-grid,
+    .feature-grid,
+    .tech-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 18px;
+    }
+
+    .card {
+      position: relative;
+      overflow: hidden;
+      min-height: 220px;
+      padding: 26px;
+      border-radius: var(--radius);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.016)),
+        var(--surface);
+      border: 1px solid var(--line);
+    }
+
+    .card::after {
+      content: "";
+      position: absolute;
+      width: 120px;
+      height: 120px;
+      right: -55px;
+      top: -55px;
+      border-radius: 50%;
+      background: rgba(139,92,246,.10);
+      filter: blur(12px);
+    }
+
+    .card-icon {
+      width: 45px;
+      height: 45px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 38px;
+      color: #d8ccff;
+      background: rgba(139,92,246,.10);
+      border: 1px solid rgba(139,92,246,.24);
+    }
+
+    .card-icon.cyan {
+      color: #b9f4fc;
+      background: rgba(34,211,238,.09);
+      border-color: rgba(34,211,238,.23);
+    }
+
+    .card-icon.green {
+      color: #c2f8dd;
+      background: rgba(52,211,153,.09);
+      border-color: rgba(52,211,153,.22);
+    }
+
+    .card-icon svg { width: 22px; height: 22px; }
+
+    .card h3 {
+      margin: 0 0 9px;
+      font-size: 20px;
+      letter-spacing: -.03em;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .architecture-shell {
+      padding: 30px;
+      border-radius: 30px;
+      border: 1px solid var(--line);
+      background:
+        radial-gradient(circle at 20% 10%, rgba(139,92,246,.10), transparent 25%),
+        radial-gradient(circle at 88% 90%, rgba(34,211,238,.08), transparent 24%),
+        var(--surface);
+    }
+
+    .architecture-row {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr;
+      align-items: stretch;
+      gap: 14px;
+    }
+
+    .arch-box {
+      min-height: 170px;
+      padding: 22px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.025);
+    }
+
+    .arch-box small {
+      display: block;
+      margin-bottom: 14px;
+      color: var(--cyan);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .10em;
+    }
+
+    .arch-box h3 { margin: 0 0 12px; }
+    .arch-box p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    .arch-arrow {
+      display: grid;
+      place-items: center;
+      color: #718096;
+      font-size: 26px;
+    }
+
+    .architecture-footer {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .mini-box {
+      padding: 14px;
+      border-radius: 14px;
+      background: rgba(255,255,255,.025);
+      border: 1px solid var(--line);
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .spoiler-demo {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: stretch;
+    }
+
+    .policy-card {
+      padding: 30px;
+      border-radius: 28px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+    }
+
+    .policy-rule {
+      display: flex;
+      gap: 15px;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .policy-rule:last-child { border-bottom: 0; }
+
+    .policy-number {
+      flex: 0 0 auto;
+      width: 32px;
+      height: 32px;
+      border-radius: 11px;
+      display: grid;
+      place-items: center;
+      color: #dcd6fe;
+      background: rgba(139,92,246,.12);
+      border: 1px solid rgba(139,92,246,.25);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .policy-rule strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 15px;
+    }
+
+    .policy-rule span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .code-card {
+      position: relative;
+      overflow: hidden;
+      border-radius: 28px;
+      background: #080c12;
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .code-head {
+      min-height: 46px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      color: #8491a3;
+      background: #0b111a;
+      border-bottom: 1px solid var(--line);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    pre {
+      margin: 0;
+      padding: 24px;
+      overflow: auto;
+      color: #cbd5e1;
+      font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .code-purple { color: #c4b5fd; }
+    .code-cyan { color: #67e8f9; }
+    .code-green { color: #86efac; }
+    .code-amber { color: #fde68a; }
+
+    .roadmap {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 14px;
+    }
+
+    .roadmap::before {
+      content: "";
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      top: 34px;
+      height: 1px;
+      background: linear-gradient(90deg, var(--green), var(--cyan), var(--violet), #596275);
+      z-index: 0;
+    }
+
+    .phase {
+      position: relative;
+      z-index: 1;
+      padding: 0 7px;
+    }
+
+    .phase-dot {
+      width: 18px;
+      height: 18px;
+      margin: 26px 0 24px;
+      border-radius: 50%;
+      background: var(--surface-3);
+      border: 4px solid var(--bg);
+      box-shadow: 0 0 0 2px #556174;
+    }
+
+    .phase.active .phase-dot {
+      background: var(--green);
+      box-shadow: 0 0 0 2px var(--green), 0 0 24px rgba(52,211,153,.36);
+    }
+
+    .phase.next .phase-dot {
+      background: var(--cyan);
+      box-shadow: 0 0 0 2px var(--cyan), 0 0 24px rgba(34,211,238,.24);
+    }
+
+    .phase h3 { margin: 0 0 7px; font-size: 18px; }
+    .phase p { margin: 0; color: var(--muted); font-size: 13px; }
+    .phase-tag {
+      display: inline-flex;
+      margin-top: 14px;
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid var(--line);
+      color: #aab5c4;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .project-box {
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 24px;
+      padding: 38px;
+      border-radius: 32px;
+      border: 1px solid rgba(139,92,246,.28);
+      background:
+        radial-gradient(circle at 0 0, rgba(139,92,246,.18), transparent 34%),
+        radial-gradient(circle at 100% 100%, rgba(34,211,238,.10), transparent 30%),
+        var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .project-box h2 { font-size: clamp(38px, 5vw, 60px); }
+
+    .project-box p {
+      max-width: 690px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .project-meta {
+      display: grid;
+      gap: 10px;
+    }
+
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 15px 16px;
+      border-radius: 14px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--line);
+      font-size: 13px;
+    }
+
+    .meta-row span:first-child { color: var(--muted); }
+    .meta-row strong { text-align: right; }
+
+    footer {
+      padding: 32px 0 48px;
+      color: #7f8a9a;
+      font-size: 13px;
+    }
+
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: none;
+      place-items: center;
+      padding: 20px;
+      background: rgba(2,5,9,.78);
+      backdrop-filter: blur(9px);
+    }
+
+    .modal-backdrop.open { display: grid; }
+
+    .modal {
+      width: min(100%, 460px);
+      padding: 26px;
+      border-radius: 24px;
+      background: #101722;
+      border: 1px solid var(--line-strong);
+      box-shadow: var(--shadow);
+      animation: modalIn .18s ease;
+    }
+
+    @keyframes modalIn {
+      from { transform: translateY(12px) scale(.98); opacity: 0; }
+      to { transform: translateY(0) scale(1); opacity: 1; }
+    }
+
+    .modal-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      color: #ffe2e7;
+      background: rgba(251,113,133,.12);
+      border: 1px solid rgba(251,113,133,.28);
+    }
+
+    .modal h3 { margin: 18px 0 8px; font-size: 24px; }
+    .modal p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    .modal-summary {
+      margin-top: 18px;
+      padding: 14px;
+      border-radius: 14px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--line);
+      font-size: 13px;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .mobile-menu-button {
+      display: none;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      color: white;
+      cursor: pointer;
+    }
+
+    .mobile-menu {
+      display: none;
+      padding: 0 0 16px;
+    }
+
+    .mobile-menu.open {
+      display: grid;
+      gap: 8px;
+    }
+
+    .mobile-menu a {
+      padding: 12px 4px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--line);
+    }
+
+    @media (max-width: 980px) {
+      .nav-links, .nav-cta { display: none; }
+      .mobile-menu-button { display: grid; }
+
+      .hero {
+        grid-template-columns: 1fr;
+        padding-top: 66px;
+      }
+
+      .hero-copy { text-align: center; }
+      .hero-copy p { margin-inline: auto; }
+      .hero-actions, .hero-note { justify-content: center; }
+
+      .app-shell { max-width: 720px; margin-inline: auto; width: 100%; }
+      .section-head { grid-template-columns: 1fr; align-items: start; }
+      .problem-grid, .feature-grid, .tech-grid { grid-template-columns: 1fr 1fr; }
+      .architecture-row { grid-template-columns: 1fr; }
+      .arch-arrow { transform: rotate(90deg); min-height: 36px; }
+      .architecture-footer { grid-template-columns: 1fr 1fr; }
+      .spoiler-demo { grid-template-columns: 1fr; }
+      .roadmap { grid-template-columns: 1fr 1fr; }
+      .roadmap::before { display: none; }
+      .phase-dot { margin: 0 0 18px; }
+      .project-box { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 680px) {
+      .container { width: min(calc(100% - 24px), var(--max)); }
+      section { padding-block: 78px; }
+      .hero { padding-block: 56px 50px; }
+      h1 { font-size: clamp(48px, 16vw, 70px); }
+      .hero-copy > p { font-size: 17px; }
+
+      .app-shell { min-height: auto; border-radius: 22px; }
+      .demo-toolbar { align-items: flex-start; flex-direction: column; }
+      .app-body { grid-template-columns: 1fr; }
+      .detail-panel { border-left: 0; border-top: 1px solid var(--line); }
+      .graph-stage { min-height: 400px; }
+
+      .problem-grid, .feature-grid, .tech-grid,
+      .architecture-footer, .roadmap {
+        grid-template-columns: 1fr;
+      }
+
+      .card { min-height: 0; }
+      .project-box { padding: 25px; }
+      .footer-inner { flex-direction: column; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header class="nav-wrap" id="navWrap">
+    <div class="container">
+      <nav aria-label="Ana navigasyon">
+        <a class="brand" href="#top" aria-label="HD Graf Cehennemi ana sayfa">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle cx="6" cy="12" r="2.3" stroke="currentColor" stroke-width="1.7"/>
+              <circle cx="17.5" cy="6" r="2.3" stroke="currentColor" stroke-width="1.7"/>
+              <circle cx="18" cy="18" r="2.3" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M8.1 11 15.4 7M8.2 13.2l7.6 3.6M17.7 8.4l.2 7.2" stroke="currentColor" stroke-width="1.7"/>
+            </svg>
+          </span>
+          <span>HD Graf Cehennemi</span>
+        </a>
+
+        <div class="nav-links">
+          <a href="#problem">Problem</a>
+          <a href="#features">Özellikler</a>
+          <a href="#architecture">Mimari</a>
+          <a href="#roadmap">Yol Haritası</a>
+        </div>
+
+        <a class="nav-cta" href="#project">
+          Projeyi incele
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="m9 18 6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </a>
+
+        <button class="mobile-menu-button" id="mobileMenuButton" aria-label="Menüyü aç" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </nav>
+
+      <div class="mobile-menu" id="mobileMenu">
+        <a href="#problem">Problem</a>
+        <a href="#features">Özellikler</a>
+        <a href="#architecture">Mimari</a>
+        <a href="#roadmap">Yol Haritası</a>
+        <a href="#project">Proje Bilgileri</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+    <div class="container">
+      <section class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow">
+            <span class="eyebrow-dot"></span>
+            Staj bitirme projesi · Aktif geliştirme
+          </div>
+
+          <h1>
+            Dizileri
+            <span class="gradient-text">graf üzerinden</span>
+            hatırla.
+          </h1>
+
+          <p>
+            İzlediğin bölüme kadar olan karakterleri, olayları ve ilişkileri;
+            kaynaklarıyla birlikte keşfet. Grafı kendin düzenle ve yalnızca
+            görebileceğin bilgilerle çalışan bir LLM ile sohbet et.
+          </p>
+
+          <div class="hero-actions">
+            <a class="button primary" href="#demo">
+              Etkileşimli prototipi gör
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="m9 18 6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </a>
+            <a class="button" href="#architecture">
+              Teknik mimari
+            </a>
+          </div>
+
+          <div class="hero-note">
+            <span><i></i>Spoiler kontrollü erişim</span>
+            <span><i></i>Kaynak bağlantılı claim sistemi</span>
+            <span><i></i>Kullanıcı tarafından düzenlenebilir graf</span>
+          </div>
+        </div>
+
+        <div class="app-shell" id="demo" aria-label="HD Graf Cehennemi arayüz prototipi">
+          <div class="window-bar">
+            <div class="window-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+            <div class="window-title">hdgrafcehennemi.app / graph</div>
+            <div style="width:46px"></div>
+          </div>
+
+          <div class="demo-toolbar">
+            <div class="series-select">
+              <span class="series-avatar">D</span>
+              <span>Dexter · Sezon 1</span>
+            </div>
+
+            <div class="episode-picker" aria-label="İzleme noktası seçimi">
+              <button class="episode-button active" data-episode="1">S01E01</button>
+              <button class="episode-button" data-episode="2">S01E02</button>
+              <button class="episode-button" data-episode="3">S01E03</button>
+            </div>
+          </div>
+
+          <div class="app-body">
+            <div class="graph-stage">
+              <svg class="graph-svg" viewBox="0 0 650 472" role="img" aria-label="Örnek karakter ve olay grafı">
+                <g id="edges-1">
+                  <line class="edge" x1="185" y1="195" x2="335" y2="120"/>
+                  <text class="edge-label" x="255" y="150">FAMILY_OF</text>
+                  <line class="edge" x1="185" y1="195" x2="360" y2="302"/>
+                  <text class="edge-label" x="256" y="258">KNOWS</text>
+                  <line class="edge" x1="185" y1="195" x2="480" y2="205"/>
+                  <text class="edge-label" x="324" y="194">PARTICIPATED_IN</text>
+                  <line class="edge" x1="480" y1="205" x2="520" y2="355"/>
+                  <text class="edge-label" x="505" y="278">OCCURRED_IN</text>
+                </g>
+
+                <g id="edges-2" class="episode-layer">
+                  <line class="edge" x1="335" y1="120" x2="510" y2="88"/>
+                  <text class="edge-label" x="410" y="96">WORKS_WITH</text>
+                  <line class="edge" x1="510" y1="88" x2="480" y2="205"/>
+                  <text class="edge-label" x="492" y="149">WITNESSED</text>
+                </g>
+
+                <g id="edges-3" class="episode-layer">
+                  <line class="edge" x1="360" y1="302" x2="235" y2="378"/>
+                  <text class="edge-label" x="282" y="344">LOCATED_IN</text>
+                </g>
+
+                <g class="node-group" data-name="Dexter Morgan" data-type="Character" data-episode="1" data-detail="Merkez karakter. Bilgiler yalnızca kullanıcının izlediği bölüme kadar gösterilir.">
+                  <circle class="node-circle" cx="185" cy="195" r="42"/>
+                  <text class="node-text" x="185" y="191">Dexter</text>
+                  <text class="node-text" x="185" y="202">Morgan</text>
+                  <text class="node-type" x="185" y="217">CHARACTER</text>
+                </g>
+
+                <g class="node-group" data-name="Debra Morgan" data-type="Character" data-episode="1" data-detail="Dexter'ın kız kardeşi. Kaynaklı ilişkiler graf üzerinde ayrı claim'ler olarak tutulur.">
+                  <circle class="node-circle secondary" cx="335" cy="120" r="36"/>
+                  <text class="node-text" x="335" y="117">Debra</text>
+                  <text class="node-text" x="335" y="128">Morgan</text>
+                  <text class="node-type" x="335" y="142">CHARACTER</text>
+                </g>
+
+                <g class="node-group" data-name="Rita Bennett" data-type="Character" data-episode="1" data-detail="Dexter'ın sosyal çevresindeki karakterlerden biri.">
+                  <circle class="node-circle secondary" cx="360" cy="302" r="36"/>
+                  <text class="node-text" x="360" y="299">Rita</text>
+                  <text class="node-text" x="360" y="310">Bennett</text>
+                  <text class="node-type" x="360" y="324">CHARACTER</text>
+                </g>
+
+                <g class="node-group" data-name="Açılış Olayı" data-type="Event" data-episode="1" data-detail="Bölüm içindeki anlatısal olay. Olay, bölüm ve kanıt parçalarıyla ilişkilendirilir.">
+                  <rect class="node-circle event" x="440" y="170" width="80" height="70" rx="20"/>
+                  <text class="node-text" x="480" y="201">Açılış</text>
+                  <text class="node-text" x="480" y="212">Olayı</text>
+                  <text class="node-type" x="480" y="226">EVENT</text>
+                </g>
+
+                <g class="node-group" data-name="S01E01" data-type="Episode" data-episode="1" data-detail="İlk görünürlük sınırı. Sonraki bölüm verileri backend tarafından hiç gönderilmez.">
+                  <rect class="node-circle location" x="480" y="330" width="80" height="54" rx="18"/>
+                  <text class="node-text" x="520" y="355">S01E01</text>
+                  <text class="node-type" x="520" y="371">EPISODE</text>
+                </g>
+
+                <g class="node-group episode-layer" data-name="Angel Batista" data-type="Character" data-episode="2" data-detail="Bu örnek node yalnızca S01E02 görünürlüğü açıldığında gösterilir.">
+                  <circle class="node-circle secondary" cx="510" cy="88" r="34"/>
+                  <text class="node-text" x="510" y="85">Angel</text>
+                  <text class="node-text" x="510" y="96">Batista</text>
+                  <text class="node-type" x="510" y="109">CHARACTER</text>
+                </g>
+
+                <g class="node-group episode-layer" data-name="Miami Metro" data-type="Location" data-episode="3" data-detail="Bu örnek node yalnızca S01E03 görünürlüğü açıldığında gösterilir.">
+                  <rect class="node-circle location" x="190" y="352" width="90" height="54" rx="18"/>
+                  <text class="node-text" x="235" y="377">Miami Metro</text>
+                  <text class="node-type" x="235" y="393">LOCATION</text>
+                </g>
+              </svg>
+
+              <div class="graph-hint">Bir node'a tıklayarak kaynak ve claim detayını görüntüle.</div>
+            </div>
+
+            <aside class="detail-panel" aria-live="polite">
+              <div class="detail-kicker" id="detailType">Character</div>
+              <h3 id="detailName">Dexter Morgan</h3>
+              <div class="detail-subtitle">İlk görünürlük: S01E01</div>
+              <span class="detail-status">● Kaynaklandırılmış bilgi</span>
+
+              <div class="detail-block">
+                <strong>Açıklama</strong>
+                <div class="claim-row" id="detailText">
+                  Merkez karakter. Bilgiler yalnızca kullanıcının izlediği bölüme kadar gösterilir.
+                </div>
+              </div>
+
+              <div class="detail-block">
+                <strong>Kaynaklar</strong>
+                <a class="source-link" href="#sources">
+                  <span>↗</span>
+                  <span>OpenSubtitles · S01E01<br>00:04:12–00:04:31</span>
+                </a>
+                <a class="source-link" href="#sources">
+                  <span>↗</span>
+                  <span>Senaryo PDF · Sayfa 5<br>Sahne 3</span>
+                </a>
+              </div>
+
+              <div class="detail-block">
+                <strong>Geçmiş</strong>
+                <div class="claim-row">v1 · Otomatik çıkarım</div>
+                <div class="claim-row">v2 · Kullanıcı tarafından onaylandı</div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section id="problem">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <div class="section-label">Problem</div>
+            <h2>Dizi bilgisi var. Bağlamı dağınık.</h2>
+          </div>
+          <p>
+            Geleneksel dizi sayfaları karakterleri, oyuncuları ve bölüm özetlerini listeler;
+            fakat bilginin hangi bölümde öğrenildiğini, neye dayandığını ve ilişkilerin
+            zaman içinde nasıl değiştiğini güvenli biçimde göstermez.
+          </p>
+        </div>
+
+        <div class="problem-grid">
+          <article class="card">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 3 4 7v5c0 5 3.4 8 8 9 4.6-1 8-4 8-9V7l-8-4Z" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M9.5 12.2 11 13.7l3.7-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h3>Spoiler güvenliği</h3>
+            <p>
+              Yalnızca izlenen bölüme kadar olan node, edge, arama sonucu ve LLM bağlamı erişilebilir.
+            </p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon cyan">
+              <svg viewBox="0 0 24 24" fill="none">
+                <circle cx="6" cy="12" r="2" stroke="currentColor" stroke-width="1.8"/>
+                <circle cx="18" cy="6" r="2" stroke="currentColor" stroke-width="1.8"/>
+                <circle cx="18" cy="18" r="2" stroke="currentColor" stroke-width="1.8"/>
+                <path d="m8 11 8-4M8 13l8 4M18 8v8" stroke="currentColor" stroke-width="1.8"/>
+              </svg>
+            </div>
+            <h3>İlişkisel keşif</h3>
+            <p>
+              Karakterler, olaylar, mekânlar ve kaynaklar statik sayfalar yerine etkileşimli bilgi grafında incelenir.
+            </p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon green">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M7 3h8l4 4v14H7V3Z" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M15 3v5h5M10 13h6M10 17h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <h3>Kanıt ve kaynak</h3>
+            <p>
+              Her otomatik claim; altyazı zaman damgası, senaryo sayfası veya bağlantılı dış kaynakla açıklanır.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <div class="section-label">Çözüm</div>
+            <h2>İkinci beyin ile bilgi grafının birleşimi.</h2>
+          </div>
+          <p>
+            Sistem yalnızca otomatik bir veri tabanı değildir. Kullanıcı kendi node, ilişki ve
+            notlarını ekleyebilir; otomatik çıkarımları onaylayabilir, düzeltebilir ve geçmiş
+            sürümleri inceleyebilir.
+          </p>
+        </div>
+
+        <div class="feature-grid">
+          <article class="card">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M4 5h16v14H4z" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M8 9h8M8 13h5M8 17h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <h3>Önceden tanımlı ontology</h3>
+            <p>Character, Event, Episode, Source ve Claim gibi node tipleri ile kontrollü ilişki sözlüğü.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon cyan">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M8 12h8M12 8v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/>
+              </svg>
+            </div>
+            <h3>Manuel düzenleme</h3>
+            <p>Kullanıcı yeni node, ilişki ve kişisel notlar ekleyebilir; sistem içeriğiyle kullanıcı içeriği ayrı tutulur.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon green">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M5 6h14v9H9l-4 4V6Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                <path d="M9 10h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <h3>Graph-RAG sohbeti</h3>
+            <p>LLM yalnızca spoiler filtresinden geçen alt grafı sorgular ve cevaplarında kaynak gösterir.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 7v5l3 2M21 12a9 9 0 1 1-3-6.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                <path d="M21 4v5h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h3>Version history</h3>
+            <p>Her değişiklik revision kaydı oluşturur; önceki sürümler silinmeden görüntülenebilir veya geri alınabilir.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon cyan">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M5 4h14v16H5z" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M8 8h8M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <h3>Çoklu kaynak çıkarımı</h3>
+            <p>Altyazı, senaryo PDF'i, bölüm özeti ve ileride podcast transkriptleri ayrı provenance kayıtlarıyla işlenir.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon green">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="m8 12 3 3 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/>
+              </svg>
+            </div>
+            <h3>Güvenilirlik katmanı</h3>
+            <p>Kaynak niteliği, kanıt açıklığı ve kaynaklar arası uyuşma; claim durumunu açıklanabilir biçimde etkiler.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="architecture">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <div class="section-label">Sistem mimarisi</div>
+            <h2>Kaynaklardan, kanıt tabanlı grafa.</h2>
+          </div>
+          <p>
+            Toplama, ayrıştırma, LLM çıkarımı, şema doğrulaması ve spoiler politikası birbirinden
+            ayrılır. Böylece hata kaynağı ölçülebilir ve sistem tekrar üretilebilir kalır.
+          </p>
+        </div>
+
+        <div class="architecture-shell">
+          <div class="architecture-row">
+            <div class="arch-box">
+              <small>01 · Kaynaklar</small>
+              <h3>Altyazı ve senaryo</h3>
+              <p>OpenSubtitles, senaryo PDF'leri ve kullanıcı tarafından sağlanan içerikler.</p>
+            </div>
+
+            <div class="arch-arrow">→</div>
+
+            <div class="arch-box">
+              <small>02 · İşleme</small>
+              <h3>Extraction pipeline</h3>
+              <p>Parser, sahne bölütleme, entity normalization, candidate claim üretimi ve evidence alignment.</p>
+            </div>
+
+            <div class="arch-arrow">→</div>
+
+            <div class="arch-box">
+              <small>03 · Uygulama</small>
+              <h3>Graph + LLM arayüzü</h3>
+              <p>Neo4j sorguları, spoiler-aware API, Cytoscape tabanlı graf görünümü ve kaynaklı sohbet.</p>
+            </div>
+          </div>
+
+          <div class="architecture-footer">
+            <div class="mini-box">React + TypeScript</div>
+            <div class="mini-box">FastAPI + Pydantic</div>
+            <div class="mini-box">Neo4j + Cypher</div>
+            <div class="mini-box">Docker Compose</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="spoiler">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <div class="section-label">Spoiler modeli</div>
+            <h2>Modelden rica etmiyoruz. Veriyi saklıyoruz.</h2>
+          </div>
+          <p>
+            Spoiler güvenliği yalnızca prompt seviyesinde uygulanmaz. Kullanıcının görmemesi gereken
+            node, edge ve evidence kayıtları API cevabına ve LLM bağlamına hiç girmez.
+          </p>
+        </div>
+
+        <div class="spoiler-demo">
+          <div class="policy-card">
+            <div class="policy-rule">
+              <div class="policy-number">1</div>
+              <div>
+                <strong>Dizi bazlı izleme noktası</strong>
+                <span>Kullanıcı her dizi için izlediği son bölümü ayrı olarak seçer.</span>
+              </div>
+            </div>
+
+            <div class="policy-rule">
+              <div class="policy-number">2</div>
+              <div>
+                <strong>Backend filtreleme</strong>
+                <span>İleri bölüm bilgisi tarayıcıya gönderilmeden önce elenir.</span>
+              </div>
+            </div>
+
+            <div class="policy-rule">
+              <div class="policy-number">3</div>
+              <div>
+                <strong>Sızıntı önleme</strong>
+                <span>Autocomplete, node boyutu, bölüm sayısı ve gizli ilişki metadatası da filtrelenir.</span>
+              </div>
+            </div>
+
+            <div class="policy-rule">
+              <div class="policy-number">4</div>
+              <div>
+                <strong>Açık onay</strong>
+                <span>İlerleme seviyesi yükseltilirken kullanıcıdan spoiler onayı istenir.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="code-card">
+            <div class="code-head">
+              <span>spoiler_policy.py</span>
+              <span>PROTOTYPE</span>
+            </div>
+            <pre><span class="code-purple">def</span> <span class="code-cyan">visible_subgraph</span>(
+    user_id: <span class="code-green">str</span>,
+    series_id: <span class="code-green">str</span>,
+) -> GraphResponse:
+    progress = progress_store.get(
+        user_id=user_id,
+        series_id=series_id,
+    )
+
+    <span class="code-purple">return</span> graph.query(
+        series_id=series_id,
+        max_visible_order=progress.episode_order,
+        include_future_metadata=<span class="code-amber">False</span>,
+    )</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="sources">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <div class="section-label">Provenance</div>
+            <h2>Her bilgi, nereden geldiğini bilir.</h2>
+          </div>
+          <p>
+            Claim'ler doğrudan gerçek kabul edilmez. Her iddia kaynak, zaman damgası, sayfa numarası,
+            içerik hash'i, çıkarım yöntemi ve doğrulama durumu ile birlikte saklanır.
+          </p>
+        </div>
+
+        <div class="tech-grid">
+          <article class="card">
+            <div class="card-icon cyan">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M4 7h16v10H4z" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M8 11h8M8 14h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <h3>Altyazı kanıtı</h3>
+            <p>Kaynak dosyası, sürüm bilgisi, konuşmacı ve başlangıç–bitiş zaman damgası.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M6 3h9l3 3v15H6z" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M15 3v4h4M9 11h6M9 15h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <h3>Senaryo kanıtı</h3>
+            <p>PDF bağlantısı, draft türü, sayfa ve sahne numarası ile paragraf hash'i.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon green">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M8 12h8M12 8v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/>
+              </svg>
+            </div>
+            <h3>Kullanıcı kanıtı</h3>
+            <p>Kişisel notlar ve düzeltmeler otomatik katmandan ayrılır, ancak ilgili claim'e bağlanabilir.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="roadmap">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <div class="section-label">Yol haritası</div>
+            <h2>Dar kapsamlı prototipten ölçeklenebilir sisteme.</h2>
+          </div>
+          <p>
+            İlk doğrulama alanı Dexter Sezon 1'in ilk üç bölümüdür. Amaç, veri toplama ölçeğinden
+            önce temel bilgi modeli ve spoiler politikasının çalıştığını kanıtlamaktır.
+          </p>
+        </div>
+
+        <div class="roadmap">
+          <div class="phase active">
+            <div class="phase-dot"></div>
+            <h3>Temel altyapı</h3>
+            <p>React, FastAPI, Neo4j, Docker ve ilk ontology tanımları.</p>
+            <span class="phase-tag">Tamamlandı / sürüyor</span>
+          </div>
+
+          <div class="phase next">
+            <div class="phase-dot"></div>
+            <h3>Dikey prototip</h3>
+            <p>Dexter S01E01–E03 seed graph, spoiler filtresi ve node detayları.</p>
+            <span class="phase-tag">Sıradaki</span>
+          </div>
+
+          <div class="phase">
+            <div class="phase-dot"></div>
+            <h3>Otomatik çıkarım</h3>
+            <p>Altyazı ve senaryo parser'ları, candidate claim üretimi ve doğrulama.</p>
+            <span class="phase-tag">Planlandı</span>
+          </div>
+
+          <div class="phase">
+            <div class="phase-dot"></div>
+            <h3>Graph-RAG</h3>
+            <p>Kaynaklı LLM sohbeti, evaluation seti ve kapsam genişletme.</p>
+            <span class="phase-tag">Planlandı</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="project">
+      <div class="container">
+        <div class="project-box">
+          <div>
+            <div class="section-label">Proje özeti</div>
+            <h2>HD Graf Cehennemi</h2>
+            <p>
+              Zaman bağımlı ilişkileri, kanıt tabanlı claim'leri, kullanıcı notlarını ve spoiler kontrollü
+              Graph-RAG sorgularını tek bir kişisel dizi bilgi sistemi altında birleştiren akademik prototip.
+            </p>
+
+            <div class="hero-actions">
+              <a class="button primary" href="#top">Prototipe dön</a>
+              <!-- GitHub URL'sini kendi repo adresinle değiştir. -->
+              <a class="button" id="githubLink" href="https://github.com/" target="_blank" rel="noreferrer">
+                GitHub deposu
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M8 16 16 8M9 8h7v7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </a>
+            </div>
+          </div>
+
+          <div class="project-meta">
+            <div class="meta-row"><span>Prototip kapsamı</span><strong>Dexter S01E01–S01E03</strong></div>
+            <div class="meta-row"><span>Graf veritabanı</span><strong>Neo4j</strong></div>
+            <div class="meta-row"><span>Backend</span><strong>FastAPI · Python</strong></div>
+            <div class="meta-row"><span>Frontend</span><strong>React · TypeScript</strong></div>
+            <div class="meta-row"><span>Temel araştırma alanı</span><strong>Temporal Knowledge Graph + Graph-RAG</strong></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-inner">
+      <span>© 2026 HD Graf Cehennemi</span>
+      <span>İzlediğin yere kadar. Kaynağıyla. Graf üzerinde.</span>
+    </div>
+  </footer>
+
+  <div class="modal-backdrop" id="spoilerModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal">
+      <div class="modal-icon">
+        <svg viewBox="0 0 24 24" width="25" height="25" fill="none">
+          <path d="M12 4 3 20h18L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+          <path d="M12 9v5M12 17h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h3 id="modalTitle">Spoiler sınırını yükseltmek üzeresin</h3>
+      <p>
+        Yeni bölüm; daha önce görünmeyen karakterleri, olayları ve ilişkileri açabilir.
+      </p>
+      <div class="modal-summary">
+        <strong id="modalEpisode">S01E02</strong> bilgileri görünür hâle getirilecek.
+      </div>
+      <div class="modal-actions">
+        <button class="button" id="cancelEpisode">İptal</button>
+        <button class="button primary" id="confirmEpisode">Eminim, aç</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const GITHUB_REPOSITORY_URL = "https://github.com/vinnipukh/hdgrafcehennemi";
+    document.getElementById("githubLink").href = GITHUB_REPOSITORY_URL;
+
+    const navWrap = document.getElementById("navWrap");
+    const mobileMenuButton = document.getElementById("mobileMenuButton");
+    const mobileMenu = document.getElementById("mobileMenu");
+
+    window.addEventListener("scroll", () => {
+      navWrap.classList.toggle("scrolled", window.scrollY > 8);
+    });
+
+    mobileMenuButton.addEventListener("click", () => {
+      const isOpen = mobileMenu.classList.toggle("open");
+      mobileMenuButton.setAttribute("aria-expanded", String(isOpen));
+    });
+
+    mobileMenu.querySelectorAll("a").forEach(link => {
+      link.addEventListener("click", () => {
+        mobileMenu.classList.remove("open");
+        mobileMenuButton.setAttribute("aria-expanded", "false");
+      });
+    });
+
+    const episodeButtons = [...document.querySelectorAll(".episode-button")];
+    const spoilerModal = document.getElementById("spoilerModal");
+    const modalEpisode = document.getElementById("modalEpisode");
+    const cancelEpisode = document.getElementById("cancelEpisode");
+    const confirmEpisode = document.getElementById("confirmEpisode");
+
+    let activeEpisode = 1;
+    let requestedEpisode = 1;
+
+    function updateGraphVisibility(episode) {
+      document.querySelectorAll(".node-group").forEach(node => {
+        const visible = Number(node.dataset.episode) <= episode;
+        node.classList.toggle("faded", !visible);
+      });
+
+      document.getElementById("edges-2").classList.toggle("faded", episode < 2);
+      document.getElementById("edges-3").classList.toggle("faded", episode < 3);
+
+      episodeButtons.forEach(button => {
+        button.classList.toggle("active", Number(button.dataset.episode) === episode);
+      });
+    }
+
+    episodeButtons.forEach(button => {
+      button.addEventListener("click", () => {
+        requestedEpisode = Number(button.dataset.episode);
+
+        if (requestedEpisode <= activeEpisode) {
+          activeEpisode = requestedEpisode;
+          updateGraphVisibility(activeEpisode);
+          return;
+        }
+
+        modalEpisode.textContent = `S01E0${requestedEpisode}`;
+        spoilerModal.classList.add("open");
+      });
+    });
+
+    cancelEpisode.addEventListener("click", () => {
+      spoilerModal.classList.remove("open");
+    });
+
+    confirmEpisode.addEventListener("click", () => {
+      activeEpisode = requestedEpisode;
+      updateGraphVisibility(activeEpisode);
+      spoilerModal.classList.remove("open");
+    });
+
+    spoilerModal.addEventListener("click", event => {
+      if (event.target === spoilerModal) spoilerModal.classList.remove("open");
+    });
+
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape") spoilerModal.classList.remove("open");
+    });
+
+    const detailType = document.getElementById("detailType");
+    const detailName = document.getElementById("detailName");
+    const detailText = document.getElementById("detailText");
+
+    document.querySelectorAll(".node-group").forEach(node => {
+      node.addEventListener("click", () => {
+        if (node.classList.contains("faded")) return;
+        detailType.textContent = node.dataset.type;
+        detailName.textContent = node.dataset.name;
+        detailText.textContent = node.dataset.detail;
+      });
+    });
+
+    updateGraphVisibility(1);
+  </script>
+</body>
+</html>

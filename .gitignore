@@ -1,12 +1,58 @@
+# ======================================================
+# Python
+# ======================================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
 .venv/
-.idea/
-.ipynb_checkpoints
-.env
-.envrc
-.venv
-env/
 venv/
+env/
 ENV/
 env.bak/
 venv.bak/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+.envrc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ======================================================
+# Node.js
+# ======================================================
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+
+# ======================================================
+# JetBrains / VS Code
+# ======================================================
+.idea/
+.vscode/
+
+# ======================================================
+# Neo4j (Local Development)
+# ======================================================
+neo4j_data/
+neo4j_logs/
+neo4j_plugins/
+neo4j_import/
+
+# ======================================================
+# Streamlit
+# ======================================================
 .streamlit/secrets.toml
+
+# ======================================================
+# OS Files
+# ======================================================
+.DS_Store
+Thumbs.db

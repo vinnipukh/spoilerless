@@ -1,0 +1,32 @@
+[
+  {
+    "id": "dexter_s01e01",
+    "series_id": "series_dexter",
+    "season_number": 1,
+    "episode_number": 1,
+    "episode_order": 1,
+    "code": "S01E01",
+    "title": "Dexter",
+    "visible_from_order": 1
+  },
+  {
+    "id": "dexter_s01e02",
+    "series_id": "series_dexter",
+    "season_number": 1,
+    "episode_number": 2,
+    "episode_order": 2,
+    "code": "S01E02",
+    "title": "Crocodile",
+    "visible_from_order": 2
+  },
+  {
+    "id": "dexter_s01e03",
+    "series_id": "series_dexter",
+    "season_number": 1,
+    "episode_number": 3,
+    "episode_order": 3,
+    "code": "S01E03",
+    "title": "Popping Cherry",
+    "visible_from_order": 3
+  }
+]

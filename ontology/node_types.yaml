@@ -1,0 +1,26 @@
+ontology_version: "0.1"
+
+node_types:
+  structural:
+    - Series
+    - Season
+    - Episode
+    - Scene
+
+  narrative:
+    - Character
+    - Location
+    - Organization
+    - Object
+    - Event
+
+  knowledge:
+    - Claim
+    - Source
+    - EvidenceFragment
+
+  user:
+    - UserNote
+
+  system:
+    - Revision

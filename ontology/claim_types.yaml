@@ -1,0 +1,21 @@
+ontology_version: "0.1"
+
+claim_types:
+  - explicit_fact
+  - observed_event
+  - inferred_state
+  - external_interpretation
+  - user_authored
+
+claim_statuses:
+  - candidate
+  - corroborated
+  - canonical
+  - disputed
+  - rejected
+
+confidence_levels:
+  - low
+  - medium
+  - high
+  - verified

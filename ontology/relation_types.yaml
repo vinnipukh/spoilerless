@@ -1,0 +1,39 @@
+ontology_version: "0.1"
+
+relation_types:
+  structural:
+    - PART_OF
+    - PRECEDES
+    - OCCURRED_IN
+    - LOCATED_IN
+
+  participation:
+    - PARTICIPATED_IN
+    - WITNESSED
+    - CAUSED
+    - AFFECTED
+    - TARGETED
+    - MENTIONED
+
+  character:
+    - KNOWS
+    - FAMILY_OF
+    - WORKS_WITH
+    - TRUSTS
+    - DISTRUSTS
+    - HELPS
+    - OPPOSES
+    - THREATENS
+    - ATTACKS
+    - KILLS
+
+  provenance:
+    - SUPPORTED_BY
+    - CONTRADICTED_BY
+    - DERIVED_FROM
+    - REFERS_TO
+
+  revision:
+    - CORRECTS
+    - SUPERSEDES
+    - REVERTS_TO
