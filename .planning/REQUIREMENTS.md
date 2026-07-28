@@ -90,7 +90,7 @@ Explicitly excluded for prototype v0.
 
 ## Traceability
 
-Updated during roadmap creation.
+Updated during roadmap creation — all 21 v1 requirements mapped to Phase 1 or Phase 2.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
@@ -117,10 +117,10 @@ Updated during roadmap creation.
 | TEST-04 | Phase 2 | Pending |
 
 **Coverage:**
-- v1 requirements: 20 total
-- Mapped to phases: 20
+- v1 requirements: 21 total
+- Mapped to phases: 21
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-28*
-*Last updated: 2026-07-28 after initial definition*
+*Last updated: 2026-07-28 — traceability mapped to roadmap phases*
