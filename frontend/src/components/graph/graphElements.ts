@@ -10,14 +10,24 @@ import type { ElementDefinition } from 'cytoscape'
 import type { GraphResponse } from '../../types/graph'
 
 export function graphToElements(graph: GraphResponse): ElementDefinition[] {
-  const nodeElements: ElementDefinition[] = graph.nodes.map((node) => ({
-    data: {
-      id: node.id,
-      label: node.label,
-      nodeType: node.type,
-      origin: node.origin,
-    },
-  }))
+  const nodeElements: ElementDefinition[] = graph.nodes.map((node) => {
+    // Only Character nodes ever carry a portrait — other node types must
+    // never pick up the background-image selector even if a future node
+    // happens to have image_url set. The `imageUrl` key is omitted entirely
+    // (not set to null) when there is no portrait, so Cytoscape's `[imageUrl]`
+    // existence selector only matches nodes that actually have one.
+    const imageUrl = node.type === 'Character' ? node.image_url : null
+
+    return {
+      data: {
+        id: node.id,
+        label: node.label,
+        nodeType: node.type,
+        origin: node.origin,
+        ...(imageUrl ? { imageUrl } : {}),
+      },
+    }
+  })
 
   const edgeElements: ElementDefinition[] = graph.edges.map((edge) => ({
     data: {

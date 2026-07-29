@@ -8,7 +8,52 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { SelectedElement } from '../graph/GraphCanvas'
-import type { GraphClaim, GraphEvidence, GraphResponse } from '../../types/graph'
+import type { GraphClaim, GraphEvidence, GraphNode, GraphResponse } from '../../types/graph'
+
+function initialsFor(label: string): string {
+  const initials = label
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('')
+  return initials || '?'
+}
+
+// Portrait shown next to a Character's name in the detail panel header.
+// Falls back to an initials avatar both when image_url is null AND when the
+// external image fails to load (broken link, 404, blocked) — never renders
+// an empty broken-image box.
+function CharacterPortrait({ node }: { node: GraphNode }) {
+  const [failed, setFailed] = useState(false)
+  const showImage = Boolean(node.image_url) && !failed
+
+  const avatar = showImage ? (
+    <img
+      src={node.image_url ?? undefined}
+      alt={node.label}
+      className="h-10 w-10 rounded-full object-cover"
+      onError={() => setFailed(true)}
+    />
+  ) : (
+    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+      {initialsFor(node.label)}
+    </div>
+  )
+
+  if (!node.image_source_url) return avatar
+
+  return (
+    <a
+      href={node.image_source_url}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`Open ${node.label} on Fandom`}
+    >
+      {avatar}
+    </a>
+  )
+}
 
 // Full Overview/Claims/Evidence tabbed Sheet (D-07) for nodes and claim-backed
 // narrative edges (edge.claim_id !== null). Structural edges (claim_id ===
@@ -104,7 +149,12 @@ export function DetailPanel({ selected, graph }: Props) {
     <Sheet open modal={false}>
       <SheetContent side="right" showCloseButton={false} className="mt-0">
         <SheetHeader>
-          <SheetTitle>{selected ? title : 'Details'}</SheetTitle>
+          <div className="flex items-center gap-3">
+            {selectedNode?.type === 'Character' && (
+              <CharacterPortrait key={selectedNode.id} node={selectedNode} />
+            )}
+            <SheetTitle>{selected ? title : 'Details'}</SheetTitle>
+          </div>
         </SheetHeader>
         <div className="flex flex-col gap-2 px-4 pb-4 text-sm">
           {!selected && <p>Select a node to see details.</p>}

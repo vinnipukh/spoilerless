@@ -45,6 +45,22 @@ export const graphStylesheet: StylesheetJsonBlock[] = [
     selector: 'node[nodeType = "Character"]',
     style: { shape: 'ellipse' },
   },
+  // Portrait background for Character nodes that carry a Fandom image_url
+  // (graphElements.ts only sets the `imageUrl` data key for Character nodes,
+  // and only when a value exists, so this selector can never match other
+  // node types). `background-image-crossorigin: 'anonymous'` avoids a tainted
+  // canvas; if the external image 404s or is blocked, Cytoscape silently
+  // keeps the node's flat background-color fill instead of showing a broken
+  // image — there is no HTML <img> element here to leave a broken-image box.
+  {
+    selector: 'node[nodeType = "Character"][imageUrl]',
+    style: {
+      'background-image': 'data(imageUrl)',
+      'background-fit': 'cover',
+      'background-clip': 'node',
+      'background-image-crossorigin': 'anonymous',
+    },
+  },
   {
     selector: 'node[nodeType = "Event"]',
     style: { shape: 'round-rectangle' },
