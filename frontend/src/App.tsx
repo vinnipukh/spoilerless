@@ -6,6 +6,7 @@ import { ConfirmAdvanceModal } from './components/episode/ConfirmAdvanceModal'
 import { GraphCanvas, type SelectedElement } from './components/graph/GraphCanvas'
 import { GraphLoadingState, GraphErrorState, GraphEmptyState } from './components/graph/GraphStatus'
 import { DetailPanel } from './components/detail/DetailPanel'
+import { StructuralEdgeCard } from './components/detail/StructuralEdgeCard'
 import { useSeries } from './hooks/useSeries'
 import { useEpisodes } from './hooks/useEpisodes'
 import { useGraph } from './hooks/useGraph'
@@ -84,7 +85,21 @@ function App() {
       {graphState.status === 'success' && graphState.data.nodes.length > 0 && (
         <>
           <GraphCanvas graph={graphState.data} onSelect={setSelectedElement} />
-          <DetailPanel selected={selectedElement} graph={graphState.data} />
+          {/*
+            Centralized D-06/D-07 branch (Task 2, action 2): this is the
+            ONLY place in the app that decides between StructuralEdgeCard
+            and DetailPanel. GraphCanvas's onSelect contract is unchanged
+            (it never carries claim_id) — the branch instead resolves the
+            selected edge's claim_id from the already-fetched GraphResponse,
+            so the decision lives here rather than being duplicated inside
+            either detail component.
+          */}
+          {selectedElement?.kind === 'edge' &&
+          graphState.data.edges.find((edge) => edge.id === selectedElement.id)?.claim_id == null ? (
+            <StructuralEdgeCard selected={selectedElement} nodes={graphState.data.nodes} />
+          ) : (
+            <DetailPanel selected={selectedElement} graph={graphState.data} />
+          )}
         </>
       )}
       {graphState.status === 'idle' && <GraphEmptyState />}
