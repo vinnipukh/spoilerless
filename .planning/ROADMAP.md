@@ -3,7 +3,7 @@
 **Canonical scope:** root `ROADMAP.md`, milestones 1–8
 **Target:** Complete Dexter S01E01–03 demo story, not an API-only release
 **Mode:** dependency-ordered Prototype v0 delivery
-**Status:** Phase 1 complete and verified (9/9 truths, 13/13 tests, smoke 8/8); Phase 2 pending
+**Status:** Phase 1 complete and verified (9/9 truths, 13/13 tests, smoke 8/8); Phase 2 complete and verified (5/5 truths, 25/25 tests, 0 gaps); Phase 3 pending
 
 ## Phase 1: Backend Graph Foundation
 

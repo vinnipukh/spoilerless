@@ -7,7 +7,7 @@ stopped_at: Completed 02-04-PLAN.md
 last_updated: "2026-07-29T17:45:00.000Z"
 progress:
   total_phases: 2
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
   completed_plans: 5
 ---
@@ -24,21 +24,21 @@ progress:
 
 | Field | Value |
 |-------|-------|
-| **Phase** | Phase 2: Polished Cytoscape Graph Experience |
-| **Status** | Execution complete — 4/4 plans done, pending phase verification |
-| **Deliverable** | Polished Cytoscape product experience over the verified spoiler-safe backend graph foundation |
-| **Requirements** | UI-01..05 |
-| **Dependencies** | Phase 1 complete (verified 9/9 truths) |
+| **Phase** | Phase 3: User Notes and Manual Editing |
+| **Status** | Not started — ready to discuss/plan |
+| **Deliverable** | Let the user add personal knowledge while preserving provenance and canonical data |
+| **Requirements** | NOTE-01..03 |
+| **Dependencies** | Phase 2 complete (verified 5/5 truths) |
 
 ## Completed Phase
 
 | Field | Value |
 |-------|-------|
-| **Phase** | Phase 1: Backend Graph Foundation |
-| **Status** | Complete — verified (9/9 truths, 13/13 tests, smoke 8/8) |
-| **Deliverable** | Reliable local runtime plus ontology-aligned deterministic Neo4j seed data, evidence-backed graph records, metadata APIs, and backend-enforced spoiler filtering |
-| **Requirements** | INFRA-01..03, META-01..03, API-01..04, SEED-01..04 |
-| **Verification** | `01-VERIFICATION.md` — 9/9 truths verified, 0 gaps, 0 human-verification items |
+| **Phase** | Phase 2: Polished Cytoscape Graph Experience |
+| **Status** | Complete — verified (5/5 truths, 25/25 tests, 0 gaps) |
+| **Deliverable** | Polished Cytoscape product experience over the verified spoiler-safe backend graph foundation |
+| **Requirements** | UI-01..05 |
+| **Verification** | `02-VERIFICATION.md` — 5/5 truths verified, 0 gaps, 0 outstanding human-verification items (Definition-of-Done demo UAT completed live via browser automation) |
 
 ## Project Position
 
@@ -50,7 +50,7 @@ Phase 2 Plan 02 (of 4) is complete: the canvas now uses the cose-bilkent layout 
 
 Phase 2 Plan 03 (of 4) is complete: DetailPanel now renders the full Overview/Claims/Evidence tabbed Sheet (D-07) for nodes and claim-backed edges, resolving claims/evidence/sources from the already-fetched GraphResponse with locked "Source: {source label} - {locator}" evidence copy and explicit zero-claims/zero-evidence empty sub-states. A new StructuralEdgeCard (D-06) gives structural edges (PART_OF/PRECEDES) a distinct tab-less card, with the branch decision centralized in exactly one place in App.tsx (GraphCanvas's onSelect contract stays unchanged). UI-04 is satisfied.
 
-Phase 2 Plan 04 (of 4) is complete: dedicated `useWatchProgress`/`ConfirmAdvanceModal` edge-case tests close the remaining Nyquist gaps, tree-wide grep audits confirm the two highest-severity threat mitigations (no `dangerouslySetInnerHTML`, no client-side `visible_from_order` filtering) hold across all of `frontend/src`, and the full 25-test suite/build/lint pass together for the first time across all four plans. The Definition-of-Done conversational demo UAT was completed against the live backend (via browser automation), finding and fixing two real issues along the way: `GraphCanvas.tsx`'s `elements` prop wasn't memoized, causing `cose-bilkent` layout thrashing/mis-fit on unrelated re-renders (fixed with `useMemo`), and `vite.config.ts` was missing a dev-server proxy for `/api` (added). UI-05 is satisfied. Phase 2 is now execution-complete (4/4 plans, UI-01 through UI-05 all satisfied); phase-level verification is the next step.
+Phase 2 Plan 04 (of 4) is complete: dedicated `useWatchProgress`/`ConfirmAdvanceModal` edge-case tests close the remaining Nyquist gaps, tree-wide grep audits confirm the two highest-severity threat mitigations (no `dangerouslySetInnerHTML`, no client-side `visible_from_order` filtering) hold across all of `frontend/src`, and the full 25-test suite/build/lint pass together for the first time across all four plans. The Definition-of-Done conversational demo UAT was completed against the live backend (via browser automation), finding and fixing two real issues along the way: `GraphCanvas.tsx`'s `elements` prop wasn't memoized, causing `cose-bilkent` layout thrashing/mis-fit on unrelated re-renders (fixed with `useMemo`), and `vite.config.ts` was missing a dev-server proxy for `/api` (added). UI-05 is satisfied. Phase 2 is now complete and independently verified (5/5 truths, 0 gaps, `02-VERIFICATION.md`) — all of UI-01 through UI-05 satisfied. Phase 3 (User Notes and Manual Editing) is next.
 
 ## Quick Reference
 
@@ -65,7 +65,7 @@ Phase 2 Plan 04 (of 4) is complete: dedicated `useWatchProgress`/`ConfirmAdvance
 | Phase | Description | Requirements | Status | Completed |
 |-------|-------------|--------------|--------|-----------|
 | Phase 1 | Backend Graph Foundation | INFRA-01..03, META-01..03, API-01..04, SEED-01..04 | Complete — verified | 2026-07-29 |
-| Phase 2 | Polished Cytoscape Graph Experience | UI-01..05 | Pending | — |
+| Phase 2 | Polished Cytoscape Graph Experience | UI-01..05 | Complete — verified | 2026-07-29 |
 | Phase 3 | User Notes and Manual Editing | NOTE-01..03 | Pending | — |
 | Phase 4 | Revision History and Revert | REV-01..03 | Pending | — |
 | Phase 5 | Future-Extraction Preparation | PREP-01..05 | Pending | — |
@@ -78,7 +78,7 @@ Phase 2 Plan 04 (of 4) is complete: dedicated `useWatchProgress`/`ConfirmAdvance
 
 ---
 
-*Last updated: 2026-07-29 — Phase 1 verified complete (9/9 truths, 0 gaps)*
+*Last updated: 2026-07-29 — Phase 2 verified complete (5/5 truths, 0 gaps)*
 
 ## Accumulated Context
 
