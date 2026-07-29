@@ -19,6 +19,8 @@ from backend.app.domain.user_content import (
     NoteCreate,
     NoteTargetType,
     NoteUpdate,
+    CustomNodeUpdate,
+    CustomRelationshipUpdate,
 )
 from backend.app.graph.database import Neo4jDatabase
 
@@ -53,6 +55,11 @@ def _namespace(value: str, prefix: str) -> None:
         or not re.fullmatch(re.escape(prefix) + r"[A-Za-z0-9._-]+", value)
     ):
         raise UserContentValidationError(f"Expected {prefix} namespace")
+
+
+def _resource_id(value: str) -> None:
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9._:-]+", value):
+        raise UserContentValidationError("Invalid resource identifier")
 
 
 def _series(value: str) -> None:
@@ -102,6 +109,14 @@ class CustomRelationshipCreateCommand:
     updated_at: datetime
 
 
+@dataclass(frozen=True)
+class CustomUpdateCommand:
+    id: str
+    series_id: str
+    value: str
+    updated_at: datetime
+
+
 NOTE_CREATE_QUERIES: Mapping[NoteTargetType, str] = {
     NoteTargetType.CHARACTER: """
         MATCH (series:Series {id: $series_id})
@@ -144,7 +159,8 @@ CUSTOM_NODE_CREATE_QUERIES: Mapping[CustomNodeType, str] = {
         CREATE (node:{node_type.value} {{id: $id, series_id: $series_id, label: $label,
           episode_id: $episode_id, visible_from_order: episode.episode_order,
           origin: 'user', created_at: $created_at, updated_at: $updated_at}})
-        RETURN node.id AS id, node.series_id AS series_id, node.label AS label,
+        RETURN node.id AS id, node.series_id AS series_id, '{node_type.value}' AS type,
+          node.label AS label,
           node.episode_id AS episode_id, node.visible_from_order AS visible_from_order,
           node.origin AS origin, node.created_at AS created_at, node.updated_at AS updated_at
     """ for node_type in CustomNodeType
@@ -165,10 +181,82 @@ CUSTOM_RELATIONSHIP_CREATE_QUERY = """
           WHEN target.visible_from_order > episode.episode_order THEN target.visible_from_order
           ELSE episode.episode_order END,
       origin: 'user', created_at: $created_at, updated_at: $updated_at})
-    RETURN claim.id AS id, claim.series_id AS series_id, claim.subject_id AS source,
+        RETURN claim.id AS id, claim.series_id AS series_id, claim.subject_id AS source,
       claim.object_id AS target, claim.predicate AS type, claim.episode_id AS episode_id,
       claim.visible_from_order AS visible_from_order, claim.origin AS origin,
       claim.created_at AS created_at, claim.updated_at AS updated_at
+"""
+
+CUSTOM_NODE_READ_QUERIES: Mapping[CustomNodeType, str] = {
+    node_type: f"""
+        MATCH (node:{node_type.value} {{id: $id, series_id: $series_id}})
+        WHERE node.origin = 'user' AND node.id STARTS WITH 'user-node:'
+          AND node.visible_from_order IS NOT NULL AND node.visible_from_order >= 1
+          AND node.visible_from_order <= $visible_until_order
+        RETURN node.id AS id, node.series_id AS series_id, '{node_type.value}' AS type,
+          node.label AS label, node.visible_from_order AS visible_from_order,
+          node.origin AS origin, node.episode_id AS episode_id,
+          node.created_at AS created_at, node.updated_at AS updated_at
+    """ for node_type in CustomNodeType
+}
+
+CUSTOM_NODE_UPDATE_QUERIES: Mapping[CustomNodeType, str] = {
+    node_type: f"""
+        MATCH (node:{node_type.value} {{id: $id, series_id: $series_id}})
+        WHERE node.origin = 'user' AND node.id STARTS WITH 'user-node:'
+        SET node.label = $label, node.updated_at = $updated_at
+        RETURN node.id AS id, node.series_id AS series_id, '{node_type.value}' AS type,
+          node.label AS label, node.visible_from_order AS visible_from_order,
+          node.origin AS origin, node.episode_id AS episode_id,
+          node.created_at AS created_at, node.updated_at AS updated_at
+    """ for node_type in CustomNodeType
+}
+
+CUSTOM_NODE_DELETE_QUERIES: Mapping[CustomNodeType, str] = {
+    node_type: f"""
+        MATCH (node:{node_type.value} {{id: $id, series_id: $series_id}})
+        WHERE node.origin = 'user' AND node.id STARTS WITH 'user-node:'
+        OPTIONAL MATCH (note:UserNote {{origin: 'user', target_id: node.id}})
+        OPTIONAL MATCH (claim:Claim {{origin: 'user', claim_type: 'user_authored'}})
+        WHERE claim.subject_id = node.id OR claim.object_id = node.id
+        WITH node, count(note) + count(claim) AS dependencies
+        WITH node.id AS deleted_id, dependencies, node
+        FOREACH (_ IN CASE WHEN dependencies = 0 THEN [1] ELSE [] END | DETACH DELETE node)
+        RETURN deleted_id AS id, dependencies
+    """ for node_type in CustomNodeType
+}
+
+CUSTOM_RELATIONSHIP_READ_QUERY = """
+    MATCH (claim:Claim {id: $id, series_id: $series_id, origin: 'user', claim_type: 'user_authored'})
+    WHERE claim.id STARTS WITH 'user-rel:' AND claim.visible_from_order IS NOT NULL
+      AND claim.visible_from_order >= 1 AND claim.visible_from_order <= $visible_until_order
+    RETURN claim.id AS id, claim.series_id AS series_id, claim.subject_id AS source,
+      claim.object_id AS target, claim.predicate AS type,
+      claim.visible_from_order AS visible_from_order, claim.origin AS origin,
+      claim.episode_id AS episode_id, claim.created_at AS created_at,
+      claim.updated_at AS updated_at
+"""
+
+CUSTOM_RELATIONSHIP_UPDATE_QUERY = """
+    MATCH (claim:Claim {id: $id, series_id: $series_id, origin: 'user', claim_type: 'user_authored'})
+    WHERE claim.id STARTS WITH 'user-rel:'
+    SET claim.predicate = $predicate, claim.updated_at = $updated_at
+    RETURN claim.id AS id, claim.series_id AS series_id, claim.subject_id AS source,
+      claim.object_id AS target, claim.predicate AS type,
+      claim.visible_from_order AS visible_from_order, claim.origin AS origin,
+      claim.episode_id AS episode_id, claim.created_at AS created_at,
+      claim.updated_at AS updated_at
+"""
+
+CUSTOM_RELATIONSHIP_DELETE_QUERY = """
+    MATCH (claim:Claim {id: $id, series_id: $series_id, origin: 'user', claim_type: 'user_authored'})
+    WHERE claim.id STARTS WITH 'user-rel:'
+    DELETE claim RETURN $id AS id
+"""
+
+OWNERSHIP_QUERY = """
+    MATCH (resource {id: $id, series_id: $series_id})
+    RETURN resource.origin AS origin, resource.id AS id LIMIT 1
 """
 
 NOTE_UPDATE_QUERY = """
@@ -248,7 +336,7 @@ class UserContentRepository:
         _series(series_id)
         return CustomNodeCreateCommand(
             f"user-node:{uuid4()}", series_id, request.node_type, request.label,
-            request.episode_id, _utc_now(), _utc_now()
+            request.episode_id, (now := _utc_now()), now
         )
 
     async def create_custom_node(self, series_id: str, request: CustomNodeCreate) -> Any:
@@ -276,7 +364,7 @@ class UserContentRepository:
         _series(series_id)
         return CustomRelationshipCreateCommand(
             f"user-rel:{uuid4()}", series_id, request.source_id, request.target_id,
-            request.predicate, request.episode_id, _utc_now(), _utc_now()
+            request.predicate, request.episode_id, (now := _utc_now()), now
         )
 
     async def create_custom_relationship(
@@ -298,6 +386,100 @@ class UserContentRepository:
         if record is None:
             raise UserContentNotFound("relationship endpoint not found")
         return _native(record.data())
+
+    async def _custom_read(self, series_id: str, resource_id: str, boundary: int, queries: list[str]) -> Any:
+        _series(series_id)
+        boundary = await self._require_persisted_boundary(series_id, boundary)
+        rows: list[dict[str, Any]] = []
+        for query in queries:
+            rows.extend(await self.database.execute_query(query, id=resource_id, series_id=series_id,
+                                                          visible_until_order=boundary))
+        if not rows:
+            raise UserContentNotFound("resource not found")
+        return _native(rows[0])
+
+    async def get_custom_node(self, series_id: str, node_id: str, boundary: int) -> Any:
+        _resource_id(node_id)
+        return await self._custom_read(series_id, node_id, boundary, list(CUSTOM_NODE_READ_QUERIES.values()))
+
+    async def update_custom_node(self, series_id: str, node_id: str, request: CustomNodeUpdate) -> Any:
+        _series(series_id); _resource_id(node_id)
+        command = CustomUpdateCommand(node_id, series_id, request.label, _utc_now())
+        return await self.database.execute_write(self._update_custom_node, command)
+
+    @staticmethod
+    async def _update_custom_node(tx: Any, command: CustomUpdateCommand) -> Any:
+        for query in CUSTOM_NODE_UPDATE_QUERIES.values():
+            record = await (await tx.run(query, id=command.id, series_id=command.series_id,
+                                         label=command.value, updated_at=command.updated_at)).single()
+            if record is not None:
+                return _native(record.data())
+        ownership = await (await tx.run(OWNERSHIP_QUERY, id=command.id, series_id=command.series_id)).single()
+        if ownership is not None and ownership.data().get("origin") != "user":
+            raise UserContentConflict("resource ownership conflict")
+        raise UserContentNotFound("node not found")
+
+    async def delete_custom_node(self, series_id: str, node_id: str) -> None:
+        _series(series_id); _resource_id(node_id)
+        result = await self.database.execute_write(self._delete_custom_node, (series_id, node_id))
+        if result == "conflict":
+            raise UserContentConflict("resource in use")
+        if result is None:
+            raise UserContentNotFound("node not found")
+
+    @staticmethod
+    async def _delete_custom_node(tx: Any, payload: tuple[str, str]) -> Any:
+        series_id, node_id = payload
+        for query in CUSTOM_NODE_DELETE_QUERIES.values():
+            record = await (await tx.run(query, id=node_id, series_id=series_id)).single()
+            if record is not None:
+                data = record.data()
+                return "conflict" if data.get("dependencies", 0) else data.get("id")
+        ownership = await (await tx.run(OWNERSHIP_QUERY, id=node_id, series_id=series_id)).single()
+        if ownership is not None and ownership.data().get("origin") != "user":
+            raise UserContentConflict("resource ownership conflict")
+        return None
+
+    async def get_custom_relationship(self, series_id: str, relationship_id: str, boundary: int) -> Any:
+        _resource_id(relationship_id)
+        return await self._custom_read(series_id, relationship_id, boundary, [CUSTOM_RELATIONSHIP_READ_QUERY])
+
+    async def update_custom_relationship(self, series_id: str, relationship_id: str,
+                                         request: CustomRelationshipUpdate) -> Any:
+        _series(series_id); _resource_id(relationship_id)
+        command = CustomUpdateCommand(relationship_id, series_id, request.predicate.value, _utc_now())
+        return await self.database.execute_write(self._update_custom_relationship, command)
+
+    @staticmethod
+    async def _update_custom_relationship(tx: Any, command: CustomUpdateCommand) -> Any:
+        record = await (await tx.run(CUSTOM_RELATIONSHIP_UPDATE_QUERY, id=command.id,
+                                     series_id=command.series_id, predicate=command.value,
+                                     updated_at=command.updated_at)).single()
+        if record is None:
+            ownership = await (await tx.run(OWNERSHIP_QUERY, id=command.id, series_id=command.series_id)).single()
+            if ownership is not None and ownership.data().get("origin") != "user":
+                raise UserContentConflict("resource ownership conflict")
+            raise UserContentNotFound("relationship not found")
+        return _native(record.data())
+
+    async def delete_custom_relationship(self, series_id: str, relationship_id: str) -> None:
+        _series(series_id); _resource_id(relationship_id)
+        result = await self.database.execute_write(self._delete_custom_relationship, (series_id, relationship_id))
+        if result is None:
+            # The ownership probe is part of the same managed transaction.
+            # A canonical/candidate collision is therefore never mutated.
+            raise UserContentNotFound("relationship not found")
+
+    @staticmethod
+    async def _delete_custom_relationship(tx: Any, payload: tuple[str, str]) -> Any:
+        series_id, relationship_id = payload
+        record = await (await tx.run(CUSTOM_RELATIONSHIP_DELETE_QUERY, id=relationship_id,
+                                     series_id=series_id)).single()
+        if record is None:
+            ownership = await (await tx.run(OWNERSHIP_QUERY, id=relationship_id, series_id=series_id)).single()
+            if ownership is not None and ownership.data().get("origin") != "user":
+                raise UserContentConflict("resource ownership conflict")
+        return None if record is None else record.data().get("id")
 
     @staticmethod
     async def _create_note(tx: Any, payload: tuple[NoteCreateCommand, str]) -> Any:

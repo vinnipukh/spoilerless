@@ -6,6 +6,8 @@ from typing import AsyncIterator
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict
+from typing import Literal
 
 
 from backend.app.api.graph import router as graph_router
@@ -15,6 +17,14 @@ from backend.app.core.errors import install_database_error_handlers
 from backend.app.graph.database import Neo4jDatabase
 
 SERVICE_NAME = "hdgrafcehennemi-backend"
+
+
+class HealthResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ok", "degraded"]
+    database: Literal["connected", "unavailable"]
+    service: str
 
 
 @asynccontextmanager
@@ -53,25 +63,16 @@ app.add_middleware(
 install_database_error_handlers(app)
 
 
-@app.get("/health")
-async def health_check(request: Request) -> JSONResponse:
+@app.get("/health", response_model=HealthResponse, summary="Check service and database health",
+         responses={503: {"model": HealthResponse, "description": "Database is unavailable."}})
+async def health_check(request: Request) -> HealthResponse | JSONResponse:
     database: Neo4jDatabase = request.app.state.neo4j
     try:
         await database.verify_connection()
     except Exception:
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "degraded",
-                "database": "unavailable",
-                "service": SERVICE_NAME,
-            },
-        )
-    return JSONResponse(
-        status_code=200,
-        content={
-            "status": "ok",
-            "database": "connected",
-            "service": SERVICE_NAME,
-        },
+        return JSONResponse(status_code=503, content=HealthResponse(
+            status="degraded", database="unavailable", service=SERVICE_NAME
+        ).model_dump())
+    return HealthResponse(
+        status="ok", database="connected", service=SERVICE_NAME
     )

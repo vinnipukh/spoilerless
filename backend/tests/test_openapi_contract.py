@@ -104,3 +104,96 @@ def test_http_error_uses_exact_runtime_envelope() -> None:
     assert_error_envelope(
         response.json(), code="resource_not_found", message="Resource not found."
     )
+
+
+def test_user_route_openapi_has_exact_operations_and_templates() -> None:
+    from backend.app.main import app
+
+    schema = app.openapi()
+    expected_paths = {
+        "/health", "/api/series", "/api/series/{series_id}",
+        "/api/series/{series_id}/episodes", "/api/series/{series_id}/graph",
+        "/api/series/{series_id}/notes", "/api/series/{series_id}/notes/{note_id}",
+        "/api/series/{series_id}/custom-nodes", "/api/series/{series_id}/custom-nodes/{node_id}",
+        "/api/series/{series_id}/custom-relationships",
+        "/api/series/{series_id}/custom-relationships/{relationship_id}",
+    }
+    assert set(schema["paths"]) == expected_paths
+    methods = {(method, path) for path, item in schema["paths"].items()
+               for method in item if method in {"get", "post", "patch", "delete"}}
+    assert methods == {
+        ("get", "/health"), ("get", "/api/series"), ("get", "/api/series/{series_id}"),
+        ("get", "/api/series/{series_id}/episodes"), ("get", "/api/series/{series_id}/graph"),
+        ("post", "/api/series/{series_id}/notes"), ("get", "/api/series/{series_id}/notes"),
+        ("get", "/api/series/{series_id}/notes/{note_id}"),
+        ("patch", "/api/series/{series_id}/notes/{note_id}"),
+        ("delete", "/api/series/{series_id}/notes/{note_id}"),
+        ("post", "/api/series/{series_id}/custom-nodes"),
+        ("get", "/api/series/{series_id}/custom-nodes/{node_id}"),
+        ("patch", "/api/series/{series_id}/custom-nodes/{node_id}"),
+        ("delete", "/api/series/{series_id}/custom-nodes/{node_id}"),
+        ("post", "/api/series/{series_id}/custom-relationships"),
+        ("get", "/api/series/{series_id}/custom-relationships/{relationship_id}"),
+        ("patch", "/api/series/{series_id}/custom-relationships/{relationship_id}"),
+        ("delete", "/api/series/{series_id}/custom-relationships/{relationship_id}"),
+    }
+    assert len(schema["paths"]) == 11
+    for path, item in schema["paths"].items():
+        for method, operation in item.items():
+            if method not in {"get", "post", "patch", "delete"}:
+                continue
+            if "custom-" not in path:
+                continue
+            for status in ("404", "422", "503"):
+                if status in operation["responses"]:
+                    assert_error_response_reference(schema, path=path, method=method, status_code=int(status))
+    for path in (
+        "/api/series/{series_id}/custom-nodes",
+        "/api/series/{series_id}/custom-nodes/{node_id}",
+        "/api/series/{series_id}/custom-relationships",
+        "/api/series/{series_id}/custom-relationships/{relationship_id}",
+    ):
+        for method in paths_for_contract(schema, path):
+            operation = schema["paths"][path][method]
+            if method == "delete":
+                assert operation["responses"]["204"].get("content") in (None, {})
+            else:
+                status = "201" if method == "post" else "200"
+                assert operation["responses"][status]["content"]["application/json"]["schema"]["$ref"].startswith("#/components/schemas/")
+
+
+def paths_for_contract(schema: dict[str, Any], path: str) -> list[str]:
+    return [method for method in schema["paths"][path] if method in {"get", "post", "patch", "delete"}]
+
+
+def test_user_route_openapi_shapes_enums_examples_and_positive_boundaries() -> None:
+    from backend.app.main import app
+
+    schema = app.openapi()
+    paths = schema["paths"]
+    for path, method in (
+        ("/api/series/{series_id}/custom-nodes", "post"),
+        ("/api/series/{series_id}/custom-nodes/{node_id}", "get"),
+        ("/api/series/{series_id}/custom-relationships", "post"),
+        ("/api/series/{series_id}/custom-relationships/{relationship_id}", "get"),
+    ):
+        operation = paths[path][method]
+        assert "summary" in operation
+        assert ("200" if method == "get" else "201") in operation["responses"]
+    for path in paths:
+        for method, operation in paths[path].items():
+            if method not in {"get", "post", "patch", "delete"} or "custom-" not in path:
+                continue
+            if method == "delete":
+                assert operation["responses"]["204"].get("content") in (None, {})
+            if method == "get":
+                boundary = next(p for p in operation["parameters"] if p["name"] == "visible_until_order")
+                assert boundary["required"] is True
+                assert boundary["schema"]["exclusiveMinimum"] == 0
+                assert boundary["schema"].get("examples") == [1]
+    assert schema["components"]["schemas"]["CustomNodeType"]["enum"] == ["Character", "Event", "Location", "Organization", "Object"]
+    assert schema["components"]["schemas"]["CustomRelationshipType"]["enum"] == [
+        "PARTICIPATED_IN", "WITNESSED", "CAUSED", "AFFECTED", "TARGETED", "MENTIONED",
+        "KNOWS", "FAMILY_OF", "WORKS_WITH", "TRUSTS", "DISTRUSTS", "HELPS", "OPPOSES",
+        "THREATENS", "ATTACKS", "KILLS",
+    ]

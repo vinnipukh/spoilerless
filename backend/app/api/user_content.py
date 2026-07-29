@@ -11,10 +11,13 @@ from backend.app.domain.user_content import (
     NoteTargetType,
     NoteUpdate,
     VisibleUntilOrder,
+    CustomNodeCreate, CustomNodeResponse, CustomNodeUpdate,
+    CustomRelationshipCreate, CustomRelationshipResponse, CustomRelationshipUpdate,
 )
 from backend.app.graph.database import Neo4jDatabase, get_database
 from backend.app.graph.user_content import (
     UserContentNotFound,
+    UserContentConflict,
     UserContentRepository,
     UserContentValidationError,
 )
@@ -34,6 +37,10 @@ def _not_found() -> Exception:
 
 def _invalid(exc: UserContentValidationError) -> Exception:
     return http_error(422, "invalid_request", "Request validation failed.")
+
+
+def _conflict(exc: UserContentConflict) -> Exception:
+    return http_error(409, "resource_conflict", "The request conflicts with the current resource state.")
 
 
 @router.post(
@@ -111,4 +118,84 @@ async def delete_note(series_id: str, note_id: str, database: DatabaseDependency
         raise _invalid(exc) from exc
     except UserContentNotFound as exc:
         raise _not_found() from exc
+    return Response(status_code=204)
+
+
+@router.post("/{series_id}/custom-nodes", response_model=CustomNodeResponse, status_code=201,
+             summary="Create a user-owned custom node", responses=error_responses(404, 409, 422, 503))
+async def create_custom_node(series_id: str, payload: CustomNodeCreate, database: DatabaseDependency) -> CustomNodeResponse:
+    try:
+        return CustomNodeResponse.model_validate(await _repository(database).create_custom_node(series_id, payload))
+    except UserContentValidationError as exc: raise _invalid(exc) from exc
+    except UserContentConflict as exc: raise _conflict(exc) from exc
+    except UserContentNotFound as exc: raise _not_found() from exc
+
+
+@router.get("/{series_id}/custom-nodes/{node_id}", response_model=CustomNodeResponse,
+            summary="Read one visible custom node", responses=error_responses(404, 422, 503))
+async def get_custom_node(series_id: str, node_id: str, visible_until_order: Boundary, database: DatabaseDependency) -> CustomNodeResponse:
+    try:
+        return CustomNodeResponse.model_validate(await _repository(database).get_custom_node(series_id, node_id, visible_until_order))
+    except UserContentValidationError as exc: raise _invalid(exc) from exc
+    except UserContentNotFound as exc: raise _not_found() from exc
+
+
+@router.patch("/{series_id}/custom-nodes/{node_id}", response_model=CustomNodeResponse,
+              summary="Update a custom node label", responses=error_responses(404, 409, 422, 503))
+async def update_custom_node(series_id: str, node_id: str, payload: CustomNodeUpdate, database: DatabaseDependency) -> CustomNodeResponse:
+    try:
+        return CustomNodeResponse.model_validate(await _repository(database).update_custom_node(series_id, node_id, payload))
+    except UserContentValidationError as exc: raise _invalid(exc) from exc
+    except UserContentConflict as exc: raise _conflict(exc) from exc
+    except UserContentNotFound as exc: raise _not_found() from exc
+
+
+@router.delete("/{series_id}/custom-nodes/{node_id}", status_code=204,
+               summary="Hard-delete a custom node", responses={**error_responses(404, 409, 422, 503), 204: {"description": "Node deleted."}})
+async def delete_custom_node(series_id: str, node_id: str, database: DatabaseDependency) -> Response:
+    try:
+        await _repository(database).delete_custom_node(series_id, node_id)
+    except UserContentValidationError as exc: raise _invalid(exc) from exc
+    except UserContentConflict as exc: raise _conflict(exc) from exc
+    except UserContentNotFound as exc: raise _not_found() from exc
+    return Response(status_code=204)
+
+
+@router.post("/{series_id}/custom-relationships", response_model=CustomRelationshipResponse, status_code=201,
+             summary="Create a user-authored relationship", responses=error_responses(404, 409, 422, 503))
+async def create_custom_relationship(series_id: str, payload: CustomRelationshipCreate, database: DatabaseDependency) -> CustomRelationshipResponse:
+    try:
+        return CustomRelationshipResponse.model_validate(await _repository(database).create_custom_relationship(series_id, payload))
+    except UserContentValidationError as exc: raise _invalid(exc) from exc
+    except UserContentConflict as exc: raise _conflict(exc) from exc
+    except UserContentNotFound as exc: raise _not_found() from exc
+
+
+@router.get("/{series_id}/custom-relationships/{relationship_id}", response_model=CustomRelationshipResponse,
+            summary="Read one visible custom relationship", responses=error_responses(404, 422, 503))
+async def get_custom_relationship(series_id: str, relationship_id: str, visible_until_order: Boundary, database: DatabaseDependency) -> CustomRelationshipResponse:
+    try:
+        return CustomRelationshipResponse.model_validate(await _repository(database).get_custom_relationship(series_id, relationship_id, visible_until_order))
+    except UserContentValidationError as exc: raise _invalid(exc) from exc
+    except UserContentNotFound as exc: raise _not_found() from exc
+
+
+@router.patch("/{series_id}/custom-relationships/{relationship_id}", response_model=CustomRelationshipResponse,
+              summary="Update a custom relationship predicate", responses=error_responses(404, 409, 422, 503))
+async def update_custom_relationship(series_id: str, relationship_id: str, payload: CustomRelationshipUpdate, database: DatabaseDependency) -> CustomRelationshipResponse:
+    try:
+        return CustomRelationshipResponse.model_validate(await _repository(database).update_custom_relationship(series_id, relationship_id, payload))
+    except UserContentValidationError as exc: raise _invalid(exc) from exc
+    except UserContentConflict as exc: raise _conflict(exc) from exc
+    except UserContentNotFound as exc: raise _not_found() from exc
+
+
+@router.delete("/{series_id}/custom-relationships/{relationship_id}", status_code=204,
+               summary="Hard-delete a custom relationship", responses={**error_responses(404, 409, 422, 503), 204: {"description": "Relationship deleted."}})
+async def delete_custom_relationship(series_id: str, relationship_id: str, database: DatabaseDependency) -> Response:
+    try:
+        await _repository(database).delete_custom_relationship(series_id, relationship_id)
+    except UserContentValidationError as exc: raise _invalid(exc) from exc
+    except UserContentConflict as exc: raise _conflict(exc) from exc
+    except UserContentNotFound as exc: raise _not_found() from exc
     return Response(status_code=204)

@@ -183,6 +183,152 @@ def test_note_claim_filter_validation_and_canonical_survival(
     assert after.json()["series"]["id"] == "series_dexter"
 
 
+def test_custom_node_crud_all_five_types_and_visibility(user_content_client: TestClient) -> None:
+    base = "/api/series/series_dexter/custom-nodes"
+    ids: list[str] = []
+    for node_type in ("Character", "Event", "Location", "Organization", "Object"):
+        created = user_content_client.post(
+            base, json={"node_type": node_type, "label": f"user {node_type}",
+                        "episode_id": "dexter_s01e03"}
+        )
+        assert created.status_code == 201
+        row = created.json()
+        ids.append(row["id"])
+        assert row["id"].startswith("user-node:")
+        assert row["type"] == node_type and row["origin"] == "user"
+        assert row["visible_from_order"] == 3
+        assert user_content_client.get(f"{base}/{row['id']}", params={"visible_until_order": 2}).status_code == 404
+        assert user_content_client.get(f"{base}/{row['id']}", params={"visible_until_order": 3}).status_code == 200
+        updated = user_content_client.patch(f"{base}/{row['id']}", json={"label": "renamed"})
+        assert updated.status_code == 200 and updated.json()["label"] == "renamed"
+    for node_id in ids:
+        response = user_content_client.delete(f"{base}/{node_id}")
+        assert response.status_code == 204 and response.content == b""
+
+
+@pytest.mark.parametrize("predicate", [
+    "PARTICIPATED_IN", "WITNESSED", "CAUSED", "AFFECTED", "TARGETED", "MENTIONED",
+    "KNOWS", "FAMILY_OF", "WORKS_WITH", "TRUSTS", "DISTRUSTS", "HELPS", "OPPOSES",
+    "THREATENS", "ATTACKS", "KILLS",
+])
+def test_custom_relationship_allowed_predicates_crud(
+    user_content_client: TestClient, predicate: str
+) -> None:
+    base = "/api/series/series_dexter/custom-relationships"
+    created = user_content_client.post(base, json={
+        "source_id": "dexter:character:dexter_morgan",
+        "target_id": "dexter:character:debra_morgan",
+        "predicate": predicate, "episode_id": "dexter_s01e01",
+    })
+    assert created.status_code == 201, created.text
+    row = created.json()
+    assert row["id"].startswith("user-rel:") and row["type"] == predicate
+    read = user_content_client.get(f"{base}/{row['id']}", params={"visible_until_order": 1})
+    assert read.status_code == 200, read.text
+    changed = "TRUSTS" if predicate != "TRUSTS" else "KNOWS"
+    patched = user_content_client.patch(f"{base}/{row['id']}", json={"predicate": changed})
+    assert patched.status_code == 200 and patched.json()["type"] == changed
+    assert user_content_client.delete(f"{base}/{row['id']}").status_code == 204
+
+
+@pytest.mark.parametrize("predicate", [
+    "PART_OF", "PRECEDES", "LOCATED_IN", "SUPPORTED_BY", "CONTRADICTED_BY",
+    "DERIVED_FROM", "REFERS_TO", "CORRECTS", "SUPERSEDES", "REVERTS_TO", "NOPE",
+])
+def test_custom_relationship_rejects_non_user_predicate_groups(
+    user_content_client: TestClient, predicate: str
+) -> None:
+    response = user_content_client.post("/api/series/series_dexter/custom-relationships", json={
+        "source_id": "dexter:character:dexter_morgan", "target_id": "dexter:character:debra_morgan",
+        "predicate": predicate, "episode_id": "dexter_s01e01",
+    })
+    assert response.status_code == 422
+    assert response.json() == {"detail": {"code": "invalid_request", "message": "Request validation failed."}}
+
+
+def test_custom_relationship_visibility_max_cross_series_dangling_and_in_use(
+    user_content_client: TestClient, second_series: str
+) -> None:
+    node = user_content_client.post("/api/series/series_dexter/custom-nodes", json={
+        "node_type": "Object", "label": "late object", "episode_id": "dexter_s01e03"
+    }).json()
+    rel_base = "/api/series/series_dexter/custom-relationships"
+    rel = user_content_client.post(rel_base, json={
+        "source_id": node["id"], "target_id": "dexter:character:dexter_morgan",
+        "predicate": "KNOWS", "episode_id": "dexter_s01e01"
+    })
+    assert rel.status_code == 201 and rel.json()["visible_from_order"] == 3
+    rel_id = rel.json()["id"]
+    assert user_content_client.get(f"{rel_base}/{rel_id}", params={"visible_until_order": 2}).status_code == 404
+    assert user_content_client.delete(f"/api/series/series_dexter/custom-nodes/{node['id']}").status_code == 409
+    assert user_content_client.delete(f"{rel_base}/{rel_id}").status_code == 204
+    assert user_content_client.delete(f"/api/series/series_dexter/custom-nodes/{node['id']}").status_code == 204
+    for payload in (
+        {"source_id": "missing", "target_id": "dexter:character:dexter_morgan"},
+        {"source_id": "dexter:character:dexter_morgan", "target_id": "missing"},
+    ):
+        response = user_content_client.post(rel_base, json={**payload, "predicate": "KNOWS", "episode_id": "dexter_s01e01"})
+        assert response.status_code == 404
+    other = user_content_client.post(f"/api/series/{second_series}/custom-nodes", json={
+        "node_type": "Object", "label": "other", "episode_id": f"{second_series}:episode:1"
+    }).json()
+    response = user_content_client.post(rel_base, json={
+        "source_id": other["id"], "target_id": "dexter:character:dexter_morgan",
+        "predicate": "KNOWS", "episode_id": "dexter_s01e01"
+    })
+    assert response.status_code == 404
+
+
+def test_custom_content_canonical_isolation_and_hidden_missing_equivalence(
+    user_content_client: TestClient,
+) -> None:
+    node_base = "/api/series/series_dexter/custom-nodes"
+    canonical = "dexter:character:dexter_morgan"
+    assert user_content_client.patch(f"{node_base}/{canonical}", json={"label": "tamper"}).status_code == 409
+    assert user_content_client.delete(f"{node_base}/{canonical}").status_code == 409
+    rel_base = "/api/series/series_dexter/custom-relationships"
+    claim = "dexter:claim:s01e01:dexter_debra_family"
+    assert user_content_client.patch(f"{rel_base}/{claim}", json={"predicate": "KNOWS"}).status_code == 409
+    assert user_content_client.patch(
+        f"{rel_base}/dexter:claim:s01e01:temporary_trust", json={"predicate": "KNOWS"}
+    ).status_code == 409
+    hidden_relationship = user_content_client.get(
+        f"{rel_base}/user-rel:missing", params={"visible_until_order": 2}
+    )
+    missing_relationship = user_content_client.get(
+        f"{rel_base}/user-rel:does-not-exist", params={"visible_until_order": 2}
+    )
+    assert_hidden_matches_missing(hidden_relationship, missing_relationship)
+    _run(database_snapshot(
+        "CREATE (:Object {id: 'user-node:missing-visibility', series_id: 'series_dexter', "
+        "label: 'hidden metadata', origin: 'user'})"
+    ))
+    hidden = user_content_client.get(f"{node_base}/user-node:missing", params={"visible_until_order": 2})
+    absent = user_content_client.get(f"{node_base}/user-node:does-not-exist", params={"visible_until_order": 2})
+    assert_hidden_matches_missing(hidden, absent)
+    malformed = user_content_client.get(
+        f"{node_base}/user-node:missing-visibility", params={"visible_until_order": 3}
+    )
+    assert_hidden_matches_missing(malformed, absent)
+    for boundary in (0, -1, 4, "bad"):
+        assert user_content_client.get(f"{node_base}/user-node:missing", params={"visible_until_order": boundary}).status_code == 422
+
+
+def test_custom_routes_return_503_when_database_is_unavailable(
+    live_client: TestClient, override_database: Callable[[DatabaseOverride], TestClient]
+) -> None:
+    class Unavailable:
+        async def execute_query(self, query: str, **parameters: Any) -> list[dict[str, Any]]:
+            from neo4j.exceptions import ServiceUnavailable
+            raise ServiceUnavailable("offline")
+        async def execute_write(self, work: Any, command: Any) -> Any:
+            from neo4j.exceptions import ServiceUnavailable
+            raise ServiceUnavailable("offline")
+    client = override_database(Unavailable())
+    assert client.get("/api/series/series_dexter/custom-nodes/user-node:x", params={"visible_until_order": 1}).status_code == 503
+    assert client.get("/api/series/series_dexter/custom-relationships/user-rel:x", params={"visible_until_order": 1}).status_code == 503
+
+
 @pytest.fixture(scope="module")
 def live_client() -> Iterator[TestClient]:
     _run(_with_database(_seed_and_clean))

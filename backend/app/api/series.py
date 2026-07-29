@@ -6,12 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from backend.app.domain.series import EpisodeResponse, SeriesResponse
 from backend.app.graph.database import Neo4jDatabase, get_database
+from backend.app.core.errors import error_responses
 
 router = APIRouter(prefix="/api/series", tags=["series"])
 DatabaseDependency = Annotated[Neo4jDatabase, Depends(get_database)]
 
 
-@router.get("", response_model=list[SeriesResponse])
+@router.get("", response_model=list[SeriesResponse], summary="List series", responses=error_responses(503))
 async def list_series(database: DatabaseDependency) -> list[SeriesResponse]:
     records = await database.execute_query(
         """
@@ -25,7 +26,7 @@ async def list_series(database: DatabaseDependency) -> list[SeriesResponse]:
     return [SeriesResponse(**record) for record in records]
 
 
-@router.get("/{series_id}", response_model=SeriesResponse)
+@router.get("/{series_id}", response_model=SeriesResponse, summary="Read a series", responses=error_responses(404, 503))
 async def get_series(series_id: str, database: DatabaseDependency) -> SeriesResponse:
     records = await database.execute_query(
         """
@@ -44,7 +45,7 @@ async def get_series(series_id: str, database: DatabaseDependency) -> SeriesResp
     return SeriesResponse(**records[0])
 
 
-@router.get("/{series_id}/episodes", response_model=list[EpisodeResponse])
+@router.get("/{series_id}/episodes", response_model=list[EpisodeResponse], summary="List series episodes", responses=error_responses(404, 503))
 async def list_episodes(
     series_id: str,
     database: DatabaseDependency,
