@@ -26,9 +26,17 @@
 **Plans:** 4 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 02-01-PLAN.md — Dependencies, test infra & tracer slice: types/API client/hooks/sessionStorage-gated confirmation modal/minimal Cytoscape render/minimal detail panel, replacing the Vite starter end-to-end
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 02-02-PLAN.md — Graph canvas polish: cose-bilkent layout, full node-type/origin stylesheet, selection highlight/fade, loading/error/empty overlay states
 - [ ] 02-03-PLAN.md — Detail panel split: Overview/Claims/Evidence tabbed Sheet (nodes/claim-backed edges) vs. tab-less StructuralEdgeCard (structural edges)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 02-04-PLAN.md — Remaining component tests, tree-wide threat-mitigation grep audit, full-suite verification, and demo UAT
 
 ## Phase 3: User Notes and Manual Editing
