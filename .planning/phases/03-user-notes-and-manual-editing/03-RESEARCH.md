@@ -335,7 +335,7 @@ There are two tensions in the locked decisions, not reasons to broaden scope:
 
 These should be surfaced in the plan's must-haves and frontend contract rather than silently resolved in a way that changes locked paths or trusts client visibility.
 
-## Testing Strategy
+## Validation Architecture
 
 ### Unit/contract tests (no live Neo4j)
 
