@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to plan
-stopped_at: Completed 02-01-PLAN.md (Task 2 tracer, resumed after quota cutoff)
-last_updated: "2026-07-29T12:02:48.231Z"
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-07-29T12:46:50.797Z"
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 5
-  completed_plans: 2
+  completed_plans: 3
 ---
 
 # HD Graf Cehennemi — Project State
@@ -25,7 +25,7 @@ progress:
 | Field | Value |
 |-------|-------|
 | **Phase** | Phase 2: Polished Cytoscape Graph Experience |
-| **Status** | In Progress — Plan 01/04 complete |
+| **Status** | In Progress — Plan 02/04 complete |
 | **Deliverable** | Polished Cytoscape product experience over the verified spoiler-safe backend graph foundation |
 | **Requirements** | UI-01..05 |
 | **Dependencies** | Phase 1 complete (verified 9/9 truths) |
@@ -44,7 +44,9 @@ progress:
 
 Phase 1 is fully executed and verified — the backend graph foundation delivers a lifespan-owned Neo4j driver, ontology-validated deterministic Dexter S01E01–03 seed data, and a fail-closed spoiler-safe graph API with 13 automated tests and a repeatable smoke command. Phase 2 can build directly against this contract. Notes/manual editing, revisions/revert, and future-extraction preparation remain Phases 3–5. Automated ingestion/extraction and LLM chat remain post-v0.
 
-Phase 2 Plan 01 (of 4) is complete: the Vite starter is fully replaced with a real product layout (AppShell/SeriesSelect/EpisodeSelector/ConfirmAdvanceModal/GraphCanvas/DetailPanel) that fetches from and renders the verified Phase 1 backend end-to-end, gated by a sessionStorage-backed watch-progress confirmation flow (forward and backward). UI-01 and the mechanical core of UI-02 are satisfied. Vitest + React Testing Library test infrastructure now exists in this repo for the first time. Visual polish (cose-bilkent layout, full node/edge stylesheet, neighbor highlight/fade — UI-03) and the detail-panel tab/branch split (UI-04) remain Plans 02 and 03.
+Phase 2 Plan 01 (of 4) is complete: the Vite starter is fully replaced with a real product layout (AppShell/SeriesSelect/EpisodeSelector/ConfirmAdvanceModal/GraphCanvas/DetailPanel) that fetches from and renders the verified Phase 1 backend end-to-end, gated by a sessionStorage-backed watch-progress confirmation flow (forward and backward). UI-01 and the mechanical core of UI-02 are satisfied. Vitest + React Testing Library test infrastructure now exists in this repo for the first time.
+
+Phase 2 Plan 02 (of 4) is complete: the canvas now uses the cose-bilkent layout (cose fallback on actual failure only), a full node-type shape + origin-border stylesheet (including Claude's-discretion Episode=tag/Series=star additions, documented in 02-UI-SPEC.md), tap-driven neighbor highlight/fade on nodes and edges, and GraphStatus.tsx loading/error/empty overlay states wired into App.tsx's full useGraph status branch (with a working Retry). A GraphCanvas.test.tsx component test proves element counts track the backend boundary exactly at both S01E01 (11 nodes/6 edges) and S01E03 (20 nodes). UI-03 is satisfied. The detail-panel tab/branch split (UI-04, D-06/D-07) remains Plan 03.
 
 ## Quick Reference
 
@@ -91,13 +93,15 @@ Phase 2 Plan 01 (of 4) is complete: the Vite starter is fully replaced with a re
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 02 P01 | ~45min (resumed) | 1 tasks | 26 files |
+| Phase 02 P02 | 45min | 2 tasks | 5 files |
 
 ## Session
 
-**Last session:** 2026-07-29T12:02:48.216Z
-**Stopped at:** Completed 02-01-PLAN.md (Task 2 tracer, resumed after quota cutoff)
+**Last session:** 2026-07-29T12:46:50.783Z
+**Stopped at:** Completed 02-02-PLAN.md
 **Resume file:** None
 
 ## Decisions
 
 - [Phase ?]: Backward-copy variant added to ConfirmAdvanceModal + 02-UI-SPEC.md Copywriting Contract (Claude's-discretion addition per CONTEXT.md)
+- [Phase ?]: GraphErrorState Retry uses a useGraph retryToken folded into the existing key-comparison reset pattern (not a new imperative setState-in-effect)
