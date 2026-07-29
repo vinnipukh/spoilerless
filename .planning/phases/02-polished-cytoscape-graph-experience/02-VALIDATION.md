@@ -40,11 +40,19 @@ created: 2026-07-29
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 02-01/T2 | 02-01 | 1 | UI-01, UI-02 | T-02-04 | React auto-escaping only; no `dangerouslySetInnerHTML` | component (tracer, RTL + user-event) | `npm run test -- --run src/App.test.tsx` | ❌ created this task | ⬜ pending |
-| 02-04/T1 | 02-04 | 3 | UI-02 | T-02-02 | Defensive `sessionStorage` JSON.parse in try/catch with D-01 fallback | unit (`renderHook`) + component (RTL + user-event) | `npm run test -- --run src/hooks/useWatchProgress.test.ts src/components/episode/ConfirmAdvanceModal.test.tsx` | ❌ created this task | ⬜ pending |
-| 02-02/T2 | 02-02 | 2 | UI-03 | T-02-06 | Backend is sole authority on visibility; frontend never client-side filters by `visible_from_order` | component (mount `GraphCanvas` w/ fixture `GraphResponse`) | `npm run test -- --run src/components/graph/GraphCanvas.test.tsx` | ❌ created this task | ⬜ pending |
-| 02-03/T1, 02-03/T2 | 02-03 | 2 | UI-04 | T-02-09 | Render evidence/claim text via JSX interpolation only | component | `npm run test -- --run src/components/detail/DetailPanel.test.tsx src/components/detail/StructuralEdgeCard.test.tsx` | ❌ created these tasks | ⬜ pending |
-| 02-04/T2 | 02-04 | 3 | UI-05 | T-02-12, T-02-13 | Tree-wide grep audit (no `dangerouslySetInnerHTML`, no client-side `visible_from_order` filtering) + full suite | build/lint (existing) + full test suite + manual/conversational UAT | `npm run build && npm run lint && npm run test -- --run` | ✅ existing scripts | ⬜ pending |
+| 02-01/T2 | 02-01 | 1 | UI-01, UI-02 | T-02-04 | React auto-escaping only; no `dangerouslySetInnerHTML` | component (tracer, RTL + user-event) | `npm run test -- --run src/App.test.tsx` | ✅ exists | ✅ passed (part of full-suite run below) |
+| 02-04/T1 | 02-04 | 3 | UI-02 | T-02-02 | Defensive `sessionStorage` JSON.parse in try/catch with D-01 fallback | unit (`renderHook`) + component (RTL + user-event) | `npm run test -- --run src/hooks/useWatchProgress.test.ts src/components/episode/ConfirmAdvanceModal.test.tsx` | ✅ created (commit 70a9c66) | ✅ passed — 12/12 tests (2 files) |
+| 02-02/T2 | 02-02 | 2 | UI-03 | T-02-06 | Backend is sole authority on visibility; frontend never client-side filters by `visible_from_order` | component (mount `GraphCanvas` w/ fixture `GraphResponse`) | `npm run test -- --run src/components/graph/GraphCanvas.test.tsx` | ✅ exists | ✅ passed (part of full-suite run below) |
+| 02-03/T1, 02-03/T2 | 02-03 | 2 | UI-04 | T-02-09 | Render evidence/claim text via JSX interpolation only | component | `npm run test -- --run src/components/detail/DetailPanel.test.tsx src/components/detail/StructuralEdgeCard.test.tsx` | ✅ exists | ✅ passed (part of full-suite run below) |
+| 02-04/T2 | 02-04 | 3 | UI-05 | T-02-12, T-02-13 | Tree-wide grep audit (no `dangerouslySetInnerHTML`, no client-side `visible_from_order` filtering) + full suite | build/lint (existing) + full test suite + manual/conversational UAT | `npm run build && npm run lint && npm run test -- --run` | ✅ existing scripts | 🟡 automated checks passed; manual UAT still pending (see below) |
+
+**02-04/T2 automated sub-check results (run 2026-07-29):**
+
+1. `npm run test -- --run` (full suite, all 4 plans together for the first time): **6 test files, 25 tests, all passed.** (`App.test.tsx`, `GraphCanvas.test.tsx`, `DetailPanel.test.tsx`, `StructuralEdgeCard.test.tsx`, `useWatchProgress.test.ts`, `ConfirmAdvanceModal.test.tsx`)
+2. `npm run build && npm run lint`: **both exit 0.** (`tsc -b && vite build` succeeded with one non-fatal chunk-size-warning notice, no errors; `eslint .` produced zero output/warnings.)
+3. Grep audit for `dangerouslySetInnerHTML` across `frontend/src`: **zero matches.**
+4. Grep audit for `visible_from_order` in `graphElements.ts` and `GraphCanvas.tsx`: **`graphElements.ts` has one match, a comment (not a filter/exclude condition) explaining why the function must never re-filter by this field; `GraphCanvas.tsx` has zero matches.** No client-side filter/exclude pattern found in either file.
+5. Manual Definition-of-Done demo script against `npm run dev` + live backend: **not yet run — awaiting human execution (see Manual-Only Verifications below).**
 
 Task ID / Plan / Wave columns filled in by `/gsd-planner` (4 plans, waves 1/2/2/3); the Requirement → Test mapping is locked from `02-RESEARCH.md`'s Validation Architecture section. Actual pass/fail status is recorded by `/gsd-execute-phase` and `/gsd-verify-work`.
 
