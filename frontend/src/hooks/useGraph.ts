@@ -14,6 +14,11 @@ function canFetch(seriesId: string | null, visibleUntilOrder: number | null): bo
 }
 
 export function useGraph(seriesId: string | null, visibleUntilOrder: number | null) {
+  // Bumped by `refetch()` (GraphErrorState's Retry button) to re-issue the
+  // last `getGraph(seriesId, visibleUntilOrder)` call without changing the
+  // series/order themselves.
+  const [retryToken, setRetryToken] = useState(0)
+
   const [state, setState] = useState<State>(() =>
     canFetch(seriesId, visibleUntilOrder) ? { status: 'loading' } : { status: 'idle' },
   )
@@ -21,11 +26,13 @@ export function useGraph(seriesId: string | null, visibleUntilOrder: number | nu
   // react-hooks/set-state-in-effect forbids an unconditional synchronous
   // setState at the top of an effect body, and react-hooks/refs forbids
   // reading/writing a ref during render. Resetting state when the
-  // (seriesId, visibleUntilOrder) key changes is instead done here, during
-  // render, comparing against a *state* copy of the previous key — React's
-  // documented "adjusting state when a prop changes" pattern — so the
-  // effect below only ever sets 'success'/'error' from its async callbacks.
-  const key = `${seriesId ?? ''}:${visibleUntilOrder ?? ''}`
+  // (seriesId, visibleUntilOrder, retryToken) key changes is instead done
+  // here, during render, comparing against a *state* copy of the previous
+  // key — React's documented "adjusting state when a prop changes" pattern —
+  // so the effect below only ever sets 'success'/'error' from its async
+  // callbacks. Including retryToken in the key means Retry re-enters the
+  // 'loading' state the same way a genuine boundary change does.
+  const key = `${seriesId ?? ''}:${visibleUntilOrder ?? ''}:${retryToken}`
   const [prevKey, setPrevKey] = useState(key)
   if (prevKey !== key) {
     setPrevKey(key)
@@ -50,7 +57,11 @@ export function useGraph(seriesId: string | null, visibleUntilOrder: number | nu
     return () => {
       cancelled = true
     }
-  }, [seriesId, visibleUntilOrder])
+  }, [seriesId, visibleUntilOrder, retryToken])
 
-  return state
+  function refetch() {
+    setRetryToken((token) => token + 1)
+  }
+
+  return { ...state, refetch }
 }

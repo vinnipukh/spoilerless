@@ -4,6 +4,7 @@ import { SeriesSelect } from './components/episode/SeriesSelect'
 import { EpisodeSelector } from './components/episode/EpisodeSelector'
 import { ConfirmAdvanceModal } from './components/episode/ConfirmAdvanceModal'
 import { GraphCanvas, type SelectedElement } from './components/graph/GraphCanvas'
+import { GraphLoadingState, GraphErrorState, GraphEmptyState } from './components/graph/GraphStatus'
 import { DetailPanel } from './components/detail/DetailPanel'
 import { useSeries } from './hooks/useSeries'
 import { useEpisodes } from './hooks/useEpisodes'
@@ -77,19 +78,16 @@ function App() {
         />
       )}
 
-      {graphState.status === 'success' ? (
+      {graphState.status === 'loading' && <GraphLoadingState />}
+      {graphState.status === 'error' && <GraphErrorState onRetry={graphState.refetch} />}
+      {graphState.status === 'success' && graphState.data.nodes.length === 0 && <GraphEmptyState />}
+      {graphState.status === 'success' && graphState.data.nodes.length > 0 && (
         <>
           <GraphCanvas graph={graphState.data} onSelect={setSelectedElement} />
           <DetailPanel selected={selectedElement} />
         </>
-      ) : (
-        <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-          <h2 className="text-lg font-semibold">Nothing revealed yet</h2>
-          <p className="text-sm text-muted-foreground">
-            Advance your watch progress to unlock the story.
-          </p>
-        </div>
       )}
+      {graphState.status === 'idle' && <GraphEmptyState />}
     </AppShell>
   )
 }

@@ -81,3 +81,76 @@ export const graphResponseS01E01: GraphResponse = {
     },
   ],
 }
+
+// Second fixture (02-02-PLAN.md Task 2, action 3) for `visible_until_order=3`
+// mirroring 02-RESEARCH.md Pitfall 3's verified live counts exactly: 20 total
+// nodes (9 Character, 3 Event, 4 Location, 3 Episode, 1 Series). Claims/
+// sources/evidence are kept minimal here — GraphCanvas.test.tsx's boundary
+// assertions are node/edge-count and nodeType focused, not claim-detail
+// focused (that's Plan 03's DetailPanel scope).
+export const graphResponseS01E03: GraphResponse = {
+  series: { id: 'series_dexter', title: 'Dexter', slug: 'dexter' },
+  visible_until_order: 3,
+  nodes: [
+    { id: 'series_dexter', type: 'Series', label: 'Dexter', visible_from_order: 1, origin: 'canonical', episode_id: null },
+    { id: 'dexter_s01e01', type: 'Episode', label: 'S01E01 — Dexter', visible_from_order: 1, origin: 'canonical', episode_id: 'dexter_s01e01' },
+    { id: 'dexter_s01e02', type: 'Episode', label: 'S01E02 — Crocodile', visible_from_order: 2, origin: 'canonical', episode_id: 'dexter_s01e02' },
+    { id: 'dexter_s01e03', type: 'Episode', label: 'S01E03 — Popping Cherry', visible_from_order: 3, origin: 'canonical', episode_id: 'dexter_s01e03' },
+    { id: 'char_dexter_morgan', type: 'Character', label: 'Dexter Morgan', visible_from_order: 1, origin: 'canonical', episode_id: 'dexter_s01e01' },
+    { id: 'char_debra_morgan', type: 'Character', label: 'Debra Morgan', visible_from_order: 1, origin: 'canonical', episode_id: 'dexter_s01e01' },
+    { id: 'char_james_doakes', type: 'Character', label: 'James Doakes', visible_from_order: 1, origin: 'canonical', episode_id: 'dexter_s01e01' },
+    { id: 'char_rita_bennett', type: 'Character', label: 'Rita Bennett', visible_from_order: 1, origin: 'canonical', episode_id: 'dexter_s01e01' },
+    { id: 'char_angel_batista', type: 'Character', label: 'Angel Batista', visible_from_order: 1, origin: 'canonical', episode_id: 'dexter_s01e01' },
+    { id: 'char_ice_truck_killer', type: 'Character', label: 'The Ice Truck Killer', visible_from_order: 1, origin: 'canonical', episode_id: 'dexter_s01e01' },
+    { id: 'char_vince_masuka', type: 'Character', label: 'Vince Masuka', visible_from_order: 2, origin: 'canonical', episode_id: 'dexter_s01e02' },
+    { id: 'char_maria_laguerta', type: 'Character', label: 'Maria LaGuerta', visible_from_order: 2, origin: 'canonical', episode_id: 'dexter_s01e02' },
+    { id: 'char_paul_bennett', type: 'Character', label: 'Paul Bennett', visible_from_order: 3, origin: 'canonical', episode_id: 'dexter_s01e03' },
+    { id: 'event_first_kill', type: 'Event', label: 'Dexter kills Mike Donovan', visible_from_order: 1, origin: 'canonical', episode_id: 'dexter_s01e01' },
+    { id: 'event_croc_discovery', type: 'Event', label: 'Alligator crime scene discovered', visible_from_order: 2, origin: 'canonical', episode_id: 'dexter_s01e02' },
+    { id: 'event_paul_flashback', type: 'Event', label: "Dexter recalls Paul's abuse", visible_from_order: 3, origin: 'canonical', episode_id: 'dexter_s01e03' },
+    { id: 'loc_miami_metro', type: 'Location', label: 'Miami Metro Police Department', visible_from_order: 1, origin: 'canonical', episode_id: 'dexter_s01e01' },
+    { id: 'loc_dexters_apartment', type: 'Location', label: "Dexter's Apartment", visible_from_order: 1, origin: 'canonical', episode_id: 'dexter_s01e01' },
+    { id: 'loc_ritas_house', type: 'Location', label: "Rita's House", visible_from_order: 2, origin: 'canonical', episode_id: 'dexter_s01e02' },
+    { id: 'loc_everglades', type: 'Location', label: 'Everglades crime scene', visible_from_order: 2, origin: 'canonical', episode_id: 'dexter_s01e02' },
+  ],
+  edges: [
+    { id: 'edge_1', source: 'dexter_s01e01', target: 'series_dexter', type: 'PART_OF', visible_from_order: 1, origin: 'canonical', claim_id: null },
+    { id: 'edge_2', source: 'dexter_s01e02', target: 'series_dexter', type: 'PART_OF', visible_from_order: 2, origin: 'canonical', claim_id: null },
+    { id: 'edge_3', source: 'dexter_s01e03', target: 'series_dexter', type: 'PART_OF', visible_from_order: 3, origin: 'canonical', claim_id: null },
+    { id: 'edge_4', source: 'dexter_s01e01', target: 'dexter_s01e02', type: 'PRECEDES', visible_from_order: 2, origin: 'canonical', claim_id: null },
+    { id: 'edge_5', source: 'dexter_s01e02', target: 'dexter_s01e03', type: 'PRECEDES', visible_from_order: 3, origin: 'canonical', claim_id: null },
+    { id: 'edge_6', source: 'char_dexter_morgan', target: 'loc_miami_metro', type: 'OCCURRED_IN', visible_from_order: 1, origin: 'canonical', claim_id: 'claim_1' },
+    { id: 'edge_7', source: 'char_dexter_morgan', target: 'char_angel_batista', type: 'WORKS_WITH', visible_from_order: 1, origin: 'canonical', claim_id: 'claim_2' },
+    { id: 'edge_8', source: 'char_dexter_morgan', target: 'char_debra_morgan', type: 'FAMILY_OF', visible_from_order: 1, origin: 'canonical', claim_id: 'claim_3' },
+    { id: 'edge_9', source: 'char_debra_morgan', target: 'loc_miami_metro', type: 'OCCURRED_IN', visible_from_order: 1, origin: 'canonical', claim_id: null },
+    { id: 'edge_10', source: 'char_dexter_morgan', target: 'event_first_kill', type: 'OCCURRED_IN', visible_from_order: 1, origin: 'canonical', claim_id: 'claim_4' },
+    { id: 'edge_11', source: 'char_dexter_morgan', target: 'char_rita_bennett', type: 'FAMILY_OF', visible_from_order: 2, origin: 'canonical', claim_id: 'claim_5' },
+    { id: 'edge_12', source: 'char_rita_bennett', target: 'loc_ritas_house', type: 'OCCURRED_IN', visible_from_order: 2, origin: 'canonical', claim_id: null },
+    { id: 'edge_13', source: 'char_vince_masuka', target: 'event_croc_discovery', type: 'OCCURRED_IN', visible_from_order: 2, origin: 'canonical', claim_id: 'claim_6' },
+    { id: 'edge_14', source: 'char_maria_laguerta', target: 'loc_miami_metro', type: 'WORKS_WITH', visible_from_order: 2, origin: 'canonical', claim_id: null },
+    { id: 'edge_15', source: 'event_croc_discovery', target: 'loc_everglades', type: 'OCCURRED_IN', visible_from_order: 2, origin: 'canonical', claim_id: null },
+    { id: 'edge_16', source: 'char_dexter_morgan', target: 'char_paul_bennett', type: 'FAMILY_OF', visible_from_order: 3, origin: 'canonical', claim_id: 'claim_7' },
+    { id: 'edge_17', source: 'char_paul_bennett', target: 'event_paul_flashback', type: 'OCCURRED_IN', visible_from_order: 3, origin: 'canonical', claim_id: 'claim_8' },
+  ],
+  claims: [
+    {
+      id: 'claim_1', label: 'Dexter works at Miami Metro', subject_id: 'char_dexter_morgan', predicate: 'works_at',
+      object_id: 'loc_miami_metro', claim_type: 'explicit_fact', status: 'canonical', confidence_level: 'verified',
+      relationship_effect: 0.8, visible_from_order: 1, valid_from_order: 1, valid_until_order: null,
+      source_id: 'source_1', evidence_ids: ['evidence_1'], origin: 'canonical',
+    },
+  ],
+  sources: [
+    {
+      id: 'source_1', label: 'S01E01 script', episode_id: 'dexter_s01e01', source_type: 'script',
+      locator: 'S01E01 script', retrieved_at: '2026-01-01T00:00:00Z', visible_from_order: 1, origin: 'canonical',
+    },
+  ],
+  evidence: [
+    {
+      id: 'evidence_1', label: 'Opening kill scene', episode_id: 'dexter_s01e01', source_id: 'source_1',
+      text: 'Dexter narrates his ritual before the kill.', locator: '00:03:12', content_hash: 'hash1',
+      visible_from_order: 1, origin: 'canonical',
+    },
+  ],
+}
