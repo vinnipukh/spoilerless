@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to plan
-stopped_at: Phase 2 context gathered
-last_updated: "2026-07-29T10:05:17.237Z"
+stopped_at: Completed 02-01-PLAN.md (Task 2 tracer, resumed after quota cutoff)
+last_updated: "2026-07-29T12:02:48.231Z"
 progress:
   total_phases: 2
   completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  total_plans: 5
+  completed_plans: 2
 ---
 
 # HD Graf Cehennemi — Project State
@@ -25,7 +25,7 @@ progress:
 | Field | Value |
 |-------|-------|
 | **Phase** | Phase 2: Polished Cytoscape Graph Experience |
-| **Status** | Pending |
+| **Status** | In Progress — Plan 01/04 complete |
 | **Deliverable** | Polished Cytoscape product experience over the verified spoiler-safe backend graph foundation |
 | **Requirements** | UI-01..05 |
 | **Dependencies** | Phase 1 complete (verified 9/9 truths) |
@@ -43,6 +43,8 @@ progress:
 ## Project Position
 
 Phase 1 is fully executed and verified — the backend graph foundation delivers a lifespan-owned Neo4j driver, ontology-validated deterministic Dexter S01E01–03 seed data, and a fail-closed spoiler-safe graph API with 13 automated tests and a repeatable smoke command. Phase 2 can build directly against this contract. Notes/manual editing, revisions/revert, and future-extraction preparation remain Phases 3–5. Automated ingestion/extraction and LLM chat remain post-v0.
+
+Phase 2 Plan 01 (of 4) is complete: the Vite starter is fully replaced with a real product layout (AppShell/SeriesSelect/EpisodeSelector/ConfirmAdvanceModal/GraphCanvas/DetailPanel) that fetches from and renders the verified Phase 1 backend end-to-end, gated by a sessionStorage-backed watch-progress confirmation flow (forward and backward). UI-01 and the mechanical core of UI-02 are satisfied. Vitest + React Testing Library test infrastructure now exists in this repo for the first time. Visual polish (cose-bilkent layout, full node/edge stylesheet, neighbor highlight/fade — UI-03) and the detail-panel tab/branch split (UI-04) remain Plans 02 and 03.
 
 ## Quick Reference
 
@@ -84,9 +86,18 @@ Phase 1 is fully executed and verified — the backend graph foundation delivers
 |-------|------|----------|-------|
 | Phase 01 P01 | 24 min | 3 tasks | 22 files |
 | Phase 01 verify | 6 min | 1 verifier agent | 9/9 truths, 0 gaps |
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 02 P01 | ~45min (resumed) | 1 tasks | 26 files |
 
 ## Session
 
-**Last session:** 2026-07-29T10:05:17.228Z
-**Stopped at:** Phase 2 context gathered
-**Resume file:** .planning/phases/02-polished-cytoscape-graph-experience/02-CONTEXT.md
+**Last session:** 2026-07-29T12:02:48.216Z
+**Stopped at:** Completed 02-01-PLAN.md (Task 2 tracer, resumed after quota cutoff)
+**Resume file:** None
+
+## Decisions
+
+- [Phase ?]: Backward-copy variant added to ConfirmAdvanceModal + 02-UI-SPEC.md Copywriting Contract (Claude's-discretion addition per CONTEXT.md)

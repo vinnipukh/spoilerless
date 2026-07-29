@@ -23,12 +23,12 @@
 
 **Success criteria:** the user selects Dexter and S01E01, sees only allowed Cytoscape elements, opens character/claim details and evidence, receives confirmation before advancing, and sees newly unlocked data after confirmation; frontend checks pass.
 
-**Plans:** 4 plans
+**Plans:** 1/4 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — Dependencies, test infra & tracer slice: types/API client/hooks/sessionStorage-gated confirmation modal/minimal Cytoscape render/minimal detail panel, replacing the Vite starter end-to-end
+- [x] 02-01-PLAN.md — Dependencies, test infra & tracer slice: types/API client/hooks/sessionStorage-gated confirmation modal/minimal Cytoscape render/minimal detail panel, replacing the Vite starter end-to-end
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
