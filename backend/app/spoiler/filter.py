@@ -48,9 +48,15 @@ VISIBLE_CLAIMS_QUERY = """
 MATCH (claim:Claim {series_id: $series_id})
 MATCH (subject {id: claim.subject_id})
 MATCH (object {id: claim.object_id})
+MATCH (claim)-[supported:SUPPORTED_BY]->(evidence:EvidenceFragment)
+MATCH (claim)-[ref:REFERS_TO]->(source:Source {id: evidence.source_id})
 WHERE claim.visible_from_order <= $visible_until_order
   AND subject.visible_from_order <= $visible_until_order
   AND object.visible_from_order <= $visible_until_order
+  AND supported.visible_from_order <= $visible_until_order
+  AND ref.visible_from_order <= $visible_until_order
+  AND evidence.visible_from_order <= $visible_until_order
+  AND source.visible_from_order <= $visible_until_order
   AND (claim.valid_from_order IS NULL OR claim.valid_from_order <= $visible_until_order)
   AND (claim.valid_until_order IS NULL OR claim.valid_until_order >= $visible_until_order)
 RETURN claim.id AS id,
@@ -65,8 +71,8 @@ RETURN claim.id AS id,
        claim.visible_from_order AS visible_from_order,
        claim.valid_from_order AS valid_from_order,
        claim.valid_until_order AS valid_until_order,
-       claim.source_id AS source_id,
-       claim.evidence_ids AS evidence_ids,
+       source.id AS source_id,
+       collect(DISTINCT evidence.id) AS evidence_ids,
        claim.origin AS origin
 ORDER BY claim.visible_from_order, id
 """
