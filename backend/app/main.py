@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 
+from backend.app.api.graph import router as graph_router
 from backend.app.api.series import router as series_router
 from backend.app.core.errors import install_database_error_handlers
 from backend.app.graph.database import Neo4jDatabase
@@ -38,6 +39,7 @@ app = FastAPI(
 )
 
 app.include_router(series_router)
+app.include_router(graph_router)
 
 app.add_middleware(
     CORSMiddleware,
