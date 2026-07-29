@@ -1,7 +1,7 @@
 ---
 phase: 03
 slug: user-notes-and-manual-editing
-status: planned
+status: backend-verified-overall-pending
 nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-29
@@ -46,8 +46,8 @@ updated: 2026-07-29
 | 03-02-01 | 02 | 2 | NOTE-01, NOTE-02 | T-03-03 | Fake session/transaction tests prove database-scoped execute_write delegation, retry-stable command IDs/timestamps, parameter forwarding/static query selection, and pre-query unsafe-input rejection; live ontology/schema idempotency remains covered | unit/repository + live integration | `uv run pytest -q backend/tests/test_user_content_repository.py && uv run pytest -q backend/tests/test_user_content_models.py backend/tests/test_seed_idempotency.py -k 'ontology or constraint or idempotent'` | creates focused repository fake tests and consumes Wave-0 model fixtures | ✅ green (6 repository; 4 selected live/model) |
 | 03-02-02 | 02 | 2 | NOTE-01 | T-03-04 | Note CRUD validates exactly one same-series Character/Claim target and hidden/missing reads/lists/errors fail closed | live integration | `uv run pytest -q backend/tests/test_user_content_api.py -k 'note'` | populates Wave-0 API file | ✅ green (2 selected; 33 full API) |
 | 03-02-03 | 02 | 2 | NOTE-02, NOTE-03 | T-03-05 | Five node types and participation+character relationships enforce ownership, endpoint closure, derived visibility, hard delete, and typed routes | live integration/contract | `uv run pytest -q backend/tests/test_user_content_api.py backend/tests/test_openapi_contract.py -k 'custom_node or custom_relationship or user_route or health or series'` | completes CRUD/OpenAPI portions of Wave-0 files | ✅ green (31 passed, 8 deselected) |
-| 03-03-01 | 03 | 3 | NOTE-02, NOTE-03 | T-03-06 | Explicitly disjoint canonical/candidate evidence and user-edge branches preserve provenance and graph closure; an evidence-bearing user-authored fixture is GraphEdge-only with zero claim/source/evidence presence | live integration/regression | `uv run pytest -q backend/tests/test_graph_api.py backend/tests/test_openapi_contract.py` | extends existing graph test + completes OpenAPI file | ⬜ pending |
-| 03-03-02 | 03 | 3 | NOTE-01, NOTE-02, NOTE-03 | T-03-07 | Setup preserves origin=user content and exact canonical layer; executable doc test compares the exact 18 operation tuples and exact 11-template set with OpenAPI and verifies origin/boundary/error/compatibility/non-goal/pending-phase text | full integration/contract | `uv run pytest -q backend/tests/test_seed_idempotency.py backend/tests/test_user_content_api.py backend/tests/test_graph_api.py backend/tests/test_openapi_contract.py backend/tests/test_frontend_contract_doc.py` | creates `test_frontend_contract_doc.py` and extends existing setup test | ⬜ pending |
+| 03-03-01 | 03 | 3 | NOTE-02, NOTE-03 | T-03-06 | Explicitly disjoint canonical/candidate evidence and user-edge branches preserve provenance and graph closure; an evidence-bearing user-authored fixture is GraphEdge-only with zero claim/source/evidence presence | live integration/regression | `uv run pytest -q backend/tests/test_graph_api.py backend/tests/test_openapi_contract.py` | extends existing graph test + completes OpenAPI file | ✅ green (18 passed) |
+| 03-03-02 | 03 | 3 | NOTE-01, NOTE-02, NOTE-03 | T-03-07 | Setup preserves origin=user content and exact canonical layer; executable doc test compares the exact 18 operation tuples and exact 11-template set with OpenAPI and verifies origin/boundary/error/compatibility/non-goal/pending-phase text | full integration/contract | `uv run pytest -q backend/tests/test_seed_idempotency.py backend/tests/test_user_content_api.py backend/tests/test_graph_api.py backend/tests/test_openapi_contract.py backend/tests/test_frontend_contract_doc.py` | creates `test_frontend_contract_doc.py` and extends existing setup test | ✅ green (58 passed) |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -55,13 +55,13 @@ updated: 2026-07-29
 
 ## Wave 0 Requirements
 
-- [ ] `backend/tests/test_user_content_models.py` — strict Pydantic contracts, enums, immutable/server-owned rejection, ontology drift, graph compatibility.
-- [ ] `backend/tests/test_openapi_contract.py` — reusable assertions comparing the exact 18 method/path operation tuples and exact 11 unique path templates, required positive boundaries, typed success/error/health schemas, examples, delete no-body.
-- [ ] `backend/tests/test_user_content_api.py` — user-only cleanup and live Neo4j CRUD/ownership/spoiler/hard-delete/database-failure acceptance.
-- [ ] `backend/tests/test_user_content_repository.py` — fake database-scoped session/transaction coverage for execute-write delegation, callback retries, stable command values, parameters/static query maps, and unsafe-input rejection before query selection.
-- [ ] `backend/tests/test_frontend_contract_doc.py` — executable comparison of the handoff's exact 18 operation tuples and exact 11-template set to OpenAPI plus required origin, boundary/error, compatibility, non-goal, and pending frontend/Phase 03 statements.
-- [ ] Existing `backend/tests/test_graph_api.py` extended without making canonical baseline counts dependent on temporary user data.
-- [ ] Existing `backend/tests/test_seed_idempotency.py` extended to snapshot canonical and user layers separately.
+- [x] `backend/tests/test_user_content_models.py` — strict Pydantic contracts, enums, immutable/server-owned rejection, ontology drift, graph compatibility.
+- [x] `backend/tests/test_openapi_contract.py` — exact 18 operation tuples and 11 templates, required positive boundaries, typed success/error/health schemas, examples, delete no-body.
+- [x] `backend/tests/test_user_content_api.py` — user-only cleanup and live Neo4j CRUD/ownership/spoiler/hard-delete/database-failure acceptance.
+- [x] `backend/tests/test_user_content_repository.py` — fake database-scoped transaction/retry/parameter/static-query safety coverage.
+- [x] `backend/tests/test_frontend_contract_doc.py` — executable document/OpenAPI comparison plus origin, boundary/error, compatibility, non-goal, and pending-status assertions.
+- [x] Existing `backend/tests/test_graph_api.py` extended while canonical baseline counts remain independent of temporary user data.
+- [x] Existing `backend/tests/test_seed_idempotency.py` snapshots canonical and user layers separately.
 - Existing pytest/TestClient/live-Neo4j infrastructure is reused; no new test framework, watch mode, skipped placeholder, or ORM/schema-push step is permitted.
 
 ---
@@ -115,4 +115,15 @@ All backend behavior has automated verification. Frontend rendering, distinct vi
 - [x] OpenAPI generation/assertions, executable handoff-document checks, setup/idempotency, full suite, `git diff --check`, and no-frontend source assertions are mandatory.
 - [x] `nyquist_compliant: true` reflects aligned final task IDs and continuous automated coverage.
 
-**Approval:** planning-complete; execution pending
+## Executed Evidence — Plan 03-03
+
+- Task 03-03-01 exact command: **18 passed, 1 warning**.
+- Task 03-03-02 exact command: **58 passed, 1 warning**.
+- Final focused commands: models **23 passed**; OpenAPI/document **10 passed**; user-content API **33 passed**; graph/setup **15 passed**.
+- Full suite: **87 passed, 1 unchanged third-party warning**.
+- Setup executed twice: **41 canonical nodes, 26 canonical relationships** each time.
+- Generated OpenAPI: **18 operations, 11 templates**, required positive integer graph boundary (`openapi-ok`).
+- OS-temp ad-hoc endpoint-rematch probe: `hermes-ad-hoc-endpoint-rematch-ok`; file removed.
+- Diff, frontend, and prohibited-scope checks: clean.
+
+**Approval:** backend Plans 03-01 through 03-03 complete and verified; Phase 2, frontend acceptance, and overall Phase 03 remain pending.

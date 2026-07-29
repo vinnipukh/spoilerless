@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 3 backend Plan 03-02 complete and ready for 03-03; Phase 2 and Phase 3 UI remain pending
-stopped_at: Completed 03-02-PLAN.md; Phase 3 backend slice ready for 03-03 while Phase 2/frontend remain pending
-last_updated: "2026-07-29T11:03:31.369Z"
+status: Phase 3 backend Plans 03-01 through 03-03 complete and verified; Phase 2 and overall Phase 3 remain pending frontend acceptance
+stopped_at: Completed 03-03-PLAN.md backend handoff; Phase 2/frontend visual acceptance remains pending
+last_updated: "2026-07-29T11:31:51Z"
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 4
   percent: 20
 ---
 
@@ -36,10 +36,10 @@ progress:
 | Field | Value |
 |-------|-------|
 | **Phase** | Phase 3: User Notes and Manual Editing — backend slice only |
-| **Status** | In progress — Plans 03-01 and 03-02 complete (2/3); ready for 03-03; overall Phase 3 and frontend acceptance remain pending |
+| **Status** | Backend complete and verified (3/3 plans); overall Phase 3 and frontend acceptance remain pending |
 | **Requirements** | NOTE-01..03 backend contracts and persistence; frontend rendering/visual acceptance remains pending |
 | **Dependencies** | Phase 1 backend foundation; Phase 2 remains the current pending product/UI phase |
-| **Resume** | `.planning/phases/03-user-notes-and-manual-editing/03-03-PLAN.md` |
+| **Resume** | Phase 2/frontend work; do not mark overall Phase 03 complete before UI acceptance |
 
 ## Completed Phase
 
@@ -53,7 +53,7 @@ progress:
 
 ## Project Position
 
-Phase 1 is fully executed and verified — the backend graph foundation delivers a lifespan-owned Neo4j driver, ontology-validated deterministic Dexter S01E01–03 seed data, and a fail-closed spoiler-safe graph API with 13 automated tests and a repeatable smoke command. Phase 2 remains pending. The out-of-sequence Phase 3 backend slice has completed Plans 03-01 and 03-02: strict contracts, sanitized errors, managed Neo4j persistence, and all 13 user-content CRUD operations are verified. Plan 03-03 plus frontend integration/distinct visual treatment remain pending, so overall Phase 3 is incomplete. Revisions/revert and future-extraction preparation remain Phases 4–5. Automated ingestion/extraction and LLM chat remain post-v0.
+Phase 1 is fully executed and verified. Phase 2 remains pending. The out-of-sequence Phase 3 backend slice is complete and verified across all three plans: strict contracts, sanitized errors, managed Neo4j persistence, 13 user-content CRUD operations, spoiler-safe GraphEdge-only user projection, setup preservation, exact OpenAPI inventory, and the frontend handoff. Frontend integration/distinct visual treatment remains pending, so overall Phase 3 is not complete. Revisions/revert and future-extraction preparation remain Phases 4–5. Automated ingestion/extraction and LLM chat remain post-v0.
 
 ## Quick Reference
 
@@ -69,7 +69,7 @@ Phase 1 is fully executed and verified — the backend graph foundation delivers
 |-------|-------------|--------------|--------|-----------|
 | Phase 1 | Backend Graph Foundation | INFRA-01..03, META-01..03, API-01..04, SEED-01..04 | Complete — verified | 2026-07-29 |
 | Phase 2 | Polished Cytoscape Graph Experience | UI-01..05 | Pending | — |
-| Phase 3 | User Notes and Manual Editing | NOTE-01..03 | Backend slice in progress (Plans 03-01/03-02 complete, 2/3); overall pending frontend | — |
+| Phase 3 | User Notes and Manual Editing | NOTE-01..03 | Backend slice complete/verified (3/3); overall pending frontend | — |
 | Phase 4 | Revision History and Revert | REV-01..03 | Pending | — |
 | Phase 5 | Future-Extraction Preparation | PREP-01..05 | Pending | — |
 
@@ -97,14 +97,16 @@ Phase 1 is fully executed and verified — the backend graph foundation delivers
 | Phase 01 verify | 6 min | 1 verifier agent | 9/9 truths, 0 gaps |
 | Phase 03 P01 | 9 min | 2 tasks | 6 files |
 | Phase 03 P02 | 40 min | 3 tasks | 11 files |
+| Phase 03 P03 | 28 min | 2 tasks | 7 implementation/test/doc files |
 
 ## Session
 
-**Last session:** 2026-07-29T11:03:00.555Z
-**Stopped at:** Completed 03-02-PLAN.md; Phase 3 backend slice ready for 03-03 while Phase 2/frontend remain pending
-**Resume file:** .planning/phases/03-user-notes-and-manual-editing/03-03-PLAN.md
+**Last session:** 2026-07-29T11:31:51Z
+**Stopped at:** Completed 03-03-PLAN.md backend handoff; Phase 2/frontend visual acceptance remains pending
+**Resume file:** None for backend Phase 03; continue Phase 2/frontend acceptance
 
 ## Decisions
 
 - [Phase 03]: Phase 03 Plan 01 keeps public origin exactly canonical, candidate, or user and locks user mutation labels/predicates to finite ontology-tested enums. — One shared classification avoids parallel discriminators, while strict enums prevent arbitrary graph shape from reaching later repository code.
 - [Phase 03]: Plan 03-02 uses pre-generated managed-write commands, static enum-keyed Cypher maps, and origin=user namespace/series ownership for retry-safe canonical-isolated CRUD. — This keeps retries idempotent, blocks query-shape injection and canonical mutation, and provides stable persistence for Plan 03-03 projection.
+- [Phase 03]: Plan 03-03 projects API-owned user relationship Claims only as existing GraphEdge records through a separate allowlisted visibility branch. — Canonical/candidate provenance remains mandatory while user edges retain closure and never enter claim/source/evidence collections.
