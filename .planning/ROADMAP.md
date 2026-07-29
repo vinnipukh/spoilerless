@@ -3,7 +3,7 @@
 **Canonical scope:** root `ROADMAP.md`, milestones 1–8
 **Target:** Complete Dexter S01E01–03 demo story, not an API-only release
 **Mode:** dependency-ordered Prototype v0 delivery
-**Status:** Phase 1 complete and verified (9/9 truths, 13/13 tests, smoke 8/8); Phase 2 pending
+**Status:** Phase 1 complete and verified (9/9 truths, 13/13 tests, smoke 8/8); Phase 2 complete and verified (5/5 truths, 25/25 tests, 0 gaps); Phase 3 pending
 
 ## Phase 1: Backend Graph Foundation
 
@@ -22,6 +22,22 @@
 **Dependencies:** Phase 1
 
 **Success criteria:** the user selects Dexter and S01E01, sees only allowed Cytoscape elements, opens character/claim details and evidence, receives confirmation before advancing, and sees newly unlocked data after confirmation; frontend checks pass.
+
+**Plans:** 4/4 plans executed
+
+Plans:
+**Wave 1**
+
+- [x] 02-01-PLAN.md — Dependencies, test infra & tracer slice: types/API client/hooks/sessionStorage-gated confirmation modal/minimal Cytoscape render/minimal detail panel, replacing the Vite starter end-to-end
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 02-02-PLAN.md — Graph canvas polish: cose-bilkent layout, full node-type/origin stylesheet, selection highlight/fade, loading/error/empty overlay states
+- [x] 02-03-PLAN.md — Detail panel split: Overview/Claims/Evidence tabbed Sheet (nodes/claim-backed edges) vs. tab-less StructuralEdgeCard (structural edges)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [x] 02-04-PLAN.md — Remaining component tests, tree-wide threat-mitigation grep audit, full-suite verification, and demo UAT
 
 ## Phase 3: User Notes and Manual Editing
 
