@@ -32,6 +32,19 @@
 
 **Success criteria:** a note can be attached to a character/claim and shown in details; custom nodes/relationships can be created/edited; user content is stored and rendered distinctly from canonical/candidate content.
 
+**Backend planning status:** Ready to execute in `backend-work` — 3 checker-verified plans, 7 tasks, 0 remaining plan issues. This does not complete Phase 3: frontend integration and distinct visual treatment remain pending in `frontend-work`.
+
+**Wave 1**
+- `03-01` — strict user-content models, shared error/OpenAPI contracts, and Wave-0 tests.
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- `03-02` — managed Neo4j writes, canonical-preserving setup, and all series-scoped note/custom-content CRUD operations.
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- `03-03` — spoiler-safe graph projection, setup preservation regressions, exact OpenAPI verification, and frontend contract handoff.
+
+**Cross-cutting constraints:** preserve Phase 1 fail-closed spoiler filtering and graph closure; mutate only namespaced `origin=user` resources; keep canonical/candidate provenance mandatory; keep all frontend files untouched; do not mark overall Phase 3 complete from backend evidence alone.
+
 ## Phase 4: Revision History and Revert
 
 **Goal:** Make corrections inspectable and reversible without destroying history.
@@ -64,7 +77,7 @@ Actual source retrieval/parsing/ingestion, operational LLM extraction, and LLM c
 |-------|--------------------------------|--------------|------:|--------|
 | Phase 1 | Milestones 1–4 — infrastructure, metadata, spoiler-aware API, manual seed graph | INFRA-01..03, META-01..03, API-01..04, SEED-01..04 | 14 | Complete — verified |
 | Phase 2 | Milestone 5 — frontend graph UI | UI-01..05 | 5 | Pending |
-| Phase 3 | Milestone 6 — notes/manual editing | NOTE-01..03 | 3 | Pending |
+| Phase 3 | Milestone 6 — notes/manual editing | NOTE-01..03 | 3 | Backend slice planned; overall pending frontend |
 | Phase 4 | Milestone 7 — revision history | REV-01..03 | 3 | Pending |
 | Phase 5 | Milestone 8 — extraction preparation | PREP-01..05 | 5 | Pending |
 
@@ -81,4 +94,4 @@ Actual source retrieval/parsing/ingestion, operational LLM extraction, and LLM c
 | Preparation expands into extraction | Use fixtures/contracts only; keep connectors non-operational in v0 |
 
 ---
-*Last updated: 2026-07-29 — Phase 1 verified complete; rebaselined into five vertical delivery phases while preserving canonical root Prototype v0 milestones 1–8*
+*Last updated: 2026-07-29 — Phase 3 backend slice planned in three verified waves; Phase 2 and Phase 3 frontend acceptance remain pending; canonical root Prototype v0 milestones 1–8 preserved*

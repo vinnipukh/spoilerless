@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready to plan
-stopped_at: Phase 3 backend context gathered
-last_updated: "2026-07-29T09:03:32.230Z"
+status: Phase 3 backend slice ready to execute; Phase 2 and Phase 3 UI remain pending
+stopped_at: Phase 3 backend plans verified (3 plans, 7 tasks, 0 checker issues)
+last_updated: "2026-07-29T13:05:59+03:00"
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 1
+  total_plans: 4
   completed_plans: 1
   percent: 20
 ---
@@ -31,6 +31,16 @@ progress:
 | **Requirements** | UI-01..05 |
 | **Dependencies** | Phase 1 complete (verified 9/9 truths) |
 
+## Prepared Out-of-Sequence Backend Slice
+
+| Field | Value |
+|-------|-------|
+| **Phase** | Phase 3: User Notes and Manual Editing — backend slice only |
+| **Status** | Ready to execute — 3 dependency-ordered plans, 7 tasks, plan checker 0 issues |
+| **Requirements** | NOTE-01..03 backend contracts and persistence; frontend rendering/visual acceptance remains pending |
+| **Dependencies** | Phase 1 backend foundation; Phase 2 remains the current pending product/UI phase |
+| **Resume** | `.planning/phases/03-user-notes-and-manual-editing/03-01-PLAN.md` |
+
 ## Completed Phase
 
 | Field | Value |
@@ -43,7 +53,7 @@ progress:
 
 ## Project Position
 
-Phase 1 is fully executed and verified — the backend graph foundation delivers a lifespan-owned Neo4j driver, ontology-validated deterministic Dexter S01E01–03 seed data, and a fail-closed spoiler-safe graph API with 13 automated tests and a repeatable smoke command. Phase 2 can build directly against this contract. Notes/manual editing, revisions/revert, and future-extraction preparation remain Phases 3–5. Automated ingestion/extraction and LLM chat remain post-v0.
+Phase 1 is fully executed and verified — the backend graph foundation delivers a lifespan-owned Neo4j driver, ontology-validated deterministic Dexter S01E01–03 seed data, and a fail-closed spoiler-safe graph API with 13 automated tests and a repeatable smoke command. Phase 2 remains pending. The Phase 3 backend slice now has three verified implementation plans, but Phase 3 remains incomplete until frontend integration and distinct visual treatment are implemented and accepted in `frontend-work`. Revisions/revert and future-extraction preparation remain Phases 4–5. Automated ingestion/extraction and LLM chat remain post-v0.
 
 ## Quick Reference
 
@@ -59,7 +69,7 @@ Phase 1 is fully executed and verified — the backend graph foundation delivers
 |-------|-------------|--------------|--------|-----------|
 | Phase 1 | Backend Graph Foundation | INFRA-01..03, META-01..03, API-01..04, SEED-01..04 | Complete — verified | 2026-07-29 |
 | Phase 2 | Polished Cytoscape Graph Experience | UI-01..05 | Pending | — |
-| Phase 3 | User Notes and Manual Editing | NOTE-01..03 | Pending | — |
+| Phase 3 | User Notes and Manual Editing | NOTE-01..03 | Backend slice planned (3 plans); overall pending frontend | — |
 | Phase 4 | Revision History and Revert | REV-01..03 | Pending | — |
 | Phase 5 | Future-Extraction Preparation | PREP-01..05 | Pending | — |
 
@@ -71,7 +81,7 @@ Phase 1 is fully executed and verified — the backend graph foundation delivers
 
 ---
 
-*Last updated: 2026-07-29 — Phase 1 verified complete (9/9 truths, 0 gaps)*
+*Last updated: 2026-07-29 — Phase 3 backend slice planned and checker-verified; Phase 2 and Phase 3 UI remain pending*
 
 ## Accumulated Context
 
@@ -88,6 +98,6 @@ Phase 1 is fully executed and verified — the backend graph foundation delivers
 
 ## Session
 
-**Last session:** 2026-07-29T09:03:32.219Z
-**Stopped at:** Phase 3 backend context gathered
-**Resume file:** .planning/phases/03-user-notes-and-manual-editing/03-CONTEXT.md
+**Last session:** 2026-07-29T13:05:59+03:00
+**Stopped at:** Phase 3 backend plans verified (3 plans, 7 tasks, 0 checker issues)
+**Resume file:** .planning/phases/03-user-notes-and-manual-editing/03-01-PLAN.md
