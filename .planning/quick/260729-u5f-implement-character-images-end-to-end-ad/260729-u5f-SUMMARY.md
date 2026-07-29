@@ -14,10 +14,10 @@ commit: "feat: add optional character portrait images to graph and detail panel"
 - `backend/app/spoiler/filter.py`: `NODES_QUERY` now returns
   `image_url`/`image_source_url` for every node type (non-Character nodes
   read back `null` since the property is never set on them).
-- No seed-loader or `data/dexter/seed/characters.json` change was required —
-  `_upsert_nodes`'s `MERGE ... SET node += row` already treats missing keys
-  as idempotent no-ops, and adding image fields later is a matter of adding
-  keys to that JSON and re-running the seed.
+- `data/dexter/seed/characters.json`: all 9 characters now carry manually
+  verified `image_url`/`image_source_url`. No seed-loader code change was
+  needed — `_upsert_nodes`'s `MERGE ... SET node += row` treats new JSON keys
+  as an idempotent property update on reseed.
 - `frontend/src/types/graph.ts`: `GraphNode` mirrors the two new fields.
 - `frontend/src/components/graph/graphElements.ts`: sets a Cytoscape
   `imageUrl` data key only for `Character` nodes with a non-null `image_url`
@@ -41,15 +41,30 @@ commit: "feat: add optional character portrait images to graph and detail panel"
 
 ## Character-to-image mappings
 
-None seeded. `WebFetch` returned HTTP 402, no Chrome extension was connected,
-and a direct `curl` to `dexter.fandom.com` was blocked by a Cloudflare JS
-challenge — there was no way to verify a real, direct image URL this session.
-Per the task's explicit "do not invent mappings when uncertain" instruction,
-all 9 Dexter S01E01–03 characters (`dexter_morgan`, `debra_morgan`,
-`angel_batista`, `maria_laguerta`, `james_doakes`, `rita_bennett`,
-`paul_bennett`, `rudy_cooper`, `harry_morgan`) are left with
-`image_url`/`image_source_url` both `null`. The plumbing is fully wired end
-to end; adding real mappings later is a JSON edit + reseed.
+`WebFetch` (402), direct `curl` (Cloudflare JS challenge) were both blocked;
+the Claude-in-Chrome extension was reconnected after the initial pass, and
+all 9 mappings were fetched and verified live via the browser's own
+`portable-infobox` DOM (og:image alone was unreliable — it sometimes points
+at an unrelated season-promo card). Each direct image URL was confirmed to
+actually load (`new Image()` load-event check, all 9 succeeded) before being
+written to `data/dexter/seed/characters.json`:
+
+| Character (seed label) | Fandom page | Note |
+|---|---|---|
+| Dexter Morgan | `/wiki/Dexter_Morgan` | |
+| Debra Morgan | `/wiki/Debra_Morgan` | |
+| Angel Batista | `/wiki/Angel_Batista` | |
+| Maria LaGuerta | `/wiki/Maria_LaGuerta` | |
+| James Doakes | `/wiki/James_Doakes` | |
+| Rita Bennett | `/wiki/Rita_Morgan` | page titled by married name, not `Rita_Bennett` (that title 404s) |
+| Paul Bennett | `/wiki/Paul_Bennett` | |
+| Rudy Cooper | `/wiki/Brian_Moser` | page titled by true identity, not the alias `Rudy_Cooper` |
+| Harry Morgan | `/wiki/Harry_Morgan` | |
+
+All 9 seeded characters now have both fields populated. The
+`test_graph_nodes_include_image_fields` test was updated to assert this
+(9 Character nodes with populated fields; every non-Character node stays
+null).
 
 ## Verification Evidence
 

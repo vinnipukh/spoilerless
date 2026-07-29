@@ -48,17 +48,21 @@ export const graphStylesheet: StylesheetJsonBlock[] = [
   // Portrait background for Character nodes that carry a Fandom image_url
   // (graphElements.ts only sets the `imageUrl` data key for Character nodes,
   // and only when a value exists, so this selector can never match other
-  // node types). `background-image-crossorigin: 'anonymous'` avoids a tainted
-  // canvas; if the external image 404s or is blocked, Cytoscape silently
-  // keeps the node's flat background-color fill instead of showing a broken
-  // image — there is no HTML <img> element here to leave a broken-image box.
+  // node types). No `background-image-crossorigin` here: Fandom's CDN
+  // (static.wikia.nocookie.net) doesn't send CORS headers, and requesting
+  // 'anonymous' mode makes Cytoscape treat the resulting opaque-response
+  // failure as a load error and draw its own broken-image glyph — worse than
+  // doing nothing. Loading without crossorigin taints the canvas (blocks
+  // cy.png()-style exports, which this app doesn't use) but renders
+  // correctly; if the image 404s or is blocked outright, Cytoscape falls
+  // back to the node's flat background-color fill — there is no HTML <img>
+  // element here to leave a broken-image box.
   {
     selector: 'node[nodeType = "Character"][imageUrl]',
     style: {
       'background-image': 'data(imageUrl)',
       'background-fit': 'cover',
       'background-clip': 'node',
-      'background-image-crossorigin': 'anonymous',
     },
   },
   {

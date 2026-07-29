@@ -33,6 +33,7 @@ function CharacterPortrait({ node }: { node: GraphNode }) {
       src={node.image_url ?? undefined}
       alt={node.label}
       className="h-10 w-10 rounded-full object-cover"
+      referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
     />
   ) : (

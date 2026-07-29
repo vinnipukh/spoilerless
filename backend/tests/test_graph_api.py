@@ -277,8 +277,23 @@ def test_graph_nodes_include_image_fields(live_client: TestClient) -> None:
     for node in payload["nodes"]:
         assert "image_url" in node
         assert "image_source_url" in node
-        # No mappings are seeded yet (all characters left unmapped pending
-        # manually-verified Fandom URLs) — every node must still validate.
+
+    # All 9 seeded S01E01-03 characters carry a manually-verified Fandom
+    # portrait; every other node type stays null (never set on Neo4j).
+    characters = [node for node in payload["nodes"] if node["type"] == "Character"]
+    assert len(characters) == 9
+    for character in characters:
+        assert character["image_url"], character
+        assert character["image_url"].startswith(
+            "https://static.wikia.nocookie.net/dexter/"
+        )
+        assert character["image_source_url"].startswith(
+            "https://dexter.fandom.com/wiki/"
+        )
+
+    non_characters = [node for node in payload["nodes"] if node["type"] != "Character"]
+    assert non_characters
+    for node in non_characters:
         assert node["image_url"] is None
         assert node["image_source_url"] is None
 
