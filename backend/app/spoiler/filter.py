@@ -50,7 +50,9 @@ RETURN node.id AS id,
        node.label AS label,
        node.visible_from_order AS visible_from_order,
        node.origin AS origin,
-       node.episode_id AS episode_id
+       node.episode_id AS episode_id,
+       node.image_url AS image_url,
+       node.image_source_url AS image_source_url
 ORDER BY node.visible_from_order, id
 """
 

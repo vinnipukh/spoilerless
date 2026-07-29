@@ -56,3 +56,5 @@ neo4j_import/
 # ======================================================
 .DS_Store
 Thumbs.db
+# GSD temporary planning files
+.planning/tmp/

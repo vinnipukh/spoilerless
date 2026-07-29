@@ -138,6 +138,58 @@ def test_graph_model_rejects_dangling_edge() -> None:
         )
 
 
+def test_graph_node_image_fields_are_optional_and_default_null() -> None:
+    node = GraphResponse.model_validate(
+        {
+            "series": {"id": "series_dexter", "title": "Dexter", "slug": "dexter"},
+            "visible_until_order": 1,
+            "nodes": [
+                {
+                    "id": "node:one",
+                    "type": "Character",
+                    "label": "One",
+                    "visible_from_order": 1,
+                    "origin": "canonical",
+                }
+            ],
+            "edges": [],
+            "claims": [],
+            "sources": [],
+            "evidence": [],
+        }
+    ).nodes[0]
+
+    assert node.image_url is None
+    assert node.image_source_url is None
+
+
+def test_graph_node_accepts_explicit_image_fields() -> None:
+    node = GraphResponse.model_validate(
+        {
+            "series": {"id": "series_dexter", "title": "Dexter", "slug": "dexter"},
+            "visible_until_order": 1,
+            "nodes": [
+                {
+                    "id": "node:one",
+                    "type": "Character",
+                    "label": "One",
+                    "visible_from_order": 1,
+                    "origin": "canonical",
+                    "image_url": "https://static.wikia.nocookie.net/dexter/images/example.jpg",
+                    "image_source_url": "https://dexter.fandom.com/wiki/Example",
+                }
+            ],
+            "edges": [],
+            "claims": [],
+            "sources": [],
+            "evidence": [],
+        }
+    ).nodes[0]
+
+    assert node.image_url == "https://static.wikia.nocookie.net/dexter/images/example.jpg"
+    assert node.image_source_url == "https://dexter.fandom.com/wiki/Example"
+
+
 def test_graph_error_shapes(live_client: TestClient) -> None:
     unknown = live_client.get("/api/series/unknown/graph?visible_until_order=1")
     missing = live_client.get("/api/series/series_dexter/graph")
@@ -212,6 +264,38 @@ def test_graph_boundaries_have_full_json_sentinels(
         edge["source"] in node_ids and edge["target"] in node_ids
         for edge in payload["edges"]
     )
+
+
+def test_graph_nodes_include_image_fields(live_client: TestClient) -> None:
+    response = live_client.get(
+        "/api/series/series_dexter/graph?visible_until_order=3"
+    )
+    payload = response.json()
+
+    assert response.status_code == 200, payload
+    assert len(payload["nodes"]) > 0
+    for node in payload["nodes"]:
+        assert "image_url" in node
+        assert "image_source_url" in node
+
+    # All 9 seeded S01E01-03 characters carry a manually-verified Fandom
+    # portrait; every other node type stays null (never set on Neo4j).
+    characters = [node for node in payload["nodes"] if node["type"] == "Character"]
+    assert len(characters) == 9
+    for character in characters:
+        assert character["image_url"], character
+        assert character["image_url"].startswith(
+            "https://static.wikia.nocookie.net/dexter/"
+        )
+        assert character["image_source_url"].startswith(
+            "https://dexter.fandom.com/wiki/"
+        )
+
+    non_characters = [node for node in payload["nodes"] if node["type"] != "Character"]
+    assert non_characters
+    for node in non_characters:
+        assert node["image_url"] is None
+        assert node["image_source_url"] is None
 
 
 def test_claim_validity_is_independent_of_visibility(live_client: TestClient) -> None:

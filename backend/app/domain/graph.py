@@ -15,6 +15,8 @@ class GraphNode(BaseModel):
     visible_from_order: int = Field(ge=1)
     origin: Origin
     episode_id: str | None = None
+    image_url: str | None = None
+    image_source_url: str | None = None
 
 
 class GraphEdge(BaseModel):

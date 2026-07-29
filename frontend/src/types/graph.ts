@@ -13,6 +13,8 @@ export type GraphNode = {
   visible_from_order: number
   origin: string
   episode_id: string | null
+  image_url: string | null
+  image_source_url: string | null
 }
 
 export type GraphEdge = {

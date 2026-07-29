@@ -92,6 +92,7 @@ Phase 2 Plan 04 (of 4) is complete: dedicated `useWatchProgress`/`ConfirmAdvance
 | Date | Task | Commit | Outcome |
 |------|------|--------|---------|
 | 2026-07-28 | Align `.planning` plans with canonical root Prototype v0 roadmap | This task's atomic commit | Reconciled 30 requirements across 8 pending phases; preserved qualified brownfield state |
+| 2026-07-29 | Implement character images end-to-end (graph + detail panel) | This task's atomic commit | Optional `image_url`/`image_source_url` wired through backend, Cytoscape, and detail panel; all 9 Dexter S01E01-03 characters left unmapped (no verified Fandom URLs obtainable this session) |
 
 ---
 

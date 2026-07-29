@@ -70,4 +70,56 @@ describe('DetailPanel', () => {
     await user.click(screen.getByRole('tab', { name: 'Evidence' }))
     expect(await screen.findByText('No evidence recorded for this claim yet')).toBeInTheDocument()
   })
+
+  it('shows a portrait linking to image_source_url for a Character with image_url', async () => {
+    // char_dexter_morgan carries a seeded image_url/image_source_url pair
+    // (test/fixtures/graphResponse.ts).
+    const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
+    render(<DetailPanel selected={selected} graph={graph} />)
+
+    const portrait = await screen.findByAltText('Dexter Morgan')
+    expect(portrait).toBeInTheDocument()
+    expect(portrait.tagName).toBe('IMG')
+
+    const link = screen.getByRole('link', { name: 'Open Dexter Morgan on Fandom' })
+    expect(link).toHaveAttribute('href', 'https://dexter.fandom.com/wiki/Dexter_Morgan')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('shows an initials fallback avatar for a Character with no image_url, with no <img>', async () => {
+    // char_debra_morgan has image_url: null in the fixture.
+    const selected: SelectedElement = { kind: 'node', id: 'char_debra_morgan', label: 'Debra Morgan', nodeType: 'Character' }
+    render(<DetailPanel selected={selected} graph={graph} />)
+
+    expect(await screen.findByRole('heading', { name: 'Debra Morgan' })).toBeInTheDocument()
+    expect(screen.getByText('DM')).toBeInTheDocument()
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Open .* on Fandom/ })).not.toBeInTheDocument()
+  })
+
+  it('falls back to the initials avatar when the portrait image fails to load', async () => {
+    const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
+    render(<DetailPanel selected={selected} graph={graph} />)
+
+    const portrait = await screen.findByAltText('Dexter Morgan')
+    portrait.dispatchEvent(new Event('error'))
+
+    expect(await screen.findByText('DM')).toBeInTheDocument()
+    expect(screen.queryByAltText('Dexter Morgan')).not.toBeInTheDocument()
+  })
+
+  it('shows no portrait or avatar for non-Character selections', async () => {
+    const selected: SelectedElement = {
+      kind: 'edge',
+      id: 'edge_2',
+      edgeType: 'OCCURRED_IN',
+      source: 'char_dexter_morgan',
+      target: 'loc_miami_metro',
+    }
+    render(<DetailPanel selected={selected} graph={graph} />)
+
+    expect(await screen.findByRole('heading', { name: 'Dexter works at Miami Metro' })).toBeInTheDocument()
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
+  })
 })
