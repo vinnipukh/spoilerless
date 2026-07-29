@@ -84,7 +84,7 @@ function App() {
       {graphState.status === 'success' && graphState.data.nodes.length > 0 && (
         <>
           <GraphCanvas graph={graphState.data} onSelect={setSelectedElement} />
-          <DetailPanel selected={selectedElement} />
+          <DetailPanel selected={selectedElement} graph={graphState.data} />
         </>
       )}
       {graphState.status === 'idle' && <GraphEmptyState />}
