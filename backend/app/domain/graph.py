@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel, Field, model_validator
 
 from backend.app.domain.series import SeriesResponse
+from backend.app.domain.user_content import Origin
 
 
 class GraphNode(BaseModel):
@@ -12,7 +13,7 @@ class GraphNode(BaseModel):
     type: str
     label: str
     visible_from_order: int = Field(ge=1)
-    origin: str
+    origin: Origin
     episode_id: str | None = None
 
 
@@ -22,7 +23,7 @@ class GraphEdge(BaseModel):
     target: str
     type: str
     visible_from_order: int = Field(ge=1)
-    origin: str
+    origin: Origin
     claim_id: str | None = None
 
 
@@ -41,7 +42,7 @@ class GraphClaim(BaseModel):
     valid_until_order: int | None = None
     source_id: str
     evidence_ids: list[str]
-    origin: str
+    origin: Origin
 
 
 class GraphSource(BaseModel):
@@ -52,7 +53,7 @@ class GraphSource(BaseModel):
     locator: str
     retrieved_at: str
     visible_from_order: int = Field(ge=1)
-    origin: str
+    origin: Origin
 
 
 class GraphEvidence(BaseModel):
@@ -64,7 +65,7 @@ class GraphEvidence(BaseModel):
     locator: str
     content_hash: str
     visible_from_order: int = Field(ge=1)
-    origin: str
+    origin: Origin
 
 
 class GraphResponse(BaseModel):
