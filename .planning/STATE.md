@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-07-29T07:13:57.904Z"
+stopped_at: Completed 01-01-PLAN.md with final Task 3 provenance hardening
+last_updated: "2026-07-29T07:16:08.951Z"
 progress:
   total_phases: 5
   completed_phases: 1
@@ -26,10 +26,10 @@ progress:
 | Field | Value |
 |-------|-------|
 | **Phase** | Phase 1: Backend Graph Foundation |
-| **Status** | Pending |
+| **Status** | Plan complete; phase verification pending |
 | **Deliverable** | Reliable local runtime plus ontology-aligned deterministic Neo4j seed data, evidence-backed graph records, metadata APIs, and backend-enforced spoiler filtering |
 | **Requirements** | INFRA-01..03, META-01..03, API-01..04, SEED-01..04 |
-| **Brownfield note** | Relevant Docker/backend/frontend scaffolds exist, but runtime acceptance is not yet verified |
+| **Brownfield note** | Plan runtime acceptance is captured in `01-SUMMARY.md`; phase-level verifier review remains pending |
 
 ## Next Phase
 
@@ -43,7 +43,7 @@ progress:
 
 ## Project Position
 
-All five vertical delivery phases are pending and preserve all eight canonical Prototype v0 milestones. Existing series/episode routes, metadata, ontology, and an unexecuted seed script are useful brownfield inputs, not completed-phase evidence. Phase 1 now consolidates the backend foundation needed for Phase 2 to focus on the polished graph UI. Notes/manual editing, revisions/revert, and future-extraction preparation remain Phases 3–5. Automated ingestion/extraction and LLM chat remain post-v0.
+Phase 1 plan execution is complete with captured runtime evidence; phase-level verifier review remains the final gate before Phase 1 is marked verified. The five-phase roadmap still preserves all eight canonical Prototype v0 milestones. Phase 2 can build against the spoiler-safe graph contract once that gate closes. Notes/manual editing, revisions/revert, and future-extraction preparation remain Phases 3–5. Automated ingestion/extraction and LLM chat remain post-v0.
 
 ## Quick Reference
 
@@ -57,7 +57,7 @@ All five vertical delivery phases are pending and preserve all eight canonical P
 
 | Phase | Description | Requirements | Status | Completed |
 |-------|-------------|--------------|--------|-----------|
-| Phase 1 | Backend Graph Foundation | INFRA-01..03, META-01..03, API-01..04, SEED-01..04 | Pending | — |
+| Phase 1 | Backend Graph Foundation | INFRA-01..03, META-01..03, API-01..04, SEED-01..04 | Plan complete; verification pending | — |
 | Phase 2 | Polished Cytoscape Graph Experience | UI-01..05 | Pending | — |
 | Phase 3 | User Notes and Manual Editing | NOTE-01..03 | Pending | — |
 | Phase 4 | Revision History and Revert | REV-01..03 | Pending | — |
@@ -70,7 +70,7 @@ All five vertical delivery phases are pending and preserve all eight canonical P
 | 2026-07-28 | Align `.planning` plans with canonical root Prototype v0 roadmap | This task's atomic commit | Reconciled 30 requirements across 8 pending phases; preserved qualified brownfield state |
 
 ---
-*Last updated: 2026-07-29 — five-phase vertical delivery rebaseline applied; implementation state remains Phase 1 pending*
+*Last updated: 2026-07-29 — Phase 1 plan complete with runtime evidence; phase-level verification pending*
 
 ## Accumulated Context
 
@@ -86,6 +86,6 @@ All five vertical delivery phases are pending and preserve all eight canonical P
 
 ## Session
 
-**Last session:** 2026-07-29T07:13:57.892Z
-**Stopped at:** Completed 01-01-PLAN.md
+**Last session:** 2026-07-29T07:16:08.939Z
+**Stopped at:** Completed 01-01-PLAN.md with final Task 3 provenance hardening
 **Resume file:** None
