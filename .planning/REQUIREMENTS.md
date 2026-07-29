@@ -39,7 +39,7 @@ All requirements below are pending until their acceptance evidence is executed. 
 - [x] **UI-01**: The Vite starter is replaced by a React/TypeScript product layout that loads series, episodes, and graph data from the backend.
 - [x] **UI-02**: A watch-progress selector confirms advancement before unlocking a later episode and safely refreshes the applied backend boundary.
 - [x] **UI-03**: Cytoscape renders only returned nodes/edges and visibly updates as S01E01, S01E02, and S01E03 become allowed.
-- [ ] **UI-04**: Node and edge/claim detail views explain relationships and display linked source/evidence episode locators.
+- [x] **UI-04**: Node and edge/claim detail views explain relationships and display linked source/evidence episode locators.
 - [ ] **UI-05**: Frontend build/lint/component checks and demo UX checks verify safe progress changes and absence of hidden-data rendering.
 
 ### Phase 3 — User Notes and Manual Editing
@@ -92,7 +92,7 @@ Each Prototype v0 requirement has exactly one primary phase assignment.
 | UI-01 | Phase 2 | Complete |
 | UI-02 | Phase 2 | Complete |
 | UI-03 | Phase 2 | Complete |
-| UI-04 | Phase 2 | Pending |
+| UI-04 | Phase 2 | Complete |
 | UI-05 | Phase 2 | Pending |
 | NOTE-01 | Phase 3 | Pending |
 | NOTE-02 | Phase 3 | Pending |

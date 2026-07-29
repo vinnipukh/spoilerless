@@ -23,7 +23,7 @@
 
 **Success criteria:** the user selects Dexter and S01E01, sees only allowed Cytoscape elements, opens character/claim details and evidence, receives confirmation before advancing, and sees newly unlocked data after confirmation; frontend checks pass.
 
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 
 Plans:
 **Wave 1**
@@ -33,7 +33,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 02-02-PLAN.md — Graph canvas polish: cose-bilkent layout, full node-type/origin stylesheet, selection highlight/fade, loading/error/empty overlay states
-- [ ] 02-03-PLAN.md — Detail panel split: Overview/Claims/Evidence tabbed Sheet (nodes/claim-backed edges) vs. tab-less StructuralEdgeCard (structural edges)
+- [x] 02-03-PLAN.md — Detail panel split: Overview/Claims/Evidence tabbed Sheet (nodes/claim-backed edges) vs. tab-less StructuralEdgeCard (structural edges)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

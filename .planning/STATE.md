@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to plan
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-07-29T12:46:50.797Z"
+stopped_at: Completed 02-03-PLAN.md
+last_updated: "2026-07-29T13:58:16.000Z"
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # HD Graf Cehennemi — Project State
@@ -25,7 +25,7 @@ progress:
 | Field | Value |
 |-------|-------|
 | **Phase** | Phase 2: Polished Cytoscape Graph Experience |
-| **Status** | In Progress — Plan 02/04 complete |
+| **Status** | In Progress — Plan 03/04 complete |
 | **Deliverable** | Polished Cytoscape product experience over the verified spoiler-safe backend graph foundation |
 | **Requirements** | UI-01..05 |
 | **Dependencies** | Phase 1 complete (verified 9/9 truths) |
@@ -46,7 +46,9 @@ Phase 1 is fully executed and verified — the backend graph foundation delivers
 
 Phase 2 Plan 01 (of 4) is complete: the Vite starter is fully replaced with a real product layout (AppShell/SeriesSelect/EpisodeSelector/ConfirmAdvanceModal/GraphCanvas/DetailPanel) that fetches from and renders the verified Phase 1 backend end-to-end, gated by a sessionStorage-backed watch-progress confirmation flow (forward and backward). UI-01 and the mechanical core of UI-02 are satisfied. Vitest + React Testing Library test infrastructure now exists in this repo for the first time.
 
-Phase 2 Plan 02 (of 4) is complete: the canvas now uses the cose-bilkent layout (cose fallback on actual failure only), a full node-type shape + origin-border stylesheet (including Claude's-discretion Episode=tag/Series=star additions, documented in 02-UI-SPEC.md), tap-driven neighbor highlight/fade on nodes and edges, and GraphStatus.tsx loading/error/empty overlay states wired into App.tsx's full useGraph status branch (with a working Retry). A GraphCanvas.test.tsx component test proves element counts track the backend boundary exactly at both S01E01 (11 nodes/6 edges) and S01E03 (20 nodes). UI-03 is satisfied. The detail-panel tab/branch split (UI-04, D-06/D-07) remains Plan 03.
+Phase 2 Plan 02 (of 4) is complete: the canvas now uses the cose-bilkent layout (cose fallback on actual failure only), a full node-type shape + origin-border stylesheet (including Claude's-discretion Episode=tag/Series=star additions, documented in 02-UI-SPEC.md), tap-driven neighbor highlight/fade on nodes and edges, and GraphStatus.tsx loading/error/empty overlay states wired into App.tsx's full useGraph status branch (with a working Retry). A GraphCanvas.test.tsx component test proves element counts track the backend boundary exactly at both S01E01 (11 nodes/6 edges) and S01E03 (20 nodes). UI-03 is satisfied.
+
+Phase 2 Plan 03 (of 4) is complete: DetailPanel now renders the full Overview/Claims/Evidence tabbed Sheet (D-07) for nodes and claim-backed edges, resolving claims/evidence/sources from the already-fetched GraphResponse with locked "Source: {source label} - {locator}" evidence copy and explicit zero-claims/zero-evidence empty sub-states. A new StructuralEdgeCard (D-06) gives structural edges (PART_OF/PRECEDES) a distinct tab-less card, with the branch decision centralized in exactly one place in App.tsx (GraphCanvas's onSelect contract stays unchanged). UI-04 is satisfied. Only Plan 04 (spoiler-safety grep audit / final phase verification) remains.
 
 ## Quick Reference
 
@@ -94,14 +96,17 @@ Phase 2 Plan 02 (of 4) is complete: the canvas now uses the cose-bilkent layout 
 |------|----------|-------|-------|
 | Phase 02 P01 | ~45min (resumed) | 1 tasks | 26 files |
 | Phase 02 P02 | 45min | 2 tasks | 5 files |
+| Phase 02 P03 | ~15min | 2 tasks | 5 files |
 
 ## Session
 
-**Last session:** 2026-07-29T12:46:50.783Z
-**Stopped at:** Completed 02-02-PLAN.md
+**Last session:** 2026-07-29T13:58:16.000Z
+**Stopped at:** Completed 02-03-PLAN.md
 **Resume file:** None
 
 ## Decisions
 
 - [Phase ?]: Backward-copy variant added to ConfirmAdvanceModal + 02-UI-SPEC.md Copywriting Contract (Claude's-discretion addition per CONTEXT.md)
 - [Phase ?]: GraphErrorState Retry uses a useGraph retryToken folded into the existing key-comparison reset pattern (not a new imperative setState-in-effect)
+- [Phase 02-03]: DetailPanel/App.tsx resolve a selected edge's claim_id from the already-fetched GraphResponse.edges rather than widening GraphCanvas's SelectedEdge contract, keeping the onSelect shape stable across plans
+- [Phase 02-03]: Locked evidence copy implemented as "Source: {source label} - {locator}" (plain hyphen) per 02-03-PLAN.md's truths/acceptance-criteria, not the em dash shown in 02-UI-SPEC.md's Copywriting Contract example
