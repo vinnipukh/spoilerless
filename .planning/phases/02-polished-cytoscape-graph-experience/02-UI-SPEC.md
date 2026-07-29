@@ -120,6 +120,8 @@ Node fill color uses `--muted` (`#131936`) as the idle/unselected fill across al
 | Spoiler-confirmation modal — body | "You're about to see new characters, events, and relationships from S01E0X. This can't be undone. Continue?" |
 | Spoiler-confirmation modal — cancel button | "Cancel" |
 | Spoiler-confirmation modal — confirm button | "Yes, unlock episode" |
+| Spoiler-confirmation modal — title (backward/rewatch variant) | "Rewatch S01E0X?" *(Claude's-discretion addition, CONTEXT.md backward-copy variant — D-03 extends confirmation to backward moves, but the row above is forward-only)* |
+| Spoiler-confirmation modal — body (backward/rewatch variant) | "You're about to move your watch progress back to S01E0X. Continue?" *(Claude's-discretion addition, CONTEXT.md backward-copy variant)* |
 | Watch-progress selector label | "Watch progress" |
 | Detail panel — no selection placeholder | "Select a node to see details." |
 | Detail panel tabs | "Overview" / "Claims" / "Evidence" |
