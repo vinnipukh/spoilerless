@@ -5,81 +5,54 @@
 **Mode:** dependency-ordered Prototype v0 delivery
 **Status:** all phases pending; brownfield scaffolds are inputs, not verified completion
 
-## Phase 1: Local Infrastructure
+## Phase 1: Backend Graph Foundation
 
-**Goal:** Establish executable local Neo4j/FastAPI/React services and trustworthy runtime health.
+**Goal:** Deliver the minimum reliable backend and Neo4j graph foundation required for the visual prototype: executable local services, ontology-aligned deterministic data, evidence-backed graph records, and backend-enforced spoiler filtering.
 
-**Requirements:** INFRA-01, INFRA-02, INFRA-03
+**Requirements:** INFRA-01, INFRA-02, INFRA-03, META-01, META-02, META-03, API-01, API-02, API-03, API-04, SEED-01, SEED-02, SEED-03, SEED-04
 **Dependencies:** None
 
-**Success criteria:** Browser, Swagger, and React URLs are exercised; `/health` reports actual database state; backend lifecycle/error/query patterns are testable and verified rather than inferred from scaffold files.
+**Success criteria:** Neo4j, FastAPI, and React development services remain executable; `/health` reports real Neo4j state; a deterministic idempotent command creates required constraints and seeds Dexter S01E01–03 metadata plus a small ontology-aligned Character/Event/Location/Claim/Source/EvidenceFragment graph; every graph-visible record has a stable string ID and every spoiler-sensitive record has `visible_from_order`; metadata and graph endpoints use parameterized Cypher and return only data allowed by validated `episode_order`; automated tests prove an S01E01 request contains no S01E02/S01E03 nodes, edges, claims, evidence, names, labels, or counts.
 
-## Phase 2: Metadata Graph
+## Phase 2: Polished Cytoscape Graph Experience
 
-**Goal:** Reliably persist and serve Dexter plus ordered S01E01–03 metadata.
-
-**Requirements:** META-01, META-02, META-03
-**Dependencies:** Phase 1
-
-**Success criteria:** idempotent setup creates constraints, one Series, three Episodes, `PART_OF` and `PRECEDES`; the canonical metadata query returns one series/three episodes; metadata endpoints return persisted ordered data.
-
-## Phase 3: Spoiler-Aware Graph API
-
-**Goal:** Enforce the central spoiler boundary at data access before graph data reaches a client.
-
-**Requirements:** API-01, API-02, API-03, API-04
-**Dependencies:** Phase 2
-
-**Success criteria:** boundary 1 excludes all S01E02/03 data; thresholds 1–3 are tested; hidden labels, names, evidence, and counts do not leak; every edge closes over returned nodes; invalid input behavior is verified.
-
-## Phase 4: Evidence-Backed Manual Seed Graph
-
-**Goal:** Provide the source-linked Dexter narrative graph needed by the Prototype v0 demo.
-
-**Requirements:** SEED-01, SEED-02, SEED-03, SEED-04
-**Dependencies:** Phases 2–3
-
-**Success criteria:** selected Characters and atomic Claims for S01E01–03 are manually curated; every claim has episode-located evidence and a source; full seeding is idempotent; executed queries/API checks show evidence-backed networks at each boundary.
-
-## Phase 5: React/Cytoscape Exploration and Spoiler UX
-
-**Goal:** Deliver the usable graph exploration flow from the root demo story.
+**Goal:** Turn the verified backend graph foundation into a polished visual prototype centered on the Cytoscape exploration flow.
 
 **Requirements:** UI-01, UI-02, UI-03, UI-04, UI-05
-**Dependencies:** Phases 3–4
+**Dependencies:** Phase 1
 
 **Success criteria:** the user selects Dexter and S01E01, sees only allowed Cytoscape elements, opens character/claim details and evidence, receives confirmation before advancing, and sees newly unlocked data after confirmation; frontend checks pass.
 
-## Phase 6: User Notes and Manual Editing
+## Phase 3: User Notes and Manual Editing
 
 **Goal:** Let the user add personal knowledge while preserving provenance and canonical data.
 
 **Requirements:** NOTE-01, NOTE-02, NOTE-03
-**Dependencies:** Phase 5
+**Dependencies:** Phase 2
 
 **Success criteria:** a note can be attached to a character/claim and shown in details; custom nodes/relationships can be created/edited; user content is stored and rendered distinctly from canonical/candidate content.
 
-## Phase 7: Revision History and Revert
+## Phase 4: Revision History and Revert
 
 **Goal:** Make corrections inspectable and reversible without destroying history.
 
 **Requirements:** REV-01, REV-02, REV-03
-**Dependencies:** Phase 6
+**Dependencies:** Phase 3
 
 **Success criteria:** each covered edit/rejection/correction creates a revision; old values are visible; reverting appends a revision and preserves history; UI and automated checks demonstrate the flow.
 
-## Phase 8: Future-Extraction Preparation
+## Phase 5: Future-Extraction Preparation
 
 **Goal:** Accept and review future extractor output without implementing extraction or an LLM.
 
 **Requirements:** PREP-01, PREP-02, PREP-03, PREP-04, PREP-05
-**Dependencies:** Phases 4 and 7
+**Dependencies:** Phases 1 and 4
 
 **Success criteria:** a versioned structured fixture enters a separate candidate layer through stable contracts, evidence is reviewable, approve/reject/edit is revision-logged, and the graph model needs no change. No automated source ingestion, extraction model, or LLM is run.
 
 ## Prototype v0 Release Gate
 
-Prototype v0 is complete only when all eight phases have executed evidence and the root demo can be performed end-to-end: open app; choose Dexter/S01E01; inspect only allowed source-backed knowledge; confirm progress advancement; see newly unlocked elements; add a note; edit a claim; inspect history/revert. Preparation contracts must accept fixture candidates. File presence or scaffold status alone cannot pass a gate.
+Prototype v0 is complete only when all five delivery phases have executed evidence and all eight canonical root-roadmap milestones are covered. The root demo must run end-to-end: open app; choose Dexter/S01E01; inspect only allowed source-backed knowledge; confirm progress advancement; see newly unlocked elements; add a note; edit a claim; inspect history/revert. Preparation contracts must accept fixture candidates. File presence or scaffold status alone cannot pass a gate.
 
 ## Post-v0
 
@@ -89,16 +62,13 @@ Actual source retrieval/parsing/ingestion, operational LLM extraction, and LLM c
 
 | Phase | Canonical milestone/capability | Requirements | Count | Status |
 |-------|--------------------------------|--------------|------:|--------|
-| Phase 1 | Milestone 1 — local infrastructure | INFRA-01..03 | 3 | Pending |
-| Phase 2 | Milestone 2 — metadata graph | META-01..03 | 3 | Pending |
-| Phase 3 | Milestone 3 — spoiler-aware API | API-01..04 | 4 | Pending |
-| Phase 4 | Milestone 4 — manual seed graph | SEED-01..04 | 4 | Pending |
-| Phase 5 | Milestone 5 — frontend graph UI | UI-01..05 | 5 | Pending |
-| Phase 6 | Milestone 6 — notes/manual editing | NOTE-01..03 | 3 | Pending |
-| Phase 7 | Milestone 7 — revision history | REV-01..03 | 3 | Pending |
-| Phase 8 | Milestone 8 — extraction preparation | PREP-01..05 | 5 | Pending |
+| Phase 1 | Milestones 1–4 — infrastructure, metadata, spoiler-aware API, manual seed graph | INFRA-01..03, META-01..03, API-01..04, SEED-01..04 | 14 | Pending |
+| Phase 2 | Milestone 5 — frontend graph UI | UI-01..05 | 5 | Pending |
+| Phase 3 | Milestone 6 — notes/manual editing | NOTE-01..03 | 3 | Pending |
+| Phase 4 | Milestone 7 — revision history | REV-01..03 | 3 | Pending |
+| Phase 5 | Milestone 8 — extraction preparation | PREP-01..05 | 5 | Pending |
 
-**Coverage:** 30/30 Prototype v0 requirements mapped once across 8/8 phases; 0 unmapped.
+**Coverage:** 30/30 Prototype v0 requirements mapped once across 5 delivery phases covering 8/8 canonical milestones; 0 unmapped.
 
 ## Risks and Controls
 
@@ -111,4 +81,4 @@ Actual source retrieval/parsing/ingestion, operational LLM extraction, and LLM c
 | Preparation expands into extraction | Use fixtures/contracts only; keep connectors non-operational in v0 |
 
 ---
-*Last updated: 2026-07-28 — reconciled to canonical root Prototype v0 milestones 1–8*
+*Last updated: 2026-07-29 — rebaselined into five vertical delivery phases while preserving canonical root Prototype v0 milestones 1–8*
