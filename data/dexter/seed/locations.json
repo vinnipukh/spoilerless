@@ -1,0 +1,6 @@
+[
+  {"id":"dexter:location:miami_metro","node_type":"Location","series_id":"series_dexter","label":"Miami Metro Police Department","visible_from_order":1,"origin":"canonical"},
+  {"id":"dexter:location:miami_crime_scene","node_type":"Location","series_id":"series_dexter","label":"Miami crime scene","visible_from_order":1,"origin":"canonical"},
+  {"id":"dexter:location:rita_home","node_type":"Location","series_id":"series_dexter","label":"Rita's home","visible_from_order":2,"origin":"canonical"},
+  {"id":"dexter:location:ice_rink","node_type":"Location","series_id":"series_dexter","label":"Miami ice rink","visible_from_order":3,"origin":"canonical"}
+]

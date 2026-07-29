@@ -1,0 +1,5 @@
+[
+  {"id":"dexter:event:s01e01_ice_truck_case","node_type":"Event","series_id":"series_dexter","episode_id":"dexter_s01e01","label":"Ice-truck case begins","visible_from_order":1,"origin":"canonical","location_id":"dexter:location:miami_crime_scene"},
+  {"id":"dexter:event:s01e02_debra_transfer","node_type":"Event","series_id":"series_dexter","episode_id":"dexter_s01e02","label":"Debra joins Homicide","visible_from_order":2,"origin":"canonical","location_id":"dexter:location:miami_metro"},
+  {"id":"dexter:event:s01e03_body_discovery","node_type":"Event","series_id":"series_dexter","episode_id":"dexter_s01e03","label":"Body is discovered at the ice rink","visible_from_order":3,"origin":"canonical","location_id":"dexter:location:ice_rink"}
+]

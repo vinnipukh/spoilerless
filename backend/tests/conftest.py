@@ -14,5 +14,5 @@ if str(PROJECT_ROOT) not in sys.path:
 
 os.environ.setdefault("NEO4J_URI", "bolt://127.0.0.1:7687")
 os.environ.setdefault("NEO4J_USERNAME", "neo4j")
-os.environ.setdefault("NEO4J_PASSWORD", "test-password")
+os.environ.setdefault("NEO4J_PASSWORD", "hdgraf-local-password")
 os.environ.setdefault("NEO4J_DATABASE", "neo4j")

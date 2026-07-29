@@ -1,0 +1,11 @@
+[
+  {"id":"dexter:character:dexter_morgan","node_type":"Character","series_id":"series_dexter","label":"Dexter Morgan","visible_from_order":1,"origin":"canonical"},
+  {"id":"dexter:character:debra_morgan","node_type":"Character","series_id":"series_dexter","label":"Debra Morgan","visible_from_order":1,"origin":"canonical"},
+  {"id":"dexter:character:angel_batista","node_type":"Character","series_id":"series_dexter","label":"Angel Batista","visible_from_order":1,"origin":"canonical"},
+  {"id":"dexter:character:maria_laguerta","node_type":"Character","series_id":"series_dexter","label":"Maria LaGuerta","visible_from_order":1,"origin":"canonical"},
+  {"id":"dexter:character:james_doakes","node_type":"Character","series_id":"series_dexter","label":"James Doakes","visible_from_order":1,"origin":"canonical"},
+  {"id":"dexter:character:rita_bennett","node_type":"Character","series_id":"series_dexter","label":"Rita Bennett","visible_from_order":1,"origin":"canonical"},
+  {"id":"dexter:character:paul_bennett","node_type":"Character","series_id":"series_dexter","label":"Paul Bennett","visible_from_order":2,"origin":"canonical"},
+  {"id":"dexter:character:rudy_cooper","node_type":"Character","series_id":"series_dexter","label":"Rudy Cooper","visible_from_order":3,"origin":"canonical"},
+  {"id":"dexter:character:harry_morgan","node_type":"Character","series_id":"series_dexter","label":"Harry Morgan","visible_from_order":3,"origin":"canonical"}
+]

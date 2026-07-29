@@ -1,0 +1,5 @@
+[
+  {"id":"dexter:source:s01e01","node_type":"Source","series_id":"series_dexter","episode_id":"dexter_s01e01","label":"Dexter S01E01 curated episode notes","source_type":"episode_notes","locator":"S01E01","retrieved_at":"2026-07-29","visible_from_order":1,"origin":"canonical"},
+  {"id":"dexter:source:s01e02","node_type":"Source","series_id":"series_dexter","episode_id":"dexter_s01e02","label":"Dexter S01E02 curated episode notes","source_type":"episode_notes","locator":"S01E02","retrieved_at":"2026-07-29","visible_from_order":2,"origin":"canonical"},
+  {"id":"dexter:source:s01e03","node_type":"Source","series_id":"series_dexter","episode_id":"dexter_s01e03","label":"Dexter S01E03 curated episode notes","source_type":"episode_notes","locator":"S01E03","retrieved_at":"2026-07-29","visible_from_order":3,"origin":"canonical"}
+]
