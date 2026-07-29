@@ -35,6 +35,43 @@ LLM answers grounded in the visible subgraph
 
 The prototype must look polished and must demonstrate that spoiler restrictions are enforced by the backend, not merely hidden in the browser.
 
+
+### 1.1 One-Week Delivery Boundary
+
+The one-week build uses **manually curated seed data** for Dexter S01E01-S01E03. The coding agent must not interpret the existence of `Source`, `EvidenceFragment`, `Claim`, or `origin: automatic` fields as permission to build an automatic ingestion system during this sprint.
+
+For this prototype:
+
+```text
+Manual curation
+    ↓
+Validated JSON/YAML seed records
+    ↓
+Idempotent Neo4j seed command
+    ↓
+Spoiler-filtered API
+```
+
+The following pipeline is part of the intended long-term architecture, but is explicitly postponed:
+
+```text
+Subtitle or script scene
+    ↓
+LLM entity and relation extraction
+    ↓
+Schema validation
+    ↓
+Entity resolution
+    ↓
+Claim and evidence generation
+    ↓
+Human review
+    ↓
+Canonical Neo4j graph
+```
+
+The one-week prototype should leave clean extension points for this future pipeline without implementing it. Do not add placeholder frameworks, background queues, model clients, vector stores, or ingestion services merely to appear extensible.
+
 ---
 
 ## 2. Core Product Idea
@@ -803,11 +840,326 @@ Additional tests should cover:
 
 ---
 
+## 12. Future Automated Knowledge-Graph Ingestion Architecture
+
+This section documents a post-prototype direction so future coding agents understand how automatic graph creation should eventually fit the existing model. It is **architectural guidance only** and is not part of the one-week implementation scope.
+
+### 12.1 Main Principle
+
+An LLM may assist with extracting candidate structure from source text, but it is not the source of truth. The source material, ontology, validation rules, and human review process remain authoritative.
+
+The future extraction flow should be:
+
+```text
+Scene-sized source fragment
+        ↓
+Constrained structured extraction
+        ↓
+Pydantic or JSON Schema validation
+        ↓
+Canonical entity linking
+        ↓
+Candidate Claim creation
+        ↓
+Evidence attachment
+        ↓
+Human approval or rejection
+        ↓
+Canonical graph publication
+```
+
+Do not write raw model output directly into the canonical graph.
+
+### 12.2 Process Sources in Small Units
+
+Whole episodes should not be sent to an LLM as a single unstructured prompt. Prefer scene-sized or subtitle-window-sized fragments.
+
+Recommended hierarchy:
+
+```text
+Source fragment → scene candidate graph
+Scene graphs → episode candidate graph
+Episode graphs → season graph
+```
+
+Benefits:
+
+- Evidence timestamps and page references remain precise.
+- Failed extraction can be retried for one scene.
+- Entity resolution is easier to inspect.
+- Prompt size and cost remain controlled.
+- Spoiler boundaries naturally inherit the episode order.
+
+A future input object may look like:
+
+```python
+from pydantic import BaseModel
+
+
+class SceneInput(BaseModel):
+    series_id: str
+    episode_id: str
+    episode_order: int
+    scene_id: str
+    source_id: str
+    text: str
+    start_time: str | None = None
+    end_time: str | None = None
+    page_number: int | None = None
+```
+
+### 12.3 Extraction Must Be Ontology-Constrained
+
+The model must choose node and relationship types from the versioned ontology. It must not invent labels dynamically.
+
+Allowed node types may include:
+
+```text
+Character
+Location
+Organization
+Object
+Event
+Scene
+Episode
+```
+
+Allowed relationship types must come from `ontology/relation_types.yaml`.
+
+Bad model output:
+
+```text
+HAS_A_WEIRD_VIBE_WITH
+IS_EMOTIONALLY_DISTANT_FROM
+```
+
+Acceptable output:
+
+```text
+DISTRUSTS
+OPPOSES
+KNOWS
+```
+
+When no ontology relationship accurately represents the source, the extractor should return an unresolved candidate rather than inventing a new predicate.
+
+### 12.4 Structured Output Only
+
+Do not parse loosely formatted prose such as:
+
+```text
+Entities:
+Dexter, Debra
+Relations:
+Dexter is related to Debra
+```
+
+Use a validated structured response instead:
+
+```python
+from enum import StrEnum
+from pydantic import BaseModel, Field
+
+
+class ConfidenceLevel(StrEnum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class ExtractedEntity(BaseModel):
+    mention: str
+    proposed_type: str
+    canonical_id_hint: str | None = None
+
+
+class ExtractedRelation(BaseModel):
+    source_mention: str
+    predicate: str
+    target_mention: str
+    explicitness: str
+    confidence: ConfidenceLevel
+    evidence_text: str = Field(min_length=1)
+
+
+class ExtractionResult(BaseModel):
+    entities: list[ExtractedEntity]
+    relations: list[ExtractedRelation]
+```
+
+If validation fails, do not write partial output to Neo4j.
+
+### 12.5 No Prior-Knowledge Leakage
+
+Television-series knowledge may already exist in a model's parameters. Extraction prompts must explicitly prohibit using prior knowledge.
+
+Future extractor prompt rule:
+
+```text
+Use only the supplied source fragment.
+Do not use prior knowledge of the television series.
+Do not infer later events, hidden identities, motives, or relationships unless
+supported by the supplied fragment.
+Return only ontology-approved node and relationship types.
+Every relation must include local evidence from the supplied fragment.
+```
+
+This requirement is separate from backend spoiler filtering. Both are necessary.
+
+### 12.6 Canonical Entity Resolution
+
+Different mentions must be resolved to stable canonical entities.
+
+Example:
+
+```json
+{
+  "canonical_id": "character_dexter_morgan",
+  "canonical_name": "Dexter Morgan",
+  "aliases": ["Dexter", "Dex", "Morgan"]
+}
+```
+
+A future entity linker must not automatically accept the top candidate in every case. Ambiguous mentions such as `Morgan` may refer to multiple characters.
+
+Suggested policy:
+
+```python
+def decide_entity_link(top_score: float) -> str:
+    if top_score >= 0.90:
+        return "auto_link"
+    if top_score >= 0.70:
+        return "manual_review"
+    return "unresolved"
+```
+
+Thresholds are placeholders and must be validated on real project data before production use.
+
+### 12.7 Candidate Claims, Not Immediate Canonical Edges
+
+Automatic extraction should create candidate claims with evidence rather than silently publishing trusted graph facts.
+
+Example candidate claim:
+
+```json
+{
+  "id": "claim_candidate_0001",
+  "subject_id": "character_dexter_morgan",
+  "predicate": "WORKS_WITH",
+  "object_id": "organization_miami_metro",
+  "claim_type": "explicit_fact",
+  "status": "candidate",
+  "confidence": "high",
+  "origin": "automatic",
+  "visible_from_order": 1,
+  "evidence_ids": ["evidence_subtitle_s01e01_001"]
+}
+```
+
+A human reviewer may later approve, edit, dispute, or reject it. Canonical graph edges may be materialized only after approval, or derived at query time from approved claims.
+
+### 12.8 Human-in-the-Loop Review
+
+The future review UI should allow a user to:
+
+- Compare the source fragment with extracted entities and relations.
+- Link a mention to an existing entity.
+- Create a new entity when necessary.
+- Change an ontology predicate.
+- Approve or reject a candidate claim.
+- Record the reason for a correction.
+- Preserve the original automatic extraction in revision history.
+
+Automatic content must never become indistinguishable from curated or user-created content.
+
+### 12.9 Suggested Future Service Boundary
+
+A future ingestion package may eventually look like:
+
+```text
+backend/app/ingestion/
+├── schemas.py
+├── extractor.py
+├── entity_linker.py
+├── claim_builder.py
+├── review_repository.py
+└── pipeline.py
+```
+
+Conceptual orchestration:
+
+```python
+def process_scene(scene: SceneInput) -> ExtractionResult:
+    raw_output = extractor.extract(
+        text=scene.text,
+        allowed_node_types=ontology.node_types,
+        allowed_relation_types=ontology.relation_types,
+    )
+
+    validated = ExtractionResult.model_validate(raw_output)
+
+    linked_entities = entity_linker.resolve(
+        series_id=scene.series_id,
+        entities=validated.entities,
+    )
+
+    candidate_claims = claim_builder.build_candidates(
+        episode_order=scene.episode_order,
+        source_id=scene.source_id,
+        relations=validated.relations,
+        linked_entities=linked_entities,
+    )
+
+    review_repository.save_candidates(
+        entities=linked_entities,
+        claims=candidate_claims,
+    )
+
+    return validated
+```
+
+This code is illustrative. Do not create these modules during the current sprint unless the user explicitly changes scope.
+
+### 12.10 Deliberately Rejected Shortcuts
+
+The future implementation should avoid:
+
+- LLM output written directly to canonical Neo4j nodes.
+- Free-form relationship labels.
+- Blind acceptance of the highest similarity match.
+- Whole-season prompts.
+- NetworkX as a required production intermediary.
+- Evidence-free inferred claims.
+- Automatic overwrite of curated data.
+- Model-generated facts unsupported by source text.
+
+NetworkX may still be used for offline analysis or experiments, but Neo4j remains the canonical graph store.
+
+### 12.11 Future Definition of Done
+
+The automatic ingestion phase should not be considered complete until:
+
+1. Scene-sized source fragments can be processed deterministically.
+2. Output is validated against a strict schema.
+3. Entity and relation types are ontology-constrained.
+4. Every candidate claim contains source evidence.
+5. Ambiguous entity links enter manual review.
+6. The model cannot directly publish canonical graph facts.
+7. Human approval actions create revision records.
+8. Spoiler visibility is inherited from the source episode.
+9. Tests prove later-episode material cannot enter earlier retrieval contexts.
+10. Reprocessing the same source does not create uncontrolled duplicates.
+
+---
+
 ## 12. Scope Boundaries for the One-Week Prototype
 
 Do not implement these unless the core vertical slice is already complete:
 
 - Full OpenSubtitles automation
+- LLM-based entity and relation extraction
+- Automatic entity linking or alias resolution
+- Candidate-claim review workflows
 - Full script PDF ingestion pipeline
 - Podcast transcription
 - IMDb scraping
