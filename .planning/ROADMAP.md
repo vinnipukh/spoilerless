@@ -23,7 +23,7 @@
 
 **Success criteria:** the user selects Dexter and S01E01, sees only allowed Cytoscape elements, opens character/claim details and evidence, receives confirmation before advancing, and sees newly unlocked data after confirmation; frontend checks pass.
 
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans executed
 
 Plans:
 **Wave 1**
@@ -37,7 +37,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 02-04-PLAN.md — Remaining component tests, tree-wide threat-mitigation grep audit, full-suite verification, and demo UAT
+- [x] 02-04-PLAN.md — Remaining component tests, tree-wide threat-mitigation grep audit, full-suite verification, and demo UAT
 
 ## Phase 3: User Notes and Manual Editing
 
