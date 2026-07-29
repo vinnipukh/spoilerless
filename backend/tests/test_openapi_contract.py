@@ -197,3 +197,46 @@ def test_user_route_openapi_shapes_enums_examples_and_positive_boundaries() -> N
         "KNOWS", "FAMILY_OF", "WORKS_WITH", "TRUSTS", "DISTRUSTS", "HELPS", "OPPOSES",
         "THREATENS", "ATTACKS", "KILLS",
     ]
+
+
+def test_all_story_reads_graph_errors_health_and_deletes_are_fully_typed() -> None:
+    from backend.app.main import app
+
+    schema = app.openapi()
+    story_reads = {
+        ("/api/series/{series_id}/graph", "get"),
+        ("/api/series/{series_id}/notes", "get"),
+        ("/api/series/{series_id}/notes/{note_id}", "get"),
+        ("/api/series/{series_id}/custom-nodes/{node_id}", "get"),
+        ("/api/series/{series_id}/custom-relationships/{relationship_id}", "get"),
+    }
+    for path, method in story_reads:
+        operation = schema["paths"][path][method]
+        boundary = next(item for item in operation["parameters"] if item["name"] == "visible_until_order")
+        assert boundary["required"] is True
+        assert boundary["schema"]["type"] == "integer"
+        assert boundary["schema"]["exclusiveMinimum"] == 0
+
+    graph = schema["paths"]["/api/series/{series_id}/graph"]["get"]
+    assert graph["summary"] == "Read the spoiler-safe series graph"
+    assert graph["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/GraphResponse"
+    }
+    for status in (404, 422, 503):
+        assert_error_response_reference(
+            schema,
+            path="/api/series/{series_id}/graph",
+            method="get",
+            status_code=status,
+        )
+
+    health = schema["paths"]["/health"]["get"]["responses"]
+    assert health["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/HealthResponse"
+    }
+    assert health["503"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/HealthResponse"
+    }
+    for path, item in schema["paths"].items():
+        if "delete" in item:
+            assert item["delete"]["responses"]["204"].get("content") in (None, {})

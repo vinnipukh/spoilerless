@@ -51,6 +51,8 @@ MATCH (object {id: claim.object_id})
 MATCH (claim)-[supported:SUPPORTED_BY]->(evidence:EvidenceFragment)
 MATCH (claim)-[ref:REFERS_TO]->(source:Source {id: evidence.source_id})
 WHERE claim.visible_from_order <= $visible_until_order
+  AND claim.origin IN ['canonical', 'candidate']
+  AND claim.claim_type <> 'user_authored'
   AND subject.visible_from_order <= $visible_until_order
   AND object.visible_from_order <= $visible_until_order
   AND supported.visible_from_order <= $visible_until_order
@@ -77,11 +79,38 @@ RETURN claim.id AS id,
 ORDER BY claim.visible_from_order, id
 """
 
+VISIBLE_USER_RELATIONSHIPS_QUERY = """
+MATCH (claim:Claim {series_id: $series_id, origin: 'user', claim_type: 'user_authored'})
+MATCH (subject {id: claim.subject_id, series_id: $series_id})
+MATCH (object {id: claim.object_id, series_id: $series_id})
+WHERE claim.id STARTS WITH 'user-rel:'
+  AND claim.predicate IN $user_relationship_types
+  AND claim.visible_from_order IS NOT NULL
+  AND claim.visible_from_order >= 1
+  AND claim.visible_from_order <= $visible_until_order
+  AND subject.visible_from_order IS NOT NULL
+  AND subject.visible_from_order >= 1
+  AND subject.visible_from_order <= $visible_until_order
+  AND object.visible_from_order IS NOT NULL
+  AND object.visible_from_order >= 1
+  AND object.visible_from_order <= $visible_until_order
+RETURN claim.id AS id,
+       claim.subject_id AS source,
+       claim.object_id AS target,
+       claim.predicate AS type,
+       claim.visible_from_order AS visible_from_order,
+       claim.origin AS origin,
+       null AS claim_id
+ORDER BY claim.visible_from_order, id
+"""
+
 SOURCES_QUERY = """
 MATCH (claim:Claim {series_id: $series_id})-[ref:REFERS_TO]->(source:Source)
 MATCH (subject {id: claim.subject_id})
 MATCH (object {id: claim.object_id})
 WHERE claim.visible_from_order <= $visible_until_order
+  AND claim.origin IN ['canonical', 'candidate']
+  AND claim.claim_type <> 'user_authored'
   AND subject.visible_from_order <= $visible_until_order
   AND object.visible_from_order <= $visible_until_order
   AND ref.visible_from_order <= $visible_until_order
@@ -105,6 +134,8 @@ MATCH (claim)-[ref:REFERS_TO]->(source:Source {id: evidence.source_id})
 MATCH (subject {id: claim.subject_id})
 MATCH (object {id: claim.object_id})
 WHERE claim.visible_from_order <= $visible_until_order
+  AND claim.origin IN ['canonical', 'candidate']
+  AND claim.claim_type <> 'user_authored'
   AND subject.visible_from_order <= $visible_until_order
   AND object.visible_from_order <= $visible_until_order
   AND supported.visible_from_order <= $visible_until_order

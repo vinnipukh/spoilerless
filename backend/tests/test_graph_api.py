@@ -147,9 +147,11 @@ def test_graph_error_shapes(live_client: TestClient) -> None:
 
     assert unknown.status_code == 404
     assert unknown.json()["detail"]["code"] == "series_not_found"
-    for response in (missing, malformed, nonpersisted):
+    for response in (missing, malformed):
         assert response.status_code == 422
-        assert response.json()["detail"]["code"] == "invalid_visible_until_order"
+        assert response.json()["detail"]["code"] == "invalid_request"
+    assert nonpersisted.status_code == 422
+    assert nonpersisted.json()["detail"]["code"] == "invalid_visible_until_order"
 
 
 def test_graph_database_unavailable_is_sanitized(live_client: TestClient) -> None:
@@ -221,3 +223,136 @@ def test_claim_validity_is_independent_of_visibility(live_client: TestClient) ->
     assert claim_id in {claim["id"] for claim in order_one["claims"]}
     assert claim_id not in {claim["id"] for claim in order_two["claims"]}
     assert claim_id not in json.dumps(order_two, sort_keys=True)
+
+
+USER_PROJECTION_FIXTURE_QUERY = """
+CREATE (character:Character {id: 'user-node:plan03-character', series_id: 'series_dexter',
+  label: 'Visible user character', visible_from_order: 1, origin: 'user'})
+CREATE (event:Event {id: 'user-node:plan03-event', series_id: 'series_dexter',
+  label: 'Visible user event', visible_from_order: 1, origin: 'user'})
+CREATE (location:Location {id: 'user-node:plan03-location', series_id: 'series_dexter',
+  label: 'Visible user location', visible_from_order: 1, origin: 'user'})
+CREATE (organization:Organization {id: 'user-node:plan03-organization', series_id: 'series_dexter',
+  label: 'Visible user organization', visible_from_order: 1, origin: 'user'})
+CREATE (object:Object {id: 'user-node:plan03-object', series_id: 'series_dexter',
+  label: 'Future user object sentinel', visible_from_order: 3, origin: 'user'})
+WITH character, event, location, organization, object
+UNWIND [
+  {id: 'user-rel:plan03-character', source: character.id, target: event.id, predicate: 'PARTICIPATED_IN', visibility: 1},
+  {id: 'user-rel:plan03-event', source: event.id, target: location.id, predicate: 'OCCURRED_INJECTION_BLOCKED', visibility: 1},
+  {id: 'user-rel:plan03-location', source: location.id, target: organization.id, predicate: 'KNOWS', visibility: 1},
+  {id: 'user-rel:plan03-organization', source: organization.id, target: character.id, predicate: 'HELPS', visibility: 1},
+  {id: 'user-rel:plan03-object', source: object.id, target: character.id, predicate: 'MENTIONED', visibility: 3}
+] AS row
+CREATE (:Claim {id: row.id, series_id: 'series_dexter', subject_id: row.source,
+  object_id: row.target, predicate: row.predicate, claim_type: 'user_authored',
+  visible_from_order: row.visibility, origin: 'user'})
+WITH DISTINCT character, event
+CREATE (source:Source {id: 'plan03:user-source', series_id: 'series_dexter', label: 'User source',
+  episode_id: 'dexter_s01e01', source_type: 'manual', locator: 'private', retrieved_at: 'now',
+  visible_from_order: 1, origin: 'user'})
+CREATE (evidence:EvidenceFragment {id: 'plan03:user-evidence', series_id: 'series_dexter',
+  label: 'User evidence', episode_id: 'dexter_s01e01', source_id: source.id, text: 'private',
+  locator: 'private', content_hash: 'private', visible_from_order: 1, origin: 'user'})
+CREATE (rich:Claim {id: 'user-rel:plan03-evidenced', series_id: 'series_dexter',
+  subject_id: character.id, object_id: event.id, predicate: 'WITNESSED',
+  claim_type: 'user_authored', visible_from_order: 1, origin: 'user'})
+CREATE (rich)-[:SUPPORTED_BY {visible_from_order: 1}]->(evidence)
+CREATE (rich)-[:REFERS_TO {visible_from_order: 1}]->(source)
+CREATE (:Claim {id: 'plan03:canonical-no-evidence', series_id: 'series_dexter',
+  subject_id: character.id, object_id: event.id, predicate: 'KNOWS', claim_type: 'explicit_fact',
+  visible_from_order: 1, origin: 'canonical'})
+CREATE (:Claim {id: 'plan03:candidate-no-evidence', series_id: 'series_dexter',
+  subject_id: character.id, object_id: event.id, predicate: 'KNOWS', claim_type: 'explicit_fact',
+  visible_from_order: 1, origin: 'candidate'})
+CREATE (:Claim {id: 'user-rel:plan03-missing-visibility', series_id: 'series_dexter',
+  subject_id: character.id, object_id: event.id, predicate: 'KNOWS',
+  claim_type: 'user_authored', origin: 'user'})
+"""
+
+USER_PROJECTION_CLEANUP_QUERY = """
+MATCH (resource)
+WHERE coalesce(resource.id, '') STARTS WITH 'user-node:plan03'
+   OR coalesce(resource.id, '') STARTS WITH 'user-rel:plan03'
+   OR coalesce(resource.id, '') STARTS WITH 'plan03:'
+DETACH DELETE resource
+"""
+
+
+async def _prepare_user_projection_fixture() -> None:
+    database = Neo4jDatabase()
+    database.open()
+    try:
+        await database.execute_query(USER_PROJECTION_CLEANUP_QUERY)
+        await database.execute_query(USER_PROJECTION_FIXTURE_QUERY)
+    finally:
+        await database.close()
+
+
+async def _clean_user_projection_fixture() -> None:
+    database = Neo4jDatabase()
+    database.open()
+    try:
+        await database.execute_query(USER_PROJECTION_CLEANUP_QUERY)
+    finally:
+        await database.close()
+
+
+def test_user_relationship_projection_is_edge_only_closed_and_fail_closed(
+    live_client: TestClient,
+) -> None:
+    asyncio.run(_prepare_user_projection_fixture())
+    try:
+        order_one_response = live_client.get(
+            "/api/series/series_dexter/graph", params={"visible_until_order": 1}
+        )
+        order_three_response = live_client.get(
+            "/api/series/series_dexter/graph", params={"visible_until_order": 3}
+        )
+        assert order_one_response.status_code == order_three_response.status_code == 200
+        order_one = order_one_response.json()
+        order_three = order_three_response.json()
+
+        one_node_ids = {node["id"] for node in order_one["nodes"]}
+        three_node_ids = {node["id"] for node in order_three["nodes"]}
+        assert {
+            "user-node:plan03-character",
+            "user-node:plan03-event",
+            "user-node:plan03-location",
+            "user-node:plan03-organization",
+        } <= one_node_ids
+        assert "user-node:plan03-object" not in one_node_ids
+        assert "user-node:plan03-object" in three_node_ids
+
+        one_edges = [edge for edge in order_one["edges"] if edge["id"].startswith("user-rel:plan03")]
+        three_edges = [edge for edge in order_three["edges"] if edge["id"].startswith("user-rel:plan03")]
+        assert {edge["id"] for edge in one_edges} == {
+            "user-rel:plan03-character",
+            "user-rel:plan03-location",
+            "user-rel:plan03-organization",
+            "user-rel:plan03-evidenced",
+        }
+        assert sum(edge["id"] == "user-rel:plan03-evidenced" for edge in three_edges) == 1
+        assert "user-rel:plan03-object" not in {edge["id"] for edge in one_edges}
+        assert "user-rel:plan03-object" in {edge["id"] for edge in three_edges}
+        assert "user-rel:plan03-missing-visibility" not in {edge["id"] for edge in three_edges}
+
+        serialized_one = json.dumps(order_one, sort_keys=True)
+        assert "Future user object sentinel" not in serialized_one
+        assert "OCCURRED_INJECTION_BLOCKED" not in serialized_one
+        assert all(edge["source"] in one_node_ids and edge["target"] in one_node_ids for edge in one_edges)
+
+        non_edge_ids = {
+            row["id"]
+            for collection in ("claims", "sources", "evidence")
+            for row in order_three[collection]
+        }
+        assert {
+            "user-rel:plan03-evidenced",
+            "plan03:user-source",
+            "plan03:user-evidence",
+            "plan03:canonical-no-evidence",
+            "plan03:candidate-no-evidence",
+        }.isdisjoint(non_edge_ids)
+    finally:
+        asyncio.run(_clean_user_projection_fixture())
