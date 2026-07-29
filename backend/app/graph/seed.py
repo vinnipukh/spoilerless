@@ -19,9 +19,12 @@ NODE_LABELS = (
     "Character",
     "Event",
     "Location",
+    "Organization",
+    "Object",
     "Claim",
     "Source",
     "EvidenceFragment",
+    "UserNote",
 )
 SPOILER_LABELS = NODE_LABELS
 RELATIONSHIP_TYPES = (
@@ -137,6 +140,10 @@ async def create_constraints(database: Neo4jDatabase) -> None:
             "CREATE INDEX claim_series_idx IF NOT EXISTS FOR (n:Claim) ON (n.series_id)",
             "CREATE INDEX source_series_idx IF NOT EXISTS FOR (n:Source) ON (n.series_id)",
             "CREATE INDEX evidence_series_idx IF NOT EXISTS FOR (n:EvidenceFragment) ON (n.series_id)",
+            "CREATE INDEX organization_series_idx IF NOT EXISTS FOR (n:Organization) ON (n.series_id)",
+            "CREATE INDEX object_series_idx IF NOT EXISTS FOR (n:Object) ON (n.series_id)",
+            "CREATE INDEX usernote_series_idx IF NOT EXISTS FOR (n:UserNote) ON (n.series_id)",
+            "CREATE INDEX usernote_target_idx IF NOT EXISTS FOR (n:UserNote) ON (n.series_id, n.target_type, n.target_id)",
         ]
     )
     for query in queries:

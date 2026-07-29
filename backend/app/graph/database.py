@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Awaitable, Callable, TypeVar
 
 from fastapi import Depends, Request
 from neo4j import AsyncDriver, AsyncGraphDatabase
 
 from backend.app.core.config import Settings, get_settings
+
+
+T = TypeVar("T")
+ManagedWork = Callable[[Any, T], Awaitable[Any]]
 
 
 class Neo4jDatabase:
@@ -50,6 +54,16 @@ class Neo4jDatabase:
             database_=self.database,
         )
         return [record.data() for record in records]
+
+    async def execute_write(self, work: ManagedWork, command: T) -> Any:
+        """Run one application-owned command in a managed, retryable transaction.
+
+        ``command`` is deliberately created by the caller before this method is
+        entered.  Neo4j may invoke ``work`` more than once, so callbacks must be
+        pure apart from their transaction writes.
+        """
+        async with self.driver.session(database=self.database) as session:
+            return await session.execute_write(work, command)
 
 
 def get_database(request: Request) -> Neo4jDatabase:

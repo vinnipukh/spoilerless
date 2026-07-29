@@ -106,9 +106,12 @@ async def test_constraints_visibility_and_provenance(live_database: Neo4jDatabas
         "Character",
         "Event",
         "Location",
+        "Organization",
+        "Object",
         "Claim",
         "Source",
         "EvidenceFragment",
+        "UserNote",
     }
     assert missing_visibility == [{"count": 0}]
     assert incomplete_claims == [{"count": 0}]

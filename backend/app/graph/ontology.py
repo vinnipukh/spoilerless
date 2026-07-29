@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from types import MappingProxyType
+from typing import Any, Iterable, Mapping
 
 import yaml
 
@@ -38,7 +39,25 @@ class Ontology:
     claim_types: frozenset[str]
     claim_statuses: frozenset[str]
     confidence_levels: frozenset[str]
+    node_type_groups: Mapping[str, frozenset[str]]
+    relationship_type_groups: Mapping[str, frozenset[str]]
     version: str = ONTOLOGY_VERSION
+
+    @property
+    def node_groups(self) -> Mapping[str, frozenset[str]]:
+        return self.node_type_groups
+
+    @property
+    def relationship_groups(self) -> Mapping[str, frozenset[str]]:
+        return self.relationship_type_groups
+
+    @property
+    def user_safe_relationship_types(self) -> frozenset[str]:
+        return self.relationship_type_groups["participation"] | self.relationship_type_groups["character"]
+
+    @property
+    def user_safe_node_types(self) -> frozenset[str]:
+        return frozenset({"Character", "Event", "Location", "Organization", "Object"})
 
     def require_node_type(self, value: str) -> None:
         self._require(value, self.node_types, "node type")
@@ -65,10 +84,18 @@ def load_ontology(directory: Path = ONTOLOGY_DIR) -> Ontology:
     nodes = _read_yaml(directory / "node_types.yaml")
     relationships = _read_yaml(directory / "relation_types.yaml")
     claims = _read_yaml(directory / "claim_types.yaml")
+    node_groups = MappingProxyType(
+        {name: frozenset(values) for name, values in nodes["node_types"].items()}
+    )
+    relationship_groups = MappingProxyType(
+        {name: frozenset(values) for name, values in relationships["relation_types"].items()}
+    )
     return Ontology(
         node_types=_flatten(nodes["node_types"]),
         relationship_types=_flatten(relationships["relation_types"]),
         claim_types=frozenset(claims["claim_types"]),
         claim_statuses=frozenset(claims["claim_statuses"]),
         confidence_levels=frozenset(claims["confidence_levels"]),
+        node_type_groups=node_groups,
+        relationship_type_groups=relationship_groups,
     )
