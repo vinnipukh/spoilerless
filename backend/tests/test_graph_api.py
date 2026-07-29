@@ -18,6 +18,9 @@ from backend.app.graph.seed import setup_database
 
 
 class UnavailableDatabase:
+    def __init__(self, _settings=None) -> None:
+        pass
+
     def open(self) -> None:
         pass
 

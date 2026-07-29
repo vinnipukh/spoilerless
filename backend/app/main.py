@@ -13,8 +13,11 @@ from typing import Literal
 from backend.app.api.graph import router as graph_router
 from backend.app.api.series import router as series_router
 from backend.app.api.user_content import router as user_content_router
+from backend.app.api.auth import router as auth_router
+from backend.app.core.config import get_settings
 from backend.app.core.errors import install_database_error_handlers
 from backend.app.graph.database import Neo4jDatabase
+from backend.app.repository.session import InMemorySessionRepository
 
 SERVICE_NAME = "hdgrafcehennemi-backend"
 
@@ -29,9 +32,11 @@ class HealthResponse(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    database = Neo4jDatabase()
+    settings = get_settings()
+    database = Neo4jDatabase(settings)
     database.open()
     app.state.neo4j = database
+    app.state.session_repo = InMemorySessionRepository()
     try:
         try:
             await database.verify_connection()
@@ -52,10 +57,18 @@ app = FastAPI(
 app.include_router(series_router)
 app.include_router(graph_router)
 app.include_router(user_content_router)
+app.include_router(auth_router)
+
+settings = get_settings()
+_allowed_origins = [
+    origin.strip()
+    for origin in settings.frontend_origins.split(",")
+    if origin.strip()
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

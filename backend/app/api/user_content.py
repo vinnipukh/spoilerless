@@ -15,7 +15,7 @@ from backend.app.domain.user_content import (
     CustomRelationshipCreate, CustomRelationshipResponse, CustomRelationshipUpdate,
 )
 from backend.app.graph.database import Neo4jDatabase, get_database
-from backend.app.graph.user_content import (
+from backend.app.repository.user_content import (
     UserContentNotFound,
     UserContentConflict,
     UserContentRepository,

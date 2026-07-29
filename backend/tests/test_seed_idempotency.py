@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import copy
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 import pytest
 import pytest_asyncio
 
 from backend.app.graph.database import Neo4jDatabase
 from backend.app.graph.ontology import OntologyValidationError, load_ontology
-from backend.app.graph.seed import load_seed_data, setup_database, validate_seed
+from backend.app.graph.seed import (
+    audit_visibility_integrity,
+    load_seed_data,
+    setup_database,
+    validate_seed,
+)
 
 
 @pytest_asyncio.fixture
@@ -22,6 +27,13 @@ async def live_database() -> AsyncIterator[Neo4jDatabase]:
         await database.close()
 
 
+SERIES_ID = "series_dexter"
+NULLABLE_ID = "seed-test:null-visibility"
+CLEANUP_NULL_NODE = """
+MATCH (resource {id: $id}) DETACH DELETE resource
+"""
+
+
 async def _snapshot(database: Neo4jDatabase) -> dict:
     nodes = await database.execute_query(
         """
@@ -30,7 +42,7 @@ async def _snapshot(database: Neo4jDatabase) -> dict:
         RETURN labels(node)[0] AS label, collect(node.id) AS ids, count(node) AS count
         ORDER BY label
         """,
-        series_id="series_dexter",
+        series_id=SERIES_ID,
     )
     relationships = await database.execute_query(
         """
@@ -41,7 +53,7 @@ async def _snapshot(database: Neo4jDatabase) -> dict:
                count(relationship) AS count
         ORDER BY type
         """,
-        series_id="series_dexter",
+        series_id=SERIES_ID,
     )
     return {"nodes": nodes, "relationships": relationships}
 
@@ -54,7 +66,7 @@ async def _layer_snapshot(database: Neo4jDatabase, origin: str) -> dict:
         RETURN resource.id AS id, labels(resource) AS labels, properties(resource) AS properties
         ORDER BY id
         """,
-        series_id="series_dexter",
+        series_id=SERIES_ID,
         origin=origin,
     )
     relationships = await database.execute_query(
@@ -65,10 +77,13 @@ async def _layer_snapshot(database: Neo4jDatabase, origin: str) -> dict:
                type(relationship) AS type, properties(relationship) AS properties
         ORDER BY id
         """,
-        series_id="series_dexter",
+        series_id=SERIES_ID,
         origin=origin,
     )
     return {"nodes": nodes, "relationships": relationships}
+
+
+# ── Seed idempotency & completeness ──
 
 
 @pytest.mark.asyncio
@@ -96,8 +111,200 @@ async def test_seed_is_idempotent_and_complete(live_database: Neo4jDatabase) -> 
     )
 
 
+# ── Community-compatible schema ──
+
+
+@pytest.mark.asyncio
+async def test_community_schema_creates_only_unique_and_index(
+    live_database: Neo4jDatabase,
+) -> None:
+    """Uniqueness constraints and indexes work on Community; no property-existence constraints."""
+    await setup_database(live_database)
+
+    constraint_types = await live_database.execute_query(
+        """
+        SHOW CONSTRAINTS YIELD type, labelsOrTypes, properties
+        RETURN type, labelsOrTypes[0] AS label, properties
+        ORDER BY label
+        """
+    )
+    for ct in constraint_types:
+        assert ct["type"] in ("NODE_PROPERTY_UNIQUENESS", "NODE_KEY"), (
+            f"Unexpected constraint type {ct['type']} on {ct['label']}"
+        )
+        # Every unique/node-key constraint must cover `id` (our schema invariant).
+        assert "id" in ct["properties"], (
+            f"Constraint on {ct['label']} missing id property: {ct['properties']}"
+        )
+
+    unique_labels = {ct["label"] for ct in constraint_types}
+    expected_labels = {
+        "Series", "Episode", "Character", "Event", "Location",
+        "Organization", "Object", "Claim", "Source", "EvidenceFragment", "UserNote",
+    }
+    assert unique_labels == expected_labels, (
+        f"Missing uniqueness constraints for: {expected_labels - unique_labels}"
+    )
+
+    # Verify no property-existence constraints exist
+    existence = await live_database.execute_query(
+        """
+        SHOW CONSTRAINTS YIELD type
+        WHERE type = 'NODE_PROPERTY_EXISTENCE'
+        RETURN count(*) AS count
+        """
+    )
+    assert existence == [{"count": 0}], "Property existence constraints should not exist on Community"
+
+
+# ── Seed integrity audit ──
+
+
+@pytest.mark.asyncio
+async def test_audit_visibility_integrity_passes_after_seed(
+    live_database: Neo4jDatabase,
+) -> None:
+    await setup_database(live_database)
+    # The audit runs inside setup_database automatically; this confirms
+    # a direct call also passes.
+    await audit_visibility_integrity(live_database, SERIES_ID)
+
+
+@pytest.mark.asyncio
+async def test_audit_visibility_integrity_rejects_null_visibility(
+    live_database: Neo4jDatabase,
+) -> None:
+    await setup_database(live_database)
+    await live_database.execute_query(
+        """
+        CREATE (:Character {id: $id, series_id: $series_id, label: 'Ghost',
+                origin: 'canonical', visible_from_order: null})
+        """,
+        id=NULLABLE_ID,
+        series_id=SERIES_ID,
+    )
+    try:
+        with pytest.raises(ValueError, match="null visible_from_order"):
+            await audit_visibility_integrity(live_database, SERIES_ID)
+    finally:
+        await live_database.execute_query(CLEANUP_NULL_NODE, id=NULLABLE_ID)
+
+
+# ── Null visibility → fail-closed reads ──
+
+
+@pytest.mark.asyncio
+async def test_read_never_returns_null_visibility_node(
+    live_database: Neo4jDatabase,
+) -> None:
+    """A node with null visible_from_order must never appear in graph reads."""
+    await setup_database(live_database)
+    await live_database.execute_query(
+        """
+        CREATE (:Character {id: $id, series_id: $series_id, label: 'Invisible Ghost',
+                origin: 'canonical', visible_from_order: null})
+        """,
+        id=NULLABLE_ID,
+        series_id=SERIES_ID,
+    )
+    try:
+        nodes = await live_database.execute_query(
+            """
+            MATCH (node {series_id: $series_id})
+            WHERE node.visible_from_order <= $boundary
+            RETURN node.id AS id
+            """,
+            series_id=SERIES_ID,
+            boundary=999,
+        )
+        assert NULLABLE_ID not in {row["id"] for row in nodes}, (
+            f"Node with null visibility should not appear in read results"
+        )
+    finally:
+        await live_database.execute_query(CLEANUP_NULL_NODE, id=NULLABLE_ID)
+
+
+# ── Write rejection when visibility cannot be derived ──
+
+
+@pytest.mark.asyncio
+async def test_note_write_rejects_null_visibility_target(
+    live_database: Neo4jDatabase,
+) -> None:
+    """Creating a note against a null-visibility target must raise UserContentNotFound."""
+    await setup_database(live_database)
+    await live_database.execute_query(
+        """
+        CREATE (:Character {id: $id, series_id: $series_id, label: 'Ghost',
+                origin: 'canonical', visible_from_order: null})
+        """,
+        id=NULLABLE_ID,
+        series_id=SERIES_ID,
+    )
+    try:
+        from backend.app.graph.database import Neo4jDatabase as DB
+        from backend.app.repository.user_content import (
+            UserContentRepository,
+            UserContentNotFound,
+        )
+        from backend.app.domain.user_content import NoteCreate
+
+        repo = UserContentRepository(live_database)
+        note = NoteCreate(
+            target_type="Character",
+            target_id=NULLABLE_ID,
+            content="This should not be creatable",
+        )
+        with pytest.raises(UserContentNotFound, match="note target not found"):
+            await repo.create_note(SERIES_ID, note)
+    finally:
+        await live_database.execute_query(CLEANUP_NULL_NODE, id=NULLABLE_ID)
+
+
+@pytest.mark.asyncio
+async def test_custom_node_write_rejects_null_episode(
+    live_database: Neo4jDatabase,
+) -> None:
+    """Creating a custom node against a null-order episode must raise UserContentNotFound."""
+    await setup_database(live_database)
+    null_ep_id = "seed-test:null-episode"
+    await live_database.execute_query(
+        """
+        CREATE (:Episode {id: $eid, series_id: $series_id, code: 'GHOST',
+                title: 'Ghost Episode', episode_order: null, visible_from_order: 1,
+                origin: 'canonical'})
+        """,
+        eid=null_ep_id,
+        series_id=SERIES_ID,
+    )
+    try:
+        from backend.app.graph.database import Neo4jDatabase as DB
+        from backend.app.repository.user_content import (
+            UserContentRepository,
+            UserContentNotFound,
+        )
+        from backend.app.domain.user_content import CustomNodeCreate, CustomNodeType
+
+        repo = UserContentRepository(live_database)
+        custom = CustomNodeCreate(
+            node_type=CustomNodeType.OBJECT,
+            label="Null Object",
+            episode_id=null_ep_id,
+        )
+        with pytest.raises(UserContentNotFound, match="episode not found"):
+            await repo.create_custom_node(SERIES_ID, custom)
+    finally:
+        await live_database.execute_query(
+            "MATCH (n:Episode {id: $id}) DETACH DELETE n", id=null_ep_id
+        )
+
+
+# ── Claim provenance ──
+
+
 @pytest.mark.asyncio
 async def test_constraints_visibility_and_provenance(live_database: Neo4jDatabase) -> None:
+    """Uniqueness constraints exist, no node has null visibility, all claims have provenance."""
     await setup_database(live_database)
     constraints = await live_database.execute_query(
         """
@@ -113,7 +320,7 @@ async def test_constraints_visibility_and_provenance(live_database: Neo4jDatabas
         WHERE node.series_id = $series_id AND node.visible_from_order IS NULL
         RETURN count(node) AS count
         """,
-        series_id="series_dexter",
+        series_id=SERIES_ID,
     )
     incomplete_claims = await live_database.execute_query(
         """
@@ -123,7 +330,7 @@ async def test_constraints_visibility_and_provenance(live_database: Neo4jDatabas
            OR NOT EXISTS { (claim)-[:REFERS_TO]->(:Source) })
         RETURN count(claim) AS count
         """,
-        series_id="series_dexter",
+        series_id=SERIES_ID,
     )
 
     assert {row["label"] for row in constraints} == {
@@ -143,12 +350,18 @@ async def test_constraints_visibility_and_provenance(live_database: Neo4jDatabas
     assert incomplete_claims == [{"count": 0}]
 
 
+# ── Seed validation ──
+
+
 def test_ontology_rejects_undeclared_seed_type() -> None:
     data = copy.deepcopy(load_seed_data())
     data["characters"][0]["node_type"] = "SpoilerMonster"
 
     with pytest.raises(OntologyValidationError, match="Undeclared node type"):
         validate_seed(data, load_ontology())
+
+
+# ── User-layer preservation ──
 
 
 USER_LAYER_CREATE_QUERY = """

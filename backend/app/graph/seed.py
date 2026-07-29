@@ -4,8 +4,6 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
-from neo4j.exceptions import DatabaseError
-
 from backend.app.graph.database import Neo4jDatabase
 from backend.app.graph.ontology import Ontology, load_ontology
 
@@ -26,7 +24,6 @@ NODE_LABELS = (
     "EvidenceFragment",
     "UserNote",
 )
-SPOILER_LABELS = NODE_LABELS
 RELATIONSHIP_TYPES = (
     "PART_OF",
     "PRECEDES",
@@ -113,47 +110,88 @@ def validate_seed(data: dict[str, Any], ontology: Ontology) -> None:
 
 
 async def create_constraints(database: Neo4jDatabase) -> None:
-    queries: list[str] = []
+    """Create uniqueness constraints and indexes compatible with Neo4j Community.
+
+    Property existence constraints (REQUIRE … IS NOT NULL) require Neo4j
+    Enterprise and are intentionally omitted.  Null visibility is prevented
+    through Pydantic validation, service-layer guards, and a post-seed
+    integrity audit instead.
+    """
     for label in NODE_LABELS:
         normalized = label.lower()
-        queries.append(
+        await database.execute_query(
             f"CREATE CONSTRAINT {normalized}_id_unique IF NOT EXISTS "
             f"FOR (n:{label}) REQUIRE n.id IS UNIQUE"
         )
-    for label in SPOILER_LABELS:
+    for label in NODE_LABELS:
         normalized = label.lower()
-        queries.append(
-            f"CREATE CONSTRAINT {normalized}_visible_exists IF NOT EXISTS "
-            f"FOR (n:{label}) REQUIRE n.visible_from_order IS NOT NULL"
-        )
-        queries.append(
+        await database.execute_query(
             f"CREATE INDEX {normalized}_visible_idx IF NOT EXISTS "
             f"FOR (n:{label}) ON (n.visible_from_order)"
         )
-    queries.extend(
-        [
-            "CREATE INDEX episode_order_idx IF NOT EXISTS FOR (n:Episode) ON (n.episode_order)",
-            "CREATE INDEX episode_series_idx IF NOT EXISTS FOR (n:Episode) ON (n.series_id)",
-            "CREATE INDEX character_series_idx IF NOT EXISTS FOR (n:Character) ON (n.series_id)",
-            "CREATE INDEX event_series_idx IF NOT EXISTS FOR (n:Event) ON (n.series_id)",
-            "CREATE INDEX location_series_idx IF NOT EXISTS FOR (n:Location) ON (n.series_id)",
-            "CREATE INDEX claim_series_idx IF NOT EXISTS FOR (n:Claim) ON (n.series_id)",
-            "CREATE INDEX source_series_idx IF NOT EXISTS FOR (n:Source) ON (n.series_id)",
-            "CREATE INDEX evidence_series_idx IF NOT EXISTS FOR (n:EvidenceFragment) ON (n.series_id)",
-            "CREATE INDEX organization_series_idx IF NOT EXISTS FOR (n:Organization) ON (n.series_id)",
-            "CREATE INDEX object_series_idx IF NOT EXISTS FOR (n:Object) ON (n.series_id)",
-            "CREATE INDEX usernote_series_idx IF NOT EXISTS FOR (n:UserNote) ON (n.series_id)",
-            "CREATE INDEX usernote_target_idx IF NOT EXISTS FOR (n:UserNote) ON (n.series_id, n.target_type, n.target_id)",
-        ]
+    await database.execute_query(
+        "CREATE INDEX episode_order_idx IF NOT EXISTS FOR (n:Episode) ON (n.episode_order)"
     )
-    for query in queries:
-        try:
-            await database.execute_query(query)
-        except DatabaseError as exc:
-            if "existence constraint" not in str(exc).lower():
-                raise
-            # Neo4j Community does not support property-existence constraints.
-            # Fixture validation and acceptance queries enforce the same invariant.
+    await database.execute_query(
+        "CREATE INDEX episode_series_idx IF NOT EXISTS FOR (n:Episode) ON (n.series_id)"
+    )
+    await database.execute_query(
+        "CREATE INDEX character_series_idx IF NOT EXISTS FOR (n:Character) ON (n.series_id)"
+    )
+    await database.execute_query(
+        "CREATE INDEX event_series_idx IF NOT EXISTS FOR (n:Event) ON (n.series_id)"
+    )
+    await database.execute_query(
+        "CREATE INDEX location_series_idx IF NOT EXISTS FOR (n:Location) ON (n.series_id)"
+    )
+    await database.execute_query(
+        "CREATE INDEX claim_series_idx IF NOT EXISTS FOR (n:Claim) ON (n.series_id)"
+    )
+    await database.execute_query(
+        "CREATE INDEX source_series_idx IF NOT EXISTS FOR (n:Source) ON (n.series_id)"
+    )
+    await database.execute_query(
+        "CREATE INDEX evidence_series_idx IF NOT EXISTS FOR (n:EvidenceFragment) ON (n.series_id)"
+    )
+    await database.execute_query(
+        "CREATE INDEX organization_series_idx IF NOT EXISTS FOR (n:Organization) ON (n.series_id)"
+    )
+    await database.execute_query(
+        "CREATE INDEX object_series_idx IF NOT EXISTS FOR (n:Object) ON (n.series_id)"
+    )
+    await database.execute_query(
+        "CREATE INDEX usernote_series_idx IF NOT EXISTS FOR (n:UserNote) ON (n.series_id)"
+    )
+    await database.execute_query(
+        "CREATE INDEX usernote_target_idx IF NOT EXISTS FOR (n:UserNote) ON (n.series_id, n.target_type, n.target_id)"
+    )
+
+
+async def audit_visibility_integrity(database: Neo4jDatabase, series_id: str) -> None:
+    """Fail if any node under *series_id* has a null ``visible_from_order``.
+
+    This replaces the Enterprise-only property-existence constraint with a
+    run-time integrity gate that fires once during setup — before any
+    spoiler-sensitive read could silently leak or hide data.
+    """
+    records = await database.execute_query(
+        """
+        MATCH (node {series_id: $series_id})
+        WHERE node.visible_from_order IS NULL
+        RETURN labels(node) AS labels, node.id AS id
+        ORDER BY id
+        """,
+        series_id=series_id,
+    )
+    if records:
+        offenders = "\n  ".join(
+            f"{r['labels'][0] if r['labels'] else '?'} ({r['id']})"
+            for r in records
+        )
+        raise ValueError(
+            f"Seed integrity audit failed: {len(records)} node(s) "
+            f"with null visible_from_order:\n  {offenders}"
+        )
 
 
 async def _upsert_nodes(
@@ -258,6 +296,7 @@ async def setup_database(database: Neo4jDatabase) -> dict[str, int]:
     validate_seed(data, load_ontology())
     await create_constraints(database)
     await seed_graph(database, data)
+    await audit_visibility_integrity(database, data["series"]["id"])
     records = await database.execute_query(
         """
         MATCH (node)
@@ -267,6 +306,6 @@ async def setup_database(database: Neo4jDatabase) -> dict[str, int]:
         WHERE relationship.series_id = $series_id
         RETURN nodes, count(relationship) AS relationships
         """,
-        series_id="series_dexter",
+        series_id=data["series"]["id"],
     )
     return records[0]

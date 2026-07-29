@@ -1,6 +1,34 @@
 """Parameterized Cypher for fail-closed spoiler and temporal filtering."""
 
-SERIES_QUERY = """
+SERIES_LIST_QUERY = """\
+MATCH (series:Series)
+RETURN series.id AS id,
+       series.title AS title,
+       series.slug AS slug
+ORDER BY series.title
+"""
+
+SERIES_BY_ID_QUERY = """\
+MATCH (series:Series {id: $series_id})
+RETURN series.id AS id,
+       series.title AS title,
+       series.slug AS slug
+"""
+
+SERIES_EPISODES_QUERY = """\
+MATCH (episode:Episode)-[:PART_OF]->(series:Series {id: $series_id})
+RETURN episode.id AS id,
+       episode.series_id AS series_id,
+       episode.season_number AS season_number,
+       episode.episode_number AS episode_number,
+       episode.episode_order AS episode_order,
+       episode.code AS code,
+       episode.title AS title,
+       episode.visible_from_order AS visible_from_order
+ORDER BY episode.episode_order
+"""
+
+SERIES_QUERY = """\
 MATCH (series:Series {id: $series_id})
 RETURN series.id AS id, series.title AS title, series.slug AS slug
 """

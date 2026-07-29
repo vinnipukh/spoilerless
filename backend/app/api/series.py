@@ -7,64 +7,47 @@ from fastapi import APIRouter, Depends, HTTPException
 from backend.app.domain.series import EpisodeResponse, SeriesResponse
 from backend.app.graph.database import Neo4jDatabase, get_database
 from backend.app.core.errors import error_responses
+from backend.app.services.series import SeriesService
 
 router = APIRouter(prefix="/api/series", tags=["series"])
 DatabaseDependency = Annotated[Neo4jDatabase, Depends(get_database)]
 
 
+def get_series_service(database: DatabaseDependency) -> SeriesService:
+    return SeriesService(database)
+
+
+SeriesServiceDependency = Annotated[SeriesService, Depends(get_series_service)]
+
+
 @router.get("", response_model=list[SeriesResponse], summary="List series", responses=error_responses(503))
-async def list_series(database: DatabaseDependency) -> list[SeriesResponse]:
-    records = await database.execute_query(
-        """
-        MATCH (series:Series)
-        RETURN series.id AS id,
-               series.title AS title,
-               series.slug AS slug
-        ORDER BY series.title
-        """
-    )
+async def list_series(service: SeriesServiceDependency) -> list[SeriesResponse]:
+    records = await service.list_series()
     return [SeriesResponse(**record) for record in records]
 
 
 @router.get("/{series_id}", response_model=SeriesResponse, summary="Read a series", responses=error_responses(404, 503))
-async def get_series(series_id: str, database: DatabaseDependency) -> SeriesResponse:
-    records = await database.execute_query(
-        """
-        MATCH (series:Series {id: $series_id})
-        RETURN series.id AS id,
-               series.title AS title,
-               series.slug AS slug
-        """,
-        series_id=series_id,
-    )
-    if not records:
+async def get_series(series_id: str, service: SeriesServiceDependency) -> SeriesResponse:
+    record = await service.get_series(series_id)
+    if record is None:
         raise HTTPException(
             status_code=404,
             detail={"code": "series_not_found", "message": "Series not found."},
         )
-    return SeriesResponse(**records[0])
+    return SeriesResponse(**record)
 
 
-@router.get("/{series_id}/episodes", response_model=list[EpisodeResponse], summary="List series episodes", responses=error_responses(404, 503))
+@router.get(
+    "/{series_id}/episodes",
+    response_model=list[EpisodeResponse],
+    summary="List series episodes",
+    responses=error_responses(404, 503),
+)
 async def list_episodes(
     series_id: str,
-    database: DatabaseDependency,
+    service: SeriesServiceDependency,
 ) -> list[EpisodeResponse]:
-    records = await database.execute_query(
-        """
-        MATCH (episode:Episode)-[:PART_OF]->(series:Series {id: $series_id})
-        RETURN episode.id AS id,
-               episode.series_id AS series_id,
-               episode.season_number AS season_number,
-               episode.episode_number AS episode_number,
-               episode.episode_order AS episode_order,
-               episode.code AS code,
-               episode.title AS title,
-               episode.visible_from_order AS visible_from_order
-        ORDER BY episode.episode_order
-        """,
-        series_id=series_id,
-    )
+    records = await service.list_episodes(series_id)
     if not records:
         raise HTTPException(
             status_code=404,

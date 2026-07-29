@@ -6,7 +6,13 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from neo4j.exceptions import AuthError, ClientError, Neo4jError, ServiceUnavailable
+from neo4j.exceptions import (
+    AuthError,
+    ClientError,
+    ConstraintError,
+    Neo4jError,
+    ServiceUnavailable,
+)
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -54,6 +60,7 @@ _SAFE_ERRORS: tuple[type[BaseException], ...] = (
 )
 
 _ERROR_SPECS: dict[int, tuple[str, str, str]] = {
+    401: ("unauthenticated", "Authentication required.", "Authentication is required for this resource."),
     404: ("resource_not_found", "Resource not found.", "The resource was not found."),
     409: (
         "resource_conflict",
@@ -130,6 +137,17 @@ def request_validation_error_response() -> JSONResponse:
 def install_error_handlers(app: FastAPI) -> None:
     """Install sanitized validation and Neo4j handlers on a FastAPI application."""
 
+    async def constraint_handler(
+        _request: Request, _exc: ConstraintError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content=_envelope(
+                "constraint_violation",
+                "The request violates a database constraint.",
+            ),
+        )
+
     async def database_handler(_request: Request, exc: Exception) -> JSONResponse:
         return database_error_response(exc)
 
@@ -139,6 +157,7 @@ def install_error_handlers(app: FastAPI) -> None:
         return request_validation_error_response()
 
     app.add_exception_handler(RequestValidationError, validation_handler)
+    app.add_exception_handler(ConstraintError, constraint_handler)
     for error_type in _SAFE_ERRORS:
         app.add_exception_handler(error_type, database_handler)
 

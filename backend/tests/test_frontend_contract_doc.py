@@ -26,6 +26,10 @@ EXPECTED_OPERATIONS = {
     ("get", "/api/series/{series_id}/custom-relationships/{relationship_id}"),
     ("patch", "/api/series/{series_id}/custom-relationships/{relationship_id}"),
     ("delete", "/api/series/{series_id}/custom-relationships/{relationship_id}"),
+    # Authentication
+    ("post", "/api/auth/google"),
+    ("get", "/api/auth/me"),
+    ("post", "/api/auth/logout"),
 }
 EXPECTED_TEMPLATES = {path for _, path in EXPECTED_OPERATIONS}
 
@@ -59,8 +63,8 @@ def test_document_and_openapi_have_exact_locked_inventory() -> None:
     assert generated == EXPECTED_OPERATIONS
     assert {path for _, path in documented} == EXPECTED_TEMPLATES
     assert set(app.openapi()["paths"]) == EXPECTED_TEMPLATES
-    assert len(documented) == len(generated) == 18
-    assert len(EXPECTED_TEMPLATES) == 11
+    assert len(documented) == len(generated) == 21
+    assert len(EXPECTED_TEMPLATES) == 14
     assert all("?" not in path for path in EXPECTED_TEMPLATES)
 
 
@@ -122,7 +126,11 @@ def test_document_has_examples_projection_rules_non_goals_and_pending_status() -
     assert "dependency" in lower and "409" in document
 
     for non_goal in (
-        "auth or permissions",
+        "passwords",
+        "roles",
+        "permissions",
+        "account linking",
+        "refresh-token",
         "revisions",
         "soft delete",
         "rich text",

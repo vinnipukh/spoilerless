@@ -10,7 +10,7 @@ from backend.app.domain.user_content import (
     NoteCreate,
 )
 from backend.app.graph.database import Neo4jDatabase
-from backend.app.graph.user_content import (
+from backend.app.repository.user_content import (
     NOTE_CREATE_QUERIES,
     UserContentRepository,
     UserContentValidationError,

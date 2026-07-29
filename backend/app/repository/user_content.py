@@ -49,6 +49,18 @@ def _native(value: Any) -> Any:
     return value
 
 
+async def _run_create(tx: Any, query: str, error_msg: str, **params: Any) -> dict[str, Any]:
+    """Execute ``tx.run``, consume a single result, and raise if absent.
+
+    Shared by all ``UserContentRepository`` write callbacks — eliminates
+    the repeated ``run → single → raise → return`` pattern.
+    """
+    record = await (await tx.run(query, **params)).single()
+    if record is None:
+        raise UserContentNotFound(error_msg)
+    return _native(record.data())
+
+
 def _namespace(value: str, prefix: str) -> None:
     if (
         not isinstance(value, str)
@@ -349,13 +361,11 @@ class UserContentRepository:
     @staticmethod
     async def _create_custom_node(tx: Any, payload: tuple[CustomNodeCreateCommand, str]) -> Any:
         command, query = payload
-        result = await tx.run(query, id=command.id, series_id=command.series_id,
+        return await _run_create(tx, query,
+            "episode not found",
+            id=command.id, series_id=command.series_id,
             label=command.label, episode_id=command.episode_id,
             created_at=command.created_at, updated_at=command.updated_at)
-        record = await result.single()
-        if record is None:
-            raise UserContentNotFound("episode not found")
-        return _native(record.data())
 
     @staticmethod
     def custom_relationship_command(
@@ -375,17 +385,12 @@ class UserContentRepository:
 
     @staticmethod
     async def _create_custom_relationship(tx: Any, command: CustomRelationshipCreateCommand) -> Any:
-        result = await tx.run(
-            CUSTOM_RELATIONSHIP_CREATE_QUERY,
+        return await _run_create(tx, CUSTOM_RELATIONSHIP_CREATE_QUERY,
+            "relationship endpoint not found",
             id=command.id, series_id=command.series_id, source_id=command.source_id,
             target_id=command.target_id, predicate=command.predicate.value,
             episode_id=command.episode_id, created_at=command.created_at,
-            updated_at=command.updated_at,
-        )
-        record = await result.single()
-        if record is None:
-            raise UserContentNotFound("relationship endpoint not found")
-        return _native(record.data())
+            updated_at=command.updated_at)
 
     async def _custom_read(self, series_id: str, resource_id: str, boundary: int, queries: list[str]) -> Any:
         _series(series_id)
@@ -466,8 +471,6 @@ class UserContentRepository:
         _series(series_id); _resource_id(relationship_id)
         result = await self.database.execute_write(self._delete_custom_relationship, (series_id, relationship_id))
         if result is None:
-            # The ownership probe is part of the same managed transaction.
-            # A canonical/candidate collision is therefore never mutated.
             raise UserContentNotFound("relationship not found")
 
     @staticmethod
@@ -484,19 +487,26 @@ class UserContentRepository:
     @staticmethod
     async def _create_note(tx: Any, payload: tuple[NoteCreateCommand, str]) -> Any:
         command, query = payload
-        result = await tx.run(query, id=command.id, series_id=command.series_id,
+        return await _run_create(tx, query,
+            "note target not found",
+            id=command.id, series_id=command.series_id,
             target_type=command.target_type.value, target_id=command.target_id,
             content=command.content, created_at=command.created_at,
             updated_at=command.updated_at)
-        record = await result.single()
-        if record is None:
-            raise UserContentNotFound("note target not found")
-        return _native(record.data())
 
     async def update_note(self, series_id: str, note_id: str, request: NoteUpdate) -> Any:
         _series(series_id); _namespace(note_id, "user-note:")
         command = NoteUpdateCommand(note_id, series_id, request.content, _utc_now())
         return await self.database.execute_write(self._update_note, command)
+
+    @staticmethod
+    async def _update_note(tx: Any, command: NoteUpdateCommand) -> Any:
+        result = await tx.run(NOTE_UPDATE_QUERY, id=command.id, series_id=command.series_id,
+            content=command.content, updated_at=command.updated_at)
+        record = await result.single()
+        if record is None:
+            raise UserContentNotFound("note not found")
+        return _native(record.data())
 
     async def delete_note(self, series_id: str, note_id: str) -> None:
         _series(series_id)
@@ -513,15 +523,6 @@ class UserContentRepository:
         result = await tx.run(NOTE_DELETE_QUERY, id=note_id, series_id=series_id)
         record = await result.single()
         return None if record is None else record.data().get("id")
-
-    @staticmethod
-    async def _update_note(tx: Any, command: NoteUpdateCommand) -> Any:
-        result = await tx.run(NOTE_UPDATE_QUERY, id=command.id, series_id=command.series_id,
-            content=command.content, updated_at=command.updated_at)
-        record = await result.single()
-        if record is None:
-            raise UserContentNotFound("note not found")
-        return _native(record.data())
 
     @staticmethod
     def validate_boundary(visible_until_order: int) -> int:
