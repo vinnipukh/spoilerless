@@ -3,7 +3,7 @@
 **Canonical scope:** root `ROADMAP.md`, milestones 1–8
 **Target:** Complete Dexter S01E01–03 demo story, not an API-only release
 **Mode:** dependency-ordered Prototype v0 delivery
-**Status:** Phase 1 plan execution complete with runtime evidence; phase-level verification pending; Phases 2–5 pending
+**Status:** Phase 1 complete and verified (9/9 truths, 13/13 tests, smoke 8/8); Phase 2 pending
 
 ## Phase 1: Backend Graph Foundation
 
@@ -62,7 +62,7 @@ Actual source retrieval/parsing/ingestion, operational LLM extraction, and LLM c
 
 | Phase | Canonical milestone/capability | Requirements | Count | Status |
 |-------|--------------------------------|--------------|------:|--------|
-| Phase 1 | Milestones 1–4 — infrastructure, metadata, spoiler-aware API, manual seed graph | INFRA-01..03, META-01..03, API-01..04, SEED-01..04 | 14 | Plan complete; verification pending |
+| Phase 1 | Milestones 1–4 — infrastructure, metadata, spoiler-aware API, manual seed graph | INFRA-01..03, META-01..03, API-01..04, SEED-01..04 | 14 | Complete — verified |
 | Phase 2 | Milestone 5 — frontend graph UI | UI-01..05 | 5 | Pending |
 | Phase 3 | Milestone 6 — notes/manual editing | NOTE-01..03 | 3 | Pending |
 | Phase 4 | Milestone 7 — revision history | REV-01..03 | 3 | Pending |
@@ -81,4 +81,4 @@ Actual source retrieval/parsing/ingestion, operational LLM extraction, and LLM c
 | Preparation expands into extraction | Use fixtures/contracts only; keep connectors non-operational in v0 |
 
 ---
-*Last updated: 2026-07-29 — rebaselined into five vertical delivery phases while preserving canonical root Prototype v0 milestones 1–8*
+*Last updated: 2026-07-29 — Phase 1 verified complete; rebaselined into five vertical delivery phases while preserving canonical root Prototype v0 milestones 1–8*

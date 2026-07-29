@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: unknown
-stopped_at: Completed 01-01-PLAN.md with final Task 3 provenance hardening
-last_updated: "2026-07-29T07:16:08.951Z"
+status: Ready to plan
+stopped_at: Phase 1 verified and complete — 9/9 truths, 13/13 tests, smoke 8/8
+last_updated: "2026-07-29T07:26:31.881Z"
 progress:
   total_phases: 5
   completed_phases: 1
@@ -25,25 +25,25 @@ progress:
 
 | Field | Value |
 |-------|-------|
-| **Phase** | Phase 1: Backend Graph Foundation |
-| **Status** | Plan complete; phase verification pending |
-| **Deliverable** | Reliable local runtime plus ontology-aligned deterministic Neo4j seed data, evidence-backed graph records, metadata APIs, and backend-enforced spoiler filtering |
-| **Requirements** | INFRA-01..03, META-01..03, API-01..04, SEED-01..04 |
-| **Brownfield note** | Plan runtime acceptance is captured in `01-SUMMARY.md`; phase-level verifier review remains pending |
-
-## Next Phase
-
-| Field | Value |
-|-------|-------|
 | **Phase** | Phase 2: Polished Cytoscape Graph Experience |
 | **Status** | Pending |
 | **Deliverable** | Polished Cytoscape product experience over the verified spoiler-safe backend graph foundation |
 | **Requirements** | UI-01..05 |
-| **Dependencies** | Phase 1 acceptance evidence |
+| **Dependencies** | Phase 1 complete (verified 9/9 truths) |
+
+## Completed Phase
+
+| Field | Value |
+|-------|-------|
+| **Phase** | Phase 1: Backend Graph Foundation |
+| **Status** | Complete — verified (9/9 truths, 13/13 tests, smoke 8/8) |
+| **Deliverable** | Reliable local runtime plus ontology-aligned deterministic Neo4j seed data, evidence-backed graph records, metadata APIs, and backend-enforced spoiler filtering |
+| **Requirements** | INFRA-01..03, META-01..03, API-01..04, SEED-01..04 |
+| **Verification** | `01-VERIFICATION.md` — 9/9 truths verified, 0 gaps, 0 human-verification items |
 
 ## Project Position
 
-Phase 1 plan execution is complete with captured runtime evidence; phase-level verifier review remains the final gate before Phase 1 is marked verified. The five-phase roadmap still preserves all eight canonical Prototype v0 milestones. Phase 2 can build against the spoiler-safe graph contract once that gate closes. Notes/manual editing, revisions/revert, and future-extraction preparation remain Phases 3–5. Automated ingestion/extraction and LLM chat remain post-v0.
+Phase 1 is fully executed and verified — the backend graph foundation delivers a lifespan-owned Neo4j driver, ontology-validated deterministic Dexter S01E01–03 seed data, and a fail-closed spoiler-safe graph API with 13 automated tests and a repeatable smoke command. Phase 2 can build directly against this contract. Notes/manual editing, revisions/revert, and future-extraction preparation remain Phases 3–5. Automated ingestion/extraction and LLM chat remain post-v0.
 
 ## Quick Reference
 
@@ -57,7 +57,7 @@ Phase 1 plan execution is complete with captured runtime evidence; phase-level v
 
 | Phase | Description | Requirements | Status | Completed |
 |-------|-------------|--------------|--------|-----------|
-| Phase 1 | Backend Graph Foundation | INFRA-01..03, META-01..03, API-01..04, SEED-01..04 | Plan complete; verification pending | — |
+| Phase 1 | Backend Graph Foundation | INFRA-01..03, META-01..03, API-01..04, SEED-01..04 | Complete — verified | 2026-07-29 |
 | Phase 2 | Polished Cytoscape Graph Experience | UI-01..05 | Pending | — |
 | Phase 3 | User Notes and Manual Editing | NOTE-01..03 | Pending | — |
 | Phase 4 | Revision History and Revert | REV-01..03 | Pending | — |
@@ -70,7 +70,8 @@ Phase 1 plan execution is complete with captured runtime evidence; phase-level v
 | 2026-07-28 | Align `.planning` plans with canonical root Prototype v0 roadmap | This task's atomic commit | Reconciled 30 requirements across 8 pending phases; preserved qualified brownfield state |
 
 ---
-*Last updated: 2026-07-29 — Phase 1 plan complete with runtime evidence; phase-level verification pending*
+
+*Last updated: 2026-07-29 — Phase 1 verified complete (9/9 truths, 0 gaps)*
 
 ## Accumulated Context
 
@@ -83,9 +84,10 @@ Phase 1 plan execution is complete with captured runtime evidence; phase-level v
 | Phase | Plan | Duration | Notes |
 |-------|------|----------|-------|
 | Phase 01 P01 | 24 min | 3 tasks | 22 files |
+| Phase 01 verify | 6 min | 1 verifier agent | 9/9 truths, 0 gaps |
 
 ## Session
 
 **Last session:** 2026-07-29T07:16:08.939Z
-**Stopped at:** Completed 01-01-PLAN.md with final Task 3 provenance hardening
+**Stopped at:** Phase 1 verified and complete — 9/9 truths, 13/13 tests, smoke 8/8
 **Resume file:** None

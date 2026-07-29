@@ -4,7 +4,7 @@
 
 A spoiler-safe narrative knowledge graph for TV series. Prototype v0 covers Dexter Season 1, Episodes 1–3 and lets a user explore source-backed narrative knowledge, control the visible episode boundary, add personal knowledge, and inspect/revert revisions.
 
-Root `ROADMAP.md` is the canonical product-scope source. These `.planning` artifacts translate its Prototype v0 milestones 1–8 into executable phases without narrowing that scope.
+Root `ROADMAP.md` is the canonical product-scope source. These `.planning` artifacts translate its Prototype v0 milestones 1–8 into five executable vertical delivery phases without narrowing that scope.
 
 ## Core Value
 
@@ -65,4 +65,4 @@ No file-presence statement above marks runtime behavior verified or a Prototype 
 | Extraction contracts before extraction automation | Keeps the model extensible while actual extraction remains post-v0 | Required |
 
 ---
-*Last updated: 2026-07-28 — reconciled to canonical root Prototype v0 milestones 1–8*
+*Last updated: 2026-07-29 — five-phase vertical delivery rebaseline preserving canonical root Prototype v0 milestones 1–8*
