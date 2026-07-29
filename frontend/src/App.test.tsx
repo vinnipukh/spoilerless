@@ -20,6 +20,30 @@ import type { SeriesResponse, EpisodeResponse } from './types/series'
 // attached once. To exercise that real guard correctly, this stub must keep
 // the same `fakeCy`/`handlers` identity across re-renders too (via useRef),
 // not recreate them on every render.
+// A trivial chainable stand-in for a Cytoscape collection (`.elements()`,
+// `.closedNeighborhood()`, `.connectedNodes()`, `.difference()`, `.union()`)
+// — GraphCanvas.tsx's tap-driven highlight/fade wiring (Plan 02) calls these
+// on every node/edge tap. The stub doesn't need real graph-traversal
+// semantics (this test only asserts DetailPanel content, not fade/dominant
+// classes), it just needs to not throw when the real production code calls
+// through the chain.
+type FakeCollection = {
+  addClass: (cls: string) => FakeCollection
+  removeClass: (cls: string) => FakeCollection
+  difference: (other: unknown) => FakeCollection
+  union: (other: unknown) => FakeCollection
+}
+
+function makeFakeCollection(): FakeCollection {
+  const collection: FakeCollection = {
+    addClass: () => collection,
+    removeClass: () => collection,
+    difference: () => collection,
+    union: () => collection,
+  }
+  return collection
+}
+
 vi.mock('react-cytoscapejs', () => {
   function CytoscapeComponentStub(props: {
     elements: Array<{ data: Record<string, unknown> }>
@@ -28,7 +52,11 @@ vi.mock('react-cytoscapejs', () => {
     type Handler = (evt: unknown) => void
     const stateRef = useRef<{
       handlers: Record<string, Handler[]>
-      fakeCy: { on: (event: string, selectorOrHandler: unknown, maybeHandler?: Handler) => void }
+      fakeCy: {
+        on: (event: string, selectorOrHandler: unknown, maybeHandler?: Handler) => void
+        elements: () => FakeCollection
+        container: () => null
+      }
     } | null>(null)
 
     if (!stateRef.current) {
@@ -41,6 +69,8 @@ vi.mock('react-cytoscapejs', () => {
           handlers[key] = handlers[key] ?? []
           handlers[key].push(handler)
         },
+        elements: () => makeFakeCollection(),
+        container: () => null,
       }
       stateRef.current = { handlers, fakeCy }
     }
@@ -56,6 +86,10 @@ vi.mock('react-cytoscapejs', () => {
           const fakeTarget = {
             id: () => el.data.id as string,
             data: (field: string) => el.data[field],
+            addClass: () => fakeTarget,
+            removeClass: () => fakeTarget,
+            closedNeighborhood: () => makeFakeCollection(),
+            connectedNodes: () => makeFakeCollection(),
           }
           return (
             <button

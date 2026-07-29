@@ -96,6 +96,8 @@ Node-type / origin visual mapping (Cytoscape canvas, not the 60/30/10 chrome pal
 | Location | square / rounded square |
 | Organization | diamond |
 | UserNote | dashed-border note shape (out of Phase 2 scope — Phase 3, but shape reserved now for forward compatibility) |
+| Episode | hexagon / tag shape *(Claude's-discretion addition, 02-RESEARCH.md Open Question 1/Pitfall 2 — no prior design doc assigned these a shape; Episode nodes are real, always-present graph-closure nodes)* |
+| Series | star shape *(Claude's-discretion addition, 02-RESEARCH.md Open Question 1/Pitfall 2 — no prior design doc assigned these a shape; Series is the graph's structural root, one per response)* |
 
 | Origin | Border treatment |
 |--------|-------------------|
