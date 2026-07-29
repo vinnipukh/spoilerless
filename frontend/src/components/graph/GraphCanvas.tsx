@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import cytoscape from 'cytoscape'
 import coseBilkent from 'cytoscape-cose-bilkent'
 import CytoscapeComponent from 'react-cytoscapejs'
@@ -77,7 +77,13 @@ type Props = {
 }
 
 export function GraphCanvas({ graph, onSelect }: Props) {
-  const elements = graphToElements(graph)
+  // Memoized so the array/object identity only changes when `graph` itself
+  // changes (once per episode-boundary fetch). react-cytoscapejs re-applies
+  // its declarative `layout` prop whenever the `elements` prop reference
+  // changes, so an unmemoized inline computation here would restart the
+  // async cose-bilkent layout on every unrelated parent re-render, racing
+  // with itself and leaving `fit()` locked onto a mid-computation snapshot.
+  const elements = useMemo(() => graphToElements(graph), [graph])
   // Tracks which real `cy` instance tap/hover listeners have already been
   // wired onto — react-cytoscapejs re-invokes the `cy` callback prop on
   // every render with the SAME underlying instance in this project's usage
