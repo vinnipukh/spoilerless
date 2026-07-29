@@ -110,6 +110,79 @@ def assert_hidden_matches_missing(hidden_response, missing_response) -> None:
         assert forbidden not in missing_response.text
 
 
+def test_note_character_lifecycle_and_spoiler_boundary(user_content_client: TestClient) -> None:
+    base = "/api/series/series_dexter/notes"
+    created = user_content_client.post(
+        base,
+        json={
+            "target_type": "Character",
+            "target_id": "dexter:character:rudy_cooper",
+            "content": "A spoiler-safe note",
+        },
+    )
+    assert created.status_code == 201
+    note = created.json()
+    assert note["id"].startswith("user-note:")
+    assert note["origin"] == "user"
+    assert note["created_at"] == note["updated_at"]
+    note_id = note["id"]
+
+    hidden = user_content_client.get(f"{base}/{note_id}", params={"visible_until_order": 2})
+    missing = user_content_client.get(
+        f"{base}/user-note:does-not-exist", params={"visible_until_order": 2}
+    )
+    assert_hidden_matches_missing(hidden, missing)
+    assert user_content_client.get(
+        f"{base}/{note_id}", params={"visible_until_order": 3}
+    ).status_code == 200
+    assert user_content_client.patch(
+        f"{base}/{note_id}", json={"content": "Updated note"}
+    ).status_code == 200
+    assert user_content_client.delete(f"{base}/{note_id}").status_code == 204
+    assert user_content_client.get(
+        f"{base}/{note_id}", params={"visible_until_order": 3}
+    ).status_code == 404
+
+
+def test_note_claim_filter_validation_and_canonical_survival(
+    user_content_client: TestClient,
+) -> None:
+    base = "/api/series/series_dexter/notes"
+    created = user_content_client.post(
+        base,
+        json={
+            "target_type": "Claim",
+            "target_id": "dexter:claim:s01e01:dexter_debra_family",
+            "content": "Claim note",
+        },
+    )
+    assert created.status_code == 201
+    note_id = created.json()["id"]
+    listed = user_content_client.get(
+        base,
+        params={
+            "visible_until_order": 1,
+            "target_type": "Claim",
+            "target_id": "dexter:claim:s01e01:dexter_debra_family",
+        },
+    )
+    assert listed.status_code == 200 and [row["id"] for row in listed.json()] == [note_id]
+
+    partial = user_content_client.get(
+        base, params={"visible_until_order": 1, "target_type": "Claim"}
+    )
+    assert partial.status_code == 422
+    for boundary in (0, -1, "nope", 4):
+        assert user_content_client.get(base, params={"visible_until_order": boundary}).status_code == 422
+
+    canonical = user_content_client.get("/api/series/series_dexter/graph", params={"visible_until_order": 1})
+    assert canonical.status_code == 200
+    assert user_content_client.delete(f"{base}/{note_id}").status_code == 204
+    after = user_content_client.get("/api/series/series_dexter/graph", params={"visible_until_order": 1})
+    assert after.status_code == 200
+    assert after.json()["series"]["id"] == "series_dexter"
+
+
 @pytest.fixture(scope="module")
 def live_client() -> Iterator[TestClient]:
     _run(_with_database(_seed_and_clean))
