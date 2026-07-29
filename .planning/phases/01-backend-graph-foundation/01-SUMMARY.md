@@ -36,6 +36,7 @@ key-decisions:
   - "Own one AsyncGraphDatabase driver in FastAPI lifespan while allowing degraded startup so documentation remains reachable without Neo4j."
   - "Require visible_until_order and enforce node, relationship, claim, source, and evidence visibility in parameterized Cypher before response construction."
   - "Keep visible_from_order mandatory in deterministic fixtures and tests when Neo4j Community cannot enforce property-existence constraints."
+  - "Derive claim source and evidence IDs only from visibility-gated provenance relationships instead of returning denormalized claim properties."
 
 patterns-established:
   - "Fail-closed graph access: a persisted positive episode boundary is mandatory for every graph response."
@@ -135,6 +136,7 @@ Each task was committed atomically:
 1. **Task 1: Infrastructure & Lifecycle Hardening** - `6462cdf` (feat)
 2. **Task 2: Metadata Graph, Ontology Validation & Deterministic Seed** - `d4c6dac` (feat)
 3. **Task 3: Spoiler-Aware Graph API & Automated Acceptance Evidence** - `4a043e7` (feat)
+   - **Task 3 provenance hardening** - `4035c2d` (feat)
 
 ## Files Created/Modified
 
@@ -177,10 +179,18 @@ Each task was committed atomically:
 - **Verification:** `bash backend/scripts/smoke.sh` completed with `SMOKE PASS: 8/8 checks passed`.
 - **Committed in:** `4a043e7`
 
+**3. Claim payload provenance IDs were not independently visibility-gated**
+- **Found during:** Task 3 Neo4j non-negotiables review
+- **Issue:** The claim query gated claims and endpoints but returned denormalized `claim.source_id` and `claim.evidence_ids`, allowing provenance identifiers to bypass their own visibility boundary if fixture visibility diverged.
+- **Fix:** Matched `REFERS_TO` and `SUPPORTED_BY` provenance paths in the claim query, gated both relationships and both provenance nodes, and derived returned IDs only from those matched visible records.
+- **Files modified:** `backend/app/spoiler/filter.py`
+- **Verification:** `uv run pytest` completed with 13 passed; boundary 1/2/3 counts, visibility, validity, and closure remained stable; smoke completed 8/8.
+- **Committed in:** `4035c2d`
+
 ---
 
-**Total deviations:** 2 auto-fixed portability/edition issues
-**Impact on plan:** Both fixes were required for the configured local runtime; no product-scope expansion occurred.
+**Total deviations:** 3 auto-fixed issues (one edition limitation, one MSYS portability defect, one spoiler-boundary hardening)
+**Impact on plan:** All fixes were required for runtime portability or the locked fail-closed disclosure invariant; no product-scope expansion occurred.
 
 ## Issues Encountered
 
@@ -196,7 +206,7 @@ The first executor exhausted its tool-call budget and the continuation executor 
   - Order 3 → nodes 20, edges 16, claims 8, sources 3, evidence 8.
   - Every returned edge endpoint appeared in the returned node collection.
 - Live errors → unknown series 404; missing/non-persisted boundary 422.
-- Database outage → `/health` returned sanitized 503 degraded response; after restart Neo4j became healthy and `/health` returned 200 connected.
+- Database outage → `/health` returned sanitized 503 degraded response and the graph endpoint returned sanitized `503 database_unavailable`; Swagger remained 200; after restart Neo4j became healthy and `/health` returned 200 connected.
 - Setup executed repeatedly with **41 nodes and 26 relationships**.
 
 ## User Setup Required
@@ -206,6 +216,14 @@ None - local Docker Compose and project commands use the existing repository con
 ## Next Phase Readiness
 
 The backend graph contract and deterministic seed are ready for Phase 2 Cytoscape integration. Phase-level verifier review remains the final GSD gate before Phase 1 is marked complete.
+
+## Self-Check: PASSED
+
+- Key created files exist on disk.
+- Task commits `6462cdf`, `d4c6dac`, `4a043e7`, and `4035c2d` are present in git history.
+- `uv run pytest` passed 13/13 tests after the final provenance hardening.
+- `bash backend/scripts/smoke.sh` passed 8/8 checks after the final provenance hardening.
+- Live boundaries 1/2/3, invalid/missing boundary, unknown series, database outage, service reachability, and recovery were exercised with real runtime output.
 
 ---
 *Phase: 01-backend-graph-foundation*
