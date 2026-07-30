@@ -121,6 +121,12 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         "/api/series/{series_id}/revisions",
         "/api/series/{series_id}/revisions/{revision_id}",
         "/api/series/{series_id}/revisions/{revision_id}/revert",
+        # Candidate claims
+        "/api/series/{series_id}/candidates",
+        "/api/series/{series_id}/candidates/ingest",
+        "/api/series/{series_id}/candidates/{claim_id}",
+        "/api/series/{series_id}/candidates/{claim_id}/approve",
+        "/api/series/{series_id}/candidates/{claim_id}/reject",
         # Authentication
         "/api/auth/google", "/api/auth/me", "/api/auth/logout",
     }
@@ -146,11 +152,18 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         ("get", "/api/series/{series_id}/revisions"),
         ("get", "/api/series/{series_id}/revisions/{revision_id}"),
         ("post", "/api/series/{series_id}/revisions/{revision_id}/revert"),
+        # Candidate claims
+        ("post", "/api/series/{series_id}/candidates/ingest"),
+        ("get", "/api/series/{series_id}/candidates"),
+        ("get", "/api/series/{series_id}/candidates/{claim_id}"),
+        ("patch", "/api/series/{series_id}/candidates/{claim_id}"),
+        ("post", "/api/series/{series_id}/candidates/{claim_id}/approve"),
+        ("post", "/api/series/{series_id}/candidates/{claim_id}/reject"),
         ("post", "/api/auth/google"),
         ("get", "/api/auth/me"),
         ("post", "/api/auth/logout"),
     }
-    assert len(schema["paths"]) == 17
+    assert len(schema["paths"]) == 22
     for path, item in schema["paths"].items():
         for method, operation in item.items():
             if method not in {"get", "post", "patch", "delete"}:

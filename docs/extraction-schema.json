@@ -1,0 +1,563 @@
+{
+  "extraction_claim": {
+    "additionalProperties": false,
+    "description": "One atomic candidate claim as produced by a future LLM-powered extractor.\n\nThis model is the extraction-output JSON schema contract (PREP-01). It\nrepresents everything a future extractor must output for one claim.\n\nNot a Neo4j label \u2014 ingested ExtractionClaims become Claim nodes with\norigin: 'candidate'.",
+    "examples": [
+      {
+        "claim_type": "observed_event",
+        "confidence_level": "high",
+        "episode_id": "episode:dexter:s01e01",
+        "evidence_locator": "S01E01:12:34",
+        "evidence_text": "Dexter keeps his blood slides carefully organized in a hidden box.",
+        "object_id": "object:blood_slides",
+        "predicate": "conceals",
+        "relationship_effect": "strengthens",
+        "schema_version": "0.1",
+        "source_locator": "https://opensubtitles.org/dexter-s01e01",
+        "source_type": "transcript",
+        "subject_id": "character:dexter",
+        "valid_from_order": 1,
+        "valid_until_order": null,
+        "visible_from_order": 1
+      }
+    ],
+    "properties": {
+      "schema_version": {
+        "default": "0.1",
+        "description": "Schema version identifier. Future extractors declare which version they produce.",
+        "examples": [
+          "0.1"
+        ],
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "subject_id": {
+        "description": "Stable public identifier.",
+        "examples": [
+          "character:dexter"
+        ],
+        "maxLength": 255,
+        "minLength": 1,
+        "title": "Subject Id",
+        "type": "string"
+      },
+      "predicate": {
+        "description": "Relationship predicate connecting subject to object.",
+        "title": "Predicate",
+        "type": "string"
+      },
+      "object_id": {
+        "description": "Stable public identifier.",
+        "examples": [
+          "character:dexter"
+        ],
+        "maxLength": 255,
+        "minLength": 1,
+        "title": "Object Id",
+        "type": "string"
+      },
+      "claim_type": {
+        "description": "Claim type per ontology allowlist.",
+        "examples": [
+          "explicit_fact",
+          "observed_event",
+          "inferred_state"
+        ],
+        "title": "Claim Type",
+        "type": "string"
+      },
+      "confidence_level": {
+        "default": "medium",
+        "description": "Confidence level per ontology allowlist.",
+        "examples": [
+          "high",
+          "medium",
+          "low"
+        ],
+        "title": "Confidence Level",
+        "type": "string"
+      },
+      "relationship_effect": {
+        "default": "neutral",
+        "description": "Effect this claim has on the subject-object relationship.",
+        "examples": [
+          "strengthens",
+          "weakens",
+          "neutral"
+        ],
+        "title": "Relationship Effect",
+        "type": "string"
+      },
+      "visible_from_order": {
+        "description": "Earliest persisted episode order at which this resource is visible.",
+        "examples": [
+          1
+        ],
+        "minimum": 1,
+        "title": "Visible From Order",
+        "type": "integer"
+      },
+      "valid_from_order": {
+        "anyOf": [
+          {
+            "description": "Earliest persisted episode order at which this resource is visible.",
+            "examples": [
+              1
+            ],
+            "minimum": 1,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Valid From Order"
+      },
+      "valid_until_order": {
+        "anyOf": [
+          {
+            "description": "Earliest persisted episode order at which this resource is visible.",
+            "examples": [
+              1
+            ],
+            "minimum": 1,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Valid Until Order"
+      },
+      "evidence_text": {
+        "description": "Non-empty plain text; rich text and markup payloads are not supported.",
+        "examples": [
+          "Dexter keeps his blood slides hidden."
+        ],
+        "maxLength": 4000,
+        "minLength": 1,
+        "title": "Evidence Text",
+        "type": "string"
+      },
+      "evidence_locator": {
+        "description": "Exact location within the source for this evidence text.",
+        "title": "Evidence Locator",
+        "type": "string"
+      },
+      "source_type": {
+        "description": "Type of source this claim was extracted from.",
+        "title": "Source Type",
+        "type": "string"
+      },
+      "source_locator": {
+        "description": "Location of the source this claim was extracted from.",
+        "title": "Source Locator",
+        "type": "string"
+      },
+      "episode_id": {
+        "description": "Stable public identifier.",
+        "examples": [
+          "character:dexter"
+        ],
+        "maxLength": 255,
+        "minLength": 1,
+        "title": "Episode Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "subject_id",
+      "predicate",
+      "object_id",
+      "claim_type",
+      "visible_from_order",
+      "evidence_text",
+      "evidence_locator",
+      "source_type",
+      "source_locator",
+      "episode_id"
+    ],
+    "title": "ExtractionClaim",
+    "type": "object"
+  },
+  "extraction_batch_envelope": {
+    "$defs": {
+      "ExtractionClaim": {
+        "additionalProperties": false,
+        "description": "One atomic candidate claim as produced by a future LLM-powered extractor.\n\nThis model is the extraction-output JSON schema contract (PREP-01). It\nrepresents everything a future extractor must output for one claim.\n\nNot a Neo4j label \u2014 ingested ExtractionClaims become Claim nodes with\norigin: 'candidate'.",
+        "examples": [
+          {
+            "claim_type": "observed_event",
+            "confidence_level": "high",
+            "episode_id": "episode:dexter:s01e01",
+            "evidence_locator": "S01E01:12:34",
+            "evidence_text": "Dexter keeps his blood slides carefully organized in a hidden box.",
+            "object_id": "object:blood_slides",
+            "predicate": "conceals",
+            "relationship_effect": "strengthens",
+            "schema_version": "0.1",
+            "source_locator": "https://opensubtitles.org/dexter-s01e01",
+            "source_type": "transcript",
+            "subject_id": "character:dexter",
+            "valid_from_order": 1,
+            "valid_until_order": null,
+            "visible_from_order": 1
+          }
+        ],
+        "properties": {
+          "schema_version": {
+            "default": "0.1",
+            "description": "Schema version identifier. Future extractors declare which version they produce.",
+            "examples": [
+              "0.1"
+            ],
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "subject_id": {
+            "description": "Stable public identifier.",
+            "examples": [
+              "character:dexter"
+            ],
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "predicate": {
+            "description": "Relationship predicate connecting subject to object.",
+            "title": "Predicate",
+            "type": "string"
+          },
+          "object_id": {
+            "description": "Stable public identifier.",
+            "examples": [
+              "character:dexter"
+            ],
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Object Id",
+            "type": "string"
+          },
+          "claim_type": {
+            "description": "Claim type per ontology allowlist.",
+            "examples": [
+              "explicit_fact",
+              "observed_event",
+              "inferred_state"
+            ],
+            "title": "Claim Type",
+            "type": "string"
+          },
+          "confidence_level": {
+            "default": "medium",
+            "description": "Confidence level per ontology allowlist.",
+            "examples": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Confidence Level",
+            "type": "string"
+          },
+          "relationship_effect": {
+            "default": "neutral",
+            "description": "Effect this claim has on the subject-object relationship.",
+            "examples": [
+              "strengthens",
+              "weakens",
+              "neutral"
+            ],
+            "title": "Relationship Effect",
+            "type": "string"
+          },
+          "visible_from_order": {
+            "description": "Earliest persisted episode order at which this resource is visible.",
+            "examples": [
+              1
+            ],
+            "minimum": 1,
+            "title": "Visible From Order",
+            "type": "integer"
+          },
+          "valid_from_order": {
+            "anyOf": [
+              {
+                "description": "Earliest persisted episode order at which this resource is visible.",
+                "examples": [
+                  1
+                ],
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Valid From Order"
+          },
+          "valid_until_order": {
+            "anyOf": [
+              {
+                "description": "Earliest persisted episode order at which this resource is visible.",
+                "examples": [
+                  1
+                ],
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Valid Until Order"
+          },
+          "evidence_text": {
+            "description": "Non-empty plain text; rich text and markup payloads are not supported.",
+            "examples": [
+              "Dexter keeps his blood slides hidden."
+            ],
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Evidence Text",
+            "type": "string"
+          },
+          "evidence_locator": {
+            "description": "Exact location within the source for this evidence text.",
+            "title": "Evidence Locator",
+            "type": "string"
+          },
+          "source_type": {
+            "description": "Type of source this claim was extracted from.",
+            "title": "Source Type",
+            "type": "string"
+          },
+          "source_locator": {
+            "description": "Location of the source this claim was extracted from.",
+            "title": "Source Locator",
+            "type": "string"
+          },
+          "episode_id": {
+            "description": "Stable public identifier.",
+            "examples": [
+              "character:dexter"
+            ],
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Episode Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject_id",
+          "predicate",
+          "object_id",
+          "claim_type",
+          "visible_from_order",
+          "evidence_text",
+          "evidence_locator",
+          "source_type",
+          "source_locator",
+          "episode_id"
+        ],
+        "title": "ExtractionClaim",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "Envelope for a batch of extraction claims submitted to the ingest API.\n\nCarries the extractor metadata block (D-13) and a list of extraction claims.",
+    "examples": [
+      {
+        "claims": [
+          {
+            "claim_type": "observed_event",
+            "confidence_level": "high",
+            "episode_id": "episode:dexter:s01e01",
+            "evidence_locator": "S01E01:12:34",
+            "evidence_text": "Dexter keeps his blood slides carefully organized in a hidden box.",
+            "object_id": "object:blood_slides",
+            "predicate": "conceals",
+            "relationship_effect": "strengthens",
+            "schema_version": "0.1",
+            "source_locator": "https://opensubtitles.org/dexter-s01e01",
+            "source_type": "transcript",
+            "subject_id": "character:dexter",
+            "valid_from_order": 1,
+            "valid_until_order": null,
+            "visible_from_order": 1
+          }
+        ],
+        "extractor_name": "dexter-extractor-v0",
+        "extractor_version": "0.1.0",
+        "run_timestamp": "2026-07-30T10:00:00Z"
+      }
+    ],
+    "properties": {
+      "extractor_name": {
+        "description": "Name/identifier of the extractor that produced these claims.",
+        "title": "Extractor Name",
+        "type": "string"
+      },
+      "extractor_version": {
+        "description": "Version of the extractor software.",
+        "title": "Extractor Version",
+        "type": "string"
+      },
+      "run_timestamp": {
+        "description": "When this extraction run completed.",
+        "format": "date-time",
+        "title": "Run Timestamp",
+        "type": "string"
+      },
+      "claims": {
+        "items": {
+          "$ref": "#/$defs/ExtractionClaim"
+        },
+        "maxItems": 500,
+        "minItems": 1,
+        "title": "Claims",
+        "type": "array"
+      }
+    },
+    "required": [
+      "extractor_name",
+      "extractor_version",
+      "run_timestamp",
+      "claims"
+    ],
+    "title": "ExtractionBatchEnvelope",
+    "type": "object"
+  },
+  "source_payload": {
+    "additionalProperties": false,
+    "description": "Contract for a source record from a future extractor.\n\nPart of the source-connector interface (PREP-04). Defines what a source\nrecord looks like without implementing any retrieval or parsing.",
+    "examples": [
+      {
+        "content_hash": "sha256:def456...",
+        "episode_id": "episode:dexter:s01e01",
+        "locator": "https://opensubtitles.org/dexter-s01e01",
+        "retrieved_at": "2026-07-30T10:00:00Z",
+        "source_type": "transcript"
+      }
+    ],
+    "properties": {
+      "source_type": {
+        "description": "Type of source \u2014 e.g., 'transcript', 'podcast', 'script', 'article'.",
+        "title": "Source Type",
+        "type": "string"
+      },
+      "locator": {
+        "description": "Stable locator for the source \u2014 URL, DOI, file path, or episode reference.",
+        "title": "Locator",
+        "type": "string"
+      },
+      "retrieved_at": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "When the source was retrieved.",
+        "title": "Retrieved At"
+      },
+      "episode_id": {
+        "description": "Stable public identifier.",
+        "examples": [
+          "character:dexter"
+        ],
+        "maxLength": 255,
+        "minLength": 1,
+        "title": "Episode Id",
+        "type": "string"
+      },
+      "content_hash": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Optional content hash for deduplication.",
+        "title": "Content Hash"
+      }
+    },
+    "required": [
+      "source_type",
+      "locator",
+      "episode_id"
+    ],
+    "title": "SourcePayload",
+    "type": "object"
+  },
+  "evidence_payload": {
+    "additionalProperties": false,
+    "description": "Contract for a single evidence fragment from a future extractor.\n\nPart of the source-connector interface (PREP-04). Not a running service \u2014\nthis model validates the shape any future connector must produce.",
+    "examples": [
+      {
+        "content_hash": "sha256:abc123...",
+        "episode_id": "episode:dexter:s01e01",
+        "locator": "S01E01:12:34",
+        "text": "Dexter keeps his blood slides in a hidden box."
+      }
+    ],
+    "properties": {
+      "text": {
+        "description": "Non-empty plain text; rich text and markup payloads are not supported.",
+        "examples": [
+          "Dexter keeps his blood slides hidden."
+        ],
+        "maxLength": 4000,
+        "minLength": 1,
+        "title": "Text",
+        "type": "string"
+      },
+      "locator": {
+        "description": "Exact location within the source (timestamp, page number, scene marker).",
+        "title": "Locator",
+        "type": "string"
+      },
+      "episode_id": {
+        "description": "Stable public identifier.",
+        "examples": [
+          "character:dexter"
+        ],
+        "maxLength": 255,
+        "minLength": 1,
+        "title": "Episode Id",
+        "type": "string"
+      },
+      "content_hash": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Optional content hash for deduplication.",
+        "title": "Content Hash"
+      }
+    },
+    "required": [
+      "text",
+      "locator",
+      "episode_id"
+    ],
+    "title": "EvidencePayload",
+    "type": "object"
+  }
+}

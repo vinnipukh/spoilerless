@@ -125,4 +125,35 @@ describe('DetailPanel', () => {
     expect(await screen.findByRole('heading', { name: 'Dexter works at Miami Metro' })).toBeInTheDocument()
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
   })
+
+  it('shows the Notes tab when a Character node is selected', async () => {
+    const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
+    render(<DetailPanel selected={selected} {...defaultProps} />)
+
+    expect(await screen.findByRole('tab', { name: 'Notes' })).toBeInTheDocument()
+  })
+
+  it('shows the User origin badge for a user-origin node', async () => {
+    const graphWithUserNode = {
+      ...graphResponseS01E01,
+      nodes: graphResponseS01E01.nodes.map((n) =>
+        n.id === 'char_ice_truck_killer' ? { ...n, origin: 'user' as const } : n,
+      ),
+    }
+    const selected: SelectedElement = { kind: 'node', id: 'char_ice_truck_killer', label: 'The Ice Truck Killer', nodeType: 'Character' }
+    render(<DetailPanel selected={selected} graph={graphWithUserNode} seriesId="series:dexter" visibleUntilOrder={1} episodes={[]} />)
+
+    expect(await screen.findByText('User')).toBeInTheDocument()
+    // The badge should have dashed border styling
+    const badge = screen.getByText('User').closest('span')
+    expect(badge).toBeInTheDocument()
+    expect(badge).toHaveClass('border-dashed')
+  })
+
+  it('shows canonical origin text (not badge) for a canonical node', async () => {
+    const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
+    render(<DetailPanel selected={selected} {...defaultProps} />)
+
+    expect(await screen.findByText('canonical')).toBeInTheDocument()
+  })
 })

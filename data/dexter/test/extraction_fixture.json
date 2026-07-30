@@ -1,0 +1,58 @@
+{
+  "extractor_name": "test-extractor-v0",
+  "extractor_version": "0.1.0",
+  "run_timestamp": "2026-07-30T10:00:00Z",
+  "claims": [
+    {
+      "schema_version": "0.1",
+      "subject_id": "character:dexter",
+      "predicate": "conceals",
+      "object_id": "location:dexter_apartment",
+      "claim_type": "observed_event",
+      "confidence_level": "high",
+      "relationship_effect": "strengthens",
+      "visible_from_order": 1,
+      "valid_from_order": 1,
+      "valid_until_order": null,
+      "evidence_text": "Dexter meticulously arranges his blood slides in a small wooden box hidden inside his air conditioner.",
+      "evidence_locator": "S01E01:12:34",
+      "source_type": "transcript",
+      "source_locator": "https://opensubtitles.org/dexter-s01e01",
+      "episode_id": "episode:dexter:s01e01"
+    },
+    {
+      "schema_version": "0.1",
+      "subject_id": "character:debra",
+      "predicate": "works_with",
+      "object_id": "character:dexter",
+      "claim_type": "observed_event",
+      "confidence_level": "medium",
+      "relationship_effect": "neutral",
+      "visible_from_order": 1,
+      "valid_from_order": 1,
+      "valid_until_order": null,
+      "evidence_text": "Debra Morgan works alongside her brother Dexter at Miami Metro Police Department.",
+      "evidence_locator": "S01E01:03:15",
+      "source_type": "transcript",
+      "source_locator": "https://opensubtitles.org/dexter-s01e01",
+      "episode_id": "episode:dexter:s01e01"
+    },
+    {
+      "schema_version": "0.1",
+      "subject_id": "character:rudy",
+      "predicate": "dates",
+      "object_id": "character:debra",
+      "claim_type": "explicit_fact",
+      "confidence_level": "low",
+      "relationship_effect": "weakens",
+      "visible_from_order": 2,
+      "valid_from_order": 2,
+      "valid_until_order": null,
+      "evidence_text": "Rudy Cooper begins dating Debra Morgan, though his true intentions remain hidden.",
+      "evidence_locator": "S01E02:08:45",
+      "source_type": "transcript",
+      "source_locator": "https://opensubtitles.org/dexter-s01e02",
+      "episode_id": "episode:dexter:s01e02"
+    }
+  ]
+}
