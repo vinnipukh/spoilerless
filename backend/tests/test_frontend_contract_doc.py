@@ -7,25 +7,32 @@ from backend.app.main import app
 
 DOC_PATH = Path(__file__).resolve().parents[2] / "docs" / "frontend-api-contract.md"
 HTTP_METHODS = {"get", "post", "patch", "delete", "put", "options", "head", "trace"}
-EXPECTED_OPERATIONS = {
+EXPECTED_OPERATIONS: set[tuple[str, str]] = {
     ("get", "/health"),
     ("get", "/api/series"),
     ("get", "/api/series/{series_id}"),
     ("get", "/api/series/{series_id}/episodes"),
     ("get", "/api/series/{series_id}/graph"),
+    # User notes
     ("post", "/api/series/{series_id}/notes"),
     ("get", "/api/series/{series_id}/notes"),
     ("get", "/api/series/{series_id}/notes/{note_id}"),
     ("patch", "/api/series/{series_id}/notes/{note_id}"),
     ("delete", "/api/series/{series_id}/notes/{note_id}"),
+    # Custom nodes
     ("post", "/api/series/{series_id}/custom-nodes"),
     ("get", "/api/series/{series_id}/custom-nodes/{node_id}"),
     ("patch", "/api/series/{series_id}/custom-nodes/{node_id}"),
     ("delete", "/api/series/{series_id}/custom-nodes/{node_id}"),
+    # Custom relationships
     ("post", "/api/series/{series_id}/custom-relationships"),
     ("get", "/api/series/{series_id}/custom-relationships/{relationship_id}"),
     ("patch", "/api/series/{series_id}/custom-relationships/{relationship_id}"),
     ("delete", "/api/series/{series_id}/custom-relationships/{relationship_id}"),
+    # Revisions
+    ("get", "/api/series/{series_id}/revisions"),
+    ("get", "/api/series/{series_id}/revisions/{revision_id}"),
+    ("post", "/api/series/{series_id}/revisions/{revision_id}/revert"),
     # Authentication
     ("post", "/api/auth/google"),
     ("get", "/api/auth/me"),
@@ -63,8 +70,8 @@ def test_document_and_openapi_have_exact_locked_inventory() -> None:
     assert generated == EXPECTED_OPERATIONS
     assert {path for _, path in documented} == EXPECTED_TEMPLATES
     assert set(app.openapi()["paths"]) == EXPECTED_TEMPLATES
-    assert len(documented) == len(generated) == 21
-    assert len(EXPECTED_TEMPLATES) == 14
+    assert len(documented) == len(generated) == 24
+    assert len(EXPECTED_TEMPLATES) == 17
     assert all("?" not in path for path in EXPECTED_TEMPLATES)
 
 
@@ -131,7 +138,6 @@ def test_document_has_examples_projection_rules_non_goals_and_pending_status() -
         "permissions",
         "account linking",
         "refresh-token",
-        "revisions",
         "soft delete",
         "rich text",
         "uploads",

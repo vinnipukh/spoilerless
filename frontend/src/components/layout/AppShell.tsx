@@ -42,9 +42,12 @@ export function AppShell({ user, onLogout, topBar, children }: Props) {
       {/* z-[60] keeps the header above the always-open Details sheet (fixed, z-50, inset-y-0 right-0), which otherwise covers the account/logout controls */}
       <Card size="sm" className="relative z-[60] rounded-none">
         <div className="flex items-center justify-between gap-4 px-4">
-          <div className="flex min-w-0 items-center gap-4">{topBar}</div>
+          <div className="flex min-w-0 items-center gap-4">
+            <h1 className="font-heading text-2xl">HD Graf Cehennemi</h1>
+            {topBar}
+          </div>
           {user && (
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-3 shrink-0 hover:bg-elevated">
               <span className="hidden sm:inline text-sm text-muted-foreground">
                 {user.display_name}
               </span>
@@ -53,6 +56,7 @@ export function AppShell({ user, onLogout, topBar, children }: Props) {
                   src={avatarUrl(user)!}
                   alt={user.display_name}
                   className="size-7 rounded-full object-cover"
+                  loading="lazy"
                 />
               ) : (
                 <div className="size-7 rounded-full bg-muted flex items-center justify-center">

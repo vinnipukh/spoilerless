@@ -88,6 +88,19 @@ async def _layer_snapshot(database: Neo4jDatabase, origin: str) -> dict:
 
 @pytest.mark.asyncio
 async def test_seed_is_idempotent_and_complete(live_database: Neo4jDatabase) -> None:
+    # Clean any leftover user content + revisions from other test modules
+    await live_database.execute_query(
+        "MATCH (n:UserNote) DETACH DELETE n"
+    )
+    await live_database.execute_query(
+        "MATCH (r:Revision) DETACH DELETE r"
+    )
+    await live_database.execute_query(
+        "MATCH (c:Claim) WHERE c.claim_type = 'user_authored' OR c.id STARTS WITH 'user-' DETACH DELETE c"
+    )
+    await live_database.execute_query(
+        "MATCH (n) WHERE n.origin = 'user' OR n.id STARTS WITH 'user-' DETACH DELETE n"
+    )
     first_counts = await setup_database(live_database)
     first = await _snapshot(live_database)
     second_counts = await setup_database(live_database)
@@ -143,7 +156,7 @@ async def test_community_schema_creates_only_unique_and_index(
     expected_labels = {
         "Series", "Episode", "Character", "Event", "Location",
         "Organization", "Object", "Claim", "Source", "EvidenceFragment", "UserNote",
-        "AppUser", "Session",
+        "AppUser", "Session", "Revision",
     }
     assert unique_labels == expected_labels, (
         f"Missing uniqueness constraints for: {expected_labels - unique_labels}"
@@ -350,6 +363,7 @@ async def test_constraints_visibility_and_provenance(live_database: Neo4jDatabas
         "UserNote",
         "AppUser",
         "Session",
+        "Revision",
     }
     assert missing_visibility == [{"count": 0}]
     assert incomplete_claims == [{"count": 0}]

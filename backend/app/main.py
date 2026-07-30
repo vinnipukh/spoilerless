@@ -14,6 +14,7 @@ from backend.app.api.graph import router as graph_router
 from backend.app.api.series import router as series_router
 from backend.app.api.user_content import router as user_content_router
 from backend.app.api.auth import router as auth_router
+from backend.app.api.revisions import router as revision_router
 from backend.app.core.config import get_settings
 from backend.app.core.errors import install_database_error_handlers
 from backend.app.graph.database import Neo4jDatabase
@@ -58,6 +59,7 @@ app.include_router(series_router)
 app.include_router(graph_router)
 app.include_router(user_content_router)
 app.include_router(auth_router)
+app.include_router(revision_router)
 
 settings = get_settings()
 _allowed_origins = [

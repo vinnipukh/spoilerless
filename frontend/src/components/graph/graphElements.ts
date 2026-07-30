@@ -10,6 +10,9 @@ import type { ElementDefinition } from 'cytoscape'
 import type { GraphResponse } from '../../types/graph'
 
 export function graphToElements(graph: GraphResponse): ElementDefinition[] {
+  // Build a lookup so each edge can quickly find its claim (if any).
+  const claimById = new Map(graph.claims.map((c) => [c.id, c]))
+
   const nodeElements: ElementDefinition[] = graph.nodes.map((node) => {
     // Only Character nodes ever carry a portrait — other node types must
     // never pick up the background-image selector even if a future node
@@ -29,17 +32,22 @@ export function graphToElements(graph: GraphResponse): ElementDefinition[] {
     }
   })
 
-  const edgeElements: ElementDefinition[] = graph.edges.map((edge) => ({
-    data: {
-      id: edge.id,
-      source: edge.source,
-      target: edge.target,
-      label: edge.type,
-      edgeType: edge.type,
-      origin: edge.origin,
-      claimId: edge.claim_id,
-    },
-  }))
+  const edgeElements: ElementDefinition[] = graph.edges.map((edge) => {
+    const claim = edge.claim_id ? claimById.get(edge.claim_id) : undefined
+
+    return {
+      data: {
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        label: edge.type,
+        edgeType: edge.type,
+        origin: edge.origin,
+        claimId: edge.claim_id,
+        ...(claim ? { claimStatus: claim.status } : {}),
+      },
+    }
+  })
 
   return [...nodeElements, ...edgeElements]
 }

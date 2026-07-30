@@ -16,12 +16,12 @@ type Props = {
 export function SeriesSelect({ series, value, onSelect }: Props) {
   return (
     <Select value={value ?? ''} onValueChange={onSelect}>
-      <SelectTrigger aria-label="Series">
+      <SelectTrigger aria-label="Series" className="font-medium">
         <SelectValue placeholder="Select a series" />
       </SelectTrigger>
       <SelectContent>
         {series.map((item) => (
-          <SelectItem key={item.id} value={item.id}>
+          <SelectItem key={item.id} value={item.id} className="py-1.5">
             {item.title}
           </SelectItem>
         ))}

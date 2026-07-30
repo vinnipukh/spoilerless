@@ -11,6 +11,7 @@ import re
 from typing import Any, Mapping
 from uuid import uuid4
 
+from backend.app.domain.revision import RevisionAction
 from backend.app.domain.user_content import (
     CustomNodeCreate,
     CustomNodeType,
@@ -23,6 +24,7 @@ from backend.app.domain.user_content import (
     CustomRelationshipUpdate,
 )
 from backend.app.graph.database import Neo4jDatabase
+from backend.app.revisions import RevisionRepository
 
 
 class UserContentValidationError(ValueError):
@@ -47,6 +49,11 @@ def _native(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: _native(item) for key, item in value.items()}
     return value
+
+
+def _parse_dt(value: str) -> datetime:
+    """Parse an ISO 8601 datetime string into a Python datetime."""
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
 async def _run_create(tx: Any, query: str, error_msg: str, **params: Any) -> dict[str, Any]:
@@ -361,11 +368,20 @@ class UserContentRepository:
     @staticmethod
     async def _create_custom_node(tx: Any, payload: tuple[CustomNodeCreateCommand, str]) -> Any:
         command, query = payload
-        return await _run_create(tx, query,
+        result = await _run_create(tx, query,
             "episode not found",
             id=command.id, series_id=command.series_id,
             label=command.label, episode_id=command.episode_id,
             created_at=command.created_at, updated_at=command.updated_at)
+        snapshot = RevisionRepository.take_snapshot(result)
+        await RevisionRepository.log_revision(
+            tx, series_id=command.series_id,
+            resource_type=command.node_type.value,
+            resource_id=command.id, action=RevisionAction.CREATED,
+            before=None, after=snapshot,
+            visible_from_order=result["visible_from_order"],
+            created_at=command.created_at)
+        return result
 
     @staticmethod
     def custom_relationship_command(
@@ -385,12 +401,20 @@ class UserContentRepository:
 
     @staticmethod
     async def _create_custom_relationship(tx: Any, command: CustomRelationshipCreateCommand) -> Any:
-        return await _run_create(tx, CUSTOM_RELATIONSHIP_CREATE_QUERY,
+        result = await _run_create(tx, CUSTOM_RELATIONSHIP_CREATE_QUERY,
             "relationship endpoint not found",
             id=command.id, series_id=command.series_id, source_id=command.source_id,
             target_id=command.target_id, predicate=command.predicate.value,
             episode_id=command.episode_id, created_at=command.created_at,
             updated_at=command.updated_at)
+        snapshot = RevisionRepository.take_snapshot(result)
+        await RevisionRepository.log_revision(
+            tx, series_id=command.series_id, resource_type="Claim",
+            resource_id=command.id, action=RevisionAction.CREATED,
+            before=None, after=snapshot,
+            visible_from_order=result["visible_from_order"],
+            created_at=command.created_at)
+        return result
 
     async def _custom_read(self, series_id: str, resource_id: str, boundary: int, queries: list[str]) -> Any:
         _series(series_id)
@@ -414,11 +438,32 @@ class UserContentRepository:
 
     @staticmethod
     async def _update_custom_node(tx: Any, command: CustomUpdateCommand) -> Any:
+        # Capture state before mutation
+        old_row = await (await tx.run(
+            "MATCH (node {id: $id, series_id: $series_id}) "
+            "RETURN node.id AS id, node.series_id AS series_id, "
+            "labels(node)[0] AS type, node.label AS label, "
+            "node.visible_from_order AS visible_from_order, "
+            "node.origin AS origin, node.episode_id AS episode_id",
+            id=command.id, series_id=command.series_id)).single()
+        old_state = _native(old_row.data()) if old_row else None
+        resource_type = old_state.get("type", "?") if old_state else "?"
+
         for query in CUSTOM_NODE_UPDATE_QUERIES.values():
             record = await (await tx.run(query, id=command.id, series_id=command.series_id,
                                          label=command.value, updated_at=command.updated_at)).single()
             if record is not None:
-                return _native(record.data())
+                result_data = _native(record.data())
+                before = RevisionRepository.take_snapshot(old_state) if old_state else None
+                after = RevisionRepository.take_snapshot(result_data)
+                await RevisionRepository.log_revision(
+                    tx, series_id=command.series_id,
+                    resource_type=resource_type,
+                    resource_id=command.id, action=RevisionAction.UPDATED,
+                    before=before, after=after,
+                    visible_from_order=result_data["visible_from_order"],
+                    created_at=command.updated_at)
+                return result_data
         ownership = await (await tx.run(OWNERSHIP_QUERY, id=command.id, series_id=command.series_id)).single()
         if ownership is not None and ownership.data().get("origin") != "user":
             raise UserContentConflict("resource ownership conflict")
@@ -435,11 +480,34 @@ class UserContentRepository:
     @staticmethod
     async def _delete_custom_node(tx: Any, payload: tuple[str, str]) -> Any:
         series_id, node_id = payload
+        # Capture state before deletion
+        old_row = await (await tx.run(
+            "MATCH (node {id: $id, series_id: $series_id}) "
+            "RETURN node.id AS id, node.series_id AS series_id, "
+            "labels(node)[0] AS type, node.label AS label, "
+            "node.visible_from_order AS visible_from_order, "
+            "node.origin AS origin, node.episode_id AS episode_id",
+            id=node_id, series_id=series_id)).single()
+        old_state = _native(old_row.data()) if old_row else None
+        resource_type = old_state.get("type", "?") if old_state else "?"
+
         for query in CUSTOM_NODE_DELETE_QUERIES.values():
             record = await (await tx.run(query, id=node_id, series_id=series_id)).single()
             if record is not None:
                 data = record.data()
-                return "conflict" if data.get("dependencies", 0) else data.get("id")
+                if data.get("dependencies", 0):
+                    return "conflict"
+                deleted_id = data.get("id")
+                if old_state and deleted_id:
+                    before = RevisionRepository.take_snapshot(old_state)
+                    await RevisionRepository.log_revision(
+                        tx, series_id=series_id,
+                        resource_type=resource_type,
+                        resource_id=node_id, action=RevisionAction.DELETED,
+                        before=before, after=None,
+                        visible_from_order=old_state["visible_from_order"],
+                        created_at=_utc_now())
+                return deleted_id
         ownership = await (await tx.run(OWNERSHIP_QUERY, id=node_id, series_id=series_id)).single()
         if ownership is not None and ownership.data().get("origin") != "user":
             raise UserContentConflict("resource ownership conflict")
@@ -457,6 +525,18 @@ class UserContentRepository:
 
     @staticmethod
     async def _update_custom_relationship(tx: Any, command: CustomUpdateCommand) -> Any:
+        # Capture state before mutation
+        old_row = await (await tx.run(
+            "MATCH (claim:Claim {id: $id, series_id: $series_id}) "
+            "RETURN claim.id AS id, claim.series_id AS series_id, "
+            "claim.subject_id AS source, claim.object_id AS target, "
+            "claim.predicate AS type, claim.episode_id AS episode_id, "
+            "claim.visible_from_order AS visible_from_order, "
+            "claim.origin AS origin",
+            id=command.id, series_id=command.series_id)).single()
+        old_state = _native(old_row.data()) if old_row else None
+        before = RevisionRepository.take_snapshot(old_state) if old_state else None
+
         record = await (await tx.run(CUSTOM_RELATIONSHIP_UPDATE_QUERY, id=command.id,
                                      series_id=command.series_id, predicate=command.value,
                                      updated_at=command.updated_at)).single()
@@ -465,7 +545,16 @@ class UserContentRepository:
             if ownership is not None and ownership.data().get("origin") != "user":
                 raise UserContentConflict("resource ownership conflict")
             raise UserContentNotFound("relationship not found")
-        return _native(record.data())
+        result_data = _native(record.data())
+        after = RevisionRepository.take_snapshot(result_data)
+
+        await RevisionRepository.log_revision(
+            tx, series_id=command.series_id, resource_type="Claim",
+            resource_id=command.id, action=RevisionAction.UPDATED,
+            before=before, after=after,
+            visible_from_order=result_data["visible_from_order"],
+            created_at=command.updated_at)
+        return result_data
 
     async def delete_custom_relationship(self, series_id: str, relationship_id: str) -> None:
         _series(series_id); _resource_id(relationship_id)
@@ -476,23 +565,53 @@ class UserContentRepository:
     @staticmethod
     async def _delete_custom_relationship(tx: Any, payload: tuple[str, str]) -> Any:
         series_id, relationship_id = payload
+        # Capture state before deletion
+        old_row = await (await tx.run(
+            "MATCH (claim:Claim {id: $id, series_id: $series_id}) "
+            "RETURN claim.id AS id, claim.series_id AS series_id, "
+            "claim.subject_id AS source, claim.object_id AS target, "
+            "claim.predicate AS type, claim.episode_id AS episode_id, "
+            "claim.visible_from_order AS visible_from_order, "
+            "claim.origin AS origin",
+            id=relationship_id, series_id=series_id)).single()
+        old_state = _native(old_row.data()) if old_row else None
+
         record = await (await tx.run(CUSTOM_RELATIONSHIP_DELETE_QUERY, id=relationship_id,
                                      series_id=series_id)).single()
+        deleted_id = None if record is None else record.data().get("id")
+
+        if old_state and deleted_id:
+            before = RevisionRepository.take_snapshot(old_state)
+            await RevisionRepository.log_revision(
+                tx, series_id=series_id, resource_type="Claim",
+                resource_id=relationship_id, action=RevisionAction.DELETED,
+                before=before, after=None,
+                visible_from_order=old_state["visible_from_order"],
+                created_at=_utc_now())
+
         if record is None:
             ownership = await (await tx.run(OWNERSHIP_QUERY, id=relationship_id, series_id=series_id)).single()
             if ownership is not None and ownership.data().get("origin") != "user":
                 raise UserContentConflict("resource ownership conflict")
-        return None if record is None else record.data().get("id")
+        return deleted_id
 
     @staticmethod
     async def _create_note(tx: Any, payload: tuple[NoteCreateCommand, str]) -> Any:
         command, query = payload
-        return await _run_create(tx, query,
+        result = await _run_create(tx, query,
             "note target not found",
             id=command.id, series_id=command.series_id,
             target_type=command.target_type.value, target_id=command.target_id,
             content=command.content, created_at=command.created_at,
             updated_at=command.updated_at)
+        snapshot = RevisionRepository.take_snapshot(result)
+        await RevisionRepository.log_revision(
+            tx, series_id=command.series_id, resource_type="UserNote",
+            resource_id=command.id, action=RevisionAction.CREATED,
+            before=None, after=snapshot,
+            visible_from_order=result["visible_from_order"],
+            created_at=command.created_at)
+        return result
 
     async def update_note(self, series_id: str, note_id: str, request: NoteUpdate) -> Any:
         _series(series_id); _namespace(note_id, "user-note:")
@@ -501,12 +620,33 @@ class UserContentRepository:
 
     @staticmethod
     async def _update_note(tx: Any, command: NoteUpdateCommand) -> Any:
+        # Capture state before mutation
+        old_row = await (await tx.run(
+            "MATCH (note:UserNote {id: $id, series_id: $series_id}) "
+            "RETURN note.id AS id, note.series_id AS series_id, "
+            "note.target_type AS target_type, note.target_id AS target_id, "
+            "note.content AS content, note.origin AS origin, "
+            "note.visible_from_order AS visible_from_order, "
+            "note.created_at AS created_at, note.updated_at AS updated_at",
+            id=command.id, series_id=command.series_id)).single()
+        before = RevisionRepository.take_snapshot(
+            _native(old_row.data())) if old_row else None
+
         result = await tx.run(NOTE_UPDATE_QUERY, id=command.id, series_id=command.series_id,
             content=command.content, updated_at=command.updated_at)
         record = await result.single()
         if record is None:
             raise UserContentNotFound("note not found")
-        return _native(record.data())
+        result_data = _native(record.data())
+        after = RevisionRepository.take_snapshot(result_data)
+
+        await RevisionRepository.log_revision(
+            tx, series_id=command.series_id, resource_type="UserNote",
+            resource_id=command.id, action=RevisionAction.UPDATED,
+            before=before, after=after,
+            visible_from_order=result_data["visible_from_order"],
+            created_at=command.updated_at)
+        return result_data
 
     async def delete_note(self, series_id: str, note_id: str) -> None:
         _series(series_id)
@@ -520,6 +660,28 @@ class UserContentRepository:
     @staticmethod
     async def _delete_note(tx: Any, payload: tuple[str, str]) -> Any:
         series_id, note_id = payload
+        # Capture state before deletion — log FIRST
+        old_row = await (await tx.run(
+            "MATCH (note:UserNote {id: $id, series_id: $series_id}) "
+            "RETURN note.id AS id, note.series_id AS series_id, "
+            "note.target_type AS target_type, note.target_id AS target_id, "
+            "note.content AS content, note.origin AS origin, "
+            "note.visible_from_order AS visible_from_order, "
+            "note.created_at AS created_at, note.updated_at AS updated_at",
+            id=note_id, series_id=series_id)).single()
+        if old_row is None:
+            return None
+
+        old_state = _native(old_row.data())
+        before = RevisionRepository.take_snapshot(old_state)
+        await RevisionRepository.log_revision(
+            tx, series_id=series_id, resource_type="UserNote",
+            resource_id=note_id, action=RevisionAction.DELETED,
+            before=before, after=None,
+            visible_from_order=old_state["visible_from_order"],
+            created_at=_utc_now())
+
+        # Now actually delete
         result = await tx.run(NOTE_DELETE_QUERY, id=note_id, series_id=series_id)
         record = await result.single()
         return None if record is None else record.data().get("id")
@@ -579,5 +741,8 @@ class UserContentRepository:
             rows = [row for row in rows if row.get("target_id") == target_id]
         return sorted(
             (_native(row) for row in rows),
-            key=lambda row: (-row["updated_at"].timestamp(), row["id"]),
+            key=lambda row: (
+                -(_parse_dt(row["updated_at"]).timestamp() if isinstance(row["updated_at"], str) else row["updated_at"].timestamp()),
+                row["id"],
+            ),
         )

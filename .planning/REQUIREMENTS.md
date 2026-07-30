@@ -50,9 +50,9 @@ All requirements below are pending until their acceptance evidence is executed. 
 
 ### Phase 4 — Revision History and Revert
 
-- [ ] **REV-01**: An append-only Revision model logs claim creation/update/rejection, user corrections, manual graph edits, and relevant before/after values.
-- [ ] **REV-02**: A history panel displays prior values and the action/provenance behind each revision.
-- [ ] **REV-03**: Revert restores a selected prior value by creating a new revision and never deletes existing history; tests prove this behavior.
+- [x] **REV-01**: An append-only Revision model logs claim creation/update/rejection, user corrections, manual graph edits, and relevant before/after values.
+- [x] **REV-02**: A history panel displays prior values and the action/provenance behind each revision.
+- [x] **REV-03**: Revert restores a selected prior value by creating a new revision and never deletes existing history; tests prove this behavior.
 
 ### Phase 5 — Future-Extraction Preparation
 
