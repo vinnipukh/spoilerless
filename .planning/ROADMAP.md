@@ -70,13 +70,20 @@ Plans:
 
 **Goal:** Turn the existing functional Cytoscape graph interface into a premium, cinematic, high-contrast graph exploration product — the graph as hero, colorful type-aware nodes and relationship-colored edges, a polished application shell/episode navigation, and a premium detail-panel inspector — frontend-only, with zero regression to auth, spoiler filtering, or existing Character/Claim/Evidence interactions.
 
-**Requirements**: None — out-of-band UI/UX initiative requested directly on `feature/graph-visual-overhaul`; not mapped to a canonical Prototype v0 requirement ID (see `03.1-CONTEXT.md`).
+**Requirements**: None — out-of-band UI/UX initiative requested directly on `feature/graph-visual-overhaul`; not mapped to a canonical Prototype v0 requirement ID (see `03.1-CONTEXT.md`). Traceability uses `03.1-CONTEXT.md` decision IDs D-01 through D-35 instead.
 **Depends on:** Phase 2 (Polished Cytoscape Graph Experience — the UI this phase restyles)
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Plans:
+**Wave 1**
 
-- [ ] TBD (run /gsd-plan-phase 03.1 to break down)
+- [ ] 03.1-01-PLAN.md — Graph canvas visual system: font/token foundation, relationshipStyles.ts edge-color module, tuned layout/zoom, full node/edge type coverage, candidate-status dashed edges, selection/hover overlay glow, background grid/glow, reduced motion
+- [ ] 03.1-02-PLAN.md — Detail panel restructure: Overview tab metadata rows, Claims/Evidence card accents, StructuralEdgeCard polish, responsive Sheet breakpoints
+
+**Wave 2** *(blocked on 03.1-01 completion)*
+
+- [ ] 03.1-03-PLAN.md — App shell & episode navigation restyle: Space Grotesk wordmark, segmented episode control (with preserved Select fallback), SeriesSelect polish
+- [ ] 03.1-04-PLAN.md — Graph canvas overlays: collapsible legend + zoom/fit/reset controls
 
 ## Phase 4: Revision History and Revert
 
