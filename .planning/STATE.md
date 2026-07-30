@@ -113,6 +113,7 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 - Phase 1 edited: Rebaselined Prototype v0 into five vertical delivery phases; Phase 1 now consolidates canonical milestones 1-4 without narrowing scope.
 - Phase 03.1 inserted after Phase 2: Frontend-only cinematic visual overhaul of graph UI, requested out-of-band from canonical requirements (URGENT). Now complete.
 - Phase 05.1 inserted after Phase 5: Candidate review frontend UI (approve/reject/edit) — deferred from Phase 5's backend-only scope; user requested completion (URGENT)
+- Phase 6 added: Spoiler-safe GraphRAG chat and graph-editing agent (RAG-01..17) — opens root ROADMAP.md milestone 9 (LLM chat, later phase), expanded with a typed ChangeSet graph-editing flow per `06-PRD-SOURCE.md`; depends functionally on Phase 3 (origin model) + Phase 4 (revision model), not on the still-unplanned Phase 05.1
 
 ## Performance Metrics
 
