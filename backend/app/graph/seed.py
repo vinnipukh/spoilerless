@@ -166,6 +166,23 @@ async def create_constraints(database: Neo4jDatabase) -> None:
         "CREATE INDEX usernote_target_idx IF NOT EXISTS FOR (n:UserNote) ON (n.series_id, n.target_type, n.target_id)"
     )
 
+    # Authentication constraints and indexes
+    await database.execute_query(
+        "CREATE CONSTRAINT appuser_id_unique IF NOT EXISTS FOR (u:AppUser) REQUIRE u.id IS UNIQUE"
+    )
+    await database.execute_query(
+        "CREATE CONSTRAINT appuser_google_sub_unique IF NOT EXISTS FOR (u:AppUser) REQUIRE u.google_sub IS UNIQUE"
+    )
+    await database.execute_query(
+        "CREATE CONSTRAINT session_id_unique IF NOT EXISTS FOR (s:Session) REQUIRE s.id IS UNIQUE"
+    )
+    await database.execute_query(
+        "CREATE CONSTRAINT session_token_hash_unique IF NOT EXISTS FOR (s:Session) REQUIRE s.token_hash IS UNIQUE"
+    )
+    await database.execute_query(
+        "CREATE INDEX session_expires_at_idx IF NOT EXISTS FOR (s:Session) ON (s.expires_at)"
+    )
+
 
 async def audit_visibility_integrity(database: Neo4jDatabase, series_id: str) -> None:
     """Fail if any node under *series_id* has a null ``visible_from_order``.

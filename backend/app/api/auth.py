@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -12,11 +13,86 @@ from backend.app.domain.auth import GoogleAuthRequest, UserPublic, UserResponse
 from backend.app.repository.session import InMemorySessionRepository, SessionRepository
 from backend.app.repository.user import UserRepository
 from backend.app.graph.database import Neo4jDatabase, get_database
-from backend.app.services.auth import AuthService
+from backend.app.services.auth import AuthService, GoogleTransportError, GoogleVerificationError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 DatabaseDependency = Annotated[Neo4jDatabase, Depends(get_database)]
+
+# ---------------------------------------------------------------------------
+# Error codes — stable machine-readable strings for the error envelope
+# ---------------------------------------------------------------------------
+AUTH_INVALID_GOOGLE_CREDENTIAL = "AUTH_INVALID_GOOGLE_CREDENTIAL"
+AUTH_UNAUTHENTICATED = "AUTH_UNAUTHENTICATED"
+AUTH_SESSION_EXPIRED = "AUTH_SESSION_EXPIRED"
+AUTH_SESSION_INVALID = "AUTH_SESSION_INVALID"
+AUTH_ORIGIN_NOT_ALLOWED = "AUTH_ORIGIN_NOT_ALLOWED"
+AUTH_DISABLED = "AUTH_DISABLED"
+
+
+def _allowed_origins() -> list[str]:
+    """Parse and return the configured frontend origins, stripping empties."""
+    settings = get_settings()
+    return [
+        o.strip()
+        for o in settings.frontend_origins.split(",")
+        if o.strip()
+    ]
+
+
+async def verify_origin(request: Request) -> None:
+    """Verify ``Origin`` (preferred) or ``Referer`` matches a configured
+    frontend origin to protect state-changing requests against CSRF.
+
+    The check is deliberately performed as a FastAPI dependency on each
+    state-changing auth route so it composes naturally with the existing
+    dependency graph.  Reads ``FRONTEND_ORIGINS`` from config, so the same
+    setting controls both CORS and CSRF validation.
+
+    ``SameSite=Lax`` on the session cookie prevents most cross-site form
+    POSTs but does **not** protect against subdomain-based attacks or
+    top-level navigations.  Origin/referer validation is the complementary
+    defence.
+    """
+    origins = _allowed_origins()
+
+    # Wildcard — no protection (not recommended, explicit setting required).
+    if "*" in origins:
+        return
+
+    origin = request.headers.get("origin")
+    referer = request.headers.get("referer")
+
+    candidate = None
+    if origin:
+        candidate = origin
+    elif referer:
+        # Take scheme + host from the Referer URL.
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(referer)
+            candidate = f"{parsed.scheme}://{parsed.hostname}"
+            if parsed.port is not None:
+                candidate += f":{parsed.port}"
+        except Exception:
+            candidate = None
+
+    # If neither Origin nor Referer is present, allow the request through.
+    # SameSite=Lax on the session cookie blocks cross-site POSTs without
+    # needing header validation; this check is defense-in-depth for cases
+    # where SameSite is insufficient (subdomain attacks, legacy browsers).
+    if candidate is None:
+        return
+
+    if candidate in origins:
+        return
+
+    raise http_error(
+        403, AUTH_ORIGIN_NOT_ALLOWED,
+        "Request origin is not allowed.",
+    )
 
 
 def get_session_repo(request: Request) -> SessionRepository:
@@ -76,6 +152,7 @@ async def google_auth(
     payload: GoogleAuthRequest,
     response: Response,
     service: AuthServiceDependency,
+    _csrf: Annotated[None, Depends(verify_origin)],
 ) -> UserResponse:
     """Authenticate via a Google ID token.
 
@@ -88,12 +165,12 @@ async def google_auth(
 
     if not settings.google_client_id:
         raise http_error(
-            401, "auth_disabled", "Google authentication is not configured."
+            401, AUTH_DISABLED, "Google authentication is not configured."
         )
 
     if not settings.session_ttl_seconds or settings.session_ttl_seconds <= 0:
         raise http_error(
-            401, "auth_disabled", "Session TTL is not configured."
+            401, AUTH_DISABLED, "Session TTL is not configured."
         )
 
     try:
@@ -102,11 +179,26 @@ async def google_auth(
             client_id=settings.google_client_id,
             session_ttl=settings.session_ttl_seconds,
         )
-    except Exception:
+    except GoogleVerificationError as exc:
+        logger.warning("google_auth: %s", str(exc))
         raise http_error(
             401,
-            "authentication_failed",
+            AUTH_INVALID_GOOGLE_CREDENTIAL,
             "Authentication failed. Please try again.",
+        )
+    except GoogleTransportError as exc:
+        logger.warning("google_auth: transport_error (%s)", str(exc))
+        raise http_error(
+            503,
+            "AUTH_SERVICE_UNAVAILABLE",
+            "Authentication service is temporarily unavailable.",
+        )
+    except Exception as exc:
+        logger.warning("google_auth: internal_error (%s)", type(exc).__name__)
+        raise http_error(
+            503,
+            "AUTH_SERVICE_UNAVAILABLE",
+            "Authentication service is temporarily unavailable.",
         )
 
     _make_cookie(
@@ -116,7 +208,9 @@ async def google_auth(
         cookie_name=settings.session_cookie_name,
     )
 
-    return UserResponse(user=UserPublic.model_validate(user))
+    return UserResponse(user=UserPublic.model_validate(
+        {k: v for k, v in user.items() if k in UserPublic.model_fields}
+    ))
 
 
 @router.get(
@@ -142,9 +236,11 @@ async def get_current_user(
         raw_token, session_ttl=settings.session_ttl_seconds
     )
     if user is None:
-        raise http_error(401, "unauthenticated", "Authentication required.")
+        raise http_error(401, AUTH_UNAUTHENTICATED, "Authentication required.")
 
-    return UserResponse(user=UserPublic.model_validate(user))
+    return UserResponse(user=UserPublic.model_validate(
+        {k: v for k, v in user.items() if k in UserPublic.model_fields}
+    ))
 
 
 @router.post(

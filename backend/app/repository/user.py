@@ -14,6 +14,30 @@ from typing import Any
 from backend.app.graph.database import Neo4jDatabase
 
 
+def _normalize(record: dict[str, Any]) -> dict[str, Any]:
+    """Convert Neo4j-specific types to plain Python/Pydantic-compatible types.
+
+    The Neo4j Python driver returns ``neo4j.time.DateTime`` for nodes
+    that were stored with Python ``datetime`` values.  Pydantic's strict
+    ``datetime`` validators reject this type, so we normalise to ISO-8601
+    strings here at the repository boundary.
+    """
+    result: dict[str, Any] = {}
+    for k, v in record.items():
+        if isinstance(v, bytes):
+            result[k] = v
+        elif hasattr(v, "iso_format"):
+            # neo4j.time.DateTime / neo4j.time.Date / neo4j.time.Time
+            result[k] = v.iso_format()
+        elif hasattr(v, "to_native"):
+            # Fallback for other Neo4j temporal types
+            native = v.to_native()
+            result[k] = native.isoformat() if hasattr(native, "isoformat") else str(native)
+        else:
+            result[k] = v
+    return result
+
+
 UPSERT_USER_QUERY = """
 MERGE (u:AppUser {google_sub: $google_sub})
 ON CREATE SET
@@ -71,11 +95,11 @@ class UserRepository:
             created_at=now,
             updated_at=now,
         )
-        return records[0]
+        return _normalize(records[0])
 
     async def get_by_id(self, user_id: str) -> dict[str, Any] | None:
         """Look up a user by application-local ID."""
         records = await self._database.execute_query(
             GET_USER_BY_ID_QUERY, id=user_id
         )
-        return records[0] if records else None
+        return _normalize(records[0]) if records else None

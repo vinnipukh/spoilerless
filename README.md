@@ -15,7 +15,7 @@ Explore characters, events, locations, claims, and relationships through an inte
 - **Source-grounded claims** — Every claim is backed by at least one evidence fragment with source metadata (type, URL, episode, timestamp). Confidence and status are tracked separately from relationship semantics.
 - **User notes & custom content** — Add plain-text notes attached to characters or claims. Create custom nodes and relationships that are visually distinct from canonical seed data.
 - **Revision history** — All user edits, corrections, and rejections are recorded in a revision log, enabling inspect-and-revert workflows.
-- **Google OAuth authentication** — Optional sign-in with Google ID tokens. Sessions are managed via HttpOnly cookies with configurable TTL.
+|- **Google OAuth authentication** — Sign-in with Google ID tokens. Sessions are managed via HttpOnly cookies with configurable TTL. A Google Cloud OAuth client is required to log in. |
 - **Future-ready architecture** — Clean extension points for LLM-powered extraction pipelines, candidate claim review workflows, and spoiler-grounded LLM chat.
 
 ---
@@ -75,9 +75,32 @@ cd hdgrafcehennemi
 cp .env.example .env
 ```
 
-Edit `.env` to set your Neo4j password and any optional Google OAuth credentials.
+Edit `.env` to set your Neo4j password.
 
-### 2. Start Neo4j
+### 2. Set up Google OAuth
+
+This application **requires** a Google OAuth 2.0 client to log in.
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials
+2. Create an **OAuth 2.0 Client ID** of type **Web application**
+3. Add `http://localhost:5173` to **Authorized JavaScript origins**
+4. Copy the **Client ID**
+
+Configure both backend and frontend:
+
+```bash
+# Backend
+echo "GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com" >> .env
+
+# Frontend
+cp frontend/.env.example frontend/.env.local
+# Edit frontend/.env.local and set VITE_GOOGLE_CLIENT_ID to the same client ID
+```
+
+> Never commit `.env` or `.env.local`. The `.gitignore` already excludes them.
+> `GOOGLE_CLIENT_SECRET` is **not** used and must not be added.
+
+### 3. Start Neo4j
 
 ```bash
 docker compose up -d
@@ -110,7 +133,9 @@ npm install
 npm run dev
 ```
 
-The frontend opens at `http://localhost:5173`.
+Make sure `frontend/.env.local` exists with your `VITE_GOOGLE_CLIENT_ID` (set in step 2).
+
+The frontend opens at `http://localhost:5173` and immediately shows the login screen. Sign in with your Google account to access the graph.
 
 ---
 

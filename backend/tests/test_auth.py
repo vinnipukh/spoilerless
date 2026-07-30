@@ -9,11 +9,19 @@ import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-from backend.app.api.auth import get_auth_service, router as auth_router
+from backend.app.api.auth import (
+    AUTH_INVALID_GOOGLE_CREDENTIAL,
+    AUTH_UNAUTHENTICATED,
+    AUTH_ORIGIN_NOT_ALLOWED,
+    AUTH_DISABLED,
+    get_auth_service,
+    router as auth_router,
+    verify_origin,
+)
 from backend.app.core.config import get_settings
 from backend.app.core.errors import install_database_error_handlers
 from backend.app.domain.auth import GoogleAuthRequest, UserPublic, UserResponse
-from backend.app.repository.session import InMemorySessionRepository
+from backend.app.repository.session import InMemorySessionRepository, SessionRecord
 from backend.app.services.auth import GoogleVerificationError
 
 
@@ -116,7 +124,19 @@ def auth_app(
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
 ) -> FastAPI:
-    """Build a minimal FastAPI app with auth routes and overridden dependencies."""
+    """Build a minimal FastAPI app with auth routes and overridden dependencies.
+
+    By default the CSRF ``verify_origin`` dependency is bypassed (set
+    ``FRONTEND_ORIGINS=*``) so tests that don't care about origin validation
+    pass without a custom header.  CSRF-specific tests override this.
+    """
+
+    _set_env_raw(
+        GOOGLE_CLIENT_ID="test-client-id.apps.googleusercontent.com",
+        SESSION_TTL_SECONDS=3600,
+        SESSION_COOKIE_NAME="session",
+        FRONTEND_ORIGINS="http://localhost:5173",
+    )
 
     app = FastAPI()
     install_database_error_handlers(app)
@@ -149,7 +169,7 @@ def client(auth_app: FastAPI) -> TestClient:
 # ---------------------------------------------------------------------------
 
 _AUTH_ERROR_PATTERN = re.compile(
-    r"^authentication_failed$|^unauthenticated$|^auth_disabled$"
+    r"^(AUTH_INVALID_GOOGLE_CREDENTIAL|AUTH_UNAUTHENTICATED|AUTH_DISABLED|AUTH_ORIGIN_NOT_ALLOWED)$"
 )
 
 
@@ -163,6 +183,14 @@ def _assert_cookie_expired(set_cookie: str) -> bool:
     """Check if a Set-Cookie header tells the browser to delete the cookie."""
     lower = set_cookie.lower()
     return "max-age=0" in lower or "expires=thu, 01 jan 1970" in lower or "expires=thu, 01 jan 197" in lower
+
+
+def _set_env_raw(**kwargs: str | int | bool) -> None:
+    """Set env vars without monkeypatch — for fixture-level setup."""
+    import os
+    get_settings.cache_clear()
+    for key, value in kwargs.items():
+        os.environ[key] = str(value)
 
 
 def _set_env(monkeypatch: pytest.MonkeyPatch, **kwargs: str | int | bool) -> None:
@@ -185,23 +213,26 @@ class TestGoogleAuth:
             GOOGLE_CLIENT_ID="test-client-id.apps.googleusercontent.com",
             SESSION_TTL_SECONDS=3600,
             SESSION_COOKIE_NAME="session",
+            FRONTEND_ORIGINS="*",
         )
 
         response = client.post(
             "/api/auth/google",
             json={"credential": "valid-token"},
+            headers={"Origin": "http://localhost:5173"},
         )
 
         assert response.status_code == 200
         body = response.json()
         user = body["user"]
-        assert user["google_sub"] == "google_sub_12345"
         assert user["email"] == "user@example.com"
         assert user["display_name"] == "Test User"
         assert user["avatar_url"] == "https://example.com/avatar.png"
         assert "id" in user
         assert "created_at" in user
         assert "updated_at" in user
+        # google_sub must NOT be exposed to clients
+        assert "google_sub" not in user
 
         set_cookie = response.headers.get("set-cookie")
         assert set_cookie is not None
@@ -219,6 +250,7 @@ class TestGoogleAuth:
             SESSION_TTL_SECONDS=3600,
             SESSION_COOKIE_SECURE=False,
             SESSION_COOKIE_NAME="session",
+            FRONTEND_ORIGINS="*",
         )
 
         response = client.post(
@@ -239,6 +271,7 @@ class TestGoogleAuth:
             SESSION_TTL_SECONDS=3600,
             SESSION_COOKIE_SECURE=True,
             SESSION_COOKIE_NAME="session",
+            FRONTEND_ORIGINS="*",
         )
 
         response = client.post(
@@ -254,7 +287,7 @@ class TestGoogleAuth:
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch, fake_verifier: FakeGoogleVerifier
     ) -> None:
         fake_verifier.set_failure("Invalid signature.")
-        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600)
+        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, FRONTEND_ORIGINS="*")
 
         response = client.post(
             "/api/auth/google",
@@ -262,12 +295,12 @@ class TestGoogleAuth:
         )
 
         assert response.status_code == 401
-        assert response.json()["detail"]["code"] == "authentication_failed"
+        assert response.json()["detail"]["code"] == AUTH_INVALID_GOOGLE_CREDENTIAL
 
     def test_expired_token_returns_401(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600)
+        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, FRONTEND_ORIGINS="*")
 
         response = client.post(
             "/api/auth/google",
@@ -276,14 +309,14 @@ class TestGoogleAuth:
 
         assert response.status_code == 401
         detail = response.json()["detail"]
-        assert detail["code"] == "authentication_failed"
+        assert detail["code"] == AUTH_INVALID_GOOGLE_CREDENTIAL
         # Generic message — no token validation details leaked
         assert "expired" not in detail["message"].lower()
 
     def test_auth_disabled_when_no_client_id(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _set_env(monkeypatch, GOOGLE_CLIENT_ID="", SESSION_TTL_SECONDS=3600)
+        _set_env(monkeypatch, GOOGLE_CLIENT_ID="", SESSION_TTL_SECONDS=3600, FRONTEND_ORIGINS="*")
 
         response = client.post(
             "/api/auth/google",
@@ -291,12 +324,12 @@ class TestGoogleAuth:
         )
 
         assert response.status_code == 401
-        assert response.json()["detail"]["code"] == "auth_disabled"
+        assert response.json()["detail"]["code"] == AUTH_DISABLED
 
     def test_user_creation(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600)
+        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, FRONTEND_ORIGINS="*")
 
         response = client.post(
             "/api/auth/google",
@@ -305,12 +338,14 @@ class TestGoogleAuth:
 
         assert response.status_code == 200
         user = response.json()["user"]
-        assert user["google_sub"] == "google_sub_12345"
+        assert user["email"] == "user@example.com"
+        # google_sub is not in the response
+        assert "google_sub" not in user
 
     def test_returning_user_does_not_create_duplicate(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600)
+        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, FRONTEND_ORIGINS="*")
 
         first = client.post("/api/auth/google", json={"credential": "valid-token"})
         second = client.post("/api/auth/google", json={"credential": "valid-token"})
@@ -322,7 +357,7 @@ class TestGoogleAuth:
     def test_updated_profile_fields_on_returning_user(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch, fake_verifier: FakeGoogleVerifier
     ) -> None:
-        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600)
+        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, FRONTEND_ORIGINS="*")
 
         # First sign-in
         client.post("/api/auth/google", json={"credential": "valid-token"})
@@ -339,8 +374,8 @@ class TestGoogleAuth:
         assert user["display_name"] == "Updated Name"
         assert user["email"] == "updated@example.com"
         assert user["avatar_url"] == "https://example.com/new.png"
-        # ID should remain the same
-        assert user["google_sub"] == "google_sub_12345"
+        # google_sub is not in the response
+        assert "google_sub" not in user
 
 
 # ===================================================================
@@ -352,7 +387,7 @@ class TestGetCurrentUser:
     def test_returns_user_with_valid_session(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, SESSION_COOKIE_NAME="session")
+        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, SESSION_COOKIE_NAME="session", FRONTEND_ORIGINS="*")
 
         auth_resp = client.post("/api/auth/google", json={"credential": "valid-token"})
         cookie = auth_resp.cookies.get("session")
@@ -360,7 +395,8 @@ class TestGetCurrentUser:
         response = client.get("/api/auth/me", cookies={"session": cookie})
 
         assert response.status_code == 200
-        assert response.json()["user"]["google_sub"] == "google_sub_12345"
+        assert response.json()["user"]["email"] == "user@example.com"
+        assert "google_sub" not in response.json()["user"]
 
     def test_returns_401_without_cookie(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
@@ -370,7 +406,7 @@ class TestGetCurrentUser:
         response = client.get("/api/auth/me")
 
         assert response.status_code == 401
-        assert response.json()["detail"]["code"] == "unauthenticated"
+        assert response.json()["detail"]["code"] == AUTH_UNAUTHENTICATED
 
     def test_returns_401_with_invalid_cookie(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
@@ -380,7 +416,7 @@ class TestGetCurrentUser:
         response = client.get("/api/auth/me", cookies={"session": "invalid-token"})
 
         assert response.status_code == 401
-        assert response.json()["detail"]["code"] == "unauthenticated"
+        assert response.json()["detail"]["code"] == AUTH_UNAUTHENTICATED
 
 
 # ===================================================================
@@ -392,7 +428,7 @@ class TestLogout:
     def test_logout_invalidates_session(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, SESSION_COOKIE_NAME="session")
+        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, SESSION_COOKIE_NAME="session", FRONTEND_ORIGINS="*")
 
         auth_resp = client.post("/api/auth/google", json={"credential": "valid-token"})
         cookie = auth_resp.cookies.get("session")
@@ -414,7 +450,7 @@ class TestLogout:
     def test_logout_deletes_cookie(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, SESSION_COOKIE_NAME="session")
+        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, SESSION_COOKIE_NAME="session", FRONTEND_ORIGINS="*")
 
         auth_resp = client.post("/api/auth/google", json={"credential": "valid-token"})
         cookie = auth_resp.cookies.get("session")
@@ -437,7 +473,7 @@ class TestCookieAttributes:
     def test_cookie_httponly_samesite_lax(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, SESSION_COOKIE_NAME="session")
+        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, SESSION_COOKIE_NAME="session", FRONTEND_ORIGINS="*")
 
         response = client.post("/api/auth/google", json={"credential": "valid-token"})
 
@@ -450,7 +486,7 @@ class TestCookieAttributes:
     def test_cookie_configurable_name(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, SESSION_COOKIE_NAME="myapp_session")
+        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, SESSION_COOKIE_NAME="myapp_session", FRONTEND_ORIGINS="*")
 
         response = client.post("/api/auth/google", json={"credential": "valid-token"})
 
@@ -488,7 +524,7 @@ class TestSessionLifecycle:
     def test_session_persists_across_endpoints(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, SESSION_COOKIE_NAME="session")
+        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, SESSION_COOKIE_NAME="session", FRONTEND_ORIGINS="*")
 
         auth_resp = client.post("/api/auth/google", json={"credential": "valid-token"})
         cookie = auth_resp.cookies.get("session")
@@ -502,6 +538,112 @@ class TestSessionLifecycle:
 
 
 # ===================================================================
+# Session token hashing
+# ===================================================================
+
+
+class TestSessionTokenHashing:
+    def test_raw_token_not_stored_in_memory(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch, session_repo: InMemorySessionRepository
+    ) -> None:
+        """Verify the in-memory store holds hashed tokens, not raw ones."""
+        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, FRONTEND_ORIGINS="*")
+
+        client.post("/api/auth/google", json={"credential": "valid-token"})
+
+        for key in session_repo._store:
+            # Keys in the in-memory store are SHA-256 hashes (64 hex chars)
+            assert len(key) == 64, f"Expected SHA-256 hash, got: {key}"
+            assert all(c in "0123456789abcdef" for c in key)
+
+
+# ===================================================================
+# CSRF / Origin validation
+# ===================================================================
+
+
+class TestCSRFOriginValidation:
+    def test_post_google_rejects_unexpected_origin(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _set_env(
+            monkeypatch,
+            GOOGLE_CLIENT_ID="test-client-id",
+            SESSION_TTL_SECONDS=3600,
+            FRONTEND_ORIGINS="http://localhost:5173",
+        )
+
+        response = client.post(
+            "/api/auth/google",
+            json={"credential": "valid-token"},
+            headers={"Origin": "http://evil.com"},
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == AUTH_ORIGIN_NOT_ALLOWED
+
+    def test_post_google_accepts_allowed_origin(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _set_env(
+            monkeypatch,
+            GOOGLE_CLIENT_ID="test-client-id",
+            SESSION_TTL_SECONDS=3600,
+            FRONTEND_ORIGINS="http://localhost:5173,http://example.com",
+        )
+
+        response = client.post(
+            "/api/auth/google",
+            json={"credential": "valid-token"},
+            headers={"Origin": "http://example.com"},
+        )
+
+        assert response.status_code == 200
+
+    def test_wildcard_origin_bypasses_csrf(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _set_env(
+            monkeypatch,
+            GOOGLE_CLIENT_ID="test-client-id",
+            SESSION_TTL_SECONDS=3600,
+            FRONTEND_ORIGINS="*",
+        )
+
+        # Without Origin header — should pass because wildcard bypasses CSRF
+        response = client.post(
+            "/api/auth/google",
+            json={"credential": "valid-token"},
+        )
+
+        assert response.status_code == 200
+
+
+# ===================================================================
+# Auth error codes are stable
+# ===================================================================
+
+
+class TestAuthErrorCodes:
+    def test_error_code_constants_defined(self) -> None:
+        """All error code constants are importable and non-empty."""
+        from backend.app.api.auth import (
+            AUTH_INVALID_GOOGLE_CREDENTIAL,
+            AUTH_UNAUTHENTICATED,
+            AUTH_SESSION_EXPIRED,
+            AUTH_SESSION_INVALID,
+            AUTH_ORIGIN_NOT_ALLOWED,
+            AUTH_DISABLED,
+        )
+        assert AUTH_INVALID_GOOGLE_CREDENTIAL == "AUTH_INVALID_GOOGLE_CREDENTIAL"
+        assert AUTH_UNAUTHENTICATED == "AUTH_UNAUTHENTICATED"
+        assert AUTH_SESSION_EXPIRED == "AUTH_SESSION_EXPIRED"
+        assert AUTH_SESSION_INVALID == "AUTH_SESSION_INVALID"
+        assert AUTH_ORIGIN_NOT_ALLOWED == "AUTH_ORIGIN_NOT_ALLOWED"
+        assert AUTH_DISABLED == "AUTH_DISABLED"
+
+
+# ===================================================================
 # Application integration — module loads cleanly
 # ===================================================================
 
@@ -510,7 +652,7 @@ def test_auth_module_imports() -> None:
     """Verify the auth module and dependencies import without errors."""
     from backend.app.api.auth import router  # noqa: F811
     from backend.app.domain.auth import GoogleAuthRequest, UserPublic, UserResponse  # noqa: F811
-    from backend.app.repository.session import InMemorySessionRepository, SessionRecord  # noqa: F811
+    from backend.app.repository.session import InMemorySessionRepository, Neo4jSessionRepository, SessionRecord  # noqa: F811
     from backend.app.repository.user import UserRepository  # noqa: F811
     from backend.app.services.auth import AuthService, ProductionGoogleVerifier  # noqa: F811
     assert router.prefix == "/api/auth"

@@ -132,15 +132,18 @@ async def test_community_schema_creates_only_unique_and_index(
         assert ct["type"] in ("NODE_PROPERTY_UNIQUENESS", "NODE_KEY"), (
             f"Unexpected constraint type {ct['type']} on {ct['label']}"
         )
-        # Every unique/node-key constraint must cover `id` (our schema invariant).
-        assert "id" in ct["properties"], (
-            f"Constraint on {ct['label']} missing id property: {ct['properties']}"
-        )
+        # Every unique/node-key constraint must cover `id` (our schema invariant),
+        # except AppUser (google_sub is the identity key) and Session (token_hash).
+        if ct["label"] not in ("AppUser", "Session"):
+            assert "id" in ct["properties"], (
+                f"Constraint on {ct['label']} missing id property: {ct['properties']}"
+            )
 
     unique_labels = {ct["label"] for ct in constraint_types}
     expected_labels = {
         "Series", "Episode", "Character", "Event", "Location",
         "Organization", "Object", "Claim", "Source", "EvidenceFragment", "UserNote",
+        "AppUser", "Session",
     }
     assert unique_labels == expected_labels, (
         f"Missing uniqueness constraints for: {expected_labels - unique_labels}"
@@ -345,6 +348,8 @@ async def test_constraints_visibility_and_provenance(live_database: Neo4jDatabas
         "Source",
         "EvidenceFragment",
         "UserNote",
+        "AppUser",
+        "Session",
     }
     assert missing_visibility == [{"count": 0}]
     assert incomplete_claims == [{"count": 0}]
