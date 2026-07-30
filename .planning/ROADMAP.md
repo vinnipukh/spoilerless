@@ -66,6 +66,18 @@ Plans:
 
 **Cross-cutting constraints:** preserve Phase 1 fail-closed spoiler filtering and graph closure; mutate only namespaced `origin=user` resources; keep canonical/candidate provenance mandatory; keep all frontend files untouched; do not mark overall Phase 3 complete from backend evidence alone.
 
+### Phase 03.1: Frontend visual overhaul - cinematic graph exploration UI (INSERTED)
+
+**Goal:** Turn the existing functional Cytoscape graph interface into a premium, cinematic, high-contrast graph exploration product — the graph as hero, colorful type-aware nodes and relationship-colored edges, a polished application shell/episode navigation, and a premium detail-panel inspector — frontend-only, with zero regression to auth, spoiler filtering, or existing Character/Claim/Evidence interactions.
+
+**Requirements**: None — out-of-band UI/UX initiative requested directly on `feature/graph-visual-overhaul`; not mapped to a canonical Prototype v0 requirement ID (see `03.1-CONTEXT.md`).
+**Depends on:** Phase 2 (Polished Cytoscape Graph Experience — the UI this phase restyles)
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 03.1 to break down)
+
 ## Phase 4: Revision History and Revert
 
 **Goal:** Make corrections inspectable and reversible without destroying history.

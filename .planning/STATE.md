@@ -4,12 +4,12 @@ milestone: v1.0
 milestone_name: milestone
 status: Phase 2 complete and verified; Phase 3 backend complete and verified, frontend implementation and acceptance pending
 stopped_at: Phase 2 verified with 5/5 truths and 0 gaps; Phase 3 backend verified with 11/11 truths and 0 gaps; resume Phase 3 frontend work
-last_updated: "2026-07-29T17:45:00.000Z"
+last_updated: "2026-07-30T07:20:23.668Z"
 progress:
-  total_phases: 5
+  total_phases: 4
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 9
+  completed_plans: 8
 ---
 
 # HD Graf Cehennemi — Project State
@@ -103,6 +103,7 @@ Phase 2 Plan 04 (of 4) is complete: dedicated `useWatchProgress`/`ConfirmAdvance
 ### Roadmap Evolution
 
 - Phase 1 edited: Rebaselined Prototype v0 into five vertical delivery phases; Phase 1 now consolidates canonical milestones 1-4 without narrowing scope.
+- Phase 03.1 inserted after Phase 3: Frontend-only cinematic visual overhaul of graph UI, requested out-of-band from canonical requirements (URGENT)
 
 ## Performance Metrics
 
