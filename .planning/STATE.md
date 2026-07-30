@@ -2,15 +2,17 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 4 complete — full-stack verified (backend 146/146, frontend 13/13 new tests)
-stopped_at: Phase 4 fully executed — backend + frontend history panel and revert UI
-last_updated: "2026-07-30T12:59:07.100Z"
+status: Awaiting next milestone
+stopped_at: Phase 4 fully executed — backend + frontend history panel and revert UI (13/13 new tests)
+last_updated: "2026-07-30T20:04:57.833Z"
+last_activity: 2026-07-30
+last_activity_desc: Milestone v1.0 completed and archived
 progress:
-  total_phases: 6
-  completed_phases: 4
-  total_plans: 19
-  completed_plans: 19
-  percent: 67
+  total_phases: 7
+  completed_phases: 6
+  total_plans: 23
+  completed_plans: 23
+current_phase: 05.1
 ---
 
 # HD Graf Cehennemi — Project State
@@ -110,6 +112,7 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 
 - Phase 1 edited: Rebaselined Prototype v0 into five vertical delivery phases; Phase 1 now consolidates canonical milestones 1-4 without narrowing scope.
 - Phase 03.1 inserted after Phase 2: Frontend-only cinematic visual overhaul of graph UI, requested out-of-band from canonical requirements (URGENT). Now complete.
+- Phase 05.1 inserted after Phase 5: Candidate review frontend UI (approve/reject/edit) — deferred from Phase 5's backend-only scope; user requested completion (URGENT)
 
 ## Performance Metrics
 
@@ -152,3 +155,15 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 - [Phase 03.1-04]: GraphControls reset reuses the existing module-scope runLayout function from GraphCanvas.tsx — not a second layout code path
 - [Phase 03.1-04]: select.tsx animation classes removed and z-index bumped from z-50 to z-[100] — fix for episode dropdown not being visible
 - [Phase 03.1 test]: setup.ts React.act polyfill uses `Object.defineProperty` on the CJS require cache — required for React 19.2.x compatibility with @testing-library/react
+
+## Current Position
+
+Phase: 05.1 — Candidate review frontend UI (INSERTED, urgent)
+Plan: —
+Status: Planning
+Last activity: 2026-07-30 — Phase 05.1 inserted after Phase 5 (backend-only PREP-01..05 left the review UI deferred); planning underway
+
+## Operator Next Steps
+
+- Complete /gsd-plan-phase 05.1
+- After 05.1 ships: Start the next milestone with /gsd-new-milestone
