@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { AuthProvider } from './providers/AuthProvider'
+import { useAuth } from './providers/useAuth'
+import { LoginPage } from './components/auth/LoginPage'
 import { AppShell } from './components/layout/AppShell'
 import { SeriesSelect } from './components/episode/SeriesSelect'
 import { EpisodeSelector } from './components/episode/EpisodeSelector'
@@ -12,12 +15,12 @@ import { useEpisodes } from './hooks/useEpisodes'
 import { useGraph } from './hooks/useGraph'
 import { useWatchProgress } from './hooks/useWatchProgress'
 
-function App() {
+function AuthenticatedApp() {
+  const { state, logout } = useAuth()
+  const user = state.status === 'authenticated' ? state.user : undefined
+
   const seriesState = useSeries()
   const watchProgress = useWatchProgress()
-  // Initialized once from the hydrated watch-progress state (D-02) so a
-  // page refresh restores the previously-selected series without any user
-  // interaction and without re-triggering ConfirmAdvanceModal.
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(watchProgress.seriesId)
   const episodesState = useEpisodes(selectedSeriesId)
   const graphState = useGraph(watchProgress.seriesId, watchProgress.confirmedOrder)
@@ -57,6 +60,8 @@ function App() {
 
   return (
     <AppShell
+      user={user}
+      onLogout={logout}
       topBar={
         <>
           <SeriesSelect series={series} value={selectedSeriesId} onSelect={handleSeriesSelect} />
@@ -85,15 +90,6 @@ function App() {
       {graphState.status === 'success' && graphState.data.nodes.length > 0 && (
         <>
           <GraphCanvas graph={graphState.data} onSelect={setSelectedElement} />
-          {/*
-            Centralized D-06/D-07 branch (Task 2, action 2): this is the
-            ONLY place in the app that decides between StructuralEdgeCard
-            and DetailPanel. GraphCanvas's onSelect contract is unchanged
-            (it never carries claim_id) — the branch instead resolves the
-            selected edge's claim_id from the already-fetched GraphResponse,
-            so the decision lives here rather than being duplicated inside
-            either detail component.
-          */}
           {selectedElement?.kind === 'edge' &&
           graphState.data.edges.find((edge) => edge.id === selectedElement.id)?.claim_id == null ? (
             <StructuralEdgeCard selected={selectedElement} nodes={graphState.data.nodes} />
@@ -104,6 +100,32 @@ function App() {
       )}
       {graphState.status === 'idle' && <GraphEmptyState />}
     </AppShell>
+  )
+}
+
+function AppContent() {
+  const { state } = useAuth()
+
+  if (state.status === 'loading') {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background text-foreground">
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      </div>
+    )
+  }
+
+  if (state.status === 'unauthenticated' || state.status === 'error') {
+    return <LoginPage />
+  }
+
+  return <AuthenticatedApp />
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   )
 }
 

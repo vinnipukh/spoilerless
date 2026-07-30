@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from dataclasses import dataclass
 from typing import Any, Protocol
 
 from backend.app.repository.session import SessionRepository, InMemorySessionRepository
 from backend.app.repository.user import UserRepository
+
+logger = logging.getLogger(__name__)
 
 
 class GoogleTokenVerifier(Protocol):
@@ -28,6 +32,14 @@ class GoogleVerificationError(ValueError):
     """Token verification failed (invalid signature, wrong audience, expired, etc.)."""
 
 
+class GoogleTransportError(Exception):
+    """Infrastructure failure — certificate fetch, network, import, or SSL error.
+
+    Separated from GoogleVerificationError so callers can return the correct
+    HTTP status (503) instead of 401.
+    """
+
+
 @dataclass(frozen=True)
 class ProductionGoogleVerifier:
     """Production verifier using the official ``google-auth`` library.
@@ -39,15 +51,38 @@ class ProductionGoogleVerifier:
     async def verify(self, credential: str, client_id: str) -> dict[str, Any]:
         try:
             from google.oauth2 import id_token
-            from google.auth.transport import requests
+            from google.auth.transport import requests as google_requests
+        except ImportError as exc:
+            raise GoogleTransportError(
+                "google.auth.transport.requests failed to import — "
+                "install the `requests` package or use `google-auth[requests]`."
+            ) from exc
 
-            request = requests.Request()
-            info = id_token.verify_oauth2_token(
-                credential, request, client_id
-            )
+        try:
+            request = google_requests.Request()
+            info = id_token.verify_oauth2_token(credential, request, client_id)
             return info
+        except google.auth.exceptions.TransportError as exc:
+            raise GoogleTransportError(
+                f"Failed to fetch Google signing certificates: {type(exc).__name__}"
+            ) from exc
+        except ValueError as exc:
+            msg = str(exc)
+            # Map common ValueError messages to safe log categories.
+            lower_msg = msg.lower()
+            if "audience" in lower_msg:
+                raise GoogleVerificationError(
+                    "audience_mismatch"
+                ) from exc
+            if "expire" in lower_msg or "before" in lower_msg:
+                raise GoogleVerificationError("token_expired") from exc
+            if "issuer" in lower_msg or "iss" in lower_msg:
+                raise GoogleVerificationError("issuer_mismatch") from exc
+            raise GoogleVerificationError(f"verification_failed__{type(exc).__name__}") from exc
         except Exception as exc:
-            raise GoogleVerificationError(str(exc)) from exc
+            raise GoogleTransportError(
+                f"Google certificate fetch failed: {type(exc).__name__}"
+            ) from exc
 
 
 class AuthService:

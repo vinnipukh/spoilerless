@@ -71,13 +71,14 @@ git clone <repository-url>
 cd hdgrafcehennemi
 ```
 
-### 2.2 Create the environment file
+### 2.2 Create the environment files
 
 ```bash
 cp .env.example .env
+cp frontend/.env.example frontend/.env.local
 ```
 
-### 2.3 Edit `.env`
+### 2.3 Configure backend `.env`
 
 Open `.env` in your editor and update the **Neo4j password** to match the Docker Compose default:
 
@@ -90,15 +91,35 @@ NEO4J_DATABASE=neo4j
 
 > **Why `hdgraf-local-password`?** The `docker-compose.yml` sets `NEO4J_AUTH: neo4j/hdgraf-local-password`. The `.env` file must match these credentials so the Python backend can connect.
 
-The remaining variables are optional for local development:
+### 2.4 Set up Google OAuth
 
-| Variable | Default | When to change |
-|---|---|---|
-| `GOOGLE_CLIENT_ID` | _(empty)_ | Set a Google OAuth client ID to enable authentication |
-| `SESSION_COOKIE_NAME` | `session` | Only if you need a custom cookie name |
-| `SESSION_TTL_SECONDS` | `604800` | Session lifetime (7 days) — only relevant with auth enabled |
-| `SESSION_COOKIE_SECURE` | `false` | Set `true` if testing over HTTPS |
-| `FRONTEND_ORIGINS` | `http://localhost:5173` | Add other origins if frontend runs on a different port |
+This application **requires** a Google OAuth 2.0 client to log in.
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials
+2. Create an **OAuth 2.0 Client ID** of type **Web application**
+3. Add `http://localhost:5173` to **Authorized JavaScript origins**
+4. Copy the **Client ID**
+
+Add the client ID to both `.env` and `frontend/.env.local`:
+
+```bash
+echo "GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com" >> .env
+# Then edit frontend/.env.local and set VITE_GOOGLE_CLIENT_ID to the same value
+```
+
+> Never commit `.env` or `.env.local`. The `.gitignore` already excludes them.
+> `GOOGLE_CLIENT_SECRET` is **not** used and must not be added.
+
+**Environment variable reference**
+
+|| Variable | File | Description |
+|---|---|---|---|
+|| `GOOGLE_CLIENT_ID` | `.env` | Google OAuth client ID for token verification |
+|| `VITE_GOOGLE_CLIENT_ID` | `frontend/.env.local` | Same client ID, exposed to the React app |
+|| `SESSION_COOKIE_NAME` | `.env` | HttpOnly cookie name (default: `session`) |
+|| `SESSION_TTL_SECONDS` | `.env` | Session lifetime in seconds (default: 604800 — 7 days) |
+|| `SESSION_COOKIE_SECURE` | `.env` | Set `true` if testing over HTTPS |
+|| `FRONTEND_ORIGINS` | `.env` | Comma-separated CORS origins (default: `http://localhost:5173`) |
 
 See [`CONFIGURATION.md`](./CONFIGURATION.md) for full details on every variable.
 
@@ -253,6 +274,8 @@ npm run dev
 | **URL** | `http://localhost:5173` |
 | **Dev server** | Vite 8 |
 
+> **Prerequisite:** `frontend/.env.local` must exist with `VITE_GOOGLE_CLIENT_ID` set to your Google OAuth client ID (configured in step [2.4](#24-set-up-google-oauth)). Without it, the login page shows a configuration error.
+
 ### How the frontend communicates with the backend
 
 The Vite dev server proxies all `/api` requests to the backend at `http://127.0.0.1:8000`. This means:
@@ -267,7 +290,7 @@ You can verify the proxy is working by opening your browser's developer tools (N
 
 ## 7. Demo Walkthrough
 
-Once everything is running ([http://localhost:5173](http://localhost:5173)), follow this flow to experience the application's core features.
+Once everything is running ([http://localhost:5173](http://localhost:5173)), the login screen appears. Sign in with your Google account, then follow this flow to experience the application's core features.
 
 ### 7.1 Select the series
 
@@ -484,7 +507,9 @@ Once you're up and running:
 git clone <repo-url>
 cd hdgrafcehennemi
 cp .env.example .env
-# Edit .env to set NEO4J_PASSWORD=hdgraf-local-password
+cp frontend/.env.example frontend/.env.local
+# Edit .env: set NEO4J_PASSWORD=hdgraf-local-password
+# Edit .env and frontend/.env.local: set GOOGLE_CLIENT_ID matching values
 
 # 2. Start Neo4j
 docker compose up -d

@@ -17,7 +17,7 @@ from backend.app.api.auth import router as auth_router
 from backend.app.core.config import get_settings
 from backend.app.core.errors import install_database_error_handlers
 from backend.app.graph.database import Neo4jDatabase
-from backend.app.repository.session import InMemorySessionRepository
+from backend.app.repository.session import Neo4jSessionRepository
 
 SERVICE_NAME = "hdgrafcehennemi-backend"
 
@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     database = Neo4jDatabase(settings)
     database.open()
     app.state.neo4j = database
-    app.state.session_repo = InMemorySessionRepository()
+    app.state.session_repo = Neo4jSessionRepository(database)
     try:
         try:
             await database.verify_connection()

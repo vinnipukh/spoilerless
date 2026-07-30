@@ -19,12 +19,16 @@ class GoogleAuthRequest(BaseModel):
 
 
 class UserPublic(BaseModel):
-    """Public user representation returned to the client."""
+    """Public user representation returned to the client.
+
+    ``google_sub`` is intentionally excluded — it is an internal immutable
+    identity key never exposed to the frontend.  All profile fields are
+    derived solely from the verified Google ID token.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     id: str = Field(description="Application-local user identifier.")
-    google_sub: str = Field(description="Google's immutable `sub` claim.")
     email: str = Field(description="Verified email from the Google ID token.")
     display_name: str = Field(description="Display name from the Google profile.")
     avatar_url: str = Field(default="", description="Profile image URL.")

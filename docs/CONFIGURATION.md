@@ -32,7 +32,7 @@ cp .env.example .env
 | `NEO4J_USERNAME` | `neo4j` | Neo4j authentication username. |
 | `NEO4J_PASSWORD` | `change-me` | Neo4j authentication password. |
 | `NEO4J_DATABASE` | `neo4j` | Neo4j database name to connect to. |
-| `GOOGLE_CLIENT_ID` | _(empty)_ | Google OAuth 2.0 client ID for ID token verification. Leave empty to disable Google Sign-In. |
+| `GOOGLE_CLIENT_ID` | _(required)_ | Google OAuth 2.0 client ID for ID token verification. Must be set to enable sign-in. |
 | `SESSION_COOKIE_NAME` | `session` | Name of the HttpOnly session cookie set on the browser. |
 | `SESSION_TTL_SECONDS` | `604800` | Session time-to-live in seconds (default: 7 days). |
 | `SESSION_COOKIE_SECURE` | `false` | Set the `Secure` flag on the session cookie. Enable in production (HTTPS). |
@@ -175,6 +175,21 @@ server: {
 ```
 
 This means during development the frontend can call `fetch('/api/...')` without hardcoding the backend URL. In production, a reverse proxy (e.g., nginx) or a combined deployment should serve both static files and route `/api` traffic.
+
+### Frontend environment variables
+
+The frontend reads environment variables from `frontend/.env.local` (NOT loaded from the root `.env`). Create it from the template:
+
+```bash
+cp frontend/.env.example frontend/.env.local
+```
+
+| Variable | Required | Description |
+|---|---|---|
+| `VITE_GOOGLE_CLIENT_ID` | Yes | Google OAuth client ID — must match the backend `GOOGLE_CLIENT_ID` |
+| `VITE_API_BASE_URL` | No (default: `/api`) | API base path for fetch requests |
+
+> **Security:** Vite inlines `VITE_*` variables at build time. Never store secrets in `.env.local`. The `GOOGLE_CLIENT_ID` is a public identifier (exposed to the browser by design) and is safe to include.
 
 ### TypeScript config
 
@@ -357,14 +372,17 @@ Seed data validation (in `backend/app/graph/setup.py`) calls `ontology.require_n
 ### 1. First-time setup
 
 ```bash
-# 1. Copy environment template
+# 1. Copy environment templates
 cp .env.example .env
+cp frontend/.env.example frontend/.env.local
 # Edit .env — at minimum set NEO4J_PASSWORD to match docker-compose.yml
+# Edit both .env and frontend/.env.local — set GOOGLE_CLIENT_ID matching values
 
 # 2. Start Neo4j
 docker compose up -d
 
-# 3. Seed the database
+# 3. Install Python deps and seed the database
+uv sync
 uv run hdgraf-setup
 
 # 4. Start the backend
@@ -393,9 +411,26 @@ NEO4J_DATABASE=neo4j
 4. Update the `NODE_LABELS` or `RELATIONSHIP_TYPES` tuples in `seed.py` if adding new labels/types.
 5. Restart the backend (live ontology reload is not yet supported).
 
-### 4. Enabling authentication
+### 4. Setting up authentication (required)
 
-1. Create a Google Cloud Console project and configure an OAuth 2.0 Web Client ID.
-2. Add your frontend origin (e.g., `http://localhost:5173`) to the **Authorized JavaScript origins**.
-3. Set `GOOGLE_CLIENT_ID` in `.env`.
-4. Restart the backend. The `/api/auth/google` endpoint becomes active.
+This application requires Google OAuth to log in.
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials.
+2. Create an **OAuth 2.0 Client ID** of type **Web application**.
+3. Add `http://localhost:5173` to **Authorized JavaScript origins**.
+4. Copy the **Client ID** and set it in both:
+
+```bash
+# Backend .env
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+
+# Frontend .env.local
+VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+```
+
+5. Restart the backend. The frontend login page becomes active.
+
+**Important:** The `GOOGLE_CLIENT_ID` values in `.env` and `frontend/.env.local` must match exactly. The backend verifies the token audience against its configured `GOOGLE_CLIENT_ID`; the frontend passes the same ID to the Google Identity Services library. A mismatch between the two will cause the backend to reject the token with a 401 error.
+
+> `GOOGLE_CLIENT_SECRET` is **not** used. Never add it to any configuration file.
+> Wait up to 5 minutes for Google Cloud configuration changes to propagate.
