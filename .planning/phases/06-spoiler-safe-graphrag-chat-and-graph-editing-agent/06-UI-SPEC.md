@@ -128,7 +128,7 @@ UI chrome copy (buttons, labels, empty/error states, badges) is **English**, mat
 | New conversation action | "New conversation" (icon `Plus`, `aria-label="Start new conversation"`) |
 | Session picker placeholder (no session selected yet) | "Select a conversation" |
 | Session picker empty state | Heading: "No conversations yet" · Body: "Ask a question below to start your first conversation." |
-| Delete session (destructive confirmation, Dialog pattern matching `ConfirmAdvanceModal`) | Title: "Delete this conversation?" · Body: "This removes it from your conversation list. This can't be undone." · Cancel: "Cancel" · Confirm: "Delete" (destructive-styled) |
+| Delete session (destructive confirmation, Dialog pattern matching `ConfirmAdvanceModal`) | Title: "Delete this conversation?" · Body: "This removes it from your conversation list. This can't be undone." · Cancel: "Keep conversation" (outline-styled) · Confirm: "Delete" (destructive-styled) |
 | Chat empty state (fresh session, no messages) | Heading: "Ask about {series title}" · Body: "Ask about characters, relationships, or events you've watched so far." · 3 suggestion chips (series-agnostic, no hardcoded entity names): "Who have I met so far?", "Summarize the story up to {current episode code}.", "Are there any tense relationships?" |
 | Message input placeholder | "Ask about {episode code} and earlier…" (dynamic — reflects the user's current watched boundary, satisfying RAG-16's "clear current series and watched episode" requirement at the point of typing, not just in a badge) |
 | Send button | Icon `Send`, `aria-label="Send message"` |
@@ -145,8 +145,8 @@ UI chrome copy (buttons, labels, empty/error states, badges) is **English**, mat
 | ChangeSet before/after row labels | "Before" / "After" |
 | ChangeSet warnings row | Icon `AlertTriangle` + backend-provided warning text (verbatim, not reworded — warnings are dynamic/data-driven) |
 | ChangeSet destructive-operation banner | Icon `AlertTriangle` (destructive-styled) + "This will permanently delete {N} graph element(s)." (pluralization-aware; singular drops the "(s)") |
-| ChangeSet confirm button | "Confirm" (primary-styled for create/update-only sets; destructive-styled for any set containing a delete operation) |
-| ChangeSet reject button | "Reject" (outline/ghost, same visual weight as `ConfirmAdvanceModal`'s Cancel) |
+| ChangeSet confirm button | "Confirm changes" (primary-styled for create/update-only sets; destructive-styled for any set containing a delete operation — note: the button re-skins to `--destructive` for that case, but the label text itself stays "Confirm changes" rather than switching to delete-specific wording, since the destructive-operation banner directly above the controls already states "This will permanently delete {N} graph element(s)." in full sentence form; the color re-skin plus the adjacent banner together carry the "a delete is about to happen" signal, so the button label is not the sole carrier of that warning) |
+| ChangeSet reject button | "Reject changes" (outline/ghost, same visual weight as `ConfirmAdvanceModal`'s Cancel) |
 | ChangeSet status — awaiting confirmation | Badge: "Awaiting confirmation" (`--warning`) |
 | ChangeSet status — applied | Badge: "Applied" (`--success`, icon `CheckCircle2`) |
 | ChangeSet status — rejected | Badge: "Rejected" (muted-foreground, icon `XCircle`) |
