@@ -33,6 +33,13 @@ EXPECTED_OPERATIONS: set[tuple[str, str]] = {
     ("get", "/api/series/{series_id}/revisions"),
     ("get", "/api/series/{series_id}/revisions/{revision_id}"),
     ("post", "/api/series/{series_id}/revisions/{revision_id}/revert"),
+    # Candidate claims
+    ("post", "/api/series/{series_id}/candidates/ingest"),
+    ("get", "/api/series/{series_id}/candidates"),
+    ("get", "/api/series/{series_id}/candidates/{claim_id}"),
+    ("patch", "/api/series/{series_id}/candidates/{claim_id}"),
+    ("post", "/api/series/{series_id}/candidates/{claim_id}/approve"),
+    ("post", "/api/series/{series_id}/candidates/{claim_id}/reject"),
     # Authentication
     ("post", "/api/auth/google"),
     ("get", "/api/auth/me"),
@@ -70,8 +77,8 @@ def test_document_and_openapi_have_exact_locked_inventory() -> None:
     assert generated == EXPECTED_OPERATIONS
     assert {path for _, path in documented} == EXPECTED_TEMPLATES
     assert set(app.openapi()["paths"]) == EXPECTED_TEMPLATES
-    assert len(documented) == len(generated) == 24
-    assert len(EXPECTED_TEMPLATES) == 17
+    assert len(documented) == len(generated) == 30
+    assert len(EXPECTED_TEMPLATES) == 22
     assert all("?" not in path for path in EXPECTED_TEMPLATES)
 
 

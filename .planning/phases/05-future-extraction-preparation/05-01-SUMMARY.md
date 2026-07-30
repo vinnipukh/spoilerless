@@ -1,35 +1,41 @@
-# Plan 05-01 SUMMARY — Extraction schema + source-connector interface models
+---
+phase: 05-future-extraction-preparation
+plan: "01"
+subsystem: domain-models
+status: complete
+tags: [pydantic, extraction, json-schema, ontology]
 
-**Phase:** 05-future-extraction-preparation  
-**Plan:** 05-01  
-**Status:** ✅ Complete  
-**Date:** 2026-07-30
+requires:
+  - phase: 01-backend-graph-foundation
+    provides: Ontology type registry (node/relation/claim_types maps)
+  - phase: 04-revision-history-and-revert
+    provides: RevisionAction enum, RevisionRepository
+provides:
+  - ExtractionClaim Pydantic model with deterministic candidate_id (SHA-256)
+  - ExtractionBatchEnvelope model with batch-level validation
+  - SourcePayload and EvidencePayload models for source-connector interface
+  - docs/extraction-schema.json (JSON Schema artifact, 4 definitions)
+  - PREP-01 (versioned extraction schema) and PREP-04 (source-connector interface)
+---
 
-## Deliverables
+# Plan 05-01 — Extraction Schema Models
 
-1. **`backend/app/domain/extraction.py`** (new) — Pydantic models:
-   - `ExtractionClaim` — atomic candidate claim with ontology validation (claim_type, confidence_level), deterministic `candidate_id` property, `schema_version` field, `extra='forbid'`
-   - `ExtractionBatchEnvelope` — batch wrapper with extractor metadata, min/max claim count constraints
-   - `SourcePayload` — source-connector interface contract (PREP-04)
-   - `EvidencePayload` — evidence-connector interface contract (PREP-04)
+**Status:** Complete — committed `620aedf`
+**Duration:** ~5 min
 
-2. **`docs/extraction-schema.json`** (new) — Published JSON Schema artifact with all four model definitions (12,129 bytes)
+## Delivered
 
-## Verification Results
+| Task | Description | Files |
+|------|-------------|-------|
+| T1 | Extraction Pydantic models | `backend/app/domain/extraction.py` |
+| T2 | JSON Schema artifact | `docs/extraction-schema.json` |
 
-| Check | Status |
-|-------|--------|
-| Import models | ✅ |
-| Valid claim creation with ontology-valid values | ✅ |
-| Ontology rejection of bad claim_type | ✅ |
-| Extra field rejection (`extra='forbid'`) | ✅ |
-| Empty batch rejection (min_length=1) | ✅ |
-| JSON Schema artifact valid with 4 definitions | ✅ |
+## Key Outcomes
 
-## Design Decisions
-- Removed `Ontology.require_relationship_type` validator for `relationship_effect` since the ontology's relationship types (e.g., `FAMILY_OF`, `PART_OF`) don't match effect semantics ("strengthens", "weakens", "neutral"). Field is stored as a plain string.
-- Used `load_ontology()` to instantiate the `Ontology` dataclass (it's not a static-method class).
-- Used `observed_event` claim type (valid per ontology YAML) instead of the plan's `character_relationship`.
-
-## No Frontend Changes
-`git diff --name-only -- frontend/` — empty ✅
+- `ExtractionClaim` fields: subject_id, subject_label, predicate, object_id, object_label, claim_type, status, confidence_level, visible_from_order, source, evidence, schema_version
+- `Deterministic ID generation:` `candidate_id = sha256(series_id:subject_id:predicate:object_id:visible_from_order)[:24]` with `extracted:` prefix
+- Ontology validation via `field_validator`s — rejects unknown claim_types, statuses, confidence_levels
+- `extra='forbid'` on all models — strict payload validation
+- Batch envelope validates `claims` is non-empty list
+- JSON Schema published at `docs/extraction-schema.json` with all 4 definitions
+</per-file>

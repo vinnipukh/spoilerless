@@ -8,7 +8,7 @@ from neo4j import ManagedTransaction
 
 from backend.app.domain.extraction import ExtractionBatchEnvelope, ExtractionClaim
 from backend.app.domain.user_content import Origin
-from backend.app.graph.database import Neo4jDatabase, get_database
+from backend.app.graph.database import Neo4jDatabase
 from backend.app.core.errors import http_error
 
 
@@ -158,7 +158,7 @@ class CandidateRepository:
     """Persistence layer for candidate claims (origin: 'candidate')."""
 
     def __init__(self, db: Neo4jDatabase | None = None) -> None:
-        self._db = db or get_database()
+        self._db = db or Neo4jDatabase()
 
     async def ingest_batch(
         self,
