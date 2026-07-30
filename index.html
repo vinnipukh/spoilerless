@@ -443,6 +443,28 @@
       border-left: 1px solid var(--line);
     }
 
+    .detail-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .detail-tab {
+      padding: 5px 9px;
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 750;
+    }
+
+    .detail-tab.active {
+      color: white;
+      background: rgba(139,92,246,.26);
+      box-shadow: inset 0 0 0 1px rgba(139,92,246,.4);
+    }
+
     .detail-kicker {
       color: var(--cyan);
       font-size: 10px;
@@ -671,7 +693,7 @@
 
     .architecture-footer {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
       gap: 12px;
       margin-top: 14px;
     }
@@ -1084,7 +1106,7 @@
         <div class="hero-copy">
           <div class="eyebrow">
             <span class="eyebrow-dot"></span>
-            Staj bitirme projesi · Aktif geliştirme
+            Staj bitirme projesi · v0 prototip tamamlandı
           </div>
 
           <h1>
@@ -1115,6 +1137,8 @@
             <span><i></i>Spoiler kontrollü erişim</span>
             <span><i></i>Kaynak bağlantılı claim sistemi</span>
             <span><i></i>Kullanıcı tarafından düzenlenebilir graf</span>
+            <span><i></i>Google OAuth ile giriş</span>
+            <span><i></i>Revizyon geçmişi</span>
           </div>
         </div>
 
@@ -1122,93 +1146,105 @@
           <div class="window-bar">
             <div class="window-dots" aria-hidden="true"><span></span><span></span><span></span></div>
             <div class="window-title">hdgrafcehennemi.app / graph</div>
-            <div style="width:46px"></div>
+            <div style="color:#7f8a9a; font-size:11px; font-weight:700;">Arhan Er · Logout</div>
           </div>
 
           <div class="demo-toolbar">
             <div class="series-select">
               <span class="series-avatar">D</span>
-              <span>Dexter · Sezon 1</span>
+              <span>Dexter</span>
             </div>
 
             <div class="episode-picker" aria-label="İzleme noktası seçimi">
-              <button class="episode-button active" data-episode="1">S01E01</button>
-              <button class="episode-button" data-episode="2">S01E02</button>
-              <button class="episode-button" data-episode="3">S01E03</button>
+              <button class="episode-button active" data-episode="1">S01E01 · Dexter</button>
+              <button class="episode-button" data-episode="2">S01E02 · Crocodile</button>
+              <button class="episode-button" data-episode="3">S01E03 · Popping Cherry</button>
             </div>
           </div>
 
           <div class="app-body">
             <div class="graph-stage">
-              <svg class="graph-svg" viewBox="0 0 650 472" role="img" aria-label="Örnek karakter ve olay grafı">
+              <svg class="graph-svg" viewBox="0 0 650 472" role="img" aria-label="Gerçek uygulamadan alınan karakter ve olay grafı">
                 <g id="edges-1">
                   <line class="edge" x1="185" y1="195" x2="335" y2="120"/>
                   <text class="edge-label" x="255" y="150">FAMILY_OF</text>
-                  <line class="edge" x1="185" y1="195" x2="360" y2="302"/>
-                  <text class="edge-label" x="256" y="258">KNOWS</text>
                   <line class="edge" x1="185" y1="195" x2="480" y2="205"/>
-                  <text class="edge-label" x="324" y="194">PARTICIPATED_IN</text>
-                  <line class="edge" x1="480" y1="205" x2="520" y2="355"/>
-                  <text class="edge-label" x="505" y="278">OCCURRED_IN</text>
+                  <text class="edge-label" x="324" y="194">TRUSTS</text>
+                  <line class="edge" x1="185" y1="80" x2="185" y2="153"/>
+                  <text class="edge-label" x="205" y="118">DISTRUSTS</text>
+                  <line class="edge" x1="480" y1="330" x2="440" y2="205"/>
+                  <text class="edge-label" x="500" y="270">OCCURRED_IN</text>
                 </g>
 
                 <g id="edges-2" class="episode-layer">
-                  <line class="edge" x1="335" y1="120" x2="510" y2="88"/>
-                  <text class="edge-label" x="410" y="96">WORKS_WITH</text>
-                  <line class="edge" x1="510" y1="88" x2="480" y2="205"/>
-                  <text class="edge-label" x="492" y="149">WITNESSED</text>
+                  <line class="edge" x1="360" y1="302" x2="510" y2="88"/>
+                  <text class="edge-label" x="440" y="190">WORKS_WITH</text>
                 </g>
 
                 <g id="edges-3" class="episode-layer">
-                  <line class="edge" x1="360" y1="302" x2="235" y2="378"/>
-                  <text class="edge-label" x="282" y="344">LOCATED_IN</text>
+                  <line class="edge" x1="235" y1="378" x2="185" y2="237"/>
+                  <text class="edge-label" x="205" y="310">PART_OF</text>
                 </g>
 
-                <g class="node-group" data-name="Dexter Morgan" data-type="Character" data-episode="1" data-detail="Merkez karakter. Bilgiler yalnızca kullanıcının izlediği bölüme kadar gösterilir.">
+                <g class="node-group" data-name="Dexter Morgan" data-type="Character" data-episode="1" data-detail="Merkez karakter — canonical origin. Node Type: Character. Gerçek uygulamadaki Overview sekmesinde bu alanlar gösterilir.">
                   <circle class="node-circle" cx="185" cy="195" r="42"/>
                   <text class="node-text" x="185" y="191">Dexter</text>
                   <text class="node-text" x="185" y="202">Morgan</text>
                   <text class="node-type" x="185" y="217">CHARACTER</text>
                 </g>
 
-                <g class="node-group" data-name="Debra Morgan" data-type="Character" data-episode="1" data-detail="Dexter'ın kız kardeşi. Kaynaklı ilişkiler graf üzerinde ayrı claim'ler olarak tutulur.">
+                <g class="node-group" data-name="James Doakes" data-type="Character" data-episode="1" data-detail="Dexter'a güvenmeyen dedektif. DISTRUSTS ilişkisiyle bağlanır.">
+                  <circle class="node-circle secondary" cx="185" cy="115" r="34"/>
+                  <text class="node-text" x="185" y="112">James</text>
+                  <text class="node-text" x="185" y="123">Doakes</text>
+                  <text class="node-type" x="185" y="136">CHARACTER</text>
+                </g>
+
+                <g class="node-group" data-name="Debra Morgan" data-type="Character" data-episode="1" data-detail="Dexter'ın kız kardeşi. FAMILY_OF ilişkisiyle bağlanır.">
                   <circle class="node-circle secondary" cx="335" cy="120" r="36"/>
                   <text class="node-text" x="335" y="117">Debra</text>
                   <text class="node-text" x="335" y="128">Morgan</text>
                   <text class="node-type" x="335" y="142">CHARACTER</text>
                 </g>
 
-                <g class="node-group" data-name="Rita Bennett" data-type="Character" data-episode="1" data-detail="Dexter'ın sosyal çevresindeki karakterlerden biri.">
-                  <circle class="node-circle secondary" cx="360" cy="302" r="36"/>
-                  <text class="node-text" x="360" y="299">Rita</text>
-                  <text class="node-text" x="360" y="310">Bennett</text>
-                  <text class="node-type" x="360" y="324">CHARACTER</text>
+                <g class="node-group" data-name="Angel Batista" data-type="Character" data-episode="1" data-detail="Dexter'ın güvendiği meslektaşı. TRUSTS ilişkisiyle bağlanır.">
+                  <circle class="node-circle secondary" cx="480" cy="205" r="36"/>
+                  <text class="node-text" x="480" y="202">Angel</text>
+                  <text class="node-text" x="480" y="213">Batista</text>
+                  <text class="node-type" x="480" y="227">CHARACTER</text>
                 </g>
 
-                <g class="node-group" data-name="Açılış Olayı" data-type="Event" data-episode="1" data-detail="Bölüm içindeki anlatısal olay. Olay, bölüm ve kanıt parçalarıyla ilişkilendirilir.">
-                  <rect class="node-circle event" x="440" y="170" width="80" height="70" rx="20"/>
-                  <text class="node-text" x="480" y="201">Açılış</text>
-                  <text class="node-text" x="480" y="212">Olayı</text>
-                  <text class="node-type" x="480" y="226">EVENT</text>
+                <g class="node-group" data-name="Ice-truck case" data-type="Event" data-episode="1" data-detail="Sezon boyunca süren merkezi olay. OCCURRED_IN ile bir mekâna bağlanır.">
+                  <rect class="node-circle event" x="400" y="170" width="80" height="70" rx="20"/>
+                  <text class="node-text" x="440" y="201">Ice-truck</text>
+                  <text class="node-text" x="440" y="212">case</text>
+                  <text class="node-type" x="440" y="226">EVENT</text>
                 </g>
 
-                <g class="node-group" data-name="S01E01" data-type="Episode" data-episode="1" data-detail="İlk görünürlük sınırı. Sonraki bölüm verileri backend tarafından hiç gönderilmez.">
-                  <rect class="node-circle location" x="480" y="330" width="80" height="54" rx="18"/>
-                  <text class="node-text" x="520" y="355">S01E01</text>
-                  <text class="node-type" x="520" y="371">EPISODE</text>
+                <g class="node-group" data-name="Miami crime scene" data-type="Location" data-episode="1" data-detail="Olayın gerçekleştiği mekân kaydı.">
+                  <rect class="node-circle location" x="440" y="330" width="90" height="54" rx="18"/>
+                  <text class="node-text" x="485" y="355">Miami crime</text>
+                  <text class="node-type" x="485" y="371">LOCATION</text>
                 </g>
 
-                <g class="node-group episode-layer" data-name="Angel Batista" data-type="Character" data-episode="2" data-detail="Bu örnek node yalnızca S01E02 görünürlüğü açıldığında gösterilir.">
-                  <circle class="node-circle secondary" cx="510" cy="88" r="34"/>
-                  <text class="node-text" x="510" y="85">Angel</text>
-                  <text class="node-text" x="510" y="96">Batista</text>
-                  <text class="node-type" x="510" y="109">CHARACTER</text>
+                <g class="node-group episode-layer" data-name="Maria LaGuerta" data-type="Character" data-episode="2" data-detail="Bu node yalnızca S01E02 · Crocodile görünürlüğü açıldığında gösterilir.">
+                  <circle class="node-circle secondary" cx="360" cy="302" r="34"/>
+                  <text class="node-text" x="360" y="299">Maria</text>
+                  <text class="node-text" x="360" y="310">LaGuerta</text>
+                  <text class="node-type" x="360" y="323">CHARACTER</text>
                 </g>
 
-                <g class="node-group episode-layer" data-name="Miami Metro" data-type="Location" data-episode="3" data-detail="Bu örnek node yalnızca S01E03 görünürlüğü açıldığında gösterilir.">
-                  <rect class="node-circle location" x="190" y="352" width="90" height="54" rx="18"/>
-                  <text class="node-text" x="235" y="377">Miami Metro</text>
-                  <text class="node-type" x="235" y="393">LOCATION</text>
+                <g class="node-group episode-layer" data-name="Miami Metro PD" data-type="Organization" data-episode="2" data-detail="Bu node yalnızca S01E02 · Crocodile görünürlüğü açıldığında gösterilir.">
+                  <rect class="node-circle location" x="470" y="70" width="90" height="54" rx="18"/>
+                  <text class="node-text" x="515" y="93">Miami Metro</text>
+                  <text class="node-type" x="515" y="109">ORGANIZATION</text>
+                </g>
+
+                <g class="node-group episode-layer" data-name="Rita Bennett" data-type="Character" data-episode="3" data-detail="Bu node yalnızca S01E03 · Popping Cherry görünürlüğü açıldığında gösterilir.">
+                  <circle class="node-circle secondary" cx="235" cy="378" r="34"/>
+                  <text class="node-text" x="235" y="375">Rita</text>
+                  <text class="node-text" x="235" y="386">Bennett</text>
+                  <text class="node-type" x="235" y="399">CHARACTER</text>
                 </g>
               </svg>
 
@@ -1216,34 +1252,30 @@
             </div>
 
             <aside class="detail-panel" aria-live="polite">
-              <div class="detail-kicker" id="detailType">Character</div>
-              <h3 id="detailName">Dexter Morgan</h3>
-              <div class="detail-subtitle">İlk görünürlük: S01E01</div>
-              <span class="detail-status">● Kaynaklandırılmış bilgi</span>
+              <div class="detail-tabs" role="tablist" aria-label="Detay sekmeleri">
+                <span class="detail-tab active" role="tab" aria-selected="true">Overview</span>
+                <span class="detail-tab" role="tab" aria-selected="false">Notes</span>
+                <span class="detail-tab" role="tab" aria-selected="false">History</span>
+                <span class="detail-tab" role="tab" aria-selected="false">Claims</span>
+                <span class="detail-tab" role="tab" aria-selected="false">Evidence</span>
+              </div>
+
+              <div class="detail-block" style="margin-top:16px; padding-top:0; border-top:0;">
+                <div class="meta-row"><span>Node Type</span><strong id="detailType">Character</strong></div>
+                <div class="meta-row"><span>Name</span><strong id="detailName">Dexter Morgan</strong></div>
+                <div class="meta-row"><span>Origin</span><strong>canonical</strong></div>
+              </div>
+
+              <a class="source-link" href="#sources" style="margin-top:16px;">
+                <span>🔗</span>
+                <span>Create Relationship</span>
+              </a>
 
               <div class="detail-block">
-                <strong>Açıklama</strong>
+                <strong>Bu sekmelerde ne var?</strong>
                 <div class="claim-row" id="detailText">
-                  Merkez karakter. Bilgiler yalnızca kullanıcının izlediği bölüme kadar gösterilir.
+                  Notes: kişisel notların · History: revizyon geçmişi · Claims: kaynaklı iddialar · Evidence: altyazı ve senaryo kanıtları.
                 </div>
-              </div>
-
-              <div class="detail-block">
-                <strong>Kaynaklar</strong>
-                <a class="source-link" href="#sources">
-                  <span>↗</span>
-                  <span>OpenSubtitles · S01E01<br>00:04:12–00:04:31</span>
-                </a>
-                <a class="source-link" href="#sources">
-                  <span>↗</span>
-                  <span>Senaryo PDF · Sayfa 5<br>Sahne 3</span>
-                </a>
-              </div>
-
-              <div class="detail-block">
-                <strong>Geçmiş</strong>
-                <div class="claim-row">v1 · Otomatik çıkarım</div>
-                <div class="claim-row">v2 · Kullanıcı tarafından onaylandı</div>
               </div>
             </aside>
           </div>
@@ -1433,10 +1465,14 @@
           </div>
 
           <div class="architecture-footer">
-            <div class="mini-box">React + TypeScript</div>
-            <div class="mini-box">FastAPI + Pydantic</div>
+            <div class="mini-box">React 19 + TypeScript</div>
+            <div class="mini-box">FastAPI + Pydantic v2</div>
             <div class="mini-box">Neo4j + Cypher</div>
             <div class="mini-box">Docker Compose</div>
+            <div class="mini-box">Cytoscape.js</div>
+            <div class="mini-box">Tailwind CSS v4</div>
+            <div class="mini-box">shadcn/ui</div>
+            <div class="mini-box">Google OAuth</div>
           </div>
         </div>
       </div>
@@ -1572,8 +1608,9 @@
             <h2>Dar kapsamlı prototipten ölçeklenebilir sisteme.</h2>
           </div>
           <p>
-            İlk doğrulama alanı Dexter Sezon 1'in ilk üç bölümüdür. Amaç, veri toplama ölçeğinden
-            önce temel bilgi modeli ve spoiler politikasının çalıştığını kanıtlamaktır.
+            İlk doğrulama alanı Dexter Sezon 1'in ilk üç bölümüdür. v0 prototipi ile temel bilgi
+            modeli ve spoiler politikasının uçtan uca çalıştığı kanıtlandı; sıradaki hedef veri
+            toplama ölçeğini otomatik çıkarım hattıyla büyütmek.
           </p>
         </div>
 
@@ -1582,21 +1619,21 @@
             <div class="phase-dot"></div>
             <h3>Temel altyapı</h3>
             <p>React, FastAPI, Neo4j, Docker ve ilk ontology tanımları.</p>
-            <span class="phase-tag">Tamamlandı / sürüyor</span>
+            <span class="phase-tag">Tamamlandı</span>
+          </div>
+
+          <div class="phase active">
+            <div class="phase-dot"></div>
+            <h3>Dikey prototip (v0)</h3>
+            <p>Dexter S01E01–E03 seed graph, spoiler filtresi, Google OAuth girişi, kullanıcı notları/custom node'lar ve revizyon geçmişi.</p>
+            <span class="phase-tag">Tamamlandı · 2026-07-30</span>
           </div>
 
           <div class="phase next">
             <div class="phase-dot"></div>
-            <h3>Dikey prototip</h3>
-            <p>Dexter S01E01–E03 seed graph, spoiler filtresi ve node detayları.</p>
-            <span class="phase-tag">Sıradaki</span>
-          </div>
-
-          <div class="phase">
-            <div class="phase-dot"></div>
             <h3>Otomatik çıkarım</h3>
             <p>Altyazı ve senaryo parser'ları, candidate claim üretimi ve doğrulama.</p>
-            <span class="phase-tag">Planlandı</span>
+            <span class="phase-tag">Sıradaki</span>
           </div>
 
           <div class="phase">
@@ -1633,10 +1670,12 @@
           </div>
 
           <div class="project-meta">
+            <div class="meta-row"><span>Durum</span><strong>v0 prototip tamamlandı · 2026-07-30</strong></div>
             <div class="meta-row"><span>Prototip kapsamı</span><strong>Dexter S01E01–S01E03</strong></div>
             <div class="meta-row"><span>Graf veritabanı</span><strong>Neo4j</strong></div>
-            <div class="meta-row"><span>Backend</span><strong>FastAPI · Python</strong></div>
-            <div class="meta-row"><span>Frontend</span><strong>React · TypeScript</strong></div>
+            <div class="meta-row"><span>Backend</span><strong>FastAPI · Python · 21 endpoint</strong></div>
+            <div class="meta-row"><span>Frontend</span><strong>React 19 · TypeScript · Cytoscape.js</strong></div>
+            <div class="meta-row"><span>Kimlik doğrulama</span><strong>Google OAuth</strong></div>
             <div class="meta-row"><span>Temel araştırma alanı</span><strong>Temporal Knowledge Graph + Graph-RAG</strong></div>
           </div>
         </div>
