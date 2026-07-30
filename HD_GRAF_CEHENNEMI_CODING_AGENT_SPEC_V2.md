@@ -549,9 +549,11 @@ Never concatenate user input into Cypher.
 
 Bad:
 
+{% raw %}
 ```python
 query = f"MATCH (n:Series {{id: '{series_id}'}}) RETURN n"
 ```
+{% endraw %}
 
 Correct:
 
