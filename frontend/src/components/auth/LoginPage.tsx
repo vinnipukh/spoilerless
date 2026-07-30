@@ -27,14 +27,10 @@ declare global {
   }
 }
 
-// Module-level guard: once initialized, never re-initialize GIS regardless of
-// React strict-mode double-mounting or re-renders.  This avoids Google's
-// "initialize() called multiple times" warning.
-let gisInitialized = false
-
 export function LoginPage() {
   const { login, state } = useAuth()
   const buttonContainerRef = useRef<HTMLDivElement>(null)
+  const initRef = useRef(false)
 
   // Stable callback — never recreated, safe for GIS to hold across renders.
   const handleCredentialResponse = useCallback(
@@ -48,19 +44,21 @@ export function LoginPage() {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
     if (!clientId) return
 
-    // Bail if another instance or strict-mode double-mount already did this.
-    if (gisInitialized) return
-    gisInitialized = true
+    // Bail if another instance or strict-mode double-mount already did this
+    // (useRef ensures each mount cycle gets its own check).
+    if (initRef.current) return
+    initRef.current = true
 
     function initGis() {
-      window.google?.accounts.id.initialize({
+      const google = window.google
+      if (!google?.accounts?.id) return
+      google.accounts.id.initialize({
         client_id: clientId,
         callback: handleCredentialResponse,
         context: 'signin',
         ux_mode: 'popup',
       })
-
-      window.google?.accounts.id.renderButton(buttonContainerRef.current, {
+      google.accounts.id.renderButton(buttonContainerRef.current, {
         theme: 'filled_blue',
         size: 'large',
         shape: 'rectangular',
@@ -73,15 +71,19 @@ export function LoginPage() {
     if (window.google?.accounts?.id) {
       initGis()
     } else {
-      // Script hasn't resolved yet. The <script async defer> tag guarantees
-      // load completion before DOMContentLoaded — on slow connections wait
-      // via polling, then init once.
+      // Script hasn't resolved yet. Poll at 100ms intervals for up to 30s,
+      // then give up (network failure, ad-blocker).
+      let attempts = 0
+      const MAX_ATTEMPTS = 300
       const timer = setInterval(() => {
+        attempts++
         if (window.google?.accounts?.id) {
           clearInterval(timer)
           initGis()
+        } else if (attempts >= MAX_ATTEMPTS) {
+          clearInterval(timer)
         }
-      }, 80)
+      }, 100)
       return () => clearInterval(timer)
     }
   }, [handleCredentialResponse])
@@ -116,8 +118,8 @@ export function LoginPage() {
             variant="outline"
             size="sm"
             onClick={() => {
-              // Reset module guard so Retry can re-init if needed.
-              gisInitialized = false
+              // Reset ref so Retry can re-init if needed.
+              initRef.current = false
               window.google?.accounts.id.cancel()
 
               window.google?.accounts.id.initialize({
@@ -126,7 +128,7 @@ export function LoginPage() {
                 context: 'signin',
                 ux_mode: 'popup',
               })
-              gisInitialized = true
+              initRef.current = true
 
               window.google?.accounts.id.renderButton(buttonContainerRef.current, {
                 theme: 'filled_blue',

@@ -18,6 +18,10 @@ MATCH (resource)
 WHERE resource.origin = 'user'
 DETACH DELETE resource
 """
+REVISION_CLEANUP_QUERY = """
+MATCH (r:Revision)
+DETACH DELETE r
+"""
 SECOND_SERIES_SETUP_QUERY = """
 MERGE (series:Series {id: $series_id})
 SET series.title = 'User Content Test Series',
@@ -72,10 +76,12 @@ async def _seed_and_clean(database: Neo4jDatabase) -> None:
     await database.verify_connection()
     await setup_database(database)
     await database.execute_query(USER_ONLY_CLEANUP_QUERY)
+    await database.execute_query(REVISION_CLEANUP_QUERY)
 
 
 async def _cleanup_user_content(database: Neo4jDatabase) -> None:
     await database.execute_query(USER_ONLY_CLEANUP_QUERY)
+    await database.execute_query(REVISION_CLEANUP_QUERY)
 
 
 async def _create_second_series(database: Neo4jDatabase) -> None:

@@ -3,7 +3,7 @@
 **Canonical scope:** root `ROADMAP.md`, milestones 1–8
 **Target:** Complete Dexter S01E01–03 demo story, not an API-only release
 **Mode:** dependency-ordered Prototype v0 delivery
-**Status:** Phase 1 complete and verified (9/9 truths, 13/13 tests, smoke 8/8); Phase 2 complete and verified (5/5 truths, 25/25 tests, 0 gaps); Phase 3 pending
+**Status:** Phase 1 complete and verified (9/9 truths, 13/13 tests, smoke 8/8); Phase 2 complete and verified (5/5 truths, 25/25 tests, 0 gaps); Phase 03.1 (visual overhaul) complete — UAT verified (16/16); Phase 3 complete — full-stack (Notes UI, custom nodes/relationships, origin distinction); Phase 4 complete — full-stack verified (5/5 plans, 146/146 backend, 13/13 frontend new tests)
 
 ## Phase 1: Backend Graph Foundation
 
@@ -48,9 +48,9 @@ Plans:
 
 **Success criteria:** a note can be attached to a character/claim and shown in details; custom nodes/relationships can be created/edited; user content is stored and rendered distinctly from canonical/candidate content.
 
-**Backend execution status:** Complete and verified in `backend-work` — Plans `03-01`, `03-02`, and `03-03` are complete (3/3). This does not complete Phase 3: Phase 2, frontend integration, and distinct visual treatment remain pending in `frontend-work`.
+**Execution status:** Complete — full-stack. Backend (3/3 plans: 03-01, 03-02, 03-03) complete and verified independently. Frontend (03-04-frontend-PLAN.md) implemented: Notes tab in DetailPanel, custom node creation FAB, custom relationship dialog, user-origin visual distinction (dashed borders + "User" badge). All wired and build-clean.
 
-**Independent backend verification:** `03-VERIFICATION.md` passed with 11/11 backend truths, 20/20 artifacts, 11/11 critical links, 28/28 decisions, and 0 backend gaps. Overall Phase 3 remains pending frontend acceptance.
+**Verification:** `03-VERIFICATION.md` passed with 11/11 backend truths, 20/20 artifacts, 11/11 critical links, 28/28 decisions, 0 gaps. Frontend acceptance: Notes tab, custom node/relationship dialogs, origin-based visual distinction verified present in code.
 
 **Wave 1**
 
@@ -66,6 +66,25 @@ Plans:
 
 **Cross-cutting constraints:** preserve Phase 1 fail-closed spoiler filtering and graph closure; mutate only namespaced `origin=user` resources; keep canonical/candidate provenance mandatory; keep all frontend files untouched; do not mark overall Phase 3 complete from backend evidence alone.
 
+### Phase 03.1: Frontend visual overhaul - cinematic graph exploration UI (INSERTED)
+
+**Goal:** Turn the existing functional Cytoscape graph interface into a premium, cinematic, high-contrast graph exploration product — the graph as hero, colorful type-aware nodes and relationship-colored edges, a polished application shell/episode navigation, and a premium detail-panel inspector — frontend-only, with zero regression to auth, spoiler filtering, or existing Character/Claim/Evidence interactions.
+
+**Requirements**: None — out-of-band UI/UX initiative requested directly on `feature/graph-visual-overhaul`; not mapped to a canonical Prototype v0 requirement ID (see `03.1-CONTEXT.md`). Traceability uses `03.1-CONTEXT.md` decision IDs D-01 through D-35 instead.
+**Depends on:** Phase 2 (Polished Cytoscape Graph Experience — the UI this phase restyles)
+**Plans:** 4 plans
+
+Plans:
+**Wave 1**
+
+- [x] 03.1-01-PLAN.md — Graph canvas visual system: font/token foundation, relationshipStyles.ts edge-color module, tuned layout/zoom, full node/edge type coverage, candidate-status dashed edges, selection/hover overlay glow, background grid/glow, reduced motion
+- [x] 03.1-02-PLAN.md — Detail panel restructure: Overview tab metadata rows, Claims/Evidence card accents, StructuralEdgeCard polish, responsive Sheet breakpoints
+
+**Wave 2** *(blocked on 03.1-01 completion)*
+
+- [x] 03.1-03-PLAN.md — App shell & episode navigation restyle: Space Grotesk wordmark, segmented episode control (with preserved Select fallback), SeriesSelect polish
+- [x] 03.1-04-PLAN.md — Graph canvas overlays: collapsible legend + zoom/fit/reset controls
+
 ## Phase 4: Revision History and Revert
 
 **Goal:** Make corrections inspectable and reversible without destroying history.
@@ -74,6 +93,19 @@ Plans:
 **Dependencies:** Phase 3
 
 **Success criteria:** each covered edit/rejection/correction creates a revision; old values are visible; reverting appends a revision and preserves history; UI and automated checks demonstrate the flow.
+
+**Plans:** 5/5 plans executed — full-stack complete (backend 146/146, frontend History tab + revert UI with 13 new tests)
+
+**Wave 1**
+- [x] 04-01-PLAN.md — Revision domain model, RevisionRepository, user-content integration, seed constraints
+
+**Wave 2**
+- [x] 04-02-PLAN.md — Revision API routes (list, get, revert) + revert business logic
+- [x] 04-03-PLAN.md — Integration tests (lifecycle, filters, revert, spoiler, regression)
+
+**Wave 3** (frontend)
+- [x] 04-04-PLAN.md — Frontend data layer: types, API client, useRevisions hook, tests
+- [x] 04-05-PLAN.md — History tab + revert UI in DetailPanel, component tests
 
 ## Phase 5: Future-Extraction Preparation
 
@@ -97,9 +129,9 @@ Actual source retrieval/parsing/ingestion, operational LLM extraction, and LLM c
 | Phase | Canonical milestone/capability | Requirements | Count | Status |
 |-------|--------------------------------|--------------|------:|--------|
 | Phase 1 | Milestones 1–4 — infrastructure, metadata, spoiler-aware API, manual seed graph | INFRA-01..03, META-01..03, API-01..04, SEED-01..04 | 14 | Complete — verified |
-| Phase 2 | Milestone 5 — frontend graph UI | UI-01..05 | 5 | Pending |
-| Phase 3 | Milestone 6 — notes/manual editing | NOTE-01..03 | 3 | Backend slice complete/verified (3/3); overall pending frontend |
-| Phase 4 | Milestone 7 — revision history | REV-01..03 | 3 | Pending |
+| Phase 2 | Milestone 5 — frontend graph UI | UI-01..05 | 5 | Complete — verified |
+| Phase 3 | Milestone 6 — notes/manual editing | NOTE-01..03 | 3 | Complete — full-stack |
+| Phase 4 | Milestone 7 — revision history | REV-01..03 | 3 | Complete — full-stack verified |
 | Phase 5 | Milestone 8 — extraction preparation | PREP-01..05 | 5 | Pending |
 
 **Coverage:** 30/30 Prototype v0 requirements mapped once across 5 delivery phases covering 8/8 canonical milestones; 0 unmapped.
@@ -115,4 +147,4 @@ Actual source retrieval/parsing/ingestion, operational LLM extraction, and LLM c
 | Preparation expands into extraction | Use fixtures/contracts only; keep connectors non-operational in v0 |
 
 ---
-*Last updated: 2026-07-29 — Phase 3 backend slice independently passed 11/11 truths with 0 gaps; Phase 2 and Phase 3 frontend acceptance remain pending; canonical root Prototype v0 milestones 1–8 preserved*
+*Last updated: 2026-07-30 — Phase 03.1 (visual overhaul) complete UAT 16/16; Phase 3 full-stack (Notes UI + custom content); Phase 4 full-stack verified; 21/21 plans across 5 completed phases; Phase 5 pending

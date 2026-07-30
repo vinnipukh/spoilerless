@@ -6,19 +6,20 @@ import { graphResponseS01E01 } from '../../test/fixtures/graphResponse'
 import type { SelectedElement } from '../graph/GraphCanvas'
 
 const graph = graphResponseS01E01
+const defaultProps = { graph, seriesId: 'series:dexter' as const, visibleUntilOrder: 1, episodes: [] }
 
 describe('DetailPanel', () => {
-  it('renders the locked no-selection placeholder with no Tabs', () => {
-    render(<DetailPanel selected={null} graph={graph} />)
+  it('renders the locked no-selection placeholder with no Tabs', async () => {
+    render(<DetailPanel selected={null} {...defaultProps} />)
 
-    expect(screen.getByText('Select a node to see details.')).toBeInTheDocument()
+    expect(await screen.findByText('Select a node to see details.')).toBeInTheDocument()
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
   })
 
   it('renders all three tabs for a node with claims/evidence, including the exact evidence copy', async () => {
     const user = userEvent.setup()
     const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
-    render(<DetailPanel selected={selected} graph={graph} />)
+    render(<DetailPanel selected={selected} {...defaultProps} />)
 
     expect(await screen.findByRole('heading', { name: 'Dexter Morgan' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument()
@@ -26,7 +27,8 @@ describe('DetailPanel', () => {
     expect(screen.getByRole('tab', { name: 'Evidence' })).toBeInTheDocument()
 
     // Overview tab is the default.
-    expect(await screen.findByText('Type: Character')).toBeInTheDocument()
+    expect(await screen.findByText('Node Type')).toBeInTheDocument()
+    expect(await screen.findByText('Character')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Claims' }))
     expect(await screen.findByText('Dexter works at Miami Metro')).toBeInTheDocument()
@@ -45,10 +47,11 @@ describe('DetailPanel', () => {
       source: 'char_dexter_morgan',
       target: 'loc_miami_metro',
     }
-    render(<DetailPanel selected={selected} graph={graph} />)
+    render(<DetailPanel selected={selected} {...defaultProps} />)
 
     expect(await screen.findByRole('heading', { name: 'Dexter works at Miami Metro' })).toBeInTheDocument()
-    expect(await screen.findByText('Predicate: works_at')).toBeInTheDocument()
+    expect(await screen.findByText('Relationship')).toBeInTheDocument()
+    expect(await screen.findByText('works_at')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Evidence' }))
     expect(await screen.findByText('Source: S01E01 script - 00:03:12')).toBeInTheDocument()
@@ -62,9 +65,9 @@ describe('DetailPanel', () => {
       label: 'The Ice Truck Killer',
       nodeType: 'Character',
     }
-    render(<DetailPanel selected={selected} graph={graph} />)
+    render(<DetailPanel selected={selected} {...defaultProps} />)
 
-    await user.click(screen.getByRole('tab', { name: 'Claims' }))
+    await user.click(await screen.findByRole('tab', { name: 'Claims' }))
     expect(await screen.findByText('No claims recorded for this node yet')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Evidence' }))
@@ -75,7 +78,7 @@ describe('DetailPanel', () => {
     // char_dexter_morgan carries a seeded image_url/image_source_url pair
     // (test/fixtures/graphResponse.ts).
     const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
-    render(<DetailPanel selected={selected} graph={graph} />)
+    render(<DetailPanel selected={selected} {...defaultProps} />)
 
     const portrait = await screen.findByAltText('Dexter Morgan')
     expect(portrait).toBeInTheDocument()
@@ -90,7 +93,7 @@ describe('DetailPanel', () => {
   it('shows an initials fallback avatar for a Character with no image_url, with no <img>', async () => {
     // char_debra_morgan has image_url: null in the fixture.
     const selected: SelectedElement = { kind: 'node', id: 'char_debra_morgan', label: 'Debra Morgan', nodeType: 'Character' }
-    render(<DetailPanel selected={selected} graph={graph} />)
+    render(<DetailPanel selected={selected} {...defaultProps} />)
 
     expect(await screen.findByRole('heading', { name: 'Debra Morgan' })).toBeInTheDocument()
     expect(screen.getByText('DM')).toBeInTheDocument()
@@ -100,7 +103,7 @@ describe('DetailPanel', () => {
 
   it('falls back to the initials avatar when the portrait image fails to load', async () => {
     const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
-    render(<DetailPanel selected={selected} graph={graph} />)
+    render(<DetailPanel selected={selected} {...defaultProps} />)
 
     const portrait = await screen.findByAltText('Dexter Morgan')
     portrait.dispatchEvent(new Event('error'))
@@ -117,7 +120,7 @@ describe('DetailPanel', () => {
       source: 'char_dexter_morgan',
       target: 'loc_miami_metro',
     }
-    render(<DetailPanel selected={selected} graph={graph} />)
+    render(<DetailPanel selected={selected} {...defaultProps} />)
 
     expect(await screen.findByRole('heading', { name: 'Dexter works at Miami Metro' })).toBeInTheDocument()
     expect(screen.queryByRole('img')).not.toBeInTheDocument()

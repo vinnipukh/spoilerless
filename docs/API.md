@@ -57,7 +57,7 @@ HD Graf Cehennemi exposes a RESTful HTTP API backed by a Neo4j graph database. A
 
 The core architectural invariant is **spoiler-aware access**: every story-sensitive read requires a `visible_until_order` query parameter that represents how far the user has watched. The backend applies Cypher-level visibility filtering so the frontend never receives data it would need to hide.
 
-**21 HTTP operations over 15 unique path templates** (including `/health`).
+**24 HTTP operations over 17 unique path templates** (including `/health`).
 
 ---
 
@@ -680,7 +680,47 @@ Hard-delete a custom relationship. Returns 204.
 
 ---
 
-## 11. Error Contract
+## 11. Revisions
+
+Revisions are an append-only log of every mutation made to user content. Each revision captures the action (`Created`, `Updated`, `Deleted`, or `Reverted`) with before/after JSON snapshots. Revisions are spoiler-filtered by the same `visible_from_order` mechanism used by the graph.
+
+### 11.1 GET /api/series/{series_id}/revisions
+
+List visible revisions, most-recent-first.
+
+**Path parameters:** `series_id` | **Query:** `visible_until_order` (required), `resource_type` (optional), `resource_id` (optional)
+
+**200 response:**
+```json
+[{"id":"revision:abc123","series_id":"series:dexter","resource_type":"UserNote","resource_id":"user-note:2a1f4c7e","action":"Updated","before":{"content":"old"},"after":{"content":"new"},"created_at":"2026-07-30T12:00:00Z","visible_from_order":1}]
+```
+
+**Errors:** `422`, `503`
+
+### 11.2 GET /api/series/{series_id}/revisions/{revision_id}
+
+Get one revision. Hidden (beyond boundary) returns 404 same as missing.
+
+**Errors:** `404`, `422`, `503`
+
+### 11.3 POST /api/series/{series_id}/revisions/{revision_id}/revert
+
+Restore resource to the state in the revision. Creates a new `Reverted` revision — history never destroyed.
+
+| Action | Behavior |
+|--------|----------|
+| `Updated` | Restores properties from `before` snapshot |
+| `Deleted` | Re-creates node from `before` snapshot (restores `REFERS_TO` for notes) |
+| `Created` | Rejected — 422 `cannot_revert_create` |
+| Canonical origin | Rejected — 409 `cannot_revert_canonical` |
+
+**200 response:** The newly created `Reverted` revision.
+
+**Errors:** `404`, `409`, `422`, `503`
+
+---
+
+## 12. Error Contract
 
 All error responses use a single envelope:
 

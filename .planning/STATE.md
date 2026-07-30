@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 2 complete and verified; Phase 3 backend complete and verified, frontend implementation and acceptance pending
-stopped_at: Phase 2 verified with 5/5 truths and 0 gaps; Phase 3 backend verified with 11/11 truths and 0 gaps; resume Phase 3 frontend work
-last_updated: "2026-07-29T17:45:00.000Z"
+status: Phase 4 complete — full-stack verified (backend 146/146, frontend 13/13 new tests)
+stopped_at: Phase 4 fully executed — backend + frontend history panel and revert UI
+last_updated: "2026-07-30T18:30:00.000Z"
 progress:
   total_phases: 5
-  completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  completed_phases: 4
+  total_plans: 17
+  completed_plans: 17
 ---
 
 # HD Graf Cehennemi — Project State
@@ -22,32 +22,21 @@ progress:
 
 ## Current Phase
 
+|| **Phase** | Phase 4: Revision History and Revert |
+| **Status** | Complete — full-stack verified (backend 146/146 tests, frontend History tab + revert UI with 13 new tests) |
+| **Deliverable** | Append-only Revision model, list/get/revert API, same-transaction revision logging + frontend History tab in DetailPanel with action badges, diff summaries, confirm dialog, and one-shot revert |
+| **Requirements** | REV-01, REV-02, REV-03 |
+| **Dependencies** | Phase 3 backend complete; Phase 2 complete |
+
+| Field | Value |
+|-------|-------|
 | **Phase** | Phase 3: User Notes and Manual Editing |
-| **Status** | Backend complete and verified; frontend implementation and acceptance pending |
+| **Status** | Complete — full-stack verified (Notes UI + custom node/relationship creation + origin-based visual distinction) |
 | **Deliverable** | User notes and manual graph editing UI integrated with the completed backend contracts |
 | **Requirements** | NOTE-01..03 |
-| **Dependencies** | Phase 2 complete and independently verified (5/5 truths, 0 gaps) |
+| **Dependencies** | Phase 2 complete and independently verified; Phase 03.1 visual overhaul complete and UAT verified (16/16 pass) |
 
-| Field | Value |
-|-------|-------|
-| **Phase** | Phase 2: Polished Cytoscape Graph Experience |
-| **Status** | Pending |
-| **Deliverable** | Polished Cytoscape product experience over the verified spoiler-safe backend graph foundation |
-| **Requirements** | UI-01..05 |
-| **Dependencies** | Phase 1 complete (verified 9/9 truths) |
-
-## Prepared Out-of-Sequence Backend Slice
-
-| Field | Value |
-|-------|-------|
-| **Phase** | Phase 3: User Notes and Manual Editing — backend slice only |
-| **Status** | Backend complete and verified (3/3 plans); overall Phase 3 and frontend acceptance remain pending |
-| **Requirements** | NOTE-01..03 backend contracts and persistence; frontend rendering/visual acceptance remains pending |
-| **Dependencies** | Phase 1 backend foundation; Phase 2 remains the current pending product/UI phase |
-| **Verification** | `03-VERIFICATION.md` — backend-only pass: 11/11 truths, 20/20 artifacts, 11/11 links, 28/28 decisions, 0 gaps |
-| **Resume** | Phase 2/frontend work; do not mark overall Phase 03 complete before UI acceptance |
-
-## Completed Phase
+## Completed Phases
 
 | Field | Value |
 |-------|-------|
@@ -57,17 +46,25 @@ progress:
 | **Requirements** | INFRA-01..03, META-01..03, API-01..04, SEED-01..04 |
 | **Verification** | `01-VERIFICATION.md` — 9/9 truths verified, 0 gaps, 0 human-verification items |
 
+| Field | Value |
+|-------|-------|
+| **Phase** | Phase 3: Backend Slice (merged into full-stack Phase 3) |
+| **Status** | Complete — backend-only verification passed (11/11 truths, 20/20 artifacts, 11/11 links, 28/28 decisions, 0 gaps); frontend now integrated |
+
+| Field | Value |
+| **Phase** | Phase 03.1: Frontend Visual Overhaul — Cinematic Graph Exploration UI (out-of-band) |
+| **Status** | Complete — UAT verified (16/16 pass) |
+| **Deliverable** | Cinematic graph canvas (type-aware node colors/sizes, relationship-color edges, hover glow, selection halo, background grid, reduced motion), restyled DetailPanel (labeled metadata rows, magenta/orange card accents, responsive sheet), AppShell (Space Grotesk wordmark, segmented episode pills, polished SeriesSelect), GraphLegend (collapsible, bottom-left, colors sourced from shared module), GraphControls (zoom in/out/fit/reset, bottom-right, tooltips) |
+| **Requirements** | None (out-of-band initiative per 03.1-CONTEXT.md) |
+| **Verification** | `03.1-UAT.md` — 16/16 tests passed conversational UAT; `npm run build` clean; zero backend/ changes; zero new `dangerouslySetInnerHTML` |
+
 ## Project Position
 
-Phase 1 is fully executed and verified — the backend graph foundation delivers a lifespan-owned Neo4j driver, ontology-validated deterministic Dexter S01E01–03 seed data, and a fail-closed spoiler-safe graph API with 13 automated tests and a repeatable smoke command. Phase 2 can build directly against this contract. Notes/manual editing, revisions/revert, and future-extraction preparation remain Phases 3–5. Automated ingestion/extraction and LLM chat remain post-v0.
+Phase 1 is fully executed and verified — the backend graph foundation delivers a lifespan-owned Neo4j driver, ontology-validated deterministic Dexter S01E01–03 seed data, and a fail-closed spoiler-safe graph API with 13 automated tests and a repeatable smoke command. Revisions/revert and future-extraction preparation remain Phases 4–5. Automated ingestion/extraction and LLM chat remain post-v0.
 
-Phase 2 Plan 01 (of 4) is complete: the Vite starter is fully replaced with a real product layout (AppShell/SeriesSelect/EpisodeSelector/ConfirmAdvanceModal/GraphCanvas/DetailPanel) that fetches from and renders the verified Phase 1 backend end-to-end, gated by a sessionStorage-backed watch-progress confirmation flow (forward and backward). UI-01 and the mechanical core of UI-02 are satisfied. Vitest + React Testing Library test infrastructure now exists in this repo for the first time.
+Phase 2 is complete and verified (5/5 truths, 0 gaps). The full product layout (AppShell/SeriesSelect/EpisodeSelector/ConfirmAdvanceModal/GraphCanvas/DetailPanel/StructuralEdgeCard) fetches from and renders the verified Phase 1 backend end-to-end. All UI requirements UI-01 through UI-05 are satisfied.
 
-Phase 2 Plan 02 (of 4) is complete: the canvas now uses the cose-bilkent layout (cose fallback on actual failure only), a full node-type shape + origin-border stylesheet (including Claude's-discretion Episode=tag/Series=star additions, documented in 02-UI-SPEC.md), tap-driven neighbor highlight/fade on nodes and edges, and GraphStatus.tsx loading/error/empty overlay states wired into App.tsx's full useGraph status branch (with a working Retry). A GraphCanvas.test.tsx component test proves element counts track the backend boundary exactly at both S01E01 (11 nodes/6 edges) and S01E03 (20 nodes). UI-03 is satisfied.
-
-Phase 2 Plan 03 (of 4) is complete: DetailPanel now renders the full Overview/Claims/Evidence tabbed Sheet (D-07) for nodes and claim-backed edges, resolving claims/evidence/sources from the already-fetched GraphResponse with locked "Source: {source label} - {locator}" evidence copy and explicit zero-claims/zero-evidence empty sub-states. A new StructuralEdgeCard (D-06) gives structural edges (PART_OF/PRECEDES) a distinct tab-less card, with the branch decision centralized in exactly one place in App.tsx (GraphCanvas's onSelect contract stays unchanged). UI-04 is satisfied.
-
-Phase 2 Plan 04 (of 4) is complete: dedicated `useWatchProgress`/`ConfirmAdvanceModal` edge-case tests close the remaining Nyquist gaps, tree-wide grep audits confirm the two highest-severity threat mitigations (no `dangerouslySetInnerHTML`, no client-side `visible_from_order` filtering) hold across all of `frontend/src`, and the full 25-test suite/build/lint pass together for the first time across all four plans. The Definition-of-Done conversational demo UAT was completed against the live backend (via browser automation), finding and fixing two real issues along the way: `GraphCanvas.tsx`'s `elements` prop wasn't memoized, causing `cose-bilkent` layout thrashing/mis-fit on unrelated re-renders (fixed with `useMemo`), and `vite.config.ts` was missing a dev-server proxy for `/api` (added). UI-05 is satisfied. Phase 2 is now complete and independently verified (5/5 truths, 0 gaps, `02-VERIFICATION.md`) — all of UI-01 through UI-05 satisfied. Phase 3 (User Notes and Manual Editing) is next.
+Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overhaul delivers: type-aware node sizing/coloring with per-relationship edge colors (9 real types plus fallback), cose-bilkent layout tuning (padding 48, nodeRepulsion 8000, idealEdgeLength 100), hover-highlights-connected-edges, selected-node violet overlay glow, candidate-status dashed edges, reduced-motion support, background grid/glow layer, font swap (Space Grotesk heading + Inter body replacing Geist), restyled DetailPanel with labeled metadata rows and magenta/orange card accents, responsive sheet (wider desktop, bottom drawer mobile), AppShell Space Grotesk wordmark, segmented episode pill control (with original Select preserved for narrow viewport and test compatibility), GraphLegend (collapsible, colors sourced from the shared relationshipStyles module), and GraphControls (zoom in/out/fit/reset with tooltips, fixed positioning to stay above the detail sheet). GraphCanvas and GraphStatus tests require React 19 CJS act workaround (see setup.ts).
 
 ## Quick Reference
 
@@ -82,9 +79,10 @@ Phase 2 Plan 04 (of 4) is complete: dedicated `useWatchProgress`/`ConfirmAdvance
 | Phase | Description | Requirements | Status | Completed |
 |-------|-------------|--------------|--------|-----------|
 | Phase 1 | Backend Graph Foundation | INFRA-01..03, META-01..03, API-01..04, SEED-01..04 | Complete — verified | 2026-07-29 |
-| Phase 2 | Polished Cytoscape Graph Experience | UI-01..05 | Pending | — |
-| Phase 3 | User Notes and Manual Editing | NOTE-01..03 | Pending | — |
-| Phase 4 | Revision History and Revert | REV-01..03 | Pending | — |
+| Phase 2 | Polished Cytoscape Graph Experience | UI-01..05 | Complete — verified | 2026-07-29 |
+| Phase 03.1 | Frontend Visual Overhaul (out-of-band) | none (03.1-CONTEXT.md) | Complete — UAT passed | 2026-07-30 |
+| Phase 3 | User Notes and Manual Editing | NOTE-01..03 | Complete — full-stack verified | 2026-07-30 |
+|| Phase 4 | Revision History and Revert | REV-01..03 | Complete — full-stack verified | 2026-07-30 |
 | Phase 5 | Future-Extraction Preparation | PREP-01..05 | Pending | — |
 
 ## Quick Tasks Completed
@@ -93,16 +91,24 @@ Phase 2 Plan 04 (of 4) is complete: dedicated `useWatchProgress`/`ConfirmAdvance
 |------|------|--------|---------|
 | 2026-07-28 | Align `.planning` plans with canonical root Prototype v0 roadmap | This task's atomic commit | Reconciled 30 requirements across 8 pending phases; preserved qualified brownfield state |
 | 2026-07-29 | Implement character images end-to-end (graph + detail panel) | This task's atomic commit | Optional `image_url`/`image_source_url` wired through backend, Cytoscape, and detail panel; all 9 Dexter S01E01-03 characters left unmapped (no verified Fandom URLs obtainable this session) |
+| 2026-07-30 | Phase 03.1 Plan 01: Canvas visual overhaul (fonts, colors, layout, hover/selection, bg grid) | phase plan | All tasks complete; relationshipStyles.ts, type-aware graphStylesheet, tuned GraphCanvas, reduced motion, bg grid |
+| 2026-07-30 | Phase 03.1 Plan 02: DetailPanel + StructuralEdgeCard restyle | phase plan | Labeled metadata rows, magenta/orange accents, responsive sheet, StructuralEdgeCard polish |
+| 2026-07-30 | Phase 03.1 Plan 03: AppShell restyle + segmented episode control | phase plan | Space Grotesk wordmark, segmented pills, polished SeriesSelect, original Select preserved for narrow viewport |
+| 2026-07-30 | Phase 03.1 Plan 04: GraphLegend + GraphControls overlays | phase plan | Collapsible legend, zoom/fit/reset controls, shadcn tooltip/collapsible primitives |
+| 2026-07-30 | Phase 4 frontend plan 04-04 (revision types/API/hook) + 04-05 (History tab/revert UI) | Wave 3 complete | Types, API client, hook, tests (6/6) + History tab UI integrated into DetailPanel, component tests (7/7), production build clean |
+| 2026-07-30 | Fix + button overlap with GraphLegend | left-4 → left-65 | Moved Create Custom Node button to right of legend trigger |
+| 2026-07-30 | Fix CreateRelationshipDialog select colors (white-on-white) | DaisyUI → Tailwind tokens | Replaced non-functional `select select-bordered` with `bg-background text-foreground border-input color-scheme:dark` on 3 native selects |
 
 ---
 
-*Last updated: 2026-07-29 — Phase 1 verified complete (9/9 truths, 0 gaps)*
+*Last updated: 2026-07-30 — Phase 03.1 complete, UAT 16/16 pass*
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
 - Phase 1 edited: Rebaselined Prototype v0 into five vertical delivery phases; Phase 1 now consolidates canonical milestones 1-4 without narrowing scope.
+- Phase 03.1 inserted after Phase 2: Frontend-only cinematic visual overhaul of graph UI, requested out-of-band from canonical requirements (URGENT). Now complete.
 
 ## Performance Metrics
 
@@ -110,12 +116,16 @@ Phase 2 Plan 04 (of 4) is complete: dedicated `useWatchProgress`/`ConfirmAdvance
 |-------|------|----------|-------|
 | Phase 01 P01 | 24 min | 3 tasks | 22 files |
 | Phase 01 verify | 6 min | 1 verifier agent | 9/9 truths, 0 gaps |
+| Phase 03.1 P01 | 8 min | 3 tasks | Canvas overhaul (fonts, colors, layout, hover/selection, reduced motion, bg grid) |
+| Phase 03.1 P02 | 7 min | 2 tasks | DetailPanel restyle, card accents, responsive sheet |
+| Phase 03.1 P03 | 3 min | 2 tasks | AppShell wordmark, segmented episode control, SeriesSelect polish |
+| Phase 03.1 P04 | 3 min | 2 tasks | GraphLegend, GraphControls, shadcn tooltip/collapsible |
 
 ## Session
 
-**Last session:** 2026-07-29T07:16:08.939Z
-**Stopped at:** Phase 1 verified and complete — 9/9 truths, 13/13 tests, smoke 8/8
-**Resume file:** None
+**Last session:** 2026-07-30T14:38:00.000Z
+**Stopped at:** Phase 4 fully executed — backend + frontend history panel and revert UI (13/13 new tests)
+**Resume file:** None — Phase 4 fully delivered. Next: Phase 5 (Future-Extraction Preparation).
 
 ## Decisions
 
@@ -126,3 +136,18 @@ Phase 2 Plan 04 (of 4) is complete: dedicated `useWatchProgress`/`ConfirmAdvance
 - [Phase 02-04]: GraphCanvas.tsx's `elements` prop memoized via `useMemo(() => graphToElements(graph), [graph])` — fixes cose-bilkent layout thrashing/mis-fit caused by react-cytoscapejs re-applying its layout on every unmemoized re-render
 - [Phase 02-04]: vite.config.ts gained a server.proxy for `/api` -> `http://127.0.0.1:8000`, required for any local `npm run dev` session to actually reach the backend (previously silently absent)
 - [Phase 02-04]: The manual Definition-of-Done checkpoint UAT was carried out in-session via Chrome browser automation rather than deferred, since a live backend and browser tooling were already available; user reviewed and accepted the results
+- [Phase 03.1-01]: Font swap from Geist to Space Grotesk (heading/display) + Inter (body/labels) via Fontsource — both packages verified legitimate (same maintainer/repo as the already-approved geist)
+- [Phase 03.1-01]: graphStylesheet.ts converted from static const to buildGraphStylesheet(prefersReducedMotion: boolean) function — consumed only by GraphCanvas.tsx in this repo
+- [Phase 03.1-01]: Node hover highlights connected edges via `cy.on('mouseover'/'mouseout', 'node', ...)` adding/removing the 'hovered' class — never calls onSelect (D-27)
+- [Phase 03.1-01]: Reduced motion preference captured at module scope via `window.matchMedia('(prefers-reduced-motion: reduce)').matches` — transitions snap to 0ms when active
+- [Phase 03.1-02]: Overview tab label mapping: "Node Type" -> selectedNode.type, "Name" -> selectedNode.label, "Relationship" -> activeClaim.predicate, "Claim Type" -> activeClaim.claim_type, "Status" -> activeClaim.status, "Confidence" -> activeClaim.confidence_level — every field still present, only presentation changed
+- [Phase 03.1-02]: Claims cards get a 4px left border with magenta #D946EF, Evidence cards with orange #FB923C — hex values stored as local named constants (CLAIM_ACCENT_COLOR, EVIDENCE_ACCENT_COLOR)
+- [Phase 03.1-02]: DetailPanel Sheet widened at desktop (>=1024px) and drops to bottom drawer (<640px) using responsive Tailwind classes — no new Drawer primitive
+- [Phase 03.1-03]: AppShell wordmark implemented as self-contained `<span className="font-heading text-2xl">HD Graf Cehennemi</span>` — no new props added to AppShell contract (would touch App.tsx)
+- [Phase 03.1-03]: EpisodeSelector dual-renders Radix ToggleGroup pills (hidden md:inline-flex) + original shadcn Select (md:hidden) — both wired to identical onSelect contract, preserving App.test.tsx combobox/option assertions
+- [Phase 03.1-03]: Episode pill bar has overflow-x-auto + flex-nowrap + hidden scrollbar — supports any number of episodes without layout breakage
+- [Phase 03.1-04]: GraphLegend and GraphControls use `fixed` positioning with `z-[60]` instead of `absolute z-10` — necessary because the DetailPanel SheetContent renders `fixed z-50` in a portal and would otherwise cover the bottom-right controls
+- [Phase 03.1-04]: GraphControls zoom/fit/reset buttons read cyRef.current at click time (not render time) — avoids stale closure over the cy instance
+- [Phase 03.1-04]: GraphControls reset reuses the existing module-scope runLayout function from GraphCanvas.tsx — not a second layout code path
+- [Phase 03.1-04]: select.tsx animation classes removed and z-index bumped from z-50 to z-[100] — fix for episode dropdown not being visible
+- [Phase 03.1 test]: setup.ts React.act polyfill uses `Object.defineProperty` on the CJS require cache — required for React 19.2.x compatibility with @testing-library/react

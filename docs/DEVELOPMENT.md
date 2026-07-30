@@ -105,7 +105,8 @@ backend/
 │   │   └── auth.py       # AuthService (Google token verification)
 │   ├── spoiler/          # Spoiler-aware Cypher queries
 │   │   └── filter.py     # Parameterized Cypher string constants
-│   ├── revisions/        # Revision history model (prepared, not wired)
+│   ├── revisions/        # Revision history (append-only log + revert logic)
+│   │   └── __init__.py   # RevisionRepository (log_revision, take_snapshot)
 │   └── main.py           # FastAPI app, lifespan, CORS, health check
 └── tests/                # Backend tests (pytest)
     ├── conftest.py

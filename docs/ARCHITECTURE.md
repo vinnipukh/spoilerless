@@ -1,7 +1,7 @@
 # HD Graf Cehennemi — Architecture Guide
 
 > **Version:** 0.1.0
-> **Last updated:** 2026-07-29
+> **Last updated:** 2026-07-30
 > **Project:** Spoiler-aware TV series knowledge graph
 
 ---
@@ -51,9 +51,10 @@ HD Graf Cehennemi is a **spoiler-aware TV series knowledge graph** application. 
 │                                                                  │
 │  ┌─────────────────────────────────────────────────────────────┐│
 │  │  API Layer (backend/app/api/)                               ││
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────────┐ ││
-│  │  │ series.py│ │graph.py  │ │auth.py   │ │user_content.py│ ││
-│  │  └──────────┘ └──────────┘ └──────────┘ └───────────────┘ ││
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────────┐ ┌───────────┐ ││
+│  │  │ series.py│ │graph.py  │ │auth.py   │ │user_content   │ │revisions │ ││
+│  │  │          │ │          │ │          │ │.py            │ │.py       │ ││
+│  │  └──────────┘ └──────────┘ └──────────┘ └───────────────┘ └───────────┘ ││
 │  └─────────────────────────────────────────────────────────────┘│
 │                          │                                       │
 │                          ▼                                       │
@@ -202,7 +203,7 @@ The dev server proxies `/api` requests to the backend at `http://127.0.0.1:8000`
 
 **Location:** `backend/app/api/`
 
-Four route modules registering 21 HTTP operations across 14 unique path templates (plus `/health`).
+Five route modules registering 24 HTTP operations across 17 unique path templates (plus `/health`).
 
 #### Route Inventory
 
@@ -217,11 +218,14 @@ Four route modules registering 21 HTTP operations across 14 unique path template
 | `user_content.py` | `/api/series/{series_id}/custom-nodes` | POST | Create custom node |
 | `user_content.py` | `/api/series/{series_id}/custom-nodes/{node_id}` | GET, PATCH, DELETE | CRUD one custom node |
 | `user_content.py` | `/api/series/{series_id}/custom-relationships` | POST | Create custom relationship |
-| `user_content.py` | `/api/series/{series_id}/custom-relationships/{id}` | GET, PATCH, DELETE | CRUD one relationship |
-| `auth.py` | `/api/auth/google` | POST | Google Sign-In |
-| `auth.py` | `/api/auth/me` | GET | Current user from session |
-| `auth.py` | `/api/auth/logout` | POST | Logout |
-| `main.py` | `/health` | GET | Health check |
+|| `user_content.py` | `/api/series/{series_id}/custom-relationships/{id}` | GET, PATCH, DELETE | CRUD one relationship |
+|| `revisions.py` | `/api/series/{series_id}/revisions` | GET | List visible revisions |
+|| `revisions.py` | `/api/series/{series_id}/revisions/{revision_id}` | GET | Get one revision |
+|| `revisions.py` | `/api/series/{series_id}/revisions/{revision_id}/revert` | POST | Revert to a revision |
+|| `auth.py` | `/api/auth/google` | POST | Google Sign-In |
+|| `auth.py` | `/api/auth/me` | GET | Current user from session |
+|| `auth.py` | `/api/auth/logout` | POST | Logout |
+|| `main.py` | `/health` | GET | Health check |
 
 #### Architecture Pattern
 
@@ -596,12 +600,17 @@ Database error messages are intentionally generic — never leak Cypher, connect
 
 **Location:** `backend/app/revisions/`
 
-The `Revision` module provides a version history model. Revisions are Neo4j `(:Revision)` nodes connected via:
-- `CORRECTS` — edit correction
-- `SUPERSEDES` — version replacement
-- `REVERTS_TO` — undo to previous state
+The `Revision` module provides a version history model. Revisions are Neo4j `(:Revision)` nodes.
 
-This is a **prepared but not yet fully integrated** system — the infrastructure exists for tracking changes to claims and other knowledge entities, but the active write paths (user content CRUD) do not yet automatically create revision records. This is an intentional future extensibility point.
+**Status:** Backend fully integrated. Every user-content mutation (note create/update/delete, custom-node create/update/delete, custom-relationship create/update/delete) auto-creates a `Revision` record in the same Neo4j transaction. API routes:
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `GET /api/series/{series_id}/revisions` | GET | List visible revisions, most-recent-first, with optional `resource_type`/`resource_id` filters |
+| `GET /api/series/{series_id}/revisions/{revision_id}` | GET | Get one revision (hidden revisions return 404) |
+| `POST /api/series/{series_id}/revisions/{revision_id}/revert` | POST | Restore resource to the state captured in the revision. Creates a new `Reverted` revision — history never destroyed |
+
+**Frontend:** History tab fully integrated. The `frontend/src/types/revision.ts` types, `frontend/src/api/revisions.ts` API client, and `frontend/src/hooks/useRevisions.ts` hook provide the data layer. The `RevisionHistoryPanel` component renders a History tab in `DetailPanel` with color-coded action badges (Created/Updated/Deleted/Reverted), diff summary chips, and a one-shot revert flow with confirmation dialog and toast feedback. Revert button only appears on `Updated` and `Deleted` revisions. All dialog buttons use inline Tailwind (no DaisyUI). (Plans 04-04, 04-05 executed.)
 
 ---
 
@@ -796,11 +805,12 @@ New content extraction from episode scripts/transcripts:
 
 ### 7.3 Revision History Integration
 
-The `Revision` node type and revision relationships (`CORRECTS`, `SUPERSEDES`, `REVERTS_TO`) are defined in the ontology but not yet wired into active write paths. Future work:
-- Auto-create `Revision` on every claim update
-- Decision journaling with author attribution
-- Time-travel queries (graph state at a given revision)
-- Undo/redo for user edits
+The `Revision` module is fully integrated into all user-content write paths. Every note, custom-node, and custom-relationship mutation auto-creates a `Revision` with before/after JSON snapshots in the same Neo4j transaction. A revert API restores prior state by creating a new `Reverted` revision — history is never destroyed.
+
+What's been delivered:
+- **History panel UI** — plans 04-04 (revision types, API client, hook) and 04-05 (DetailPanel History tab + revert UI) executed. The History tab shows action badges, diff summaries, and one-shot revert with confirmation dialog and toast.
+- **Time-travel queries** (graph state at a given revision) — post-v0
+- **Decision journaling** with author attribution — post-v0
 
 ### 7.4 Multi-Series Support
 

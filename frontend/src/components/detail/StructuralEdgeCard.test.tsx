@@ -18,7 +18,7 @@ describe('StructuralEdgeCard', () => {
 
     expect(screen.getByRole('heading', { name: 'PART_OF' })).toBeInTheDocument()
     expect(screen.getByText(/S01E01 — Dexter/)).toBeInTheDocument()
-    expect(screen.getByText(/Dexter/)).toBeInTheDocument()
+    expect(screen.getByText('Dexter', { exact: true })).toBeInTheDocument()
   })
 
   it('renders no TabsList/TabsTrigger elements', () => {

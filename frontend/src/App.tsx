@@ -89,12 +89,12 @@ function AuthenticatedApp() {
       {graphState.status === 'success' && graphState.data.nodes.length === 0 && <GraphEmptyState />}
       {graphState.status === 'success' && graphState.data.nodes.length > 0 && (
         <>
-          <GraphCanvas graph={graphState.data} onSelect={setSelectedElement} />
+          <GraphCanvas graph={graphState.data} onSelect={setSelectedElement} seriesId={watchProgress.seriesId} onRefetchGraph={graphState.refetch} episodes={episodes} />
           {selectedElement?.kind === 'edge' &&
           graphState.data.edges.find((edge) => edge.id === selectedElement.id)?.claim_id == null ? (
             <StructuralEdgeCard selected={selectedElement} nodes={graphState.data.nodes} />
           ) : (
-            <DetailPanel selected={selectedElement} graph={graphState.data} />
+            <DetailPanel selected={selectedElement} graph={graphState.data} seriesId={watchProgress.seriesId} visibleUntilOrder={watchProgress.confirmedOrder} onRefetchGraph={graphState.refetch} episodes={episodes} />
           )}
         </>
       )}

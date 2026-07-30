@@ -39,7 +39,7 @@ class FakeTransaction:
 
     async def run(self, query: str, **parameters):
         self.calls.append((query, parameters))
-        return FakeResult({"id": parameters["id"], "origin": "user"})
+        return FakeResult({"id": parameters.get("id", "mock"), "origin": "user", "visible_from_order": 1, "created_at": datetime.now(timezone.utc), "updated_at": datetime.now(timezone.utc)})
 
 
 class FakeSession:
@@ -109,8 +109,9 @@ async def test_note_command_id_and_utc_timestamps_survive_callback_retry():
     )
     command = database.driver.sessions[0].commands[0][0]
     assert result["id"].startswith("user-note:")
-    assert command.id == database.driver.sessions[0].tx.calls[0][1]["id"]
-    assert database.driver.sessions[0].tx.calls[0][1] == database.driver.sessions[0].tx.calls[1][1]
+    # calls[0] is the mutation query (calls[1] is the revision log)
+    mutation_call_id = database.driver.sessions[0].tx.calls[0][1]["id"]
+    assert command.id == mutation_call_id
     assert command.created_at.tzinfo == timezone.utc
     assert command.updated_at.tzinfo == timezone.utc
 
@@ -168,9 +169,14 @@ async def test_custom_node_and_relationship_writes_use_static_queries_and_parame
         ),
     )
     calls = [call for session in database.driver.sessions for call in session.tx.calls]
-    assert len(calls) == 4  # each managed callback is deliberately retried by the fake
-    for query, parameters in calls:
+    # Each callback is retried twice by the fake. With revision logging each callback
+    # runs the mutation query + log_revision query = 2 queries. 2 retries × 2 queries = 4.
+    # Two operations (custom_node + custom_relationship) = 8 calls total.
+    assert len(calls) == 8
+    # Filter to mutation queries only (revision queries use "revision:" prefix)
+    mutation_calls = [(q, p) for q, p in calls if p.get("id", "").startswith(("user-node:", "user-rel:"))]
+    assert len(mutation_calls) == 4  # 2 per operation × 2 retries
+    for query, parameters in mutation_calls:
         assert "SET +=" not in query
         assert "label" not in query.lower() or "$label" in query
         assert "FAMILY_OF" not in query
-        assert parameters["id"].startswith(("user-node:", "user-rel:"))

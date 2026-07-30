@@ -2,6 +2,8 @@
 // these fully REPLACES the Cytoscape canvas for its render (never layers
 // alongside it) per 02-UI-SPEC.md's UI Considerations table (loading/error/
 // empty rows) and this plan's `GraphCanvas to GraphStatus` key_link.
+//
+// Phase 03.1: restyled with --card/--elevated/--muted-foreground tokens.
 
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
@@ -27,7 +29,7 @@ type GraphErrorStateProps = {
 export function GraphErrorState({ onRetry }: GraphErrorStateProps) {
   return (
     <div className="flex h-full items-center justify-center p-6">
-      <Alert variant="destructive" className="max-w-md">
+      <Alert variant="destructive" className="max-w-md bg-card text-card-foreground border-border">
         <AlertTitle>Couldn&apos;t load the graph. Check the backend connection and retry.</AlertTitle>
         <AlertDescription>
           <Button onClick={onRetry} size="sm" className="mt-2 w-fit" variant="outline">
@@ -44,8 +46,8 @@ export function GraphErrorState({ onRetry }: GraphErrorStateProps) {
 // empty-state contract (02-02-PLAN.md must_haves truth).
 export function GraphEmptyState() {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-      <h2 className="text-lg font-semibold">Nothing revealed yet</h2>
+    <div className="flex h-full flex-col items-center justify-center gap-2 text-center bg-elevated">
+      <h2 className="text-lg font-semibold text-card-foreground">Nothing revealed yet</h2>
       <p className="text-sm text-muted-foreground">
         Advance your watch progress to unlock the story.
       </p>

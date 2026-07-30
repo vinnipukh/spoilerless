@@ -23,6 +23,7 @@ NODE_LABELS = (
     "Source",
     "EvidenceFragment",
     "UserNote",
+    "Revision",
 )
 RELATIONSHIP_TYPES = (
     "PART_OF",
@@ -164,6 +165,20 @@ async def create_constraints(database: Neo4jDatabase) -> None:
     )
     await database.execute_query(
         "CREATE INDEX usernote_target_idx IF NOT EXISTS FOR (n:UserNote) ON (n.series_id, n.target_type, n.target_id)"
+    )
+
+    # Revision constraints and indexes
+    await database.execute_query(
+        "CREATE CONSTRAINT revision_id_unique IF NOT EXISTS FOR (r:Revision) REQUIRE r.id IS UNIQUE"
+    )
+    await database.execute_query(
+        "CREATE INDEX revision_series_idx IF NOT EXISTS FOR (r:Revision) ON (r.series_id)"
+    )
+    await database.execute_query(
+        "CREATE INDEX revision_resource_idx IF NOT EXISTS FOR (r:Revision) ON (r.resource_type, r.resource_id)"
+    )
+    await database.execute_query(
+        "CREATE INDEX revision_created_idx IF NOT EXISTS FOR (r:Revision) ON (r.created_at)"
     )
 
     # Authentication constraints and indexes

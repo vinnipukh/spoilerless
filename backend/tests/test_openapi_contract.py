@@ -117,6 +117,10 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         "/api/series/{series_id}/custom-nodes", "/api/series/{series_id}/custom-nodes/{node_id}",
         "/api/series/{series_id}/custom-relationships",
         "/api/series/{series_id}/custom-relationships/{relationship_id}",
+        # Revisions
+        "/api/series/{series_id}/revisions",
+        "/api/series/{series_id}/revisions/{revision_id}",
+        "/api/series/{series_id}/revisions/{revision_id}/revert",
         # Authentication
         "/api/auth/google", "/api/auth/me", "/api/auth/logout",
     }
@@ -138,11 +142,15 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         ("get", "/api/series/{series_id}/custom-relationships/{relationship_id}"),
         ("patch", "/api/series/{series_id}/custom-relationships/{relationship_id}"),
         ("delete", "/api/series/{series_id}/custom-relationships/{relationship_id}"),
+        # Revisions
+        ("get", "/api/series/{series_id}/revisions"),
+        ("get", "/api/series/{series_id}/revisions/{revision_id}"),
+        ("post", "/api/series/{series_id}/revisions/{revision_id}/revert"),
         ("post", "/api/auth/google"),
         ("get", "/api/auth/me"),
         ("post", "/api/auth/logout"),
     }
-    assert len(schema["paths"]) == 14
+    assert len(schema["paths"]) == 17
     for path, item in schema["paths"].items():
         for method, operation in item.items():
             if method not in {"get", "post", "patch", "delete"}:

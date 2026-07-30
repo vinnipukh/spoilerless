@@ -1,3 +1,4 @@
+import { ArrowRight } from 'lucide-react'
 import {
   Sheet,
   SheetContent,
@@ -28,14 +29,20 @@ export function StructuralEdgeCard({ selected, nodes }: Props) {
 
   return (
     <Sheet open modal={false}>
-      <SheetContent side="right" showCloseButton={false} className="mt-0">
+      <SheetContent
+        side="right"
+        showCloseButton={false}
+        className="mt-0 max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!h-auto max-sm:max-h-[70vh] max-sm:!w-full max-sm:!border-t max-sm:!border-l-0 lg:max-w-md"
+      >
         <SheetHeader>
           <SheetTitle>{selected.edgeType}</SheetTitle>
         </SheetHeader>
         <div className="flex flex-col gap-2 px-4 pb-4 text-sm">
-          <p>
-            {sourceLabel} → {targetLabel}
-          </p>
+          <div className="flex items-center gap-2 rounded-md border border-border p-3">
+            <span>{sourceLabel}</span>
+            <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span>{targetLabel}</span>
+          </div>
         </div>
       </SheetContent>
     </Sheet>
