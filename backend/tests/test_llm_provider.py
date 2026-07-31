@@ -53,7 +53,7 @@ def _provider(transport: httpx.MockTransport) -> OpenAICompatibleProvider:
         base_url="https://llm.test",
         api_key="test-secret-key",
         model="test-model",
-        client=httpx.AsyncClient(transport=transport),
+        client=httpx.AsyncClient(transport=transport, base_url="https://llm.test"),
     )
 
 
@@ -166,7 +166,7 @@ async def test_openai_provider_accumulates_streamed_tool_call_arguments() -> Non
 
 @pytest.mark.asyncio
 async def test_openai_provider_handles_done_marker_without_event() -> None:
-    provider = _provider(_chunk({"content": "ok"}, finish_reason="stop"))
+    provider = _provider(_transport(_chunk({"content": "ok"}, finish_reason="stop")))
     events = [event async for event in provider.stream_chat(**_stream_kwargs())]
     assert events[-1].kind == "done"
     assert events[-1].content == "ok"
@@ -195,21 +195,30 @@ async def test_openai_provider_connection_error_raises_unavailable() -> None:
 @pytest.mark.asyncio
 async def test_openai_provider_timeout_raises_unavailable() -> None:
     async def _slow(request: httpx.Request) -> httpx.Response:
-        await asyncio.sleep(5)
-        return httpx.Response(200, text="late")
+        # MockTransport handlers bypass httpx timeout enforcement, so raise
+        # the transport-level timeout directly — this exercises the provider's
+        # exception mapping (httpx.TimeoutException -> LLMProviderUnavailable).
+        raise httpx.ReadTimeout("simulated read timeout", request=request)
 
-    client = httpx.AsyncClient(transport=httpx.MockTransport(_slow), timeout=0.05)
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(_slow), timeout=0.05, base_url="https://llm.test"
+    )
     provider = OpenAICompatibleProvider(
         base_url="https://llm.test", api_key="k", model="m", client=client
     )
 
     with pytest.raises(LLMProviderUnavailable):
-        _ = [event async for event in provider.stream_chat(**_stream_kwargs())]
+        _ = [
+            event
+            async for event in provider.stream_chat(
+                **{**_stream_kwargs(), "timeout_seconds": 0.05}
+            )
+        ]
 
 
 @pytest.mark.asyncio
 async def test_openai_provider_never_exposes_api_key_in_events() -> None:
-    provider = _provider(_chunk({"content": "answer"}, finish_reason="stop"))
+    provider = _provider(_transport(_chunk({"content": "answer"}, finish_reason="stop")))
     events = [event async for event in provider.stream_chat(**_stream_kwargs())]
     serialized = json.dumps([event.model_dump() for event in events])
     assert "test-secret-key" not in serialized

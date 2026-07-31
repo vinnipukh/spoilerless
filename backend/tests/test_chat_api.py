@@ -3,11 +3,20 @@
 Runs against the live local Neo4j instance. The LLM is always the deterministic
 FakeLLMProvider (zero network); provider failure and disabled-provider paths are
 exercised explicitly and must map to HTTP 503, never 401/403.
+
+All tests are synchronous TestClient calls (the working pattern in
+test_graph_api.py): the app's async Neo4j driver is only ever touched inside
+TestClient's portal loop.  In-memory repo awaits (FakeUserRepo.upsert,
+InMemorySessionRepository.create) run via asyncio.run; progress persistence in
+the auth helper goes through the real HTTP endpoint, so no driver call ever
+crosses an event loop.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
+from collections.abc import Iterator
 from typing import Any, AsyncIterator
 from uuid import uuid4
 
@@ -27,7 +36,6 @@ from backend.app.llm.provider import (
     LLMProviderUnavailable,
     install_llm_error_handlers,
 )
-from backend.app.repository.progress import ProgressRepository
 from backend.app.repository.session import InMemorySessionRepository
 from backend.app.services.auth import AuthService
 from backend.app.services.chat import get_llm_provider
@@ -74,13 +82,30 @@ class TimeoutLLMProvider:
 
     async def stream_chat(self, **kwargs: Any) -> AsyncIterator[LLMEvent]:
         raise LLMProviderUnavailable("simulated provider timeout")
+        yield  # pragma: no cover — unreachable; marks this as an async generator
 
 
 @pytest.fixture
-def database() -> AsyncIterator[Neo4jDatabase]:
+def database() -> Iterator[Neo4jDatabase]:
     db = Neo4jDatabase()
     db.open()
     yield db
+
+    # Clean up test-created chat/progress nodes so the seed-integrity audit
+    # in test_graph_api.py stays green.  A FRESH driver + loop is required:
+    # the app's driver connections are bound to TestClient's portal loop and
+    # would crash if reused here (cross-loop 'NoneType' send).
+    async def _cleanup() -> None:
+        clean = Neo4jDatabase()
+        clean.open()
+        try:
+            await clean.execute_query("MATCH (n:ChatSession) DETACH DELETE n")
+            await clean.execute_query("MATCH (n:ChatMessage) DETACH DELETE n")
+            await clean.execute_query("MATCH (n:UserSeriesProgress) DETACH DELETE n")
+        finally:
+            await clean.close()
+
+    asyncio.run(_cleanup())
 
 
 @pytest.fixture
@@ -132,34 +157,46 @@ def fake_provider() -> FakeLLMProvider:
 
 
 @pytest.fixture
-def client(chat_app: FastAPI) -> TestClient:
-    return TestClient(chat_app, raise_server_exceptions=False)
+def client(chat_app: FastAPI) -> Iterator[TestClient]:
+    # Context-managed TestClient keeps ONE portal loop alive for the whole
+    # test — the app's async Neo4j driver is only ever used inside that loop
+    # (test_graph_api.py pattern). Without `with`, starlette starts a fresh
+    # per-request loop and pooled driver connections die with the first one.
+    with TestClient(chat_app, raise_server_exceptions=False) as client:
+        yield client
 
 
-async def _authed(
+def _authed(
     client: TestClient,
-    database: Neo4jDatabase,
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
     progress: int | None = 1,
 ) -> dict[str, Any]:
-    """Create a user, authenticate via session cookie, and persist progress."""
-    user = await fake_user_repo.upsert(
-        google_sub=f"sub-{uuid4()}",
-        email="user@example.com",
-        display_name="Test User",
-        avatar_url="",
+    """Create a user, authenticate via session cookie, and persist progress.
+
+    Progress is persisted through the real HTTP endpoint (TestClient's portal
+    loop) so the app's driver is never touched from another event loop.
+    """
+    user = asyncio.run(
+        fake_user_repo.upsert(
+            google_sub=f"sub-{uuid4()}",
+            email="user@example.com",
+            display_name="Test User",
+            avatar_url="",
+        )
     )
-    raw_token = await session_repo.create(user["id"], ttl_seconds=3600)
+    raw_token = asyncio.run(session_repo.create(user["id"], ttl_seconds=3600))
     client.cookies.set("session", raw_token)
     if progress is not None:
-        await ProgressRepository(database).upsert(
-            user["id"], SERIES_ID, visible_until_order=progress
+        response = client.post(
+            f"/api/series/{SERIES_ID}/progress",
+            json={"visible_until_order": progress},
         )
+        assert response.status_code == 200, response.text
     return user
 
 
-async def _create_session(client: TestClient, title: str = "Test session") -> dict[str, Any]:
+def _create_session(client: TestClient, title: str = "Test session") -> dict[str, Any]:
     response = client.post(
         f"/api/series/{SERIES_ID}/chat/sessions", json={"title": title}
     )
@@ -211,20 +248,21 @@ def test_chat_requires_authentication(client: TestClient) -> None:
 
 def test_cross_user_session_is_generic_404(
     client: TestClient,
-    database: Neo4jDatabase,
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
 ) -> None:
-    user_a = await _authed(client, database, fake_user_repo, session_repo)
-    session = await _create_session(client)
+    user_a = _authed(client, fake_user_repo, session_repo)
+    session = _create_session(client)
 
-    other = await fake_user_repo.upsert(
-        google_sub=f"sub-{uuid4()}",
-        email="other@example.com",
-        display_name="Other",
-        avatar_url="",
+    other = asyncio.run(
+        fake_user_repo.upsert(
+            google_sub=f"sub-{uuid4()}",
+            email="other@example.com",
+            display_name="Other",
+            avatar_url="",
+        )
     )
-    raw_token = await session_repo.create(other["id"], ttl_seconds=3600)
+    raw_token = asyncio.run(session_repo.create(other["id"], ttl_seconds=3600))
     client.cookies.set("session", raw_token)
 
     response = client.get(f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}")
@@ -240,13 +278,12 @@ def test_cross_user_session_is_generic_404(
 
 def test_streaming_answer_citations_validated_against_this_turn_context(
     client: TestClient,
-    database: Neo4jDatabase,
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
     fake_provider: FakeLLMProvider,
 ) -> None:
-    await _authed(client, database, fake_user_repo, session_repo, progress=1)
-    session = await _create_session(client)
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_session(client)
 
     fake_provider.scripted_events = _neighborhood_scripted_events(
         citations=[
@@ -312,13 +349,12 @@ def test_streaming_answer_citations_validated_against_this_turn_context(
 
 def test_lowering_progress_removes_citations_to_now_hidden_claims(
     client: TestClient,
-    database: Neo4jDatabase,
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
     fake_provider: FakeLLMProvider,
 ) -> None:
-    await _authed(client, database, fake_user_repo, session_repo, progress=3)
-    session = await _create_session(client)
+    _authed(client, fake_user_repo, session_repo, progress=3)
+    session = _create_session(client)
 
     def _script() -> None:
         fake_provider.scripted_events = _neighborhood_scripted_events(
@@ -383,17 +419,17 @@ def test_disabled_provider_returns_503_never_401(
     get_settings.cache_clear()
     try:
         app = _build_app(database, fake_user_repo, session_repo, provider=None)
-        client = TestClient(app, raise_server_exceptions=False)
-        user = await _authed(client, database, fake_user_repo, session_repo, progress=1)
-        session = await _create_session(client)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            user = _authed(client, fake_user_repo, session_repo, progress=1)
+            session = _create_session(client)
 
-        response = client.post(
-            f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages",
-            json={"question": "Who is Dexter related to?"},
-        )
-        assert response.status_code == 503
-        assert response.json()["detail"]["code"] == "LLM_DISABLED"
-        assert user["id"]
+            response = client.post(
+                f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages",
+                json={"question": "Who is Dexter related to?"},
+            )
+            assert response.status_code == 503
+            assert response.json()["detail"]["code"] == "LLM_DISABLED"
+            assert user["id"]
     finally:
         get_settings.cache_clear()
 
@@ -409,16 +445,16 @@ def test_provider_timeout_returns_503_never_401(
     session_repo: InMemorySessionRepository,
 ) -> None:
     app = _build_app(database, fake_user_repo, session_repo, provider=TimeoutLLMProvider())
-    client = TestClient(app, raise_server_exceptions=False)
-    await _authed(client, database, fake_user_repo, session_repo, progress=1)
-    session = await _create_session(client)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        _authed(client, fake_user_repo, session_repo, progress=1)
+        session = _create_session(client)
 
-    response = client.post(
-        f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages",
-        json={"question": "Who is Dexter related to?"},
-    )
-    assert response.status_code == 503
-    assert response.json()["detail"]["code"] == "LLM_PROVIDER_UNAVAILABLE"
+        response = client.post(
+            f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages",
+            json={"question": "Who is Dexter related to?"},
+        )
+        assert response.status_code == 503
+        assert response.json()["detail"]["code"] == "LLM_PROVIDER_UNAVAILABLE"
 
 
 # ---------------------------------------------------------------------------
@@ -428,12 +464,11 @@ def test_provider_timeout_returns_503_never_401(
 
 def test_zero_message_session_returns_empty_messages(
     client: TestClient,
-    database: Neo4jDatabase,
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
 ) -> None:
-    await _authed(client, database, fake_user_repo, session_repo, progress=1)
-    session = await _create_session(client)
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_session(client)
 
     detail = client.get(f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}")
     assert detail.status_code == 200
@@ -450,13 +485,12 @@ def test_zero_message_session_returns_empty_messages(
 
 def test_session_list_is_user_scoped(
     client: TestClient,
-    database: Neo4jDatabase,
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
 ) -> None:
-    await _authed(client, database, fake_user_repo, session_repo, progress=1)
-    first = await _create_session(client, title="First")
-    second = await _create_session(client, title="Second")
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    first = _create_session(client, title="First")
+    second = _create_session(client, title="Second")
 
     response = client.get(f"/api/series/{SERIES_ID}/chat/sessions")
     assert response.status_code == 200
@@ -467,13 +501,12 @@ def test_session_list_is_user_scoped(
 
 def test_non_streaming_message_returns_envelope(
     client: TestClient,
-    database: Neo4jDatabase,
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
     fake_provider: FakeLLMProvider,
 ) -> None:
-    await _authed(client, database, fake_user_repo, session_repo, progress=1)
-    session = await _create_session(client)
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_session(client)
     fake_provider.scripted_events = _neighborhood_scripted_events()
 
     response = client.post(
@@ -488,11 +521,10 @@ def test_non_streaming_message_returns_envelope(
 
 def test_unknown_session_is_generic_404(
     client: TestClient,
-    database: Neo4jDatabase,
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
 ) -> None:
-    await _authed(client, database, fake_user_repo, session_repo, progress=1)
+    _authed(client, fake_user_repo, session_repo, progress=1)
     response = client.post(
         f"/api/series/{SERIES_ID}/chat/sessions/chat-session:nope/messages",
         json={"question": "hello"},

@@ -5,11 +5,19 @@ backend suite). Watch progress is backend-authoritative: the boundary is never
 accepted as request input on the GraphRAG path, only via this explicit
 progress endpoint, and it is resolved server-side from the persisted
 UserSeriesProgress record.
+
+All tests are synchronous TestClient calls (the working pattern in
+test_graph_api.py): the app's async Neo4j driver is only ever touched inside
+TestClient's portal loop.  In-memory repo awaits run via asyncio.run with a
+dedicated driver instance that is discarded afterwards — the driver never
+crosses event loops.
 """
 
 from __future__ import annotations
 
-from typing import Any, AsyncIterator
+import asyncio
+from collections.abc import AsyncIterator, Iterator
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -61,10 +69,22 @@ class FakeUserRepo:
 
 
 @pytest.fixture
-def database() -> AsyncIterator[Neo4jDatabase]:
+def database() -> Iterator[Neo4jDatabase]:
     db = Neo4jDatabase()
     db.open()
     yield db
+
+    # Clean up test-created progress nodes (fresh driver + loop — the app
+    # driver's connections live in TestClient's portal loop).
+    async def _cleanup() -> None:
+        clean = Neo4jDatabase()
+        clean.open()
+        try:
+            await clean.execute_query("MATCH (n:UserSeriesProgress) DETACH DELETE n")
+        finally:
+            await clean.close()
+
+    asyncio.run(_cleanup())
 
 
 @pytest.fixture
@@ -97,36 +117,62 @@ def progress_app(
 
 
 @pytest.fixture
-def client(progress_app: FastAPI) -> TestClient:
-    return TestClient(progress_app, raise_server_exceptions=False)
+def client(progress_app: FastAPI) -> Iterator[TestClient]:
+    # Context-managed TestClient keeps ONE portal loop alive for the whole
+    # test — the app's async Neo4j driver is only ever used inside that loop
+    # (test_graph_api.py pattern). Without `with`, starlette starts a fresh
+    # per-request loop and pooled driver connections die with the first one.
+    with TestClient(progress_app, raise_server_exceptions=False) as client:
+        yield client
+
+
+def _cleanup_user(user_id: str) -> None:
+    """Delete the user's Neo4j rows via a dedicated driver+loop.
+
+    The app's driver is only ever used inside TestClient's portal loop; any
+    cleanup here uses its own short-lived driver so no connection ever crosses
+    an event loop (see test_graph_api.py's _seed_live_database pattern).
+    """
+
+    async def _cleanup() -> None:
+        db = Neo4jDatabase()
+        db.open()
+        try:
+            await db.execute_query(
+                "MATCH (p:UserSeriesProgress {user_id: $uid}) DETACH DELETE p",
+                uid=user_id,
+            )
+            await db.execute_query(
+                "MATCH (u:AppUser {id: $uid}) DETACH DELETE u", uid=user_id
+            )
+        finally:
+            await db.close()
+
+    asyncio.run(_cleanup())
 
 
 @pytest.fixture
-async def authed_user(
+def authed_user(
     client: TestClient,
-    database: Neo4jDatabase,
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
-) -> AsyncIterator[dict[str, Any]]:
+) -> Iterator[dict[str, Any]]:
     """Authenticate a fresh user against the app; clean up Neo4j rows on exit."""
-    user = await fake_user_repo.upsert(
-        google_sub=f"sub-{uuid4()}",
-        email="user@example.com",
-        display_name="Test User",
-        avatar_url="",
+    user = asyncio.run(
+        fake_user_repo.upsert(
+            google_sub=f"sub-{uuid4()}",
+            email="user@example.com",
+            display_name="Test User",
+            avatar_url="",
+        )
     )
-    raw_token = await session_repo.create(user["id"], ttl_seconds=3600)
+    raw_token = asyncio.run(session_repo.create(user["id"], ttl_seconds=3600))
     client.cookies.set("session", raw_token)
     yield user
-    await database.execute_query(
-        "MATCH (p:UserSeriesProgress {user_id: $uid}) DETACH DELETE p", uid=user["id"]
-    )
-    await database.execute_query(
-        "MATCH (u:AppUser {id: $uid}) DETACH DELETE u", uid=user["id"]
-    )
+    _cleanup_user(user["id"])
 
 
-async def _set_progress(
+def _set_progress(
     client: TestClient, series_id: str, visible_until_order: int
 ) -> Any:
     return client.post(
@@ -135,19 +181,21 @@ async def _set_progress(
     )
 
 
-async def _switch_to_other_user(
+def _switch_to_other_user(
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
     client: TestClient,
 ) -> dict[str, Any]:
     """Authenticate as a second, distinct user."""
-    other = await fake_user_repo.upsert(
-        google_sub=f"sub-{uuid4()}",
-        email="other@example.com",
-        display_name="Other",
-        avatar_url="",
+    other = asyncio.run(
+        fake_user_repo.upsert(
+            google_sub=f"sub-{uuid4()}",
+            email="other@example.com",
+            display_name="Other",
+            avatar_url="",
+        )
     )
-    raw_token = await session_repo.create(other["id"], ttl_seconds=3600)
+    raw_token = asyncio.run(session_repo.create(other["id"], ttl_seconds=3600))
     client.cookies.set("session", raw_token)
     return other
 
@@ -179,7 +227,7 @@ def test_progress_is_scoped_to_the_authenticated_user(
     assert response.status_code == 200
     assert response.json()["visible_until_order"] == 2
 
-    other = await _switch_to_other_user(fake_user_repo, session_repo, client)
+    other = _switch_to_other_user(fake_user_repo, session_repo, client)
     assert other["id"] != authed_user["id"]
 
     response = client.get("/api/series/series_dexter/progress")

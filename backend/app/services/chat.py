@@ -1,0 +1,204 @@
+"""Chat service — session CRUD, grounded answer orchestration, provider wiring.
+
+``get_llm_provider`` is the FastAPI dependency that builds the configured
+provider; tests override it via ``app.dependency_overrides`` with the
+deterministic ``FakeLLMProvider`` (zero network).  A disabled provider
+(``LLM_ENABLED=false``) raises ``LLMProviderDisabled`` and an unconfigured or
+unavailable provider raises ``LLMProviderUnavailable`` — both map to HTTP 503
+via :func:`install_llm_error_handlers`, never 401/403.
+"""
+
+from __future__ import annotations
+
+from typing import Annotated, Any, AsyncIterator
+
+from fastapi import Depends
+
+from backend.app.core.config import get_settings
+from backend.app.domain.chat import (
+    ChatMessageResponse,
+    ChatSessionDetailResponse,
+    ChatSessionResponse,
+    Citation,
+    GraphFocus,
+    MessageResponseEnvelope,
+)
+from backend.app.graph.database import Neo4jDatabase
+from backend.app.llm.provider import (
+    LLMProvider,
+    LLMProviderDisabled,
+    LLMProviderUnavailable,
+    OpenAICompatibleProvider,
+)
+from backend.app.repository.chat import ChatRepository, ChatSessionNotFound
+from backend.app.retrieval.pipeline import RetrievalPipeline
+from backend.app.services.progress import ProgressNotFoundError, ProgressService
+
+
+def get_llm_provider() -> LLMProvider:
+    """Build the configured LLM provider from ``Settings`` (env-driven).
+
+    The API key is read only here, inside the provider constructor, from
+    settings — it never appears in a response model, a log line, or a
+    Revision record (T-06-07).
+    """
+    settings = get_settings()
+    if not settings.llm_enabled:
+        raise LLMProviderDisabled("The LLM provider is disabled.")
+    if settings.llm_provider != "openai_compatible":
+        raise LLMProviderUnavailable(
+            f"Unsupported LLM provider: {settings.llm_provider}"
+        )
+    if not settings.llm_base_url or not settings.llm_api_key or not settings.llm_model:
+        raise LLMProviderUnavailable("The LLM provider is not configured.")
+    return OpenAICompatibleProvider(
+        base_url=settings.llm_base_url,
+        api_key=settings.llm_api_key,
+        model=settings.llm_model,
+    )
+
+
+class ChatService:
+    """Orchestrates chat sessions, persistence, and grounded answers."""
+
+    def __init__(
+        self,
+        database: Neo4jDatabase,
+        progress_service: ProgressService | None = None,
+        pipeline: RetrievalPipeline | None = None,
+    ) -> None:
+        self._database = database
+        self._repository = ChatRepository(database)
+        self._progress = progress_service or ProgressService(database)
+        self._pipeline = pipeline or RetrievalPipeline(
+            database, progress_service=self._progress
+        )
+
+    async def create_session(
+        self, user_id: str, series_id: str, title: str
+    ) -> ChatSessionResponse:
+        return await self._repository.create_session(user_id, series_id, title)
+
+    async def list_sessions(
+        self, user_id: str, series_id: str
+    ) -> list[ChatSessionResponse]:
+        return await self._repository.list_sessions(user_id, series_id)
+
+    async def get_session_detail(
+        self, user_id: str, series_id: str, session_id: str
+    ) -> ChatSessionDetailResponse:
+        """Return the session plus messages visible at the current boundary.
+
+        Raises ``ChatSessionNotFound`` for foreign or missing sessions (the
+        identical generic not-found).  With no persisted progress the message
+        list fails closed to empty — never an error that reveals existence.
+        """
+        session = await self._repository.get_session(user_id, series_id, session_id)
+        try:
+            boundary = await self._progress.resolve(user_id, series_id)
+        except ProgressNotFoundError:
+            boundary = None
+        if boundary is None:
+            messages: list[ChatMessageResponse] = []
+        else:
+            messages = await self._repository.list_messages_for_response(
+                user_id, series_id, session_id, boundary
+            )
+        return ChatSessionDetailResponse(session=session, messages=messages)
+
+    async def answer_stream(
+        self,
+        *,
+        user_id: str,
+        series_id: str,
+        chat_session_id: str,
+        question: str,
+        provider: LLMProvider,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Run one grounded turn; yield stream chunks then a final done chunk.
+
+        Yields ``{"type": "text_delta", "text": ...}`` chunks followed by one
+        ``{"type": "done", "envelope": {...}}`` chunk carrying the full
+        ``MessageResponseEnvelope``.  Persists the user message before
+        streaming and the assistant message (with the exact boundary snapshot
+        used) after the pipeline completes.
+        """
+        boundary = await self._progress.resolve(user_id, series_id)
+        history = await self._repository.list_messages_for_context(
+            user_id, series_id, chat_session_id, boundary
+        )
+        await self._repository.create_message(
+            user_id,
+            series_id,
+            chat_session_id,
+            role="user",
+            content=question,
+            visible_until_order_snapshot=boundary,
+        )
+
+        final_done: Any = None
+        async for event in self._pipeline.answer(
+            user_id=user_id,
+            series_id=series_id,
+            chat_session_id=chat_session_id,
+            question=question,
+            history=history,
+            provider=provider,
+        ):
+            if event.kind == "text_delta" and event.text:
+                yield {"type": "text_delta", "text": event.text}
+            elif event.kind == "done":
+                final_done = event
+
+        citations = [
+            Citation.model_validate(citation)
+            for citation in (final_done.citations or [])
+        ]
+        graph_focus = GraphFocus(
+            node_ids=(final_done.graph_focus or {}).get("node_ids", []),
+            edge_ids=(final_done.graph_focus or {}).get("edge_ids", []),
+        )
+        assistant_message = await self._repository.create_message(
+            user_id,
+            series_id,
+            chat_session_id,
+            role="assistant",
+            content=final_done.content or "",
+            visible_until_order_snapshot=boundary,
+            citations=[citation.model_dump() for citation in citations],
+            graph_focus=graph_focus.model_dump(),
+        )
+        envelope = MessageResponseEnvelope(
+            message=assistant_message,
+            citations=citations,
+            graph_focus=graph_focus,
+            proposed_change_set=None,
+        )
+        yield {"type": "done", "envelope": envelope.model_dump(mode="json")}
+
+    async def answer(
+        self,
+        *,
+        user_id: str,
+        series_id: str,
+        chat_session_id: str,
+        question: str,
+        provider: LLMProvider,
+    ) -> MessageResponseEnvelope:
+        """Non-streaming variant: consume the stream and return the envelope."""
+        done_chunk: dict[str, Any] | None = None
+        async for chunk in self.answer_stream(
+            user_id=user_id,
+            series_id=series_id,
+            chat_session_id=chat_session_id,
+            question=question,
+            provider=provider,
+        ):
+            if chunk["type"] == "done":
+                done_chunk = chunk
+        if done_chunk is None:
+            raise LLMProviderUnavailable("The LLM provider returned no answer.")
+        return MessageResponseEnvelope.model_validate(done_chunk["envelope"])
+
+
+LLMProviderDependency = Annotated[LLMProvider, Depends(get_llm_provider)]
