@@ -5,16 +5,15 @@ milestone_name: milestone
 current_phase: 06
 current_phase_name: spoiler-safe-graphrag-chat-and-graph-editing-agent
 status: executing
-stopped_at: Phase 6 UI-SPEC approved
-last_updated: "2026-07-31T12:14:13.166Z"
+stopped_at: Completed 06-03-PLAN.md
+last_updated: "2026-07-31T21:29:14.876Z"
 last_activity: 2026-07-31
 last_activity_desc: Phase 06 execution resumed (wave continue)
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 35
-  completed_plans: 24
-  percent: 69
+  completed_plans: 26
 ---
 
 # HD Graf Cehennemi — Project State
@@ -127,12 +126,17 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 | Phase 03.1 P02 | 7 min | 2 tasks | DetailPanel restyle, card accents, responsive sheet |
 | Phase 03.1 P03 | 3 min | 2 tasks | AppShell wordmark, segmented episode control, SeriesSelect polish |
 | Phase 03.1 P04 | 3 min | 2 tasks | GraphLegend, GraphControls, shadcn tooltip/collapsible |
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 06 P03 | 15min | 2 tasks | 6 files |
 
 ## Session
 
-**Last session:** 2026-07-30T20:54:30.985Z
-**Stopped at:** Phase 6 UI-SPEC approved
-**Resume file:** .planning/phases/06-spoiler-safe-graphrag-chat-and-graph-editing-agent/06-UI-SPEC.md
+**Last session:** 2026-07-31T21:29:14.856Z
+**Stopped at:** Completed 06-03-PLAN.md
+**Resume file:** None
 
 ## Decisions
 
@@ -158,12 +162,13 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 - [Phase 03.1-04]: GraphControls reset reuses the existing module-scope runLayout function from GraphCanvas.tsx — not a second layout code path
 - [Phase 03.1-04]: select.tsx animation classes removed and z-index bumped from z-50 to z-[100] — fix for episode dropdown not being visible
 - [Phase 03.1 test]: setup.ts React.act polyfill uses `Object.defineProperty` on the CJS require cache — required for React 19.2.x compatibility with @testing-library/react
+- [Phase ?]: [Phase 06-03]: Fixed ProgressNotFoundError propagating as raw 500 in chat message endpoints and RetrievalPipeline.answer() - caught and mapped to generic 404 / fail-closed empty boundary
 
 ## Current Position
 
 Phase: 06 (spoiler-safe-graphrag-chat-and-graph-editing-agent) — EXECUTING
-Plan: 3 of 12
-Status: Executing Phase 06 — 06-01/06-02 complete (slice + full toolset)
+Plan: 4 of 12
+Status: Ready to execute
 Last activity: 2026-07-31 — Phase 06 execution resumed (wave continue)
 
 ## Operator Next Steps

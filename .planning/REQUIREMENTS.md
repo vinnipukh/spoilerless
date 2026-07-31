@@ -76,7 +76,7 @@ All requirements below are pending until their acceptance evidence is executed. 
 
 #### Authoritative Watch Progress & Spoiler-Safe Retrieval
 
-- [ ] **RAG-01**: A persisted per-user, per-series watch-progress record (not a frontend-supplied parameter) is the sole source of `visible_until_order` for every GraphRAG request; the existing `/api/series/{id}/graph` endpoint and chat retrieval use compatible visibility semantics.
+- [x] **RAG-01**: A persisted per-user, per-series watch-progress record (not a frontend-supplied parameter) is the sole source of `visible_until_order` for every GraphRAG request; the existing `/api/series/{id}/graph` endpoint and chat retrieval use compatible visibility semantics.
 - [ ] **RAG-02**: An explicit allowlisted set of typed backend retrieval tools (entity search/get, neighborhood, path, timeline, claims, evidence, sources, graph summary, user notes) each independently re-enforce user ownership, series scope, `visible_from_order` filtering, bounded depth/result counts, and fail-closed behavior; no tool accepts user- or model-provided Cypher.
 - [ ] **RAG-03**: Hidden/future graph resources behave as nonexistent through every tool, error path, and citation — no leakage via counts, path existence, timing, or metadata.
 
