@@ -43,3 +43,24 @@ counts fail, and the count deltas exactly match the 8 leftover candidate-origin 
    `test_chat_api.py`'s `database` fixture).
 2. One-time manual cleanup of the current dev database:
    `MATCH (n) WHERE n.origin = 'candidate' DETACH DELETE n`.
+
+## Wave-2 post-merge gate: pollution has cascaded further
+
+**Found during:** orchestrator's Wave 2 post-merge full-suite gate (after 06-03 + 06-04 both
+landed), `cd backend && uv run pytest -q`.
+
+**Symptom:** full-suite run now shows 5 failed + 7 errors (up from the 3 failures 06-03
+originally logged): the same 3 `test_seed_idempotency.py` failures, plus 2 new
+`test_extraction_models.py` failures and 7 new `ERROR`s across `test_candidate_ingest.py`
+(4) and `test_candidate_review.py` (3) — all Phase 5 (candidate extraction/ingest/review)
+territory, none of it touched by any Phase 6 plan. Re-running `test_candidate_ingest.py`
+against the already-polluted dev DB appears to trip unique-constraint/setup errors on top
+of the original count-drift failures, worsening the same untorn-down-fixture root cause.
+
+**Verified unrelated to phase 06:** targeted run of every phase-06-relevant test file
+(`test_progress_api`, `test_chat_api`, `test_chat_persistence`, `test_retrieval_pipeline`,
+`test_retrieval_tools`, `test_citations`, `test_prompt_injection`, `test_openapi_contract`,
+`test_frontend_contract_doc`) — 110/110 pass in isolation. Wave 2 post-merge gate treated as
+PASS on that basis; the Phase 5 pollution remains out of scope for Phase 6 to fix, per the
+same SCOPE BOUNDARY rule, but is now worse and should be cleaned up (recommended fix above)
+before Phase 5 work resumes or before running the unfiltered full suite again.
