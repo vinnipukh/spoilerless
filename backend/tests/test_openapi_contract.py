@@ -133,6 +133,8 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         "/api/series/{series_id}/chat/sessions/{session_id}",
         "/api/series/{series_id}/chat/sessions/{session_id}/messages",
         "/api/series/{series_id}/chat/sessions/{session_id}/messages/stream",
+        # ChangeSets (phase 06 graph-editing agent, Stage 1 propose)
+        "/api/series/{series_id}/change-sets",
         # Authentication
         "/api/auth/google", "/api/auth/me", "/api/auth/logout",
     }
@@ -174,11 +176,13 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         ("delete", "/api/series/{series_id}/chat/sessions/{session_id}"),
         ("post", "/api/series/{series_id}/chat/sessions/{session_id}/messages"),
         ("post", "/api/series/{series_id}/chat/sessions/{session_id}/messages/stream"),
+        # ChangeSets (phase 06 graph-editing agent, Stage 1 propose)
+        ("post", "/api/series/{series_id}/change-sets"),
         ("post", "/api/auth/google"),
         ("get", "/api/auth/me"),
         ("post", "/api/auth/logout"),
     }
-    assert len(schema["paths"]) == 27
+    assert len(schema["paths"]) == 28
     for path, item in schema["paths"].items():
         for method, operation in item.items():
             if method not in {"get", "post", "patch", "delete"}:
