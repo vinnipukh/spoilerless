@@ -36,8 +36,16 @@ from backend.app.llm.provider import LLMEvent, LLMProvider
 from backend.app.llm.system_prompt import SYSTEM_PROMPT_V1
 from backend.app.retrieval.tools import (
     fetch_episode_codes,
+    find_path,
+    get_claims,
+    get_current_visible_graph_summary,
     get_entity,
+    get_evidence,
     get_neighborhood,
+    get_sources,
+    get_timeline,
+    get_user_notes,
+    search_entities,
 )
 from backend.app.services.progress import ProgressService
 
@@ -78,7 +86,81 @@ class GetNeighborhoodInput(BaseModel):
     depth: int = Field(default=1, ge=1, le=3, description="Traversal depth.")
 
 
+class SearchEntitiesInput(BaseModel):
+    """Input schema for the ``search_entities`` tool."""
+
+    query: str = Field(
+        min_length=1, max_length=200, description="Substring to match against entity labels."
+    )
+    allowed_entity_types: list[str] = Field(
+        default_factory=lambda: sorted(
+            ["Character", "Event", "Location", "Organization", "Object"]
+        ),
+        description="Entity types to search (server-intersected with the allowlist).",
+    )
+    limit: int = Field(default=10, ge=1, le=25, description="Maximum results.")
+
+
+class FindPathInput(BaseModel):
+    """Input schema for the ``find_path`` tool."""
+
+    source_entity_id: str = Field(description="Stable ID of the path start.")
+    target_entity_id: str = Field(description="Stable ID of the path end.")
+    max_hops: int = Field(default=3, ge=1, le=4, description="Maximum hops.")
+
+
+class GetTimelineInput(BaseModel):
+    """Input schema for the ``get_timeline`` tool."""
+
+    limit: int = Field(default=20, ge=1, le=50, description="Maximum episodes.")
+
+
+class GetClaimsInput(BaseModel):
+    """Input schema for the ``get_claims`` tool."""
+
+    entity_ids: list[str] = Field(description="Entity IDs to fetch claims for.")
+    limit: int = Field(default=50, ge=1, le=50, description="Maximum claims.")
+
+
+class GetEvidenceInput(BaseModel):
+    """Input schema for the ``get_evidence`` tool."""
+
+    claim_ids: list[str] = Field(description="Claim IDs to fetch evidence for.")
+    limit: int = Field(default=50, ge=1, le=50, description="Maximum evidence items.")
+
+
+class GetSourcesInput(BaseModel):
+    """Input schema for the ``get_sources`` tool."""
+
+    claim_ids: list[str] = Field(description="Claim IDs to fetch sources for.")
+    limit: int = Field(default=50, ge=1, le=50, description="Maximum sources.")
+
+
+class GetGraphSummaryInput(BaseModel):
+    """Input schema for the ``get_current_visible_graph_summary`` tool."""
+
+    focus_entity_ids: list[str] = Field(
+        default_factory=list, description="Optional entity IDs to focus the summary on."
+    )
+
+
+class GetUserNotesInput(BaseModel):
+    """Input schema for the ``get_user_notes`` tool."""
+
+    entity_or_claim_ids: list[str] = Field(
+        description="Visible Character or Claim IDs to fetch the user's own notes for."
+    )
+
+
 TOOL_SCHEMAS: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_entities",
+            "description": "Search visible entities by label substring (bounded, deterministic order).",
+            "parameters": SearchEntitiesInput.model_json_schema(),
+        },
+    },
     {
         "type": "function",
         "function": {
@@ -95,11 +177,88 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "parameters": GetNeighborhoodInput.model_json_schema(),
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_path",
+            "description": "Find a visible path between two entities (bounded hops).",
+            "parameters": FindPathInput.model_json_schema(),
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_timeline",
+            "description": "Fetch the visible episode timeline up to the watched boundary.",
+            "parameters": GetTimelineInput.model_json_schema(),
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_claims",
+            "description": "Fetch visible claims touching the given entities.",
+            "parameters": GetClaimsInput.model_json_schema(),
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_evidence",
+            "description": "Fetch visible evidence supporting the given claims.",
+            "parameters": GetEvidenceInput.model_json_schema(),
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_sources",
+            "description": "Fetch visible sources referenced by the given claims.",
+            "parameters": GetSourcesInput.model_json_schema(),
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_current_visible_graph_summary",
+            "description": "Summarize the currently visible graph (counts + bounded samples).",
+            "parameters": GetGraphSummaryInput.model_json_schema(),
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_user_notes",
+            "description": "Fetch the requesting user's own notes on visible entities/claims.",
+            "parameters": GetUserNotesInput.model_json_schema(),
+        },
+    },
 ]
 
 _TOOL_EXECUTORS: dict[str, Any] = {
+    "search_entities": search_entities,
     "get_entity": get_entity,
     "get_neighborhood": get_neighborhood,
+    "find_path": find_path,
+    "get_timeline": get_timeline,
+    "get_claims": get_claims,
+    "get_evidence": get_evidence,
+    "get_sources": get_sources,
+    "get_current_visible_graph_summary": get_current_visible_graph_summary,
+    "get_user_notes": get_user_notes,
+}
+
+_TOOL_INPUT_MODELS: dict[str, type[BaseModel]] = {
+    "search_entities": SearchEntitiesInput,
+    "get_entity": GetEntityInput,
+    "get_neighborhood": GetNeighborhoodInput,
+    "find_path": FindPathInput,
+    "get_timeline": GetTimelineInput,
+    "get_claims": GetClaimsInput,
+    "get_evidence": GetEvidenceInput,
+    "get_sources": GetSourcesInput,
+    "get_current_visible_graph_summary": GetGraphSummaryInput,
+    "get_user_notes": GetUserNotesInput,
 }
 
 
@@ -308,7 +467,11 @@ class RetrievalPipeline:
                 return
             for call in new_calls:
                 result = await self._execute_tool_call(
-                    call, series_id=series_id, boundary=boundary, retrieved=retrieved
+                    call,
+                    series_id=series_id,
+                    boundary=boundary,
+                    user_id=user_id,
+                    retrieved=retrieved,
                 )
                 executed.add(_call_args(call.tool_name or "", call.arguments or {}))
                 messages.append(
@@ -355,39 +518,37 @@ class RetrievalPipeline:
         *,
         series_id: str,
         boundary: int,
+        user_id: str,
         retrieved: dict[str, Any],
     ) -> dict[str, Any]:
         """Execute one allowlisted tool call with the server-resolved boundary.
 
         The model's JSON arguments are validated against the tool's input
-        schema; ``visible_until_order`` is NEVER sourced from those arguments.
+        schema; ``visible_until_order`` (and the requesting ``user_id``) are
+        NEVER sourced from those arguments.
         """
         name = call.tool_name or ""
         arguments = call.arguments or {}
         executor = _TOOL_EXECUTORS.get(name)
-        if executor is None:
+        input_model = _TOOL_INPUT_MODELS.get(name)
+        if executor is None or input_model is None:
             return {"error": f"unknown tool: {name}"}
-
-        if name == "get_neighborhood":
-            try:
-                parsed = GetNeighborhoodInput.model_validate(arguments)
-            except ValidationError:
-                return {"error": "invalid arguments for get_neighborhood"}
-            result = await get_neighborhood(
+        try:
+            parsed = input_model.model_validate(arguments)
+        except ValidationError:
+            return {"error": f"invalid arguments for {name}"}
+        if name == "get_user_notes":
+            result = await get_user_notes(
                 self._database,
-                entity_id=parsed.entity_id,
+                **parsed.model_dump(),
+                user_id=user_id,
                 series_id=series_id,
                 visible_until_order=boundary,
-                depth=parsed.depth,
             )
-        else:  # get_entity
-            try:
-                parsed = GetEntityInput.model_validate(arguments)
-            except ValidationError:
-                return {"error": "invalid arguments for get_entity"}
-            result = await get_entity(
+        else:
+            result = await executor(
                 self._database,
-                entity_id=parsed.entity_id,
+                **parsed.model_dump(),
                 series_id=series_id,
                 visible_until_order=boundary,
             )
