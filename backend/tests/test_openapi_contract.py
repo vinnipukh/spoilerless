@@ -127,6 +127,12 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         "/api/series/{series_id}/candidates/{claim_id}",
         "/api/series/{series_id}/candidates/{claim_id}/approve",
         "/api/series/{series_id}/candidates/{claim_id}/reject",
+        # Chat sessions and watch progress (phase 06 GraphRAG chat)
+        "/api/series/{series_id}/progress",
+        "/api/series/{series_id}/chat/sessions",
+        "/api/series/{series_id}/chat/sessions/{session_id}",
+        "/api/series/{series_id}/chat/sessions/{session_id}/messages",
+        "/api/series/{series_id}/chat/sessions/{session_id}/messages/stream",
         # Authentication
         "/api/auth/google", "/api/auth/me", "/api/auth/logout",
     }
@@ -159,11 +165,19 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         ("patch", "/api/series/{series_id}/candidates/{claim_id}"),
         ("post", "/api/series/{series_id}/candidates/{claim_id}/approve"),
         ("post", "/api/series/{series_id}/candidates/{claim_id}/reject"),
+        # Chat sessions and watch progress (phase 06 GraphRAG chat)
+        ("get", "/api/series/{series_id}/progress"),
+        ("post", "/api/series/{series_id}/progress"),
+        ("get", "/api/series/{series_id}/chat/sessions"),
+        ("post", "/api/series/{series_id}/chat/sessions"),
+        ("get", "/api/series/{series_id}/chat/sessions/{session_id}"),
+        ("post", "/api/series/{series_id}/chat/sessions/{session_id}/messages"),
+        ("post", "/api/series/{series_id}/chat/sessions/{session_id}/messages/stream"),
         ("post", "/api/auth/google"),
         ("get", "/api/auth/me"),
         ("post", "/api/auth/logout"),
     }
-    assert len(schema["paths"]) == 22
+    assert len(schema["paths"]) == 27
     for path, item in schema["paths"].items():
         for method, operation in item.items():
             if method not in {"get", "post", "patch", "delete"}:
