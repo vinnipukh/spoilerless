@@ -1,0 +1,464 @@
+"""Tests for the ChangeSet Stage 1 (Propose) vertical slice (RAG-11, RAG-13).
+
+Task 1 tests exercise the domain-level discriminated union directly (no HTTP,
+no database) — closed-field rejection and the empty-operations guard.
+
+Task 2 tests exercise the full ``POST /api/series/{series_id}/change-sets``
+integration path against the live local Neo4j instance: server-side
+ontology/visibility/series validation, and the invariant that propose never
+mutates a target resource.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Iterator
+from typing import Any
+from uuid import uuid4
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from pydantic import ValidationError
+
+from backend.app.api import deps
+from backend.app.api.change_set import router as change_set_router
+from backend.app.api.chat import router as chat_router
+from backend.app.api.progress import router as progress_router
+from backend.app.core.errors import install_database_error_handlers
+from backend.app.domain.change_set import (
+    ChangeSetCreateRequest,
+    CreateRelationshipOperation,
+)
+from backend.app.graph.database import Neo4jDatabase
+from backend.app.repository.session import InMemorySessionRepository
+from backend.app.services.auth import AuthService
+
+async def _fresh_query(query: str, **params: Any) -> list[dict[str, Any]]:
+    """Run *query* on a brand-new driver/loop — never the app's shared driver.
+
+    The app's async Neo4j driver connections are bound to ``TestClient``'s
+    portal loop; reusing them from a bare ``asyncio.run()`` call crashes with
+    a cross-loop error (the same pattern documented in ``test_chat_api.py``'s
+    ``database`` fixture cleanup and ``_true_total``/``_delete_progress``
+    helpers).
+    """
+    db = Neo4jDatabase()
+    db.open()
+    try:
+        return await db.execute_query(query, **params)
+    finally:
+        await db.close()
+
+
+SERIES_ID = "series_dexter"
+OTHER_SERIES_ID = "series_other_show"
+DEXTER = "dexter:character:dexter_morgan"
+DEBRA = "dexter:character:debra_morgan"
+RUDY_COOPER = "dexter:character:rudy_cooper"  # visible_from_order=3, canonical
+EPISODE_1 = "dexter_s01e01"
+CROSS_SERIES_NODE = "other-series:character:ghost"
+
+
+# ---------------------------------------------------------------------------
+# Task 1 — domain-level discriminated union (no HTTP, no database)
+# ---------------------------------------------------------------------------
+
+
+def _valid_create_relationship_payload(**overrides: Any) -> dict[str, Any]:
+    payload = {
+        "operation_type": "create_relationship",
+        "source_id": DEXTER,
+        "target_id": DEBRA,
+        "relationship_type": "WORKS_WITH",
+        "episode_id": EPISODE_1,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_operation_model_forbids_origin_field() -> None:
+    with pytest.raises(ValidationError):
+        CreateRelationshipOperation(**_valid_create_relationship_payload(origin="user"))
+
+
+def test_operation_model_forbids_visible_from_order_field() -> None:
+    with pytest.raises(ValidationError):
+        CreateRelationshipOperation(
+            **_valid_create_relationship_payload(visible_from_order=1)
+        )
+
+
+def test_operation_model_forbids_id_field() -> None:
+    with pytest.raises(ValidationError):
+        CreateRelationshipOperation(
+            **_valid_create_relationship_payload(id="change-set-op:forged")
+        )
+
+
+def test_discriminator_rejects_unknown_operation_type() -> None:
+    with pytest.raises(ValidationError):
+        ChangeSetCreateRequest(
+            series_id=SERIES_ID,
+            chat_session_id="chat-session:x",
+            summary="test",
+            operations=[
+                {
+                    "operation_type": "drop_database",
+                    "source_id": DEXTER,
+                    "target_id": DEBRA,
+                }
+            ],
+        )
+
+
+def test_operation_model_rejects_non_allowlisted_relationship_type() -> None:
+    with pytest.raises(ValidationError):
+        CreateRelationshipOperation(
+            **_valid_create_relationship_payload(relationship_type="FRIEND_OF")
+        )
+
+
+def test_operation_model_requires_at_least_one_operation() -> None:
+    with pytest.raises(ValidationError):
+        ChangeSetCreateRequest(
+            series_id=SERIES_ID,
+            chat_session_id="chat-session:x",
+            summary="test",
+            operations=[],
+        )
+
+
+# ---------------------------------------------------------------------------
+# Task 2 — POST /api/series/{series_id}/change-sets integration tests
+# ---------------------------------------------------------------------------
+
+
+class FakeUserRepo:
+    def __init__(self) -> None:
+        self._store: dict[str, dict[str, Any]] = {}
+
+    async def upsert(
+        self, google_sub: str, email: str, display_name: str, avatar_url: str
+    ) -> dict[str, Any]:
+        record = {
+            "id": f"user:{uuid4()}",
+            "google_sub": google_sub,
+            "email": email,
+            "display_name": display_name,
+            "avatar_url": avatar_url,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+        }
+        self._store[google_sub] = record
+        return dict(record)
+
+    async def get_by_id(self, user_id: str) -> dict[str, Any] | None:
+        for record in self._store.values():
+            if record["id"] == user_id:
+                return dict(record)
+        return None
+
+
+@pytest.fixture
+def database() -> Iterator[Neo4jDatabase]:
+    db = Neo4jDatabase()
+    db.open()
+    yield db
+
+    async def _cleanup() -> None:
+        clean = Neo4jDatabase()
+        clean.open()
+        try:
+            await clean.execute_query("MATCH (n:ChangeSet) DETACH DELETE n")
+            await clean.execute_query("MATCH (n:ChatSession) DETACH DELETE n")
+            await clean.execute_query("MATCH (n:ChatMessage) DETACH DELETE n")
+            await clean.execute_query("MATCH (n:UserSeriesProgress) DETACH DELETE n")
+            await clean.execute_query(
+                "MATCH (n:Location {series_id: $series_id}) "
+                "WHERE NOT n.id STARTS WITH 'dexter:location:' DETACH DELETE n",
+                series_id=SERIES_ID,
+            )
+            await clean.execute_query(
+                "MATCH (n) WHERE n.id = $id DETACH DELETE n", id=CROSS_SERIES_NODE
+            )
+        finally:
+            await clean.close()
+
+    asyncio.run(_cleanup())
+
+
+@pytest.fixture
+def fake_user_repo() -> FakeUserRepo:
+    return FakeUserRepo()
+
+
+@pytest.fixture
+def session_repo() -> InMemorySessionRepository:
+    return InMemorySessionRepository()
+
+
+def _build_app(
+    database: Neo4jDatabase,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> FastAPI:
+    app = FastAPI()
+    install_database_error_handlers(app)
+    app.state.neo4j = database
+    app.state.session_repo = session_repo
+
+    def _override_auth_service() -> AuthService:
+        return AuthService(user_repo=fake_user_repo, session_repo=session_repo)
+
+    app.dependency_overrides[deps.get_auth_service] = _override_auth_service
+    app.include_router(progress_router)
+    app.include_router(chat_router)
+    app.include_router(change_set_router)
+    return app
+
+
+@pytest.fixture
+def change_set_app(
+    database: Neo4jDatabase,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> FastAPI:
+    return _build_app(database, fake_user_repo, session_repo)
+
+
+@pytest.fixture
+def client(change_set_app: FastAPI) -> Iterator[TestClient]:
+    with TestClient(change_set_app, raise_server_exceptions=False) as client:
+        yield client
+
+
+def _authed(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+    progress: int = 1,
+) -> dict[str, Any]:
+    user = asyncio.run(
+        fake_user_repo.upsert(
+            google_sub=f"sub-{uuid4()}",
+            email="user@example.com",
+            display_name="Test User",
+            avatar_url="",
+        )
+    )
+    raw_token = asyncio.run(session_repo.create(user["id"], ttl_seconds=3600))
+    client.cookies.set("session", raw_token)
+    response = client.post(
+        f"/api/series/{SERIES_ID}/progress", json={"visible_until_order": progress}
+    )
+    assert response.status_code == 200, response.text
+    return user
+
+
+def _create_chat_session(client: TestClient, title: str = "Change-set session") -> dict[str, Any]:
+    response = client.post(f"/api/series/{SERIES_ID}/chat/sessions", json={"title": title})
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def _create_node_op(**overrides: Any) -> dict[str, Any]:
+    op = {
+        "operation_type": "create_node",
+        "node_type": "Location",
+        "label": f"Rita's second home {uuid4()}",
+        "episode_id": EPISODE_1,
+    }
+    op.update(overrides)
+    return op
+
+
+def _propose(client: TestClient, session_id: str, operations: list[dict[str, Any]], summary: str = "Test change") -> Any:
+    return client.post(
+        f"/api/series/{SERIES_ID}/change-sets",
+        json={
+            "series_id": SERIES_ID,
+            "chat_session_id": session_id,
+            "summary": summary,
+            "operations": operations,
+        },
+    )
+
+
+def _insert_cross_series_node() -> None:
+    asyncio.run(
+        _fresh_query(
+            "CREATE (n:Character {id: $id, series_id: $series_id, label: 'Cross', "
+            "visible_from_order: 1, origin: 'canonical'})",
+            id=CROSS_SERIES_NODE,
+            series_id=OTHER_SERIES_ID,
+        )
+    )
+
+
+def test_propose_requires_authentication(client: TestClient) -> None:
+    response = _propose(client, "chat-session:nope", [_create_node_op()])
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "AUTH_UNAUTHENTICATED"
+
+
+async def _location_count(label: str) -> int:
+    rows = await _fresh_query(
+        "MATCH (n:Location {series_id: $series_id, label: $label}) RETURN count(n) AS c",
+        series_id=SERIES_ID,
+        label=label,
+    )
+    return rows[0]["c"]
+
+
+async def _change_set_count(session_id: str) -> int:
+    rows = await _fresh_query(
+        "MATCH (cs:ChangeSet {series_id: $series_id, chat_session_id: $session_id}) "
+        "RETURN count(cs) AS c",
+        series_id=SERIES_ID,
+        session_id=session_id,
+    )
+    return rows[0]["c"]
+
+
+async def _dexter_debra_works_with_claim_count() -> int:
+    rows = await _fresh_query(
+        "MATCH (c:Claim {series_id: $series_id, subject_id: $subject_id, "
+        "object_id: $object_id, predicate: 'WORKS_WITH'}) RETURN count(c) AS c",
+        series_id=SERIES_ID,
+        subject_id=DEXTER,
+        object_id=DEBRA,
+    )
+    return rows[0]["c"]
+
+
+def test_propose_create_node_returns_awaiting_confirmation_and_creates_no_target(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_chat_session(client)
+    label = f"Rita's second home {uuid4()}"
+
+    response = _propose(client, session["id"], [_create_node_op(label=label)])
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["status"] == "awaiting_confirmation"
+    assert body["series_id"] == SERIES_ID
+    assert body["chat_session_id"] == session["id"]
+    assert body["operations"][0]["operation_type"] == "create_node"
+    assert body["visible_until_order_snapshot"] == 1
+
+    assert asyncio.run(_location_count(label)) == 0
+
+
+def test_propose_create_relationship_creates_no_claim(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_chat_session(client)
+
+    before = asyncio.run(_dexter_debra_works_with_claim_count())
+    response = _propose(
+        client,
+        session["id"],
+        [
+            {
+                "operation_type": "create_relationship",
+                "source_id": DEXTER,
+                "target_id": DEBRA,
+                "relationship_type": "WORKS_WITH",
+                "episode_id": EPISODE_1,
+            }
+        ],
+    )
+    assert response.status_code == 201, response.text
+    after = asyncio.run(_dexter_debra_works_with_claim_count())
+    assert after == before
+
+
+def test_propose_hidden_target_rejected_like_nonexistent(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_chat_session(client)
+
+    hidden = _propose(
+        client,
+        session["id"],
+        [{"operation_type": "delete_node", "node_id": RUDY_COOPER}],
+    )
+    nonexistent = _propose(
+        client,
+        session["id"],
+        [{"operation_type": "delete_node", "node_id": "dexter:character:nope"}],
+    )
+    assert hidden.status_code == nonexistent.status_code == 422
+    assert hidden.json()["detail"]["code"] == nonexistent.json()["detail"]["code"]
+
+
+def test_propose_cross_series_target_rejected_identically_to_hidden(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    _insert_cross_series_node()
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_chat_session(client)
+
+    cross_series = _propose(
+        client,
+        session["id"],
+        [{"operation_type": "delete_node", "node_id": CROSS_SERIES_NODE}],
+    )
+    hidden = _propose(
+        client,
+        session["id"],
+        [{"operation_type": "delete_node", "node_id": RUDY_COOPER}],
+    )
+    assert cross_series.status_code == hidden.status_code == 422
+    assert cross_series.json()["detail"]["code"] == hidden.json()["detail"]["code"]
+
+
+def test_propose_operations_validated_in_list_order_no_partial_persistence(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_chat_session(client)
+    label = f"Never persisted {uuid4()}"
+
+    response = _propose(
+        client,
+        session["id"],
+        [
+            _create_node_op(label=label),
+            {"operation_type": "delete_node", "node_id": RUDY_COOPER},
+        ],
+    )
+    assert response.status_code == 422
+
+    assert asyncio.run(_location_count(label)) == 0
+    assert asyncio.run(_change_set_count(session["id"])) == 0
+
+
+def test_propose_same_content_twice_creates_distinct_change_sets(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_chat_session(client)
+    op = _create_node_op()
+
+    first = _propose(client, session["id"], [op], summary="Same content")
+    second = _propose(client, session["id"], [op], summary="Same content")
+
+    assert first.status_code == second.status_code == 201
+    assert first.json()["id"] != second.json()["id"]
