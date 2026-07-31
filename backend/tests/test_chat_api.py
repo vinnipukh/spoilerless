@@ -519,6 +519,83 @@ def test_non_streaming_message_returns_envelope(
     assert envelope["message"]["content"] == "Dexter and Debra are siblings."
 
 
+def test_message_without_progress_returns_generic_404(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+    fake_provider: FakeLLMProvider,
+) -> None:
+    """No persisted progress must fail closed to the generic 404 — never a
+    raw 500 (RAG-01)."""
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_session(client)
+
+    # Wipe the just-created progress row so the session exists but the user
+    # has no persisted boundary — the scenario this endpoint must fail closed
+    # for (distinct from "session not found").
+    reset = client.post(
+        f"/api/series/{SERIES_ID}/progress", json={"visible_until_order": 1}
+    )
+    assert reset.status_code == 200
+    from backend.app.graph.database import Neo4jDatabase as _Neo4jDatabase
+
+    async def _delete_progress() -> None:
+        db = _Neo4jDatabase()
+        db.open()
+        try:
+            await db.execute_query(
+                "MATCH (p:UserSeriesProgress {series_id: $sid}) DETACH DELETE p",
+                sid=SERIES_ID,
+            )
+        finally:
+            await db.close()
+
+    asyncio.run(_delete_progress())
+
+    fake_provider.scripted_events = _neighborhood_scripted_events()
+    response = client.post(
+        f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages",
+        json={"question": "Who is Dexter related to?"},
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "resource_not_found"
+
+
+def test_stream_message_without_progress_returns_404_not_a_broken_stream(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+    fake_provider: FakeLLMProvider,
+) -> None:
+    """Missing progress must be caught before the SSE stream opens — once
+    headers are sent an in-stream exception cannot become a clean 404."""
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_session(client)
+
+    from backend.app.graph.database import Neo4jDatabase as _Neo4jDatabase
+
+    async def _delete_progress() -> None:
+        db = _Neo4jDatabase()
+        db.open()
+        try:
+            await db.execute_query(
+                "MATCH (p:UserSeriesProgress {series_id: $sid}) DETACH DELETE p",
+                sid=SERIES_ID,
+            )
+        finally:
+            await db.close()
+
+    asyncio.run(_delete_progress())
+
+    fake_provider.scripted_events = _neighborhood_scripted_events()
+    response = client.post(
+        f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages/stream",
+        json={"question": "Who is Dexter related to?"},
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "resource_not_found"
+
+
 def test_unknown_session_is_generic_404(
     client: TestClient,
     fake_user_repo: FakeUserRepo,

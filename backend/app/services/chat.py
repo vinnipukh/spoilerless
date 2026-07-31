@@ -84,6 +84,15 @@ class ChatService:
     ) -> list[ChatSessionResponse]:
         return await self._repository.list_sessions(user_id, series_id)
 
+    async def ensure_progress_exists(self, user_id: str, series_id: str) -> None:
+        """Raise ``ProgressNotFoundError`` when no progress is persisted yet.
+
+        Used to fail closed *before* opening a streaming response — an error
+        raised mid-stream cannot cleanly become an HTTP error status once SSE
+        headers are already sent (RAG-01).
+        """
+        await self._progress.resolve(user_id, series_id)
+
     async def get_session_detail(
         self, user_id: str, series_id: str, session_id: str
     ) -> ChatSessionDetailResponse:

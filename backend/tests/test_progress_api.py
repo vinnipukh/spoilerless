@@ -28,8 +28,11 @@ from backend.app.api import deps
 from backend.app.api.progress import router as progress_router
 from backend.app.core.errors import install_database_error_handlers
 from backend.app.graph.database import Neo4jDatabase
+from backend.app.graph.progress import PROGRESS_GET_QUERY, PROGRESS_UPSERT_QUERY
 from backend.app.repository.session import InMemorySessionRepository
+from backend.app.repository.progress import ProgressRepository
 from backend.app.services.auth import AuthService
+from backend.app.services.progress import ProgressNotFoundError, ProgressService
 
 
 class FakeUserRepo:
@@ -235,6 +238,64 @@ def test_progress_is_scoped_to_the_authenticated_user(
     assert response.json()["detail"]["code"] == "resource_not_found"
 
 
+def test_progress_get_query_scopes_ownership_inside_the_match_pattern() -> None:
+    """The ownership filter must live inside the Cypher node pattern itself —
+    never a separate post-fetch check in Python (06-RESEARCH.md Q7)."""
+    assert (
+        "(p:UserSeriesProgress {user_id: $user_id, series_id: $series_id})"
+        in PROGRESS_GET_QUERY
+    )
+    assert (
+        "(p:UserSeriesProgress {user_id: $user_id, series_id: $series_id})"
+        in PROGRESS_UPSERT_QUERY
+    )
+
+
+def test_never_watched_and_nonexistent_series_return_identical_404(
+    client: TestClient, authed_user: dict[str, Any]
+) -> None:
+    """A real series the user never watched and a series_id that does not
+    exist anywhere must be indistinguishable to the caller."""
+    never_watched = client.get("/api/series/series_dexter/progress")
+    nonexistent = client.get("/api/series/series_does_not_exist_at_all/progress")
+
+    assert never_watched.status_code == nonexistent.status_code == 404
+    assert (
+        never_watched.json()["detail"]["code"]
+        == nonexistent.json()["detail"]["code"]
+        == "resource_not_found"
+    )
+    assert never_watched.json() == nonexistent.json()
+
+
+def test_progress_service_resolve_raises_not_found_for_missing_progress(
+    database: Neo4jDatabase,
+) -> None:
+    """``ProgressService.resolve`` raises the typed error (not a generic
+    exception) so every caller can fail closed instead of propagating a raw
+    500 (RAG-01)."""
+    service = ProgressService(database)
+
+    async def _run() -> None:
+        with pytest.raises(ProgressNotFoundError):
+            await service.resolve("user:does-not-exist", "series_dexter")
+
+    asyncio.run(_run())
+
+
+def test_progress_repository_get_is_none_for_missing_record(
+    database: Neo4jDatabase,
+) -> None:
+    """The repository-level read returns ``None`` (never raises, never a
+    partial/garbage row) when no record exists for the (user, series) pair."""
+    repo = ProgressRepository(database)
+
+    async def _run() -> Any:
+        return await repo.get("user:does-not-exist", "series_dexter")
+
+    assert asyncio.run(_run()) is None
+
+
 # ---------------------------------------------------------------------------
 # CRUD semantics
 # ---------------------------------------------------------------------------
@@ -305,3 +366,51 @@ def test_progress_never_accepts_extra_fields(
         json={"visible_until_order": 1, "user_id": "attacker"},
     )
     assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Concurrency backstop
+# ---------------------------------------------------------------------------
+
+
+def test_concurrent_upserts_for_same_user_series_resolve_without_torn_state(
+    database: Neo4jDatabase,
+) -> None:
+    """Two near-simultaneous upserts for the same (user, series) must resolve
+    to one of the two submitted values with no exception and no torn/partial
+    write — the MERGE-based upsert's atomic semantics (backstop-level, not an
+    exhaustive load test)."""
+    repo = ProgressRepository(database)
+    user_id = f"user:concurrency-{uuid4()}"
+    series_id = "series_dexter"
+
+    async def _run() -> Any:
+        await asyncio.gather(
+            repo.upsert(user_id, series_id, 1),
+            repo.upsert(user_id, series_id, 3),
+        )
+        return await repo.get(user_id, series_id)
+
+    try:
+        final = asyncio.run(_run())
+        assert final is not None
+        assert final.visible_until_order in (1, 3)
+        assert final.user_id == user_id
+        assert final.series_id == series_id
+    finally:
+
+        async def _cleanup() -> None:
+            clean = Neo4jDatabase()
+            clean.open()
+            try:
+                await clean.execute_query(
+                    "MATCH (p:UserSeriesProgress {user_id: $uid}) DETACH DELETE p",
+                    uid=user_id,
+                )
+                await clean.execute_query(
+                    "MATCH (u:AppUser {id: $uid}) DETACH DELETE u", uid=user_id
+                )
+            finally:
+                await clean.close()
+
+        asyncio.run(_cleanup())

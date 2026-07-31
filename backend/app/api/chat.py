@@ -30,6 +30,7 @@ from backend.app.services.chat import (
     LLMProviderDependency,
     ChatService,
 )
+from backend.app.services.progress import ProgressNotFoundError
 
 router = APIRouter(prefix="/api/series/{series_id}/chat", tags=["chat"])
 
@@ -127,7 +128,7 @@ async def post_message(
             question=payload.question,
             provider=provider,
         )
-    except ChatSessionNotFound:
+    except (ChatSessionNotFound, ProgressNotFoundError):
         _not_found()
 
 
@@ -149,11 +150,15 @@ async def stream_message(
     provider: LLMProviderDependency,
 ) -> StreamingResponse:
     """Stream text deltas, then a final ``event: done`` with the envelope."""
-    # Resolve session ownership up-front so not-found surfaces as a normal
-    # HTTP 404 before any streaming begins.
+    # Resolve session ownership and progress existence up-front so a
+    # not-found (foreign/missing session, or no persisted progress yet)
+    # surfaces as a normal HTTP 404 before any streaming begins — once SSE
+    # headers are sent an in-stream exception cannot become a clean error
+    # status (RAG-01 fail-closed guarantee).
     try:
         await service.get_session_detail(user["id"], series_id, session_id)
-    except ChatSessionNotFound:
+        await service.ensure_progress_exists(user["id"], series_id)
+    except (ChatSessionNotFound, ProgressNotFoundError):
         _not_found()
 
     async def event_stream() -> AsyncIterator[str]:

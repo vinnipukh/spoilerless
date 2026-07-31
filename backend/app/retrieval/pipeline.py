@@ -47,7 +47,7 @@ from backend.app.retrieval.tools import (
     get_user_notes,
     search_entities,
 )
-from backend.app.services.progress import ProgressService
+from backend.app.services.progress import ProgressNotFoundError, ProgressService
 
 # Answer used when the model cited only IDs that were never retrieved this
 # turn: the response is ungrounded, so it is replaced with an explicit
@@ -490,7 +490,16 @@ class RetrievalPipeline:
         """
         del chat_session_id  # unused this plan — reserved for audit linkage
         settings = get_settings()
-        boundary = await self._progress.resolve(user_id, series_id)
+        try:
+            boundary = await self._progress.resolve(user_id, series_id)
+        except ProgressNotFoundError:
+            # No persisted progress: fail closed to an empty visible set
+            # rather than a raw 500 (RAG-01). ``visible_until_order=None``
+            # already flows safely through every tool query — Cypher's
+            # ``<= $visible_until_order`` comparison is null when the
+            # parameter is null, which never matches (WHERE null is falsy),
+            # so every tool call returns zero rows.
+            boundary = None
 
         retrieved: dict[str, Any] = {
             "entity": None,
@@ -596,7 +605,7 @@ class RetrievalPipeline:
         call: LLMEvent,
         *,
         series_id: str,
-        boundary: int,
+        boundary: int | None,
         user_id: str,
         retrieved: dict[str, Any],
     ) -> dict[str, Any]:
@@ -674,7 +683,7 @@ class RetrievalPipeline:
         done: LLMEvent,
         messages: list[dict[str, Any]],
         retrieved: dict[str, Any],
-        boundary: int,
+        boundary: int | None,
         history: list[dict[str, Any]],
         provider: LLMProvider,
         settings: Any,
