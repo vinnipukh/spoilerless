@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from typing import Annotated, Any, AsyncIterator
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from fastapi.responses import StreamingResponse
 
 from backend.app.api.deps import CurrentUserDependency, DatabaseDependency
@@ -27,6 +27,7 @@ from backend.app.domain.chat import (
 from backend.app.llm.provider import LLMProvider
 from backend.app.repository.chat import ChatSessionNotFound
 from backend.app.services.chat import (
+    ConcurrentGenerationLimitExceeded,
     LLMProviderDependency,
     ChatService,
 )
@@ -44,6 +45,10 @@ ChatServiceDependency = Annotated[ChatService, Depends(get_chat_service)]
 
 def _not_found() -> None:
     raise http_error(404, "resource_not_found", "Resource not found.")
+
+
+def _too_many_requests() -> None:
+    raise http_error(429, "too_many_requests", "Too many concurrent requests.")
 
 
 @router.post(
@@ -102,6 +107,36 @@ async def get_session(
         _not_found()
 
 
+@router.delete(
+    "/sessions/{session_id}",
+    status_code=204,
+    summary="Delete a chat session and its messages",
+    responses={
+        401: error_responses(401)[401],
+        404: error_responses(404)[404],
+        204: {"description": "Session deleted."},
+    },
+)
+async def delete_session(
+    series_id: str,
+    session_id: str,
+    user: CurrentUserDependency,
+    service: ChatServiceDependency,
+) -> Response:
+    """Hard-delete the session and its messages.
+
+    Foreign, cross-series, and missing sessions all return the identical
+    generic 404 as ``GET`` (no separate ownership existence-check query is
+    needed — a single user-scoped MATCH already makes those three cases
+    indistinguishable; see 06-PATTERNS.md note in ``graph/chat.py``).
+    """
+    try:
+        await service.delete_session(user["id"], series_id, session_id)
+    except ChatSessionNotFound:
+        _not_found()
+    return Response(status_code=204)
+
+
 @router.post(
     "/sessions/{session_id}/messages",
     response_model=MessageResponseEnvelope,
@@ -109,6 +144,7 @@ async def get_session(
     responses={
         401: error_responses(401)[401],
         404: error_responses(404)[404],
+        429: error_responses(429)[429],
         503: error_responses(503)[503],
     },
 )
@@ -130,6 +166,8 @@ async def post_message(
         )
     except (ChatSessionNotFound, ProgressNotFoundError):
         _not_found()
+    except ConcurrentGenerationLimitExceeded:
+        _too_many_requests()
 
 
 @router.post(
@@ -138,6 +176,7 @@ async def post_message(
     responses={
         401: error_responses(401)[401],
         404: error_responses(404)[404],
+        429: error_responses(429)[429],
         503: error_responses(503)[503],
     },
 )
@@ -154,7 +193,14 @@ async def stream_message(
     # not-found (foreign/missing session, or no persisted progress yet)
     # surfaces as a normal HTTP 404 before any streaming begins — once SSE
     # headers are sent an in-stream exception cannot become a clean error
-    # status (RAG-01 fail-closed guarantee).
+    # status (RAG-01 fail-closed guarantee). The concurrent-generation limit
+    # cannot be given this same pre-check treatment: acquiring the slot must
+    # happen atomically with the generation itself (inside
+    # ``ChatService.answer_stream``) or two genuinely concurrent requests
+    # could both pass a separate pre-check and double-book the one slot. A
+    # rejection that happens after headers are already sent is instead
+    # surfaced as a structured ``event: error`` below — the clearest signal
+    # this transport can give once the 200 status line has already gone out.
     try:
         await service.get_session_detail(user["id"], series_id, session_id)
         await service.ensure_progress_exists(user["id"], series_id)
@@ -162,16 +208,23 @@ async def stream_message(
         _not_found()
 
     async def event_stream() -> AsyncIterator[str]:
-        async for chunk in service.answer_stream(
-            user_id=user["id"],
-            series_id=series_id,
-            chat_session_id=session_id,
-            question=payload.question,
-            provider=provider,
-        ):
-            if chunk["type"] == "done":
-                yield f"event: done\ndata: {json.dumps(chunk['envelope'])}\n\n"
-            else:
-                yield f"data: {json.dumps(chunk)}\n\n"
+        try:
+            async for chunk in service.answer_stream(
+                user_id=user["id"],
+                series_id=series_id,
+                chat_session_id=session_id,
+                question=payload.question,
+                provider=provider,
+            ):
+                if chunk["type"] == "done":
+                    yield f"event: done\ndata: {json.dumps(chunk['envelope'])}\n\n"
+                else:
+                    yield f"data: {json.dumps(chunk)}\n\n"
+        except ConcurrentGenerationLimitExceeded:
+            error_payload = {
+                "code": "too_many_requests",
+                "message": "Too many concurrent requests.",
+            }
+            yield f"event: error\ndata: {json.dumps(error_payload)}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

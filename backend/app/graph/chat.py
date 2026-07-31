@@ -85,3 +85,19 @@ RETURN message.id AS id,
        message.created_at AS created_at,
        message.visible_until_order_snapshot AS visible_until_order_snapshot
 """
+
+# Hard-deletes the user's session and every message it owns.  A single
+# user-scoped MATCH already makes "missing" and "not yours" indistinguishable
+# (zero rows either way) — no separate ownership existence-check query is
+# needed here, unlike user_content.py's origin-conflict two-query pattern:
+# ChatSession has no third outcome to distinguish (no origin/conflict state),
+# only found-and-owned vs. not (06-PATTERNS.md's two-query pattern exists to
+# separate 404-from-409; there is no 409 case for chat sessions).
+CHAT_SESSION_DELETE_QUERY = """\
+MATCH (u:AppUser {id: $user_id})-[:HAS_CHAT_SESSION]->(session:ChatSession {id: $session_id, series_id: $series_id})
+OPTIONAL MATCH (session)-[:HAS_MESSAGE]->(message:ChatMessage)
+WITH session, collect(message) AS messages, session.id AS deleted_id
+FOREACH (m IN messages | DETACH DELETE m)
+DETACH DELETE session
+RETURN deleted_id AS id
+"""

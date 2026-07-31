@@ -38,7 +38,7 @@ from backend.app.llm.provider import (
 )
 from backend.app.repository.session import InMemorySessionRepository
 from backend.app.services.auth import AuthService
-from backend.app.services.chat import get_llm_provider
+from backend.app.services.chat import ChatService, get_llm_provider
 
 SERIES_ID = "series_dexter"
 DEXTER = "dexter:character:dexter_morgan"
@@ -608,3 +608,217 @@ def test_unknown_session_is_generic_404(
     )
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "resource_not_found"
+
+
+def test_zero_sessions_returns_empty_list_not_404(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    response = client.get(f"/api/series/{SERIES_ID}/chat/sessions")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+# ---------------------------------------------------------------------------
+# DELETE session (Task 2, RAG-10) — ownership, cross-series, and generic 404s
+# ---------------------------------------------------------------------------
+
+
+def test_delete_session_requires_authentication(client: TestClient) -> None:
+    response = client.delete(f"/api/series/{SERIES_ID}/chat/sessions/chat-session:nope")
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "AUTH_UNAUTHENTICATED"
+
+
+def test_delete_session_removes_it_and_its_messages_from_subsequent_get(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+    fake_provider: FakeLLMProvider,
+) -> None:
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_session(client)
+    fake_provider.scripted_events = _neighborhood_scripted_events()
+    posted = client.post(
+        f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages",
+        json={"question": "Who is Dexter related to?"},
+    )
+    assert posted.status_code == 200, posted.text
+
+    response = client.delete(f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}")
+    assert response.status_code == 204
+    assert response.content == b""
+
+    after = client.get(f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}")
+    assert after.status_code == 404
+    assert after.json()["detail"]["code"] == "resource_not_found"
+
+
+def test_delete_session_cross_user_and_nonexistent_return_identical_404(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_session(client)
+
+    other = asyncio.run(
+        fake_user_repo.upsert(
+            google_sub=f"sub-{uuid4()}",
+            email="other@example.com",
+            display_name="Other",
+            avatar_url="",
+        )
+    )
+    raw_token = asyncio.run(session_repo.create(other["id"], ttl_seconds=3600))
+    client.cookies.set("session", raw_token)
+
+    cross_user = client.delete(f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}")
+    nonexistent = client.delete(f"/api/series/{SERIES_ID}/chat/sessions/chat-session:nope")
+
+    assert cross_user.status_code == nonexistent.status_code == 404
+    assert cross_user.json() == nonexistent.json()
+    assert cross_user.json()["detail"]["code"] == "resource_not_found"
+
+
+def test_delete_session_cross_series_is_generic_404(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_session(client)
+
+    response = client.delete(
+        f"/api/series/series_other_show/chat/sessions/{session['id']}"
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "resource_not_found"
+
+
+def test_delete_session_retried_twice_returns_204_then_404(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    """Retrying a DELETE twice returns the same terminal result both times —
+    204 then 404, never a duplicate side effect."""
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_session(client)
+
+    first = client.delete(f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}")
+    second = client.delete(f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}")
+
+    assert first.status_code == 204
+    assert second.status_code == 404
+    assert second.json()["detail"]["code"] == "resource_not_found"
+
+
+# ---------------------------------------------------------------------------
+# Bounded concurrent generations (Task 2, T-06-13)
+# ---------------------------------------------------------------------------
+
+
+def test_concurrent_generation_for_same_user_is_rejected_with_clear_error(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+    fake_provider: FakeLLMProvider,
+    chat_app: FastAPI,
+) -> None:
+    """A second concurrent POST .../messages for the same user while one is
+    already in-flight is rejected with a clear, non-500 error — never
+    silently queued or dropped."""
+    user = _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_session(client)
+    fake_provider.scripted_events = _neighborhood_scripted_events()
+
+    service = ChatService(chat_app.state.neo4j)
+    service.acquire_generation_slot(user["id"])
+    try:
+        response = client.post(
+            f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages",
+            json={"question": "Who is Dexter related to?"},
+        )
+        assert response.status_code == 429
+        assert response.json()["detail"]["code"] == "too_many_requests"
+    finally:
+        service.release_generation_slot(user["id"])
+
+    # After releasing, a normal request for the same user succeeds again.
+    fake_provider.scripted_events = _neighborhood_scripted_events()
+    response = client.post(
+        f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages",
+        json={"question": "Who is Dexter related to?"},
+    )
+    assert response.status_code == 200, response.text
+
+
+def test_concurrent_generation_does_not_block_a_different_user(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+    fake_provider: FakeLLMProvider,
+    chat_app: FastAPI,
+) -> None:
+    other_user_id = f"user:{uuid4()}"
+    service = ChatService(chat_app.state.neo4j)
+    service.acquire_generation_slot(other_user_id)
+    try:
+        _authed(client, fake_user_repo, session_repo, progress=1)
+        session = _create_session(client)
+        fake_provider.scripted_events = _neighborhood_scripted_events()
+
+        response = client.post(
+            f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages",
+            json={"question": "Who is Dexter related to?"},
+        )
+        assert response.status_code == 200, response.text
+    finally:
+        service.release_generation_slot(other_user_id)
+
+
+def test_answer_stream_releases_generation_slot_on_client_disconnect(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+    fake_provider: FakeLLMProvider,
+) -> None:
+    """Starlette calls ``aclose()`` on the SSE body generator when a client
+    disconnects mid-stream — the concurrency slot must release exactly the
+    same way it does on normal completion, never leaking (T-06-13)."""
+    user = _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_session(client)
+    fake_provider.scripted_events = _neighborhood_scripted_events()
+
+    from backend.app.graph.database import Neo4jDatabase as _Neo4jDatabase
+
+    async def _simulate_disconnect() -> None:
+        db = _Neo4jDatabase()
+        db.open()
+        try:
+            service = ChatService(db)
+            generator = service.answer_stream(
+                user_id=user["id"],
+                series_id=SERIES_ID,
+                chat_session_id=session["id"],
+                question="Who is Dexter related to?",
+                provider=fake_provider,
+            )
+            await generator.__anext__()  # start the generation (slot acquired)
+            await generator.aclose()  # Starlette's client-disconnect path
+        finally:
+            await db.close()
+
+    asyncio.run(_simulate_disconnect())
+
+    # If the slot had leaked, this second generation for the same user would
+    # be rejected instead of succeeding.
+    fake_provider.scripted_events = _neighborhood_scripted_events()
+    response = client.post(
+        f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages",
+        json={"question": "Who is Dexter related to?"},
+    )
+    assert response.status_code == 200, response.text

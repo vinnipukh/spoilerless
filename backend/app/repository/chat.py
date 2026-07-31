@@ -20,6 +20,7 @@ from backend.app.graph.chat import (
     CHAT_MESSAGE_CREATE_QUERY,
     CHAT_MESSAGE_LIST_QUERY,
     CHAT_SESSION_CREATE_QUERY,
+    CHAT_SESSION_DELETE_QUERY,
     CHAT_SESSION_GET_QUERY,
     CHAT_SESSION_LIST_QUERY,
 )
@@ -97,6 +98,26 @@ class ChatRepository:
             series_id=series_id,
         )
         return [ChatSessionResponse.model_validate(_normalize(r)) for r in records]
+
+    async def delete_session(
+        self, user_id: str, series_id: str, session_id: str
+    ) -> None:
+        """Hard-delete the user's session and every message it owns.
+
+        Raises ``ChatSessionNotFound`` for foreign, cross-series, or missing
+        sessions — the identical generic not-found used everywhere else in
+        this module (cross-user and missing are indistinguishable by design).
+        """
+        records = await self._database.execute_query(
+            CHAT_SESSION_DELETE_QUERY,
+            user_id=user_id,
+            series_id=series_id,
+            session_id=session_id,
+        )
+        if not records:
+            raise ChatSessionNotFound(
+                f"Chat session {session_id} not found for this user."
+            )
 
     async def create_message(
         self,

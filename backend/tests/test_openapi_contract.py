@@ -171,6 +171,7 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         ("get", "/api/series/{series_id}/chat/sessions"),
         ("post", "/api/series/{series_id}/chat/sessions"),
         ("get", "/api/series/{series_id}/chat/sessions/{session_id}"),
+        ("delete", "/api/series/{series_id}/chat/sessions/{session_id}"),
         ("post", "/api/series/{series_id}/chat/sessions/{session_id}/messages"),
         ("post", "/api/series/{series_id}/chat/sessions/{session_id}/messages/stream"),
         ("post", "/api/auth/google"),
