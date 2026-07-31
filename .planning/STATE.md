@@ -2,17 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Awaiting next milestone
-stopped_at: Phase 4 fully executed — backend + frontend history panel and revert UI (13/13 new tests)
-last_updated: "2026-07-30T20:04:57.833Z"
-last_activity: 2026-07-30
-last_activity_desc: Milestone v1.0 completed and archived
-progress:
-  total_phases: 7
-  completed_phases: 6
-  total_plans: 23
-  completed_plans: 23
 current_phase: 05.1
+current_phase_name: INSERTED, urgent
+status: executing
+stopped_at: Phase 6 UI-SPEC approved
+last_updated: "2026-07-31T10:56:06.797Z"
+last_activity: 2026-07-30
+last_activity_desc: Phase 05.1 inserted after Phase 5 (backend-only PREP-01..05 left the review UI deferred); planning underway
+progress:
+  total_phases: 8
+  completed_phases: 6
+  total_plans: 35
+  completed_plans: 23
 ---
 
 # HD Graf Cehennemi — Project State
@@ -128,9 +129,9 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 
 ## Session
 
-**Last session:** 2026-07-30T14:38:00.000Z
-**Stopped at:** Phase 4 fully executed — backend + frontend history panel and revert UI (13/13 new tests)
-**Resume file:** None — Phase 4 fully delivered. Next: Phase 5 (Future-Extraction Preparation).
+**Last session:** 2026-07-30T20:54:30.985Z
+**Stopped at:** Phase 6 UI-SPEC approved
+**Resume file:** .planning/phases/06-spoiler-safe-graphrag-chat-and-graph-editing-agent/06-UI-SPEC.md
 
 ## Decisions
 
@@ -161,7 +162,7 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 
 Phase: 05.1 — Candidate review frontend UI (INSERTED, urgent)
 Plan: —
-Status: Planning
+Status: Ready to execute
 Last activity: 2026-07-30 — Phase 05.1 inserted after Phase 5 (backend-only PREP-01..05 left the review UI deferred); planning underway
 
 ## Operator Next Steps
