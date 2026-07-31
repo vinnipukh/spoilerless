@@ -32,6 +32,52 @@ class Settings(BaseSettings):
         description="Comma-separated list of allowed CORS frontend origins.",
     )
 
+    # LLM provider (GraphRAG chat) — backend-only, never exposed to clients.
+    llm_enabled: bool = Field(
+        default=False,
+        description="Enable the LLM-backed GraphRAG chat/retrieval endpoints.",
+    )
+    llm_provider: str = Field(
+        default="openai_compatible",
+        description="LLM provider implementation selector.",
+    )
+    llm_base_url: str = Field(
+        default="",
+        description="Base URL for the OpenAI-compatible chat completions endpoint.",
+    )
+    llm_api_key: str = Field(
+        default="",
+        description="LLM provider API key. Read only inside OpenAICompatibleProvider.",
+    )
+    llm_model: str = Field(
+        default="",
+        description="LLM model identifier passed to the provider.",
+    )
+    llm_timeout_seconds: int = Field(
+        default=60,
+        description="Per-request timeout for LLM provider calls, in seconds.",
+    )
+    llm_max_output_tokens: int = Field(
+        default=800,
+        description="Maximum tokens the model may generate per completion call.",
+    )
+    llm_temperature: float = Field(
+        default=0.0,
+        description="Sampling temperature for LLM completions.",
+    )
+    llm_max_tool_rounds: int = Field(
+        default=4,
+        description="Maximum bounded tool-calling rounds per chat turn.",
+    )
+    llm_max_context_items: int = Field(
+        default=40,
+        description="Maximum number of retrieved context items assembled per turn.",
+    )
+    llm_max_context_characters: int = Field(
+        default=12000,
+        description="Maximum total character budget for assembled context per turn.",
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

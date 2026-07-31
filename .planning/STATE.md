@@ -2,18 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 05.1
-current_phase_name: INSERTED, urgent
+current_phase: 06
+current_phase_name: spoiler-safe-graphrag-chat-and-graph-editing-agent
 status: executing
 stopped_at: Phase 6 UI-SPEC approved
-last_updated: "2026-07-31T10:56:06.797Z"
-last_activity: 2026-07-30
-last_activity_desc: Phase 05.1 inserted after Phase 5 (backend-only PREP-01..05 left the review UI deferred); planning underway
+last_updated: "2026-07-31T12:14:13.166Z"
+last_activity: 2026-07-31
+last_activity_desc: Phase 06 execution resumed (wave continue)
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 35
-  completed_plans: 23
+  completed_plans: 24
+  percent: 69
 ---
 
 # HD Graf Cehennemi — Project State
@@ -160,10 +161,10 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 
 ## Current Position
 
-Phase: 05.1 — Candidate review frontend UI (INSERTED, urgent)
-Plan: —
-Status: Ready to execute
-Last activity: 2026-07-30 — Phase 05.1 inserted after Phase 5 (backend-only PREP-01..05 left the review UI deferred); planning underway
+Phase: 06 (spoiler-safe-graphrag-chat-and-graph-editing-agent) — EXECUTING
+Plan: 1 of 12
+Status: Executing Phase 06
+Last activity: 2026-07-31 — Phase 06 execution resumed (wave continue)
 
 ## Operator Next Steps
 
