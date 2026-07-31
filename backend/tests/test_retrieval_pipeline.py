@@ -39,6 +39,8 @@ CLAIM_C1 = {
     "subject_id": "dexter:character:dexter_morgan",
     "object_id": "dexter:character:debra_morgan",
     "predicate": "FAMILY_OF",
+    "visible_from_order": 1,
+    "origin": "canonical",
 }
 NODE_N1 = {"id": "dexter:character:dexter_morgan", "label": "Dexter Morgan", "type": "Character"}
 NODE_N2 = {"id": "dexter:character:debra_morgan", "label": "Debra Morgan", "type": "Character"}
@@ -90,20 +92,24 @@ class _StubDatabase:
         series_rows: list[dict[str, Any]] | None = None,
     ) -> None:
         self._rows = {
-            "GET_ENTITY_QUERY": entity_rows or [],
-            "CLAIMS_FOR_FRONTIER": claim_rows or [],
-            "NODES_BY_IDS": node_rows or [],
+            # Routed by distinctive Cypher fragments of the actual query
+            # text (constant names never appear in the SQL).  get_entity
+            # falls back to node_rows when no entity_rows are supplied —
+            # the neighborhood tests provide entities via node_rows.
+            "node.id = $entity_id": entity_rows or node_rows or [],
+            "claim.claim_type": claim_rows or [],
+            "node.id IN $node_ids": node_rows or [],
             "SUPPORTED_BY": evidence_rows or [],
             "REFERS_TO": source_rows or [],
-            "EPISODE_CODES": [],
-            "SERIES_QUERY": series_rows or [],
+            "episode.id IN $episode_ids": [],
+            "series:Series": series_rows or [],
         }
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
     async def execute_query(self, query: str, **parameters: Any) -> list[dict[str, Any]]:
         self.calls.append((query, parameters))
-        for key, rows in self._rows.items():
-            if key in query:
+        for fragment, rows in self._rows.items():
+            if fragment in query:
                 return list(rows)
         return []
 

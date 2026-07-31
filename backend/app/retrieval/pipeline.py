@@ -56,11 +56,15 @@ INSUFFICIENT_CONTEXT_ANSWER = (
     "The watched graph does not contain enough information to answer that."
 )
 
-# Delimiter tags the context-assembly step wraps graph-sourced text in.  These
+# Delimiter tags the context-assembly step wraps context sections in.  These
 # exact names are referenced by SYSTEM_PROMPT_V1 (keep the two in sync) and by
-# the prompt-injection tests.
+# the prompt-injection tests.  The first eight are the documented fixed-order
+# sections (06-CONTEXT.md RAG-05); chat_history is the trailing ninth.
 CONTEXT_SECTIONS = (
+    "series_context",
+    "boundary",
     "entities",
+    "relationships",
     "claims",
     "evidence",
     "sources",
@@ -71,6 +75,141 @@ CONTEXT_SECTIONS = (
 
 def _tag(name: str) -> str:
     return f"<{name}>"
+
+
+def _entity_line(item: dict[str, Any]) -> str:
+    return f"- {item.get('label') or item.get('id')} ({item.get('id')}, {item.get('type')})"
+
+
+def _edge_line(item: dict[str, Any]) -> str:
+    return (
+        f"- {item.get('source')} -[{item.get('type')}]-> "
+        f"{item.get('target')} ({item.get('id')})"
+    )
+
+
+def _claim_line(item: dict[str, Any]) -> str:
+    return (
+        f"- {item.get('label') or item.get('id')} ({item.get('id')}): "
+        f"{item.get('subject_id')} {item.get('predicate')} {item.get('object_id')}"
+    )
+
+
+def _evidence_line(item: dict[str, Any]) -> str:
+    return f"- {item.get('label') or item.get('id')} ({item.get('id')}): {item.get('text') or ''}"
+
+
+def _source_line(item: dict[str, Any]) -> str:
+    return (
+        f"- {item.get('label') or item.get('id')} ({item.get('id')}, "
+        f"{item.get('source_type')}): {item.get('locator') or ''}"
+    )
+
+
+def _note_line(item: dict[str, Any]) -> str:
+    content = (item.get("content") or "").strip()
+    return f"- {content or item.get('id')}"
+
+
+def _dedupe_by_id(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Stable deduplication by ``id`` — the same resource retrieved by two
+    different tool calls appears exactly once (RAG-05)."""
+    seen: set[str] = set()
+    result: list[dict[str, Any]] = []
+    for item in items:
+        key = item.get("id")
+        if key is None or key not in seen:
+            if key is not None:
+                seen.add(key)
+            result.append(item)
+    return result
+
+
+def _by_distance(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Stable sort by hop distance (missing distance = direct, priority 0)."""
+    return sorted(items, key=lambda item: item.get("distance") or 0)
+
+
+def assemble_context(
+    *,
+    nodes: list[dict[str, Any]],
+    claims: list[dict[str, Any]],
+    evidence: list[dict[str, Any]],
+    sources: list[dict[str, Any]],
+    notes: list[dict[str, Any]],
+    history: list[dict[str, Any]],
+    max_items: int,
+    max_characters: int,
+    edges: list[dict[str, Any]] | None = None,
+    series: dict[str, Any] | None = None,
+    boundary: int | None = None,
+) -> str:
+    """Assemble retrieved items into delimited, data-framed context sections.
+
+    Sections always render in the fixed documented order — series context,
+    current watched boundary, relevant entities, relevant relationships,
+    claims, evidence fragments, sources, user notes, then chat history.  An
+    empty section renders as an empty ``(none)`` block, never omitted or
+    reordered.  Entities/claims/evidence/sources are deduplicated by stable ID
+    and prioritized by hop distance (direct evidence before distant
+    neighborhood results) when the ``max_items`` budget trims.  The
+    ``max_characters`` bound is enforced with Python ``len()`` — Unicode code
+    points, never bytes, so Turkish text is never truncated mid-character.
+    Only the allowlisted fields below are ever read from input rows; auth and
+    session data cannot enter the context by construction.
+
+    Every section is wrapped in its labeled delimiter tag.  Content inside
+    those tags is untrusted data — the system prompt tells the model exactly
+    that, and the prompt-injection tests assert malicious strings never escape
+    their section.
+    """
+
+    item_sections: list[tuple[str, list[dict[str, Any]], Any]] = [
+        ("entities", _by_distance(_dedupe_by_id(nodes)), _entity_line),
+        ("relationships", _by_distance(_dedupe_by_id(edges or [])), _edge_line),
+        ("claims", _by_distance(_dedupe_by_id(claims)), _claim_line),
+        ("evidence", _by_distance(_dedupe_by_id(evidence)), _evidence_line),
+        ("sources", _by_distance(_dedupe_by_id(sources)), _source_line),
+        ("notes", _dedupe_by_id(notes), _note_line),
+    ]
+    remaining = max_items
+    sections: list[str] = []
+
+    if series:
+        series_line = f"- {series.get('title') or series.get('id')} ({series.get('id')})"
+    else:
+        series_line = "(none)"
+    sections.append(_tag("series_context") + "\n" + series_line + "\n" + _tag("/series_context"))
+
+    boundary_line = f"- {boundary}" if boundary is not None else "(none)"
+    sections.append(_tag("boundary") + "\n" + boundary_line + "\n" + _tag("/boundary"))
+
+    for name, items, formatter in item_sections:
+        lines: list[str] = []
+        for item in items:
+            if remaining <= 0:
+                break
+            lines.append(formatter(item))
+            remaining -= 1
+        sections.append(
+            _tag(name) + "\n" + ("\n".join(lines) or "(none)") + "\n" + _tag(f"/{name}")
+        )
+
+    history_lines = [
+        f"- {m.get('role')}: {m.get('content') or ''}" for m in history[:max_items]
+    ]
+    sections.append(
+        _tag("chat_history")
+        + "\n"
+        + ("\n".join(history_lines) or "(none)")
+        + "\n"
+        + _tag("/chat_history")
+    )
+
+    context = "\n\n".join(sections)
+    if max_characters > 0 and len(context) > max_characters:
+        context = context[:max_characters]
+    return context
 
 
 class GetEntityInput(BaseModel):
@@ -260,71 +399,6 @@ _TOOL_INPUT_MODELS: dict[str, type[BaseModel]] = {
     "get_current_visible_graph_summary": GetGraphSummaryInput,
     "get_user_notes": GetUserNotesInput,
 }
-
-
-def assemble_context(
-    *,
-    nodes: list[dict[str, Any]],
-    claims: list[dict[str, Any]],
-    evidence: list[dict[str, Any]],
-    sources: list[dict[str, Any]],
-    notes: list[dict[str, Any]],
-    history: list[dict[str, Any]],
-    max_items: int,
-    max_characters: int,
-) -> str:
-    """Assemble retrieved items into delimited, data-framed context sections.
-
-    Every section is wrapped in its labeled delimiter tag.  Content inside
-    those tags is untrusted data — the system prompt tells the model exactly
-    that, and the prompt-injection tests assert malicious strings never escape
-    their section.
-    """
-
-    def _lines(items: list[dict[str, Any]], formatter: Any) -> list[str]:
-        return [formatter(item) for item in items[:max_items]]
-
-    sections: list[str] = []
-
-    entity_lines = _lines(
-        nodes,
-        lambda n: f"- {n.get('label') or n.get('id')} ({n.get('id')}, {n.get('type')})",
-    )
-    sections.append(_tag("entities") + "\n" + ("\n".join(entity_lines) or "(none)") + "\n" + _tag("/entities"))
-
-    claim_lines = _lines(
-        claims,
-        lambda c: (
-            f"- {c.get('label') or c.get('id')} ({c.get('id')}): "
-            f"{c.get('subject_id')} {c.get('predicate')} {c.get('object_id')}"
-        ),
-    )
-    sections.append(_tag("claims") + "\n" + ("\n".join(claim_lines) or "(none)") + "\n" + _tag("/claims"))
-
-    evidence_lines = _lines(
-        evidence,
-        lambda e: f"- {e.get('label') or e.get('id')} ({e.get('id')}): {e.get('text') or ''}",
-    )
-    sections.append(_tag("evidence") + "\n" + ("\n".join(evidence_lines) or "(none)") + "\n" + _tag("/evidence"))
-
-    source_lines = _lines(
-        sources,
-        lambda s: f"- {s.get('label') or s.get('id')} ({s.get('id')}, {s.get('source_type')}): {s.get('locator') or ''}",
-    )
-    sections.append(_tag("sources") + "\n" + ("\n".join(source_lines) or "(none)") + "\n" + _tag("/sources"))
-
-    note_lines = _lines(notes, lambda n: f"- {n.get('content') or n.get('id')}")
-    sections.append(_tag("notes") + "\n" + ("\n".join(note_lines) or "(none)") + "\n" + _tag("/notes"))
-
-    history_lines = [
-        f"- {m.get('role')}: {m.get('content') or ''}" for m in history[:max_items]
-    ]
-    sections.append(_tag("chat_history") + "\n" + ("\n".join(history_lines) or "(none)") + "\n" + _tag("/chat_history"))
-
-    context = "\n\n".join(sections)
-    if max_characters > 0 and len(context) > max_characters:
-        context = context[:max_characters]
-    return context
 
 
 def _citation_survives(raw: dict[str, Any], retrieved: dict[str, Any]) -> bool:
@@ -603,11 +677,13 @@ class RetrievalPipeline:
         """Assemble the delimited context, make the final answer call, validate."""
         context = assemble_context(
             nodes=retrieved["nodes"],
+            edges=retrieved["edges"],
             claims=retrieved["claims"],
             evidence=retrieved["evidence"],
             sources=retrieved["sources"],
             notes=[],
             history=history,
+            boundary=boundary,
             max_items=settings.llm_max_context_items,
             max_characters=settings.llm_max_context_characters,
         )
