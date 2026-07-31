@@ -162,8 +162,8 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 ## Current Position
 
 Phase: 06 (spoiler-safe-graphrag-chat-and-graph-editing-agent) — EXECUTING
-Plan: 2 of 12
-Status: Executing Phase 06 — 06-01 complete (GraphRAG vertical slice)
+Plan: 3 of 12
+Status: Executing Phase 06 — 06-01/06-02 complete (slice + full toolset)
 Last activity: 2026-07-31 — Phase 06 execution resumed (wave continue)
 
 ## Operator Next Steps
