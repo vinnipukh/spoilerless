@@ -822,3 +822,107 @@ def test_answer_stream_releases_generation_slot_on_client_disconnect(
         json={"question": "Who is Dexter related to?"},
     )
     assert response.status_code == 200, response.text
+
+
+# ---------------------------------------------------------------------------
+# Turkish-language bounded length + count-leakage (Task 3)
+# ---------------------------------------------------------------------------
+
+
+def test_turkish_question_length_bound_counts_unicode_code_points_not_bytes(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+    fake_provider: FakeLLMProvider,
+) -> None:
+    """The 4000-character question bound is enforced with Python ``len()``
+    (Unicode code points) — Turkish text is accepted right up to the limit
+    and rejected exactly one code point over, never truncated mid-character."""
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_session(client)
+    fake_provider.scripted_events = _neighborhood_scripted_events()
+
+    turkish_chars = "İıŞşĞğÇçÖöÜü"
+    at_limit = (turkish_chars * ((4000 // len(turkish_chars)) + 1))[:4000]
+    assert len(at_limit) == 4000
+    # Every character here is multi-byte in UTF-8 but a single Unicode code
+    # point — the byte length exceeds the code-point length, proving the
+    # bound is code-point-based, not byte-based.
+    assert len(at_limit.encode("utf-8")) > len(at_limit)
+
+    response = client.post(
+        f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages",
+        json={"question": at_limit},
+    )
+    assert response.status_code == 200, response.text
+
+    over_limit = at_limit + "x"
+    response = client.post(
+        f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages",
+        json={"question": over_limit},
+    )
+    assert response.status_code == 422
+
+
+def test_session_message_count_never_leaks_hidden_message_count(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+    fake_provider: FakeLLMProvider,
+) -> None:
+    """Comparing a visible-only count against the true persisted total
+    (including hidden messages) must show they differ — proving the exposed
+    count is always boundary-scoped, never the raw total (RAG-09/RAG-13)."""
+    _authed(client, fake_user_repo, session_repo, progress=3)
+    session = _create_session(client)
+
+    fake_provider.scripted_events = _neighborhood_scripted_events()
+    first = client.post(
+        f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages",
+        json={"question": "q1"},
+    )
+    assert first.status_code == 200, first.text
+    fake_provider.scripted_events = _neighborhood_scripted_events()
+    second = client.post(
+        f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages",
+        json={"question": "q2"},
+    )
+    assert second.status_code == 200, second.text
+
+    # Lower progress: the 4 messages just persisted become hidden.
+    lowered = client.post(
+        f"/api/series/{SERIES_ID}/progress", json={"visible_until_order": 1}
+    )
+    assert lowered.status_code == 200
+
+    # One new visible turn at the lowered boundary.
+    fake_provider.scripted_events = _neighborhood_scripted_events()
+    third = client.post(
+        f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages",
+        json={"question": "q3"},
+    )
+    assert third.status_code == 200, third.text
+
+    detail = client.get(f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}")
+    assert detail.status_code == 200
+    visible_count = len(detail.json()["messages"])
+    assert visible_count == 2  # only the boundary-1 turn is visible
+
+    from backend.app.graph.database import Neo4jDatabase as _Neo4jDatabase
+
+    async def _true_total() -> int:
+        db = _Neo4jDatabase()
+        db.open()
+        try:
+            rows = await db.execute_query(
+                "MATCH (:ChatSession {id: $sid})-[:HAS_MESSAGE]->(m:ChatMessage) "
+                "RETURN count(m) AS total",
+                sid=session["id"],
+            )
+            return rows[0]["total"]
+        finally:
+            await db.close()
+
+    true_total = asyncio.run(_true_total())
+    assert true_total == 6
+    assert visible_count != true_total
