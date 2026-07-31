@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 06
 current_phase_name: spoiler-safe-graphrag-chat-and-graph-editing-agent
 status: executing
-stopped_at: Completed 06-05-PLAN.md
-last_updated: "2026-07-31T22:24:44.917Z"
+stopped_at: Completed 06-08-PLAN.md
+last_updated: "2026-07-31T22:41:21.568Z"
 last_activity: 2026-07-31
 last_activity_desc: Phase 06 execution resumed (wave continue)
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 35
-  completed_plans: 28
+  completed_plans: 29
 ---
 
 # HD Graf Cehennemi — Project State
@@ -133,11 +133,12 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 | Phase 06 P03 | 15min | 2 tasks | 6 files |
 | Phase 06 P04 | 20min | 3 tasks | 10 files |
 | Phase 06 P05 | 30min | 3 tasks | 11 files |
+| Phase 06 P08 | 45min | 3 tasks | 13 files |
 
 ## Session
 
-**Last session:** 2026-07-31T22:24:44.893Z
-**Stopped at:** Completed 06-05-PLAN.md
+**Last session:** 2026-07-31T22:41:21.541Z
+**Stopped at:** Completed 06-08-PLAN.md
 **Resume file:** None
 
 ## Decisions
@@ -169,11 +170,13 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 - [Phase ?]: [Phase 06-04]: Concurrent-generation slot acquire/release lives inside ChatService.answer_stream's try/finally, covering both streaming and non-streaming paths symmetrically
 - [Phase ?]: [Phase 06-05]: Single label-agnostic TARGET_VISIBILITY_QUERY reused for every ChangeSet operation target kind (node/Claim/UserNote) rather than one query per label
 - [Phase ?]: [Phase 06-05]: Canonical/candidate protection is a service-layer transparent substitution (create_note override op) inside propose(), never a bare rejection
+- [Phase ?]: [Phase 06-08]: proposed_change_set typed ChangeSet | null in types/chat.ts (forward-compatible), not null alone, ahead of 06-09..11's eventual chat-triggered proposal wiring
+- [Phase ?]: [Phase 06-08]: confirmChangeSet/rejectChangeSet/revertChangeSet routes built from 06-06/06-07 PLAN.md route text since those plans hadn't executed yet at authoring time
 
 ## Current Position
 
 Phase: 06 (spoiler-safe-graphrag-chat-and-graph-editing-agent) — EXECUTING
-Plan: 6 of 12
+Plan: 7 of 12
 Status: Ready to execute
 Last activity: 2026-07-31 — Phase 06 execution resumed (wave continue)
 
