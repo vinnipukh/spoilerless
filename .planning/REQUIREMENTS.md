@@ -93,8 +93,8 @@ All requirements below are pending until their acceptance evidence is executed. 
 
 #### Chat Persistence
 
-- [ ] **RAG-09**: Persistent per-user `ChatSession`/`ChatMessage` records store the exact `visible_until_order` used to generate each assistant message; messages generated above the user's current boundary are excluded from API responses, previews, titles, and LLM conversation memory — without being deleted.
-- [ ] **RAG-10**: Series-scoped chat REST endpoints (create/list/get/delete session, post message, stream) enforce authenticated ownership, generic 404s for inaccessible sessions, bounded input/history length, and a structured streaming final event (message/citations/graph_focus/proposed ChangeSet) with no chain-of-thought or provider diagnostics exposed.
+- [x] **RAG-09**: Persistent per-user `ChatSession`/`ChatMessage` records store the exact `visible_until_order` used to generate each assistant message; messages generated above the user's current boundary are excluded from API responses, previews, titles, and LLM conversation memory — without being deleted.
+- [x] **RAG-10**: Series-scoped chat REST endpoints (create/list/get/delete session, post message, stream) enforce authenticated ownership, generic 404s for inaccessible sessions, bounded input/history length, and a structured streaming final event (message/citations/graph_focus/proposed ChangeSet) with no chain-of-thought or provider diagnostics exposed.
 
 #### Safe Graph-Editing Agent
 
