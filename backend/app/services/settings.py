@@ -33,10 +33,12 @@ class SettingsService:
         api_key = stored.get("api_key") or settings.llm_api_key
         base_url = stored.get("base_url") or settings.llm_base_url
         model = stored.get("model") or settings.llm_model
+        enabled = stored.get("enabled", settings.llm_enabled)
         return LLMSettingsResponse(
             provider=provider,
             model=model or None,
             base_url=base_url or None,
+            enabled=bool(enabled),
             api_key_configured=bool(api_key),
             api_key_masked=mask_api_key(api_key),
         )
@@ -57,12 +59,15 @@ class SettingsService:
                 merged["model"] = update.model.strip()
             else:
                 merged.pop("model", None)
+        if update.enabled is not None:
+            merged["enabled"] = update.enabled
         await self._repository.set_llm(
             settings_payload(
                 provider=merged.get("provider", update.provider),
                 api_key=merged.get("api_key"),
                 base_url=merged.get("base_url"),
                 model=merged.get("model"),
+                enabled=merged.get("enabled"),
             )
         )
         return await self.get_llm()

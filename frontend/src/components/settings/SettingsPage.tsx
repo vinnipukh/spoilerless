@@ -20,9 +20,11 @@ export function SettingsPage({ onBack }: Props) {
   const [model, setModel] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
   const [apiKey, setApiKey] = useState('')
+  const [enabled, setEnabled] = useState(false)
   const [saved, setSaved] = useState<LLMSettings | null>(null)
   const [status, setStatus] = useState<'loading' | 'idle' | 'saving' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // Loading is best-effort: a failed GET must never block saving (the PUT is
   // independent), so the form always ends up editable with sane defaults.
@@ -34,6 +36,7 @@ export function SettingsPage({ onBack }: Props) {
         setProvider(settings.provider)
         setModel(settings.model ?? '')
         setBaseUrl(settings.base_url ?? '')
+        setEnabled(settings.enabled)
         setSaved(settings)
         setStatus('idle')
       })
@@ -54,6 +57,7 @@ export function SettingsPage({ onBack }: Props) {
 
   async function handleSave() {
     setStatus('saving')
+    setSaveError(null)
     setErrorMessage(null)
     try {
       const updated = await updateLLMSettings({
@@ -61,13 +65,18 @@ export function SettingsPage({ onBack }: Props) {
         api_key: apiKey.trim() || undefined,
         model: model.trim() || null,
         base_url: baseUrl.trim() || null,
+        enabled,
       })
       setSaved(updated)
       setApiKey('')
       setStatus('idle')
-    } catch {
-      setStatus('error')
-      setErrorMessage('Failed to save LLM settings.')
+    } catch (error: unknown) {
+      setStatus('idle')
+      setSaveError(
+        error instanceof Error && error.message
+          ? `Failed to save LLM settings: ${error.message}`
+          : 'Failed to save LLM settings.',
+      )
     }
   }
 
@@ -138,7 +147,11 @@ export function SettingsPage({ onBack }: Props) {
                 type="text"
                 autoComplete="off"
                 className={inputClass}
-                placeholder="e.g. gemini-3.6-flash"
+                placeholder={
+                  provider === 'gemini'
+                    ? 'e.g. gemini-2.5-flash'
+                    : 'e.g. deepseek-chat'
+                }
                 value={model}
                 onChange={(event) => setModel(event.target.value)}
               />
@@ -168,8 +181,42 @@ export function SettingsPage({ onBack }: Props) {
               </p>
             </div>
 
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-input px-3 py-2.5">
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <label htmlFor="settings-enabled" className="text-sm font-medium">
+                  Enable the chat assistant
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  {enabled
+                    ? 'Chat and retrieval endpoints are active.'
+                    : 'Disabled — chat returns LLM disabled. Turn this on after saving a key.'}
+                </p>
+              </div>
+              <button
+                id="settings-enabled"
+                type="button"
+                role="switch"
+                aria-checked={enabled}
+                onClick={() => setEnabled((current) => !current)}
+                className={cn(
+                  'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2',
+                  enabled ? 'bg-primary' : 'bg-muted',
+                )}
+              >
+                <span
+                  className={cn(
+                    'inline-block size-4 transform rounded-full bg-background shadow transition-transform',
+                    enabled ? 'translate-x-[1.15rem]' : 'translate-x-0.5',
+                  )}
+                />
+              </button>
+            </div>
+
             {errorMessage && (
               <p className="text-sm text-destructive">{errorMessage}</p>
+            )}
+            {saveError && (
+              <p className="text-sm text-destructive">{saveError}</p>
             )}
             {status === 'idle' && saved?.api_key_configured && (
               <p className="text-sm text-muted-foreground">

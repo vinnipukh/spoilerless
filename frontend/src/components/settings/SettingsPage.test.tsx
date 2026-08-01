@@ -13,6 +13,7 @@ const defaultSettings = {
   provider: 'gemini' as const,
   model: 'gemini-2.5-flash',
   base_url: null,
+  enabled: true,
   api_key_configured: true,
   api_key_masked: '••••7890',
 }
@@ -55,9 +56,30 @@ describe('SettingsPage', () => {
       api_key: 'AIzaSyNewGeminiKey',
       model: 'gemini-2.5-flash',
       base_url: null,
+      enabled: true,
     })
     expect(await screen.findByText('API key configured (••••7890).')).toBeInTheDocument()
     expect(screen.getByLabelText('API key')).toHaveValue('')
+  })
+
+  it('toggles the enable switch and sends it with the save', async () => {
+    vi.mocked(getLLMSettings).mockResolvedValue({
+      ...defaultSettings,
+      enabled: false,
+    })
+    vi.mocked(updateLLMSettings).mockResolvedValue(defaultSettings)
+    const user = userEvent.setup()
+    render(<SettingsPage onBack={vi.fn()} />)
+
+    const toggle = await screen.findByRole('switch')
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(updateLLMSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ enabled: true }),
+    )
   })
 
   it('shows the back button and calls onBack', async () => {

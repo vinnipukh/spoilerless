@@ -152,20 +152,23 @@ def test_get_and_update_llm_settings_roundtrip(
     body = response.json()
     assert body["api_key_configured"] is False
     assert body["api_key_masked"] is None
+    assert body["enabled"] is False  # LLM_ENABLED env default (unset in tests)
 
-    # PUT a gemini config with a key.
+    # PUT a gemini config with a key + enabled.
     response = client.put(
         "/api/settings/llm",
         json={
             "provider": "gemini",
             "api_key": "AIzaSyTestKey1234567890",
             "model": "gemini-2.5-flash",
+            "enabled": True,
         },
     )
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["provider"] == "gemini"
     assert body["model"] == "gemini-2.5-flash"
+    assert body["enabled"] is True
     assert body["api_key_configured"] is True
     assert body["api_key_masked"] == "••••7890"
     # The full key must never appear in the response (T-06-07).
@@ -176,6 +179,7 @@ def test_get_and_update_llm_settings_roundtrip(
     assert response.status_code == 200
     assert response.json()["provider"] == "gemini"
     assert response.json()["api_key_masked"] == "••••7890"
+    assert response.json()["enabled"] is True
 
     # Blank api_key keeps the stored one (client only ever sees the masked form).
     response = client.put(
@@ -185,6 +189,7 @@ def test_get_and_update_llm_settings_roundtrip(
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["model"] == "gemini-3.6-flash"
+    assert body["enabled"] is True  # not sent -> kept
     assert body["api_key_masked"] == "••••7890"
     assert "AIzaSyTestKey1234567890" not in response.text
 
@@ -195,6 +200,7 @@ def test_get_and_update_llm_settings_roundtrip(
             "provider": "openai_compatible",
             "base_url": "https://llm.example/v1",
             "model": "gpt-4.1-mini",
+            "enabled": True,
         },
     )
     assert response.status_code == 200, response.text

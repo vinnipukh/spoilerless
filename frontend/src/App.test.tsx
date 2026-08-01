@@ -178,6 +178,7 @@ function fetchStub(input: RequestInfo | URL): Promise<Response> {
         provider: 'gemini',
         model: 'gemini-2.5-flash',
         base_url: null,
+        enabled: false,
         api_key_configured: false,
         api_key_masked: null,
       }),

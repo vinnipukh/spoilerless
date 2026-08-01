@@ -82,9 +82,12 @@ async def get_llm_provider(database: DatabaseDependency) -> LLMProvider:
     configured anywhere.
     """
     settings = get_settings()
-    if not settings.llm_enabled:
-        raise LLMProviderDisabled("The LLM provider is disabled.")
     stored = await SettingsRepository(database).get_llm() or {}
+    # The on/off switch is part of the persisted settings (UI-controllable);
+    # the LLM_ENABLED env fallback applies only when never stored.
+    enabled = stored.get("enabled", settings.llm_enabled)
+    if not enabled:
+        raise LLMProviderDisabled("The LLM provider is disabled.")
     provider = stored.get("provider") or settings.llm_provider
     api_key = stored.get("api_key") or settings.llm_api_key
     model = stored.get("model") or settings.llm_model

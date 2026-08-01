@@ -28,6 +28,7 @@ class LLMSettingsUpdate(BaseModel):
     ``api_key`` of ``None``/empty keeps the previously stored key (the GET
     response never returns the full key, so a client that only ever sees the
     masked form can update provider/model without clobbering the secret).
+    ``enabled`` of ``None`` keeps the previously stored value.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -36,6 +37,7 @@ class LLMSettingsUpdate(BaseModel):
     api_key: str | None = Field(default=None, max_length=4096)
     base_url: str | None = Field(default=None, max_length=2048)
     model: str | None = Field(default=None, max_length=256)
+    enabled: bool | None = None
 
 
 class LLMSettingsResponse(BaseModel):
@@ -46,6 +48,10 @@ class LLMSettingsResponse(BaseModel):
     provider: Literal["gemini", "openai_compatible"]
     model: str | None = None
     base_url: str | None = None
+    # Effective on/off switch: stored value wins, else the LLM_ENABLED env
+    # fallback. When false, every chat/retrieval endpoint returns
+    # ``LLM_DISABLED`` (HTTP 503).
+    enabled: bool
     api_key_configured: bool
     # Never the full key: "••••1234" (last 4 chars) when configured.
     api_key_masked: str | None = None
@@ -60,7 +66,13 @@ def mask_api_key(api_key: str | None) -> str | None:
     return f"••••{api_key[-4:]}"
 
 
-def settings_payload(provider: str, api_key: str | None, base_url: str | None, model: str | None) -> dict[str, Any]:
+def settings_payload(
+    provider: str,
+    api_key: str | None,
+    base_url: str | None,
+    model: str | None,
+    enabled: bool | None = None,
+) -> dict[str, Any]:
     """Build the stored JSON payload, dropping empty values."""
     payload: dict[str, Any] = {"provider": provider}
     if api_key:
@@ -69,4 +81,6 @@ def settings_payload(provider: str, api_key: str | None, base_url: str | None, m
         payload["base_url"] = base_url
     if model:
         payload["model"] = model
+    if enabled is not None:
+        payload["enabled"] = enabled
     return payload

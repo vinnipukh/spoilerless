@@ -8,6 +8,7 @@ export type LLMSettings = {
   provider: LLMProvider
   model: string | null
   base_url: string | null
+  enabled: boolean
   api_key_configured: boolean
   api_key_masked: string | null
 }
@@ -17,4 +18,5 @@ export type LLMSettingsUpdate = {
   api_key?: string
   base_url?: string | null
   model?: string | null
+  enabled?: boolean
 }
