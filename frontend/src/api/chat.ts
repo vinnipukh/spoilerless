@@ -92,6 +92,12 @@ export async function streamMessage(
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  // A terminal event (`done` or `error`) must always arrive: if the server
+  // closes the stream without one (proxy death, mid-stream provider failure
+  // that the backend could not frame as `event: error`), the caller would
+  // otherwise stay in its streaming state forever — the Stop button never
+  // goes away and no answer ever appears.
+  let gotTerminal = false
 
   function processEvent(rawEvent: string): void {
     const lines = rawEvent.split('\n')
@@ -115,8 +121,10 @@ export async function streamMessage(
     }
 
     if (eventType === 'done') {
+      gotTerminal = true
       callbacks.onDone(parsed as MessageResponseEnvelope)
     } else if (eventType === 'error') {
+      gotTerminal = true
       callbacks.onError?.(parsed as { code: string; message: string })
     } else {
       const chunk = parsed as { type?: string; text?: string }
@@ -138,5 +146,12 @@ export async function streamMessage(
       processEvent(rawEvent)
       boundary = buffer.indexOf('\n\n')
     }
+  }
+
+  if (!gotTerminal) {
+    callbacks.onError?.({
+      code: 'stream_ended',
+      message: 'The response ended unexpectedly. Please try again.',
+    })
   }
 }

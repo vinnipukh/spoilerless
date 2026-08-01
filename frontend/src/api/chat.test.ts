@@ -192,6 +192,26 @@ describe('streamMessage', () => {
     expect(onDone).not.toHaveBeenCalled()
   })
 
+  it('ends the streaming state when the server closes without a terminal event', async () => {
+    // Server closed the connection mid-stream with no `event: done` and no
+    // `event: error` (e.g. a provider failure the backend could not frame) —
+    // the caller must still leave its streaming state, or the Stop button
+    // would stay visible forever.
+    mockStreamResponse([
+      'data: {"type":"text_delta","text":"Based"}\n\n',
+    ])
+
+    const onDone = vi.fn()
+    const onError = vi.fn()
+    await streamMessage('series_dexter', 'session_1', 'Hi', { onDone, onError })
+
+    expect(onDone).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith({
+      code: 'stream_ended',
+      message: 'The response ended unexpectedly. Please try again.',
+    })
+  })
+
   it('skips a malformed chunk defensively instead of throwing', async () => {
     const envelope: MessageResponseEnvelope = {
       message: {

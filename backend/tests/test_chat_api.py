@@ -514,6 +514,35 @@ def test_provider_timeout_returns_503_never_401(
         assert response.json()["detail"]["code"] == "LLM_PROVIDER_UNAVAILABLE"
 
 
+def test_stream_provider_failure_emits_error_event_never_silent_close(
+    database: Neo4jDatabase,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    """A provider failure mid-stream must arrive as a structured
+    ``event: error`` chunk — never a silent connection close that leaves the
+    client's streaming state (Stop button) stuck forever."""
+    app = _build_app(database, fake_user_repo, session_repo, provider=TimeoutLLMProvider())
+    with TestClient(app, raise_server_exceptions=False) as client:
+        _authed(client, fake_user_repo, session_repo, progress=1)
+        session = _create_session(client)
+
+        response = client.post(
+            f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages/stream",
+            json={"question": "Who is Dexter related to?"},
+        )
+        assert response.status_code == 200
+        assert "text/event-stream" in response.headers["content-type"]
+        errors = [
+            payload
+            for kind, payload in _parse_sse(response.text)
+            if kind == "error"
+        ]
+        assert errors, "expected an event: error chunk, got a silent close"
+        assert errors[0]["code"] == "LLM_PROVIDER_UNAVAILABLE"
+        assert "done" not in [kind for kind, _ in _parse_sse(response.text)]
+
+
 # ---------------------------------------------------------------------------
 # Test 5 (plan): zero-message session returns an empty list, never an error
 # ---------------------------------------------------------------------------

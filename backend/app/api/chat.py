@@ -24,7 +24,7 @@ from backend.app.domain.chat import (
     ChatSessionResponse,
     MessageResponseEnvelope,
 )
-from backend.app.llm.provider import LLMProvider
+from backend.app.llm.provider import LLMProvider, LLMProviderUnavailable
 from backend.app.repository.chat import ChatSessionNotFound
 from backend.app.services.chat import (
     ConcurrentGenerationLimitExceeded,
@@ -224,6 +224,24 @@ async def stream_message(
             error_payload = {
                 "code": "too_many_requests",
                 "message": "Too many concurrent requests.",
+            }
+            yield f"event: error\ndata: {json.dumps(error_payload)}\n\n"
+        except LLMProviderUnavailable:
+            # Provider failures happen mid-stream, after the 200 status line
+            # has gone out — surface them as a structured `event: error` chunk
+            # instead of silently dropping the connection (which would leave
+            # the client's streaming state stuck forever).
+            error_payload = {
+                "code": "LLM_PROVIDER_UNAVAILABLE",
+                "message": "The LLM provider is unavailable. Check your API key and model in Settings, then try again.",
+            }
+            yield f"event: error\ndata: {json.dumps(error_payload)}\n\n"
+        except Exception:
+            # Never leak internals; the client must always receive a terminal
+            # event so it can leave the streaming state.
+            error_payload = {
+                "code": "LLM_STREAM_FAILED",
+                "message": "The response ended unexpectedly. Please try again.",
             }
             yield f"event: error\ndata: {json.dumps(error_payload)}\n\n"
 
