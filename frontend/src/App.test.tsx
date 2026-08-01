@@ -105,6 +105,13 @@ function fetchStub(input: RequestInfo | URL): Promise<Response> {
   if (url.startsWith('/api/series/series_dexter/graph')) {
     return Promise.resolve(jsonResponse(graphResponseS01E01))
   }
+  // ChatPanel (mounted only once the panel switches to Chat mode) fetches
+  // the session list on mount — an empty list keeps these App-level
+  // integration tests focused on the mode-toggle wiring itself, not chat
+  // session content (covered by ChatPanel.test.tsx/SessionPicker.test.tsx).
+  if (url.startsWith('/api/series/series_dexter/chat/sessions')) {
+    return Promise.resolve(jsonResponse([]))
+  }
   return Promise.resolve(notFoundResponse())
 }
 
@@ -178,7 +185,14 @@ describe('App', () => {
     expect(graphFetchCalls()[0]?.[0]).toBe('/api/series/series_dexter/graph?visible_until_order=1')
 
     expect(await screen.findByTestId('graph-canvas-stub')).toBeInTheDocument()
-    expect(screen.getByText('Select a node to see details.')).toBeInTheDocument()
+    // 06-09: DetailPanel's Sheet now defaults closed until either a node is
+    // selected or chat is opened this session — it is no longer permanently
+    // visible with the "Select a node..." placeholder the instant a graph
+    // loads (the highest-risk, deliberate behavior change this phase makes).
+    expect(screen.queryByText('Select a node to see details.')).not.toBeInTheDocument()
+
+    await user.click(await screen.findByTestId('graph-element-char_dexter_morgan'))
+    expect(await screen.findByRole('heading', { name: 'Dexter Morgan' })).toBeInTheDocument()
   })
 
   it('restores confirmed state from sessionStorage on mount without opening confirmation modal', async () => {
@@ -193,5 +207,42 @@ describe('App', () => {
     expect(screen.queryByText(/Unlock S01E0/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Rewatch S01E0/)).not.toBeInTheDocument()
     expect(await screen.findByTestId('graph-canvas-stub')).toBeInTheDocument()
+  })
+
+  it('ChatLauncher opens the panel in Chat mode, and clicking it again while already in Chat mode collapses the panel', async () => {
+    currentAuthState = 'authenticated'
+    sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
+
+    const user = userEvent.setup()
+    render(<App />)
+
+    expect(await screen.findByTestId('graph-canvas-stub')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Chat' })).not.toBeInTheDocument()
+
+    await user.click(await screen.findByRole('button', { name: 'Open chat' }))
+    expect(await screen.findByRole('heading', { name: 'Chat' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Chat' })).toHaveAttribute('aria-checked', 'true')
+
+    await user.click(screen.getByRole('button', { name: 'Close chat' }))
+    expect(screen.queryByRole('heading', { name: 'Chat' })).not.toBeInTheDocument()
+  })
+
+  it('selecting a node while the panel is in Chat mode does not force-switch it back to Inspector', async () => {
+    currentAuthState = 'authenticated'
+    sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
+
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Open chat' }))
+    expect(await screen.findByRole('heading', { name: 'Chat' })).toBeInTheDocument()
+
+    await user.click(await screen.findByTestId('graph-element-char_dexter_morgan'))
+
+    // Still showing Chat-mode content, not the node's Inspector Overview —
+    // the mode toggle itself still reads "Chat" as the checked segment.
+    expect(screen.getByRole('heading', { name: 'Chat' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Chat' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.queryByRole('heading', { name: 'Dexter Morgan' })).not.toBeInTheDocument()
   })
 })

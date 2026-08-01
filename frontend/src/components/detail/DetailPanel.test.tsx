@@ -1,12 +1,31 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { DetailPanel } from './DetailPanel'
 import { graphResponseS01E01 } from '../../test/fixtures/graphResponse'
 import type { SelectedElement } from '../graph/GraphCanvas'
 
+// ChatPanel (mounted only when mode === 'chat') calls the real chat API
+// client on mount via useChatSessions — stub it so mode-toggle tests that
+// switch into Chat mode don't hit a real/undefined `fetch`.
+vi.mock('../../api/chat', () => ({
+  listChatSessions: vi.fn().mockResolvedValue([]),
+  getChatSession: vi.fn(),
+  createChatSession: vi.fn(),
+  deleteChatSession: vi.fn(),
+  streamMessage: vi.fn(),
+}))
+
 const graph = graphResponseS01E01
-const defaultProps = { graph, seriesId: 'series:dexter' as const, visibleUntilOrder: 1, episodes: [] }
+const defaultProps = {
+  graph,
+  seriesId: 'series:dexter' as const,
+  visibleUntilOrder: 1,
+  episodes: [],
+  open: true,
+  mode: 'inspector' as const,
+  onModeChange: vi.fn(),
+}
 
 describe('DetailPanel', () => {
   it('renders the locked no-selection placeholder with no Tabs', async () => {
@@ -141,7 +160,7 @@ describe('DetailPanel', () => {
       ),
     }
     const selected: SelectedElement = { kind: 'node', id: 'char_ice_truck_killer', label: 'The Ice Truck Killer', nodeType: 'Character' }
-    render(<DetailPanel selected={selected} graph={graphWithUserNode} seriesId="series:dexter" visibleUntilOrder={1} episodes={[]} />)
+    render(<DetailPanel selected={selected} {...defaultProps} graph={graphWithUserNode} />)
 
     expect(await screen.findByText('User')).toBeInTheDocument()
     // The badge should have dashed border styling
@@ -155,5 +174,43 @@ describe('DetailPanel', () => {
     render(<DetailPanel selected={selected} {...defaultProps} />)
 
     expect(await screen.findByText('canonical')).toBeInTheDocument()
+  })
+
+  describe('collapsible Sheet + Inspector/Chat mode toggle (06-09)', () => {
+    it('renders no Sheet content at all when open is false', () => {
+      const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
+      render(<DetailPanel selected={selected} {...defaultProps} open={false} />)
+
+      expect(screen.queryByRole('heading', { name: 'Dexter Morgan' })).not.toBeInTheDocument()
+      expect(screen.queryByText('Select a node to see details.')).not.toBeInTheDocument()
+      expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
+    })
+
+    it('renders the Inspector/Chat mode toggle whenever the panel is open', async () => {
+      render(<DetailPanel selected={null} {...defaultProps} />)
+
+      expect(await screen.findByRole('radio', { name: 'Inspector' })).toBeInTheDocument()
+      expect(screen.getByRole('radio', { name: 'Chat' })).toBeInTheDocument()
+    })
+
+    it('calls onModeChange("chat") when the Chat segment is clicked', async () => {
+      const user = userEvent.setup()
+      const onModeChange = vi.fn()
+      render(<DetailPanel selected={null} {...defaultProps} onModeChange={onModeChange} />)
+
+      await user.click(await screen.findByRole('radio', { name: 'Chat' }))
+      expect(onModeChange).toHaveBeenCalledWith('chat')
+    })
+
+    it('mounts Chat-mode content (not Tabs) and preserves Overview/Claims/Evidence tabs for Inspector mode', async () => {
+      const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
+      render(<DetailPanel selected={selected} {...defaultProps} mode="chat" />)
+
+      expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
+      expect(screen.queryByRole('tab', { name: 'Claims' })).not.toBeInTheDocument()
+      // Chat-mode content (ChatPanel) renders the series+episode-less badge
+      // and empty-state heading rather than Inspector's Overview fields.
+      expect(await screen.findByRole('heading', { name: 'Ask about Dexter' })).toBeInTheDocument()
+    })
   })
 })

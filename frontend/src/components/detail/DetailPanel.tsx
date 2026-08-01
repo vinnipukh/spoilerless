@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { ToggleGroup } from 'radix-ui'
 import {
   Sheet,
   SheetContent,
@@ -13,12 +14,23 @@ import {
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import type { SelectedElement } from '../graph/GraphCanvas'
 import type { GraphClaim, GraphEvidence, GraphNode, GraphResponse } from '../../types/graph'
 import { useNotes } from '../../hooks/useNotes'
 import type { NoteResponse } from '../../types/userContent'
 import { createCustomRelationship } from '../../api/userContent'
 import { RevisionHistoryPanel } from './RevisionHistoryPanel'
+import { ChatPanel } from '../chat/ChatPanel'
+
+// Reused by CitationChip.tsx (06-09-PLAN.md Task 2) so claim/evidence citation
+// accents are never redefined as a second, drifting hex literal — the exact
+// same visual meaning ("this points at that Claims/Evidence card") applies to
+// a citation chip as it does to these Overview-tab accent bars.
+export const CLAIM_ACCENT_COLOR = '#D946EF'
+export const EVIDENCE_ACCENT_COLOR = '#FB923C'
+
+export type DetailPanelMode = 'inspector' | 'chat'
 
 function initialsFor(label: string): string {
   const initials = label
@@ -78,7 +90,15 @@ type Props = {
   seriesId: string | null
   visibleUntilOrder: number | null
   onRefetchGraph?: () => void
-  episodes: { id: string; code: string; title: string }[]
+  episodes: { id: string; code: string; title: string; episode_order: number }[]
+  // Sheet `open`/`mode` are lifted to App.tsx (06-UI-SPEC.md "Chat & Panel
+  // Architecture") — `ChatLauncher` lives in AppShell's topBar slot, outside
+  // this component, and needs to control the panel from there. DetailPanel
+  // itself is a fully controlled component for both: it never defaults or
+  // persists either value on its own.
+  open: boolean
+  mode: DetailPanelMode
+  onModeChange: (mode: DetailPanelMode) => void
 }
 
 type ResolvedEvidence = {
@@ -392,10 +412,63 @@ function NoteEditor({
   )
 }
 
-export function DetailPanel({ selected, graph, seriesId, visibleUntilOrder, onRefetchGraph, episodes }: Props) {
-  const CLAIM_ACCENT_COLOR = '#D946EF'
-  const EVIDENCE_ACCENT_COLOR = '#FB923C'
+// Two-segment "Inspector"/"Chat" pill toggle — visual pattern copied verbatim
+// from EpisodeSelector.tsx's existing segmented ToggleGroup control (same
+// bg-muted track, data-[state=on]:bg-accent active segment, focus ring).
+function ModeToggle({
+  mode,
+  onModeChange,
+}: {
+  mode: DetailPanelMode
+  onModeChange: (mode: DetailPanelMode) => void
+}) {
+  return (
+    <ToggleGroup.Root
+      type="single"
+      value={mode}
+      onValueChange={(next) => {
+        if (next) onModeChange(next as DetailPanelMode)
+      }}
+      className="inline-flex shrink-0 items-center gap-0.5 rounded-lg bg-muted p-0.5"
+      aria-label="Panel mode"
+    >
+      <ToggleGroup.Item
+        value="inspector"
+        className={cn(
+          'inline-flex items-center justify-center rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+          'hover:bg-elevated',
+          'data-[state=on]:bg-accent data-[state=on]:text-accent-foreground',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        )}
+      >
+        Inspector
+      </ToggleGroup.Item>
+      <ToggleGroup.Item
+        value="chat"
+        className={cn(
+          'inline-flex items-center justify-center rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+          'hover:bg-elevated',
+          'data-[state=on]:bg-accent data-[state=on]:text-accent-foreground',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        )}
+      >
+        Chat
+      </ToggleGroup.Item>
+    </ToggleGroup.Root>
+  )
+}
 
+export function DetailPanel({
+  selected,
+  graph,
+  seriesId,
+  visibleUntilOrder,
+  onRefetchGraph,
+  episodes,
+  open,
+  mode,
+  onModeChange,
+}: Props) {
   // Selection-aware state
   const [editingNote, setEditingNote] = useState<NoteResponse | null>(null)
   const [showNewNoteForm, setShowNewNoteForm] = useState(false)
@@ -500,28 +573,53 @@ export function DetailPanel({ selected, graph, seriesId, visibleUntilOrder, onRe
 
   const title = selectedNode?.label ?? activeClaim?.label ?? 'Details'
 
+  // The chat empty-state suggestion ("Summarize the story up to {episode
+  // code}.") and series+episode badge both need the currently-watched
+  // episode's code — resolved from the already-fetched episodes list rather
+  // than adding a second progress-lookup path (06-UI-SPEC.md "Series +
+  // episode badge").
+  const currentEpisodeCode =
+    episodes.find((episode) => episode.episode_order === visibleUntilOrder)?.code ?? null
+
   // Workaround for stale-ref callback: keep the latest delete in a ref
   const handleDeleteNoteRef = useRef(handleDeleteNote)
   handleDeleteNoteRef.current = handleDeleteNote
 
   return (
-    <Sheet open modal={false}>
+    <Sheet open={open} modal={false}>
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="mt-0 max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!h-auto max-sm:max-h-[70vh] max-sm:!w-full max-sm:!border-t max-sm:!border-l-0 lg:max-w-md"
+        className={cn(
+          'mt-0 max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!h-auto max-sm:!w-full max-sm:!border-t max-sm:!border-l-0',
+          mode === 'chat'
+            ? 'max-sm:max-h-[75vh] lg:max-w-[420px] xl:max-w-[480px]'
+            : 'max-sm:max-h-[70vh] lg:max-w-md',
+        )}
       >
         <SheetHeader>
-          <div className="flex items-center gap-3">
-            {selectedNode?.type === 'Character' && (
-              <CharacterPortrait key={selectedNode.id} node={selectedNode} />
-            )}
-            <SheetTitle>{selected ? title : 'Details'}</SheetTitle>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              {mode === 'inspector' && selectedNode?.type === 'Character' && (
+                <CharacterPortrait key={selectedNode.id} node={selectedNode} />
+              )}
+              <SheetTitle className="truncate">
+                {mode === 'chat' ? 'Chat' : selected ? title : 'Details'}
+              </SheetTitle>
+            </div>
+            <ModeToggle mode={mode} onModeChange={onModeChange} />
           </div>
         </SheetHeader>
-        <div className="flex flex-col gap-2 px-4 pb-4 text-sm">
-          {!selected && <p>Select a node to see details.</p>}
-          {selected && (
+        <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pb-4 text-sm">
+          {mode === 'chat' && (
+            <ChatPanel
+              seriesId={seriesId}
+              seriesTitle={graph.series.title}
+              currentEpisodeCode={currentEpisodeCode}
+            />
+          )}
+          {mode === 'inspector' && !selected && <p>Select a node to see details.</p>}
+          {mode === 'inspector' && selected && (
             <Tabs defaultValue="overview">
               <TabsList>
                 <TabsTrigger value="overview">Overview</TabsTrigger>
