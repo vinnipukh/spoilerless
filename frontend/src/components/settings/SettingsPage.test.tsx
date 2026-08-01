@@ -82,6 +82,21 @@ describe('SettingsPage', () => {
     )
   })
 
+  it('reveals and hides the API key via the show/hide toggle', async () => {
+    vi.mocked(getLLMSettings).mockResolvedValue(defaultSettings)
+    const user = userEvent.setup()
+    render(<SettingsPage onBack={vi.fn()} />)
+
+    const keyInput = await screen.findByLabelText('API key')
+    expect(keyInput).toHaveAttribute('type', 'password')
+
+    await user.click(screen.getByRole('button', { name: 'Show API key' }))
+    expect(keyInput).toHaveAttribute('type', 'text')
+
+    await user.click(screen.getByRole('button', { name: 'Hide API key' }))
+    expect(keyInput).toHaveAttribute('type', 'password')
+  })
+
   it('shows the back button and calls onBack', async () => {
     vi.mocked(getLLMSettings).mockResolvedValue(defaultSettings)
     const onBack = vi.fn()
