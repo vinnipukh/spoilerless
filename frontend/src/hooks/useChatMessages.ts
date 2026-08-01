@@ -74,6 +74,25 @@ export function useChatMessages(seriesId: string | null, sessionId: string | nul
       abortControllerRef.current = controller
       setStatus({ status: 'streaming', streamingText: '' })
 
+      // Optimistically append the user's own message immediately. The
+      // backend persists it before the assistant's reply streams, but the
+      // `done` envelope only ever carries the assistant's message — without
+      // this, a just-sent question would never render until the next full
+      // `getChatSession` refetch (06-09 fix: a chat UI where the sent
+      // question disappears is broken by definition, Rule 1). The
+      // placeholder id/snapshot are superseded by the real persisted values
+      // whenever the session is next refetched.
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `pending-user-${Date.now()}`,
+          role: 'user',
+          content,
+          created_at: new Date().toISOString(),
+          visible_until_order_snapshot: 0,
+        },
+      ])
+
       streamMessage(
         seriesId,
         sessionId,
