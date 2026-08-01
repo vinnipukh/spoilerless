@@ -257,19 +257,32 @@ export function GraphCanvas({
   focusedElementIds = null,
   onClearFocus,
 }: Props) {
-  console.log('[GC] GraphCanvas render called')
   const elements = useMemo(() => graphToElements(graph), [graph])
   const wiredCyRef = useRef<cytoscape.Core | null>(null)
   const cyInstanceRef = useRef<cytoscape.Core | null>(null)
   const stylesheet = useMemo(() => buildGraphStylesheet(prefersReducedMotion), [])
   const [dialogOpen, setDialogOpen] = useState(false)
 
-  // Re-run the layout whenever a new graph is fetched.
+  // Re-run the layout whenever a new graph is fetched — UNLESS an external
+  // `focusedElementIds` is active, in which case the graph change is an
+  // incremental refresh (06-11: a ChangeSet apply) that must NOT trigger the
+  // destructive full relayout: the focus effect below already provides the
+  // gentle `cy.fit(focused, 48)` re-frame (06-UI-SPEC.md "Applying a
+  // ChangeSet"), and running cose-bilkent again would discard the user's
+  // zoom/pan. Element data still updates in place; the layout re-runs on the
+  // next non-focused graph change (e.g. a progress boundary change once the
+  // focus has been cleared). The ref guard keeps focus clear/apply state
+  // changes (which re-run this effect via `focusedElementIds` in the deps)
+  // from ever re-laying-out an unchanged graph.
+  const lastLayoutGraphRef = useRef<GraphResponse | null>(null)
   useEffect(() => {
     const cy = cyInstanceRef.current
     if (!cy) return
+    if (lastLayoutGraphRef.current === graph) return
+    lastLayoutGraphRef.current = graph
+    if (focusedElementIds) return
     runLayout(cy)
-  }, [graph])
+  }, [graph, focusedElementIds])
 
   // Apply/clear an externally-driven `graph_focus` highlight (RAG-17), keyed
   // on the `focusedElementIds` prop — the same "prop-driven effect" pattern

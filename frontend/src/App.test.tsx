@@ -4,11 +4,17 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 import { graphResponseS01E01, graphResponseS01E03 } from './test/fixtures/graphResponse'
-import { claimCitation } from './test/fixtures/chatFixtures'
+import {
+  claimCitation,
+  proposedChangeSetApplied,
+  proposedChangeSetAwaitingConfirmation,
+  protectedOverrideChangeSet,
+} from './test/fixtures/chatFixtures'
 import { useChatMessages } from './hooks/useChatMessages'
 import type { SeriesResponse, EpisodeResponse } from './types/series'
 import type { UserResponse } from './types/auth'
 import type { Citation } from './types/chat'
+import type { ChangeSet } from './types/changeSet'
 
 // 06-10: citation-wiring tests (onShowInGraph/onOpenDetail -> App.tsx) mock
 // useChatMessages directly rather than driving a real SSE turn end-to-end
@@ -19,6 +25,17 @@ import type { Citation } from './types/chat'
 vi.mock('./hooks/useChatMessages', () => ({
   useChatMessages: vi.fn(),
 }))
+
+// 06-11: ChangeSetCard's Confirm/Reject handlers are the only UI path into
+// the confirm/reject endpoints (T-06-05) — mock the api module so an App-level
+// apply can be driven without a real POST, and assert the post-apply
+// incremental-refresh wiring (graphState.refresh + setGraphFocus) fires.
+vi.mock('./api/changeSet', () => ({
+  confirmChangeSet: vi.fn(),
+  rejectChangeSet: vi.fn(),
+}))
+
+import { confirmChangeSet } from './api/changeSet'
 
 function defaultChatMessagesReturn() {
   return {
@@ -39,10 +56,15 @@ function makeFakeCollection(): FakeCollection {
   return c
 }
 
+// 06-11: module-scoped counters the ChangeSet-apply tests read to prove the
+// post-apply refresh neither remounts GraphCanvas (cy callback re-invoked)
+// nor re-invokes the full layout (cy.layout re-called). Reset in beforeEach.
+const graphStubHooks = vi.hoisted(() => ({ cyMounts: 0, layoutRuns: 0 }))
+
 vi.mock('react-cytoscapejs', () => {
   type Handler = (evt: unknown) => void
   function CytoscapeComponentStub(props: { elements: Array<{ data: Record<string, unknown> }>; cy?: (cy: unknown) => void }) {
-    const stateRef = useRef<{ handlers: Record<string, Handler[]>; fakeCy: { on: (event: string, selectorOrHandler: unknown, maybeHandler?: Handler) => void; elements: () => FakeCollection; container: () => null } } | null>(null)
+    const stateRef = useRef<{ handlers: Record<string, Handler[]>; fakeCy: { on: (event: string, selectorOrHandler: unknown, maybeHandler?: Handler) => void; elements: () => FakeCollection; container: () => null; layout: () => { run: () => void } } } | null>(null)
     if (!stateRef.current) {
       const handlers: Record<string, Handler[]> = {}
       const fakeCy = {
@@ -55,10 +77,18 @@ vi.mock('react-cytoscapejs', () => {
         },
         elements: () => makeFakeCollection(),
         container: () => null,
+        // 06-11 spy: records whether the post-apply incremental refresh ever
+        // re-invokes the full relayout path (it must not — only element-data
+        // updates and the focus-driven fit are allowed).
+        layout: () => {
+          graphStubHooks.layoutRuns += 1
+          return { run: () => {} }
+        },
       }
       stateRef.current = { handlers, fakeCy }
     }
     const { handlers, fakeCy } = stateRef.current
+    graphStubHooks.cyMounts += 1
     props.cy?.(fakeCy)
     return (
       <div data-testid="graph-canvas-stub">
@@ -411,6 +441,92 @@ describe('App', () => {
 
       await waitFor(() => expect(graphFetchCalls().some(([url]) => String(url).includes('visible_until_order=1'))).toBe(true))
       expect(screen.getByText('Highlighting 3 from chat')).toBeInTheDocument()
+    })
+  })
+
+  describe('ChangeSet-apply incremental refresh (06-11, RAG-14/RAG-17)', () => {
+    function chatMessagesWithProposedChangeSet(changeSet: ChangeSet) {
+      return {
+        ...defaultChatMessagesReturn(),
+        status: 'success' as const,
+        messages: [
+          {
+            id: 'message_assistant_cs',
+            role: 'assistant',
+            content: 'Here is a proposal.',
+            created_at: '2026-01-01T00:01:05Z',
+            visible_until_order_snapshot: 1,
+          },
+        ],
+        proposedChangeSet: changeSet,
+      }
+    }
+
+    async function openChatAndConfirm(user: ReturnType<typeof userEvent.setup>) {
+      await user.click(await screen.findByRole('button', { name: 'Open chat' }))
+      await user.click(await screen.findByRole('button', { name: 'Confirm changes' }))
+    }
+
+    it('applying a ChangeSet refreshes the graph incrementally — no full relayout, no GraphCanvas remount, focus moved to the new resource', async () => {
+      currentAuthState = 'authenticated'
+      sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
+      vi.mocked(useChatMessages).mockReturnValue(chatMessagesWithProposedChangeSet(proposedChangeSetAwaitingConfirmation))
+      vi.mocked(confirmChangeSet).mockResolvedValue(proposedChangeSetApplied)
+
+      const user = userEvent.setup()
+      render(<App />)
+
+      // Initial graph load settles, then reset the spies so only the
+      // post-apply refresh's behavior is measured.
+      await screen.findByTestId('graph-element-char_dexter_morgan')
+      const fetchesBeforeApply = graphFetchCalls().length
+      graphStubHooks.cyMounts = 0
+      graphStubHooks.layoutRuns = 0
+
+      await openChatAndConfirm(user)
+
+      // Terminal Applied badge replaces the controls (immutable record).
+      expect(await screen.findByText('Applied')).toBeInTheDocument()
+      // T-06-05: the only write path is the card's own Confirm button — it
+      // fired exactly once, no other UI event triggered apply.
+      expect(confirmChangeSet).toHaveBeenCalledTimes(1)
+
+      // Incremental refresh: useGraph re-issued its own fetch (no loading
+      // flash — GraphCanvas never unmounts), and the full relayout path was
+      // NOT re-invoked. cyMounts counts stub re-renders (not remounts), so
+      // the mount-stability proof is: the graph element never leaves the DOM
+      // and no GraphLoadingState appears during the refresh.
+      await waitFor(() => expect(graphFetchCalls().length).toBeGreaterThan(fetchesBeforeApply))
+      expect(screen.getByTestId('graph-element-char_dexter_morgan')).toBeInTheDocument()
+      expect(screen.queryByText('Loading…')).not.toBeInTheDocument()
+      expect(graphStubHooks.layoutRuns).toBe(0)
+
+      // 06-10 focus mechanism reused: the created resource (create_note →
+      // char_dexter_morgan) gets the selected-dominant focus treatment.
+      expect(await screen.findByText('Highlighting 1 from chat')).toBeInTheDocument()
+
+      // Regression: the graph still renders its elements after the refresh —
+      // image/episode-filtering mapping (graphElements.ts) untouched.
+      expect(await screen.findByTestId('graph-element-char_dexter_morgan')).toBeInTheDocument()
+    })
+
+    it('renders the Protected badge for a canonical-edit refusal in the full app, claiming no canonical modification', async () => {
+      currentAuthState = 'authenticated'
+      sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
+      vi.mocked(useChatMessages).mockReturnValue(chatMessagesWithProposedChangeSet(protectedOverrideChangeSet))
+
+      const user = userEvent.setup()
+      render(<App />)
+
+      await user.click(await screen.findByRole('button', { name: 'Open chat' }))
+
+      expect(await screen.findByText('Protected')).toBeInTheDocument()
+      expect(screen.getByText('Propose a note instead')).toBeInTheDocument()
+      // The card stays confirmable (the proposal is a linked note annotation,
+      // not a canonical edit — the badge is informational), but no copy claims
+      // the canonical record was changed (T-06-12).
+      expect(screen.getByRole('button', { name: 'Confirm changes' })).toBeInTheDocument()
+      expect(screen.queryByText(/canonical record.*(updated|changed|modified)/i)).not.toBeInTheDocument()
     })
   })
 })

@@ -16,6 +16,7 @@ import { useEpisodes } from './hooks/useEpisodes'
 import { useGraph } from './hooks/useGraph'
 import { useWatchProgress } from './hooks/useWatchProgress'
 import type { Citation } from './types/chat'
+import type { ChangeSet } from './types/changeSet'
 
 function AuthenticatedApp() {
   const { state, logout } = useAuth()
@@ -53,6 +54,54 @@ function AuthenticatedApp() {
   // stay in Chat while looking at the canvas").
   function handleShowInGraph(citation: Citation) {
     setGraphFocus({ nodeIds: citation.related_node_ids, edgeIds: citation.related_edge_ids })
+  }
+
+  // The applied ChangeSet's already-existing target resources — the newly
+  // created/changed element(s) the incremental refresh should highlight.
+  // Operations whose target doesn't exist as a focusable id at apply time
+  // (create_node/create_claim carry no persisted id on the response) and
+  // delete operations (the element is gone) contribute nothing.
+  function focusTargetsForAppliedChangeSet(changeSet: ChangeSet): FocusedElementIds {
+    const nodeIds: string[] = []
+    const edgeIds: string[] = []
+    for (const op of changeSet.operations) {
+      switch (op.operation_type) {
+        case 'update_node':
+        case 'delete_node':
+          nodeIds.push(op.node_id)
+          break
+        case 'update_relationship':
+        case 'delete_relationship':
+          edgeIds.push(op.relationship_id)
+          break
+        case 'update_claim':
+        case 'delete_claim':
+        case 'attach_evidence':
+          nodeIds.push(op.claim_id)
+          break
+        case 'create_note':
+          nodeIds.push(op.target_id)
+          break
+        case 'update_note':
+        case 'delete_note':
+          nodeIds.push(op.note_id)
+          break
+        default:
+          break
+      }
+    }
+    return { nodeIds: [...new Set(nodeIds)], edgeIds: [...new Set(edgeIds)] }
+  }
+
+  // ChangeSetCard's Confirm-success callback (06-11): re-invokes useGraph's
+  // own fetch (via `refresh()`, the data-preserving path that never flips to
+  // 'loading', so GraphCanvas is neither unmounted nor re-laid-out) and sets
+  // the 06-10 focus state to the newly created/changed resource so it
+  // receives the `.selected-dominant` treatment and the focus effect's
+  // gentle pan/fit — reusing the existing focus mechanism, not a second one.
+  function handleChangeSetApplied(changeSet: ChangeSet) {
+    graphState.refresh()
+    setGraphFocus(focusTargetsForAppliedChangeSet(changeSet))
   }
 
   // Clicking a citation chip's body switches to Inspector and selects the
@@ -230,6 +279,7 @@ function AuthenticatedApp() {
               onModeChange={handlePanelModeChange}
               onShowInGraph={handleShowInGraph}
               onOpenDetail={handleOpenDetail}
+              onChangeSetApplied={handleChangeSetApplied}
             />
           )}
         </>

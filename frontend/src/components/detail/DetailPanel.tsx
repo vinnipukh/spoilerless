@@ -482,6 +482,7 @@ export function DetailPanel({
   onModeChange,
   onShowInGraph,
   onOpenDetail,
+  onChangeSetApplied,
 }: Props) {
   // Selection-aware state
   const [editingNote, setEditingNote] = useState<NoteResponse | null>(null)
