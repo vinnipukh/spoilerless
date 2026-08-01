@@ -99,10 +99,10 @@ All requirements below are pending until their acceptance evidence is executed. 
 #### Safe Graph-Editing Agent
 
 - [x] **RAG-11**: A typed `ChangeSet` propose/confirm flow lets the assistant construct graph mutations only through a Pydantic discriminated-union operation set (create/update/delete node, relationship, claim, note, evidence attach); the LLM never executes a write directly.
-- [ ] **RAG-12**: The backend validates every ChangeSet operation server-side (ontology labels/predicates, series scope, current visibility, server-derived `visible_from_order` not exceeding progress, `origin:user` assignment) before applying it as one transaction, rolling back entirely on failure, and preventing idempotency-key replay.
+- [x] **RAG-12**: The backend validates every ChangeSet operation server-side (ontology labels/predicates, series scope, current visibility, server-derived `visible_from_order` not exceeding progress, `origin:user` assignment) before applying it as one transaction, rolling back entirely on failure, and preventing idempotency-key replay.
 - [x] **RAG-13**: `origin:canonical` and `origin:candidate` resources remain non-mutable by the assistant; requested edits to them produce a user-origin note/override proposal instead of a silent write, matching the existing origin-protection invariant from Phase 3.
-- [ ] **RAG-14**: Destructive or multi-element ChangeSets require explicit frontend confirmation (the chat message itself is not confirmation); confirmation re-validates current user/progress/origin/version, and a ChangeSet whose snapshot boundary exceeds the user's since-lowered progress becomes non-applicable.
-- [ ] **RAG-15**: Every applied ChangeSet is recorded as an auditable Revision (extending the existing Phase 4 revision model) with before/after state and no secrets/tokens stored; user-origin changes support revert.
+- [x] **RAG-14**: Destructive or multi-element ChangeSets require explicit frontend confirmation (the chat message itself is not confirmation); confirmation re-validates current user/progress/origin/version, and a ChangeSet whose snapshot boundary exceeds the user's since-lowered progress becomes non-applicable.
+- [x] **RAG-15**: Every applied ChangeSet is recorded as an auditable Revision (extending the existing Phase 4 revision model) with before/after state and no secrets/tokens stored; user-origin changes support revert.
 
 #### Frontend Chat & Graph Sync
 
