@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ChatPanel } from './ChatPanel'
-import { emptyChatSession } from '../../test/fixtures/chatFixtures'
+import { emptyChatSession, chatSessionWithOneMessage } from '../../test/fixtures/chatFixtures'
 import { ApiError } from '../../api/client'
 
 vi.mock('../../api/chat', () => ({
@@ -22,7 +22,7 @@ vi.mock('../../hooks/useChatMessages', () => ({
   useChatMessages: vi.fn(),
 }))
 
-import { listChatSessions, getChatSession } from '../../api/chat'
+import { listChatSessions, getChatSession, createChatSession } from '../../api/chat'
 import { useChatMessages } from '../../hooks/useChatMessages'
 
 function defaultChatMessagesReturn() {
@@ -85,6 +85,66 @@ describe('ChatPanel', () => {
     render(<ChatPanel seriesId="series_dexter" seriesTitle="Dexter" currentEpisodeCode="S01E02" />)
 
     expect(await screen.findByText('Dexter · up to S01E02')).toBeInTheDocument()
+  })
+
+  it('renders the initial chat history for a session with existing messages (not the empty state)', async () => {
+    vi.mocked(listChatSessions).mockResolvedValue([chatSessionWithOneMessage.session])
+    vi.mocked(getChatSession).mockResolvedValue(chatSessionWithOneMessage)
+    vi.mocked(useChatMessages).mockReturnValue({
+      ...defaultChatMessagesReturn(),
+      status: 'success',
+      messages: chatSessionWithOneMessage.messages,
+    })
+
+    render(<ChatPanel seriesId="series_dexter" seriesTitle="Dexter" currentEpisodeCode="S01E01" />)
+
+    expect(await screen.findByText('Who is Dexter?')).toBeInTheDocument()
+    expect(
+      screen.getByText('Dexter Morgan works at Miami Metro Police Department.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Ask about Dexter' })).not.toBeInTheDocument()
+  })
+
+  it('"New conversation" creates a session and switches the active session to it', async () => {
+    const user = userEvent.setup()
+    vi.mocked(listChatSessions).mockResolvedValue([])
+    vi.mocked(createChatSession).mockResolvedValue({
+      id: 'session_new',
+      series_id: 'series_dexter',
+      title: '',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    })
+
+    render(<ChatPanel seriesId="series_dexter" seriesTitle="Dexter" currentEpisodeCode="S01E01" />)
+
+    expect(await screen.findByText('No conversations yet')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Start new conversation' }))
+
+    expect(createChatSession).toHaveBeenCalledWith('series_dexter', '')
+    // useChatMessages is mocked at module level, so we can't observe the
+    // real hook re-binding to the new session id here — that data-flow is
+    // covered by useChatSessions.test.tsx/useChatMessages.test.tsx; this
+    // asserts ChatPanel's own responsibility: calling createChatSession
+    // with the right arguments when "New conversation" is clicked.
+  })
+
+  it('clicking "Stop generating" calls the hook\'s stop() function', async () => {
+    const user = userEvent.setup()
+    vi.mocked(listChatSessions).mockResolvedValue([emptyChatSession.session])
+    vi.mocked(getChatSession).mockResolvedValue(emptyChatSession)
+    const stop = vi.fn()
+    vi.mocked(useChatMessages).mockReturnValue({
+      ...defaultChatMessagesReturn(),
+      status: 'streaming',
+      streamingText: 'partial',
+      stop,
+    })
+
+    render(<ChatPanel seriesId="series_dexter" seriesTitle="Dexter" currentEpisodeCode="S01E01" />)
+
+    await user.click(await screen.findByRole('button', { name: 'Stop generating' }))
+    expect(stop).toHaveBeenCalledTimes(1)
   })
 
   describe('streaming / error states (Task 2)', () => {
