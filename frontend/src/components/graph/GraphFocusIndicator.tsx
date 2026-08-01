@@ -2,8 +2,8 @@
 // highlight (RAG-17). Same `bg-card`/`ring-border`/`text-xs`/`rounded-md`/
 // `shadow-sm` visual treatment as GraphLegend.tsx's collapsed trigger pill,
 // positioned `fixed top-4 left-4 z-[60]` — the one unclaimed canvas-overlay
-// corner (bottom-left: GraphLegend + Create Custom Node FAB; bottom-right:
-// GraphControls; top-right: intentionally left clear per 06-UI-SPEC.md
+// corner (bottom-left: GraphLegend + Create Custom Node FAB + GraphControls;
+// top-right: intentionally left clear per 06-UI-SPEC.md
 // "Spacing Scale" exceptions).
 //
 // The inline "Clear" text action copies NoteItem's (DetailPanel.tsx) inline
