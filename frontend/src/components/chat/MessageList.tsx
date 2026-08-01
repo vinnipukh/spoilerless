@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { MessageBubble, StreamingMessageBubble, FailedMessageBubble } from './MessageBubble'
 import { CitationChip } from './CitationChip'
+import { ChangeSetCard } from './ChangeSetCard'
 import type { ChatMessage, Citation } from '../../types/chat'
+import type { ChangeSet } from '../../types/changeSet'
 
 export type FailedTurn = {
   retryable: boolean
@@ -16,6 +18,12 @@ type Props = {
   citations: Citation[]
   onShowInGraph?: (citation: Citation) => void
   onOpenDetail?: (citation: Citation) => void
+  // The last turn's proposed ChangeSet (06-11) — rendered as a
+  // ChangeSetCard below the assistant message that proposed it, the same
+  // "attached below the bubble" pattern as the citation-chip row.
+  proposedChangeSet?: ChangeSet | null
+  seriesId?: string | null
+  onApplied?: (changeSet: ChangeSet) => void
 }
 
 // Auto-scrolls to the newest message on send/stream unless the user has
@@ -29,6 +37,9 @@ export function MessageList({
   citations,
   onShowInGraph,
   onOpenDetail,
+  proposedChangeSet,
+  seriesId,
+  onApplied,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
@@ -55,6 +66,12 @@ export function MessageList({
   const lastMessage = messages[messages.length - 1]
   const showCitations =
     streamingText == null && !failedTurn && lastMessage?.role === 'assistant' && citations.length > 0
+  // The proposed ChangeSet rides the same "attached below the last assistant
+  // bubble" slot as citations (06-UI-SPEC.md "Proposed-ChangeSet card": "the
+  // same 'attached below the bubble' pattern as citations"), and is likewise
+  // suppressed while a turn is streaming or has failed.
+  const showChangeSet =
+    streamingText == null && !failedTurn && lastMessage?.role === 'assistant' && proposedChangeSet != null
 
   return (
     <div ref={containerRef} className="min-h-0 flex-1">
@@ -74,6 +91,16 @@ export function MessageList({
                   onOpenDetail={onOpenDetail}
                 />
               ))}
+            </div>
+          )}
+
+          {showChangeSet && proposedChangeSet && seriesId && (
+            <div className="pl-9">
+              <ChangeSetCard
+                changeSet={proposedChangeSet}
+                seriesId={seriesId}
+                onApplied={onApplied}
+              />
             </div>
           )}
 

@@ -23,6 +23,7 @@ import { createCustomRelationship } from '../../api/userContent'
 import { RevisionHistoryPanel } from './RevisionHistoryPanel'
 import { ChatPanel } from '../chat/ChatPanel'
 import type { Citation } from '../../types/chat'
+import type { ChangeSet } from '../../types/changeSet'
 
 // Reused by CitationChip.tsx (06-09-PLAN.md Task 2) so claim/evidence citation
 // accents are never redefined as a second, drifting hex literal — the exact
@@ -107,6 +108,9 @@ type Props = {
   // `panelMode`/`selectedElement`).
   onShowInGraph?: (citation: Citation) => void
   onOpenDetail?: (citation: Citation) => void
+  // ChangeSetCard Confirm-success callback (06-11) threaded to App.tsx so it
+  // can incrementally refresh the graph and focus the applied resource.
+  onChangeSetApplied?: (changeSet: ChangeSet) => void
 }
 
 type ResolvedEvidence = {
@@ -628,6 +632,7 @@ export function DetailPanel({
               currentEpisodeCode={currentEpisodeCode}
               onShowInGraph={onShowInGraph}
               onOpenDetail={onOpenDetail}
+              onApplied={onChangeSetApplied}
             />
           )}
           {mode === 'inspector' && !selected && <p>Select a node to see details.</p>}

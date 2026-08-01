@@ -9,6 +9,7 @@ import { useChatMessages } from '../../hooks/useChatMessages'
 import { createChatSession, deleteChatSession } from '../../api/chat'
 import type { ApiError } from '../../api/client'
 import type { Citation } from '../../types/chat'
+import type { ChangeSet } from '../../types/changeSet'
 
 type Props = {
   seriesId: string | null
@@ -16,6 +17,10 @@ type Props = {
   currentEpisodeCode: string | null
   onShowInGraph?: (citation: Citation) => void
   onOpenDetail?: (citation: Citation) => void
+  // Confirm-success callback threaded from App.tsx (06-11) — fires when a
+  // ChangeSetCard's Confirm applies, so App can incrementally refresh the
+  // graph and focus the newly created/changed resource.
+  onApplied?: (changeSet: ChangeSet) => void
 }
 
 function newestFirst<T extends { updated_at: string }>(sessions: T[]): T[] {
@@ -44,7 +49,14 @@ function classifyChatError(error: ApiError): ChatErrorKind {
 // empty-state suggestion chips (Task 1); streaming/citations/retry via
 // MessageList plus the Send/Stop-generating input and the disabled-provider/
 // transient-503 banners (Task 2).
-export function ChatPanel({ seriesId, seriesTitle, currentEpisodeCode, onShowInGraph, onOpenDetail }: Props) {
+export function ChatPanel({
+  seriesId,
+  seriesTitle,
+  currentEpisodeCode,
+  onShowInGraph,
+  onOpenDetail,
+  onApplied,
+}: Props) {
   const sessionsState = useChatSessions(seriesId)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -265,6 +277,9 @@ export function ChatPanel({ seriesId, seriesTitle, currentEpisodeCode, onShowInG
           citations={chatMessages.citations}
           onShowInGraph={onShowInGraph}
           onOpenDetail={onOpenDetail}
+          proposedChangeSet={chatMessages.proposedChangeSet}
+          seriesId={seriesId}
+          onApplied={onApplied}
         />
       )}
 
