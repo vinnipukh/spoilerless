@@ -11,7 +11,7 @@ type Props = {
 }
 
 const inputClass = cn(
-  'flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30',
+  'flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30 md:text-sm',
   '[color-scheme:dark]',
 )
 
@@ -109,7 +109,7 @@ export function SettingsPage({ onBack }: Props) {
               LLM provider configuration for the GraphRAG chat agent.
             </p>
           </div>
-          <Button variant="ghost" size="sm" onClick={onBack} type="button">
+          <Button variant="ghost" size="sm" className="min-h-11" onClick={onBack} type="button">
             Back to graph
           </Button>
         </div>
@@ -123,7 +123,7 @@ export function SettingsPage({ onBack }: Props) {
                 Provider
               </label>
               <Select value={provider} onValueChange={(value) => setProvider(value as LLMProvider)}>
-                <SelectTrigger id="settings-provider" className="w-full">
+                <SelectTrigger id="settings-provider" className="min-h-11 w-full">
                   <SelectValue placeholder="Provider" />
                 </SelectTrigger>
                 <SelectContent>
@@ -232,13 +232,13 @@ export function SettingsPage({ onBack }: Props) {
               >
                 <span
                   className={cn(
-                    'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                    'relative inline-flex h-6 w-11 items-center rounded-full transition-colors motion-reduce:transition-none',
                     enabled ? 'bg-primary' : 'bg-muted',
                   )}
                 >
                   <span
                     className={cn(
-                      'inline-block size-5 transform rounded-full bg-background shadow transition-transform',
+                      'inline-block size-5 transform rounded-full bg-background shadow transition-transform motion-reduce:transition-none',
                       enabled ? 'translate-x-5' : 'translate-x-0.5',
                     )}
                   />
@@ -262,6 +262,7 @@ export function SettingsPage({ onBack }: Props) {
               type="button"
               onClick={handleSave}
               disabled={status === 'saving'}
+              className="min-h-11"
             >
               {status === 'saving' ? 'Saving…' : 'Save settings'}
             </Button>
