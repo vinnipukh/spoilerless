@@ -70,10 +70,14 @@ describe('SettingsPage', () => {
     expect(onBack).toHaveBeenCalledTimes(1)
   })
 
-  it('shows an error state when loading fails', async () => {
-    vi.mocked(getLLMSettings).mockRejectedValue(new Error('network'))
+  it('keeps the form usable when loading fails — save stays enabled', async () => {
+    vi.mocked(getLLMSettings).mockRejectedValue(new Error('Request failed.'))
     render(<SettingsPage onBack={vi.fn()} />)
 
-    expect(await screen.findByText('Failed to load LLM settings.')).toBeInTheDocument()
+    // The failure is surfaced but never blocks saving.
+    expect(
+      await screen.findByText('Could not load current settings (Request failed.). Save will overwrite them.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save settings' })).toBeEnabled()
   })
 })

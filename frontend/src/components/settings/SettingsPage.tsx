@@ -24,6 +24,8 @@ export function SettingsPage({ onBack }: Props) {
   const [status, setStatus] = useState<'loading' | 'idle' | 'saving' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
+  // Loading is best-effort: a failed GET must never block saving (the PUT is
+  // independent), so the form always ends up editable with sane defaults.
   useEffect(() => {
     let cancelled = false
     getLLMSettings()
@@ -35,10 +37,15 @@ export function SettingsPage({ onBack }: Props) {
         setSaved(settings)
         setStatus('idle')
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (cancelled) return
-        setStatus('error')
-        setErrorMessage('Failed to load LLM settings.')
+        // Keep the form editable — the previous config is simply unknown.
+        setStatus('idle')
+        setErrorMessage(
+          error instanceof Error && error.message
+            ? `Could not load current settings (${error.message}). Save will overwrite them.`
+            : 'Could not load current settings. Save will overwrite them.',
+        )
       })
     return () => {
       cancelled = true
@@ -161,7 +168,7 @@ export function SettingsPage({ onBack }: Props) {
               </p>
             </div>
 
-            {status === 'error' && (
+            {errorMessage && (
               <p className="text-sm text-destructive">{errorMessage}</p>
             )}
             {status === 'idle' && saved?.api_key_configured && (
@@ -173,7 +180,7 @@ export function SettingsPage({ onBack }: Props) {
             <Button
               type="button"
               onClick={handleSave}
-              disabled={status === 'saving' || status === 'error'}
+              disabled={status === 'saving'}
             >
               {status === 'saving' ? 'Saving…' : 'Save settings'}
             </Button>
