@@ -40,7 +40,7 @@ export function ChatSheet({
         onInteractOutside={(event) => event.preventDefault()}
         onEscapeKeyDown={(event) => event.preventDefault()}
         className={cn(
-          'mt-0 max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!h-auto max-sm:!w-full max-sm:!border-t max-sm:!border-l-0 max-sm:max-h-[75vh] lg:max-w-[420px] xl:max-w-[480px]',
+          'mt-0 max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!h-auto max-sm:!w-full max-sm:!border-t max-sm:!border-l-0 max-sm:max-h-[75vh] lg:max-w-[560px] xl:max-w-[640px]',
         )}
       >
         <SheetHeader>
