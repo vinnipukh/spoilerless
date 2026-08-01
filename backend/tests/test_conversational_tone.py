@@ -119,6 +119,7 @@ async def _run_pipeline(
     provider: _ScriptedProvider,
     question: str,
     boundary: int = 1,
+    prompt_language: str = "english",
 ) -> list[LLMEvent]:
     pipeline = RetrievalPipeline(
         database=database, progress_service=_StubProgressService(boundary=boundary)
@@ -132,6 +133,7 @@ async def _run_pipeline(
             question=question,
             history=[],
             provider=provider,
+            prompt_language=prompt_language,
         )
     ]
 
@@ -269,13 +271,16 @@ async def test_turkish_question_gets_turkish_fallback() -> None:
     database = _ScriptedDatabase()
     provider = _ScriptedProvider([[LLMEvent.done("")]])
 
-    done = _final_done(
-        await _run_pipeline(
-            database=database,
-            provider=provider,
-            question="Sence Dexter'ın işleri iyiye mi kötüye mi gidiyor?",
-        )
+    # The fallback follows the SELECTED prompt language (Settings "Assistant
+    # language"), not the question heuristic: a Turkish prompt means the
+    # fallback is Turkish even when the stored question is not.
+    events = await _run_pipeline(
+        database=database,
+        provider=provider,
+        question="What do you think will happen next?",
+        prompt_language="turkish",
     )
+    done = _final_done(events)
 
     assert done.content == DEFAULT_FALLBACKS["tr"]
     assert "watched graph" not in done.content
@@ -296,6 +301,49 @@ async def test_english_question_gets_english_fallback() -> None:
 
     assert done.content == DEFAULT_FALLBACKS["en"]
     assert done.content != DEFAULT_FALLBACKS["tr"]
+
+
+# ---------------------------------------------------------------------------
+# Language selection: the Settings choice picks the system prompt
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_english_prompt_is_sent_by_default() -> None:
+    database = _ScriptedDatabase()
+    provider = _ScriptedProvider([[LLMEvent.done("Hello!")]])
+
+    await _run_pipeline(
+        database=database,
+        provider=provider,
+        question="How do you feel about Dexter's future?",
+    )
+
+    for call in provider.calls:
+        prompt = call["system_prompt"]
+        assert "Always respond in English" in prompt
+        assert "Her zaman Türkçe cevap ver" not in prompt
+        # The security framing is always appended.
+        assert "<series_context>" in prompt
+
+
+@pytest.mark.asyncio
+async def test_turkish_prompt_is_sent_when_selected() -> None:
+    database = _ScriptedDatabase()
+    provider = _ScriptedProvider([[LLMEvent.done("Merhaba!")]])
+
+    await _run_pipeline(
+        database=database,
+        provider=provider,
+        question="Dexter hakkında ne düşünüyorsun?",
+        prompt_language="turkish",
+    )
+
+    for call in provider.calls:
+        prompt = call["system_prompt"]
+        assert "Her zaman Türkçe cevap ver" in prompt
+        assert "Always respond in English" not in prompt
+        assert "<series_context>" in prompt
 
 
 # ---------------------------------------------------------------------------

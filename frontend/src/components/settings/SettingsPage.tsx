@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { getLLMSettings, updateLLMSettings } from '@/api/settings'
-import type { LLMSettings, LLMProvider } from '@/types/settings'
+import type { LLMSettings, LLMProvider, SystemPromptLanguage } from '@/types/settings'
 
 type Props = {
   onBack: () => void
@@ -40,6 +40,7 @@ export function SettingsPage({ onBack }: Props) {
   const [apiKey, setApiKey] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
   const [enabled, setEnabled] = useState(false)
+  const [promptLanguage, setPromptLanguage] = useState<SystemPromptLanguage>('english')
   const [saved, setSaved] = useState<LLMSettings | null>(null)
   const [status, setStatus] = useState<'loading' | 'idle' | 'saving' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -56,6 +57,7 @@ export function SettingsPage({ onBack }: Props) {
         setModel(settings.model ?? '')
         setBaseUrl(settings.base_url ?? '')
         setEnabled(settings.enabled)
+        setPromptLanguage(settings.system_prompt_language ?? 'english')
         setSaved(settings)
         setStatus('idle')
       })
@@ -85,6 +87,7 @@ export function SettingsPage({ onBack }: Props) {
         model: model.trim() || null,
         base_url: baseUrl.trim() || null,
         enabled,
+        system_prompt_language: promptLanguage,
       })
       setSaved(updated)
       setApiKey('')
@@ -207,6 +210,28 @@ export function SettingsPage({ onBack }: Props) {
                 {provider === 'gemini'
                   ? 'Optional — defaults to the official Gemini endpoint.'
                   : 'Required for OpenAI-compatible providers.'}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="settings-prompt-language" className="text-sm font-medium">
+                Assistant language
+              </label>
+              <Select
+                value={promptLanguage}
+                onValueChange={(value) => setPromptLanguage(value as SystemPromptLanguage)}
+              >
+                <SelectTrigger id="settings-prompt-language" className="min-h-11 w-full">
+                  <SelectValue placeholder="Language" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="english">English</SelectItem>
+                  <SelectItem value="turkish">Türkçe (Turkish)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Selects which system prompt the GraphRAG agent receives — the
+                assistant always replies in that language.
               </p>
             </div>
 

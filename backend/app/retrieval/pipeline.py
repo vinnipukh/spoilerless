@@ -33,7 +33,7 @@ from pydantic import BaseModel, Field, ValidationError
 from backend.app.core.config import get_settings
 from backend.app.graph.database import Neo4jDatabase
 from backend.app.llm.provider import LLMEvent, LLMProvider
-from backend.app.llm.system_prompt import SYSTEM_PROMPT_V1
+from backend.app.llm.system_prompt import compose_system_prompt
 from backend.app.retrieval.tools import (
     fetch_episode_codes,
     find_path,
@@ -68,13 +68,15 @@ from backend.app.llm.fallbacks import (
 INSUFFICIENT_EVIDENCE_RESPONSE_TEMPLATE = INSUFFICIENT_EVIDENCE_FALLBACK_EN
 
 
-def _fallback_for(question: str, settings: Any) -> str:
-    """Pick the localized friendly fallback for *question*.
+def _fallback_for(question: str, settings: Any, prompt_language: str) -> str:
+    """Pick the localized friendly fallback for the turn.
 
-    Language follows the user's message (Turkish-character heuristic); the
-    text is overridable via ``LLM_FALLBACK_EN`` / ``LLM_FALLBACK_TR``.
+    The language follows the *selected prompt language* (the Settings
+    "Assistant language" choice) — the selected prompt hard-locks the reply
+    language, so the fallback must match it. The text is overridable via
+    ``LLM_FALLBACK_EN`` / ``LLM_FALLBACK_TR``.
     """
-    lang = detect_language(question)
+    lang = "tr" if prompt_language == "turkish" else "en"
     override = (
         settings.llm_fallback_tr if lang == "tr" else settings.llm_fallback_en
     )
@@ -525,6 +527,7 @@ class RetrievalPipeline:
         question: str,
         history: list[dict[str, Any]],
         provider: LLMProvider,
+        prompt_language: str = "english",
     ) -> AsyncIterator[LLMEvent]:
         """Yield ``text_delta`` events then one final ``done`` event.
 
@@ -532,6 +535,8 @@ class RetrievalPipeline:
         dicts on ``citations`` and the extracted graph focus on
         ``graph_focus``.  ``chat_session_id`` is part of the signature for
         traceability; persistence happens in the service layer.
+        ``prompt_language`` selects which system prompt the agent receives
+        (Settings "Assistant language": ``english`` | ``turkish``).
         """
         del chat_session_id  # unused this plan — reserved for audit linkage
         settings = get_settings()
@@ -566,7 +571,7 @@ class RetrievalPipeline:
             events = [
                 event
                 async for event in provider.stream_chat(
-                    system_prompt=SYSTEM_PROMPT_V1,
+                    system_prompt=compose_system_prompt(prompt_language),
                     messages=messages,
                     tools=TOOL_SCHEMAS,
                     max_output_tokens=settings.llm_max_output_tokens,
@@ -596,6 +601,7 @@ class RetrievalPipeline:
                     provider=provider,
                     settings=settings,
                     question=question,
+                    prompt_language=prompt_language,
                 ):
                     yield event
                 return
@@ -644,6 +650,7 @@ class RetrievalPipeline:
             provider=provider,
             settings=settings,
             question=question,
+            prompt_language=prompt_language,
         ):
             yield event
 
@@ -735,6 +742,7 @@ class RetrievalPipeline:
         provider: LLMProvider,
         settings: Any,
         question: str,
+        prompt_language: str,
     ) -> AsyncIterator[LLMEvent]:
         """Assemble the delimited context, make the final answer call, validate."""
         context = assemble_context(
@@ -749,7 +757,7 @@ class RetrievalPipeline:
             max_items=settings.llm_max_context_items,
             max_characters=settings.llm_max_context_characters,
         )
-        fallback = _fallback_for(question, settings)
+        fallback = _fallback_for(question, settings, prompt_language)
         has_context = bool(
             retrieved["nodes"] or retrieved["claims"] or retrieved["evidence"]
         )
@@ -788,7 +796,7 @@ class RetrievalPipeline:
         final_events = [
             event
             async for event in provider.stream_chat(
-                system_prompt=SYSTEM_PROMPT_V1,
+                system_prompt=compose_system_prompt(prompt_language),
                 messages=final_messages,
                 tools=[],
                 max_output_tokens=settings.llm_max_output_tokens,

@@ -38,6 +38,8 @@ class LLMSettingsUpdate(BaseModel):
     base_url: str | None = Field(default=None, max_length=2048)
     model: str | None = Field(default=None, max_length=256)
     enabled: bool | None = None
+    # Which system prompt the GraphRAG agent receives ("Assistant language").
+    system_prompt_language: Literal["english", "turkish"] = "english"
 
 
 class LLMSettingsResponse(BaseModel):
@@ -52,6 +54,8 @@ class LLMSettingsResponse(BaseModel):
     # fallback. When false, every chat/retrieval endpoint returns
     # ``LLM_DISABLED`` (HTTP 503).
     enabled: bool
+    # Which system prompt the GraphRAG agent receives.
+    system_prompt_language: Literal["english", "turkish"] = "english"
     api_key_configured: bool
     # Never the full key: "••••1234" (last 4 chars) when configured.
     api_key_masked: str | None = None
@@ -72,6 +76,7 @@ def settings_payload(
     base_url: str | None,
     model: str | None,
     enabled: bool | None = None,
+    system_prompt_language: str = "english",
 ) -> dict[str, Any]:
     """Build the stored JSON payload, dropping empty values."""
     payload: dict[str, Any] = {"provider": provider}
@@ -83,4 +88,5 @@ def settings_payload(
         payload["model"] = model
     if enabled is not None:
         payload["enabled"] = enabled
+    payload["system_prompt_language"] = system_prompt_language
     return payload

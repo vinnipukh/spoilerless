@@ -14,6 +14,7 @@ const defaultSettings = {
   model: 'gemini-2.5-flash',
   base_url: null,
   enabled: true,
+  system_prompt_language: 'english' as const,
   api_key_configured: true,
   api_key_masked: '••••7890',
 }
@@ -57,6 +58,7 @@ describe('SettingsPage', () => {
       model: 'gemini-2.5-flash',
       base_url: null,
       enabled: true,
+      system_prompt_language: 'english',
     })
     expect(await screen.findByText('API key configured (••••7890).')).toBeInTheDocument()
     expect(screen.getByLabelText('API key')).toHaveValue('')
@@ -95,6 +97,26 @@ describe('SettingsPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Hide API key' }))
     expect(keyInput).toHaveAttribute('type', 'password')
+  })
+
+  it('sends the selected assistant language with the save', async () => {
+    vi.mocked(getLLMSettings).mockResolvedValue({
+      ...defaultSettings,
+      system_prompt_language: 'english',
+    })
+    vi.mocked(updateLLMSettings).mockResolvedValue(defaultSettings)
+    const user = userEvent.setup()
+    render(<SettingsPage onBack={vi.fn()} />)
+
+    // Default is English; switch to Turkish.
+    const languageSelect = await screen.findByLabelText('Assistant language')
+    await user.click(languageSelect)
+    await user.click(await screen.findByRole('option', { name: 'Türkçe (Turkish)' }))
+
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(updateLLMSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ system_prompt_language: 'turkish' }),
+    )
   })
 
   it('shows the back button and calls onBack', async () => {

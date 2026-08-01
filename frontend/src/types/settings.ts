@@ -4,11 +4,14 @@
 
 export type LLMProvider = 'gemini' | 'openai_compatible'
 
+export type SystemPromptLanguage = 'english' | 'turkish'
+
 export type LLMSettings = {
   provider: LLMProvider
   model: string | null
   base_url: string | null
   enabled: boolean
+  system_prompt_language: SystemPromptLanguage
   api_key_configured: boolean
   api_key_masked: string | null
 }
@@ -19,4 +22,5 @@ export type LLMSettingsUpdate = {
   base_url?: string | null
   model?: string | null
   enabled?: boolean
+  system_prompt_language?: SystemPromptLanguage
 }

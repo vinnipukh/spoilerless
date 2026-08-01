@@ -246,6 +246,13 @@ class ChatService:
                 visible_until_order_snapshot=boundary,
             )
 
+            # The Settings "Assistant language" choice selects which system
+            # prompt the agent receives (english | turkish).
+            stored = await SettingsRepository(self._database).get_llm() or {}
+            prompt_language = (
+                stored.get("system_prompt_language") or "english"
+            )
+
             final_done: Any = None
             async for event in self._pipeline.answer(
                 user_id=user_id,
@@ -254,6 +261,7 @@ class ChatService:
                 question=question,
                 history=history,
                 provider=provider,
+                prompt_language=prompt_language,
             ):
                 if event.kind == "text_delta" and event.text:
                     yield {"type": "text_delta", "text": event.text}
