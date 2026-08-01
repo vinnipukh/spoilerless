@@ -148,6 +148,55 @@ SET cs.status = 'applied',
 RETURN {_CHANGE_SET_FIELDS}
 """
 
+# ---------------------------------------------------------------------------
+# Stage 3 — Revert (RAG-15)
+# ---------------------------------------------------------------------------
+
+# Read the ChangeSet's own apply-time Revision by id (never the user-facing,
+# visibility-filtered ``REVISION_GET_QUERY`` in ``api/revisions.py`` — this is
+# a server-internal read inside the revert transaction, not a user-facing
+# list/get). ``after`` carries the JSON-encoded ``{operation_types,
+# affected_ids}`` payload ``_apply_change_set`` logged at apply time.
+CHANGE_SET_REVISION_GET_QUERY = """\
+MATCH (revision:Revision {id: $revision_id, series_id: $series_id})
+RETURN revision.id AS id, revision.action AS action,
+  revision.before AS before, revision.after AS after,
+  revision.created_at AS created_at
+"""
+
+# Undoes exactly one create-shaped operation's target: only a resource this
+# ChangeSet itself created (`origin = 'user'`) and that has not been touched
+# since (`updated_at` still equal to this ChangeSet's own `applied_at`, both
+# read fresh from the *same* Neo4j `ChangeSet` node inside this one query —
+# never a Python-side value, which would compare a driver-native datetime
+# property against a re-serialized string and never match — every create-
+# stage query sets `created_at == updated_at == $now` from the same apply
+# transaction, so `applied_at` on the ChangeSet is exactly that same instant)
+# is deleted. Zero rows back means the resource was modified or removed by a
+# later, unrelated change since this ChangeSet was applied — the caller must
+# treat that as a conflict, never as "nothing to do". Label-agnostic and
+# works for every create-shaped operation type (node, relationship/claim,
+# evidence, note) because ``DETACH DELETE`` also removes the
+# ``REFERS_TO``/``SUPPORTED_BY`` relationships those creates add.
+CHANGE_SET_REVERT_DELETE_QUERY = """\
+MATCH (cs:ChangeSet {id: $change_set_id, series_id: $series_id})
+MATCH (resource {id: $resource_id, series_id: $series_id})
+WHERE resource.origin = 'user' AND resource.updated_at = cs.applied_at
+WITH resource, resource.id AS deleted_id
+DETACH DELETE resource
+RETURN deleted_id AS id
+"""
+
+# Revert only succeeds from 'applied' — an unapplied/rejected/failed/already-
+# reverted ChangeSet (or one owned by another user) yields zero rows.
+MARK_CHANGE_SET_REVERTED_QUERY = f"""\
+MATCH (u:AppUser {{id: $user_id}})-[:PROPOSED_CHANGE_SET]->
+      (cs:ChangeSet {{id: $id, series_id: $series_id}})
+WHERE cs.status = 'applied'
+SET cs.status = 'reverted', cs.revision_id = $revert_revision_id
+RETURN {_CHANGE_SET_FIELDS}
+"""
+
 # Every CREATE below hardcodes origin: 'user' and binds visible_from_order
 # from $visible_from_order — a server-computed parameter (current progress,
 # read fresh inside the transaction), never sourced from the operation

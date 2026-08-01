@@ -21,7 +21,10 @@ from backend.app.domain.change_set import ChangeSetCreateRequest, ChangeSetRespo
 from backend.app.services.change_set import (
     ChangeSetConflict,
     ChangeSetNotFound,
+    ChangeSetNotRevertible,
     ChangeSetOperationInvalid,
+    ChangeSetRevertConflict,
+    ChangeSetRevertUnsupported,
     ChangeSetService,
     ChangeSetSessionNotFound,
     ChangeSetStale,
@@ -153,3 +156,49 @@ async def reject_change_set(
         _not_found()
     except ChangeSetConflict:
         _conflict("This ChangeSet has already been resolved and cannot be rejected again.")
+
+
+@router.post(
+    "/{change_set_id}/revert",
+    response_model=ChangeSetResponse,
+    status_code=200,
+    summary="Revert a previously applied ChangeSet",
+    responses={
+        401: error_responses(401)[401],
+        404: error_responses(404)[404],
+        409: error_responses(409)[409],
+        422: error_responses(422)[422],
+    },
+)
+async def revert_change_set(
+    series_id: str,
+    change_set_id: str,
+    user: CurrentUserDependency,
+    service: ChangeSetServiceDependency,
+) -> ChangeSetResponse:
+    """Revert a previously applied ChangeSet's create-shaped operations.
+
+    Deletes every resource this ChangeSet created — restoring pre-apply
+    state — and logs a new ``Reverted``-action Revision; the original
+    apply-time Revision is never edited or deleted. Requires its own
+    explicit call, distinct from the original apply confirmation. Only
+    ChangeSets whose operations are entirely create-shaped support revert
+    (RAG-15's minimal-revert allowance — an update/delete-shaped operation
+    has no stored prior state to restore and returns **422**). A resource
+    modified or removed by a later, unrelated change since this ChangeSet
+    was applied causes revert to fail with **409** rather than silently
+    overwrite that change.
+    """
+    try:
+        return await service.revert(user["id"], series_id, change_set_id)
+    except ChangeSetNotFound:
+        _not_found()
+    except ChangeSetNotRevertible:
+        _conflict("This ChangeSet has no applied Revision to revert.")
+    except ChangeSetRevertConflict:
+        _conflict(
+            "A resource this ChangeSet created was modified or removed by a later, "
+            "unrelated change; revert was aborted to avoid overwriting it."
+        )
+    except ChangeSetRevertUnsupported:
+        _invalid()

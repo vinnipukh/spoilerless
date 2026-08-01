@@ -39,12 +39,16 @@ from backend.app.repository.change_set import (
     ApplyChangeSetCommand,
     ChangeSetConflict,
     ChangeSetNotFound,
+    ChangeSetNotRevertible,
     ChangeSetOperationInvalid,
     ChangeSetRepository,
+    ChangeSetRevertConflict,
+    ChangeSetRevertUnsupported,
     ChangeSetSessionNotFound,
     ChangeSetStale,
     ProposeChangeSetCommand,
     RejectChangeSetCommand,
+    RevertChangeSetCommand,
 )
 from backend.app.services.progress import ProgressService
 
@@ -52,7 +56,10 @@ __all__ = [
     "ChangeSetService",
     "ChangeSetConflict",
     "ChangeSetNotFound",
+    "ChangeSetNotRevertible",
     "ChangeSetOperationInvalid",
+    "ChangeSetRevertConflict",
+    "ChangeSetRevertUnsupported",
     "ChangeSetSessionNotFound",
     "ChangeSetStale",
     "ChangeSetValidationError",
@@ -206,6 +213,27 @@ class ChangeSetService:
         """
         return await self._repository.reject(
             RejectChangeSetCommand(
+                change_set_id=change_set_id,
+                user_id=user_id,
+                series_id=series_id,
+                now=_utc_now(),
+            )
+        )
+
+    async def revert(
+        self, user_id: str, series_id: str, change_set_id: str
+    ) -> ChangeSetResponse:
+        """Revert a previously applied ChangeSet (RAG-15).
+
+        Delegates entirely to ``ChangeSetRepository.revert``. Raises
+        ``ChangeSetNotFound``, ``ChangeSetNotRevertible`` (no applied
+        Revision to revert), ``ChangeSetRevertUnsupported`` (an update/
+        delete-shaped operation has no stored prior state to restore), or
+        ``ChangeSetRevertConflict`` (a created resource was modified or
+        removed by a later, unrelated change) — see that method's docstring.
+        """
+        return await self._repository.revert(
+            RevertChangeSetCommand(
                 change_set_id=change_set_id,
                 user_id=user_id,
                 series_id=series_id,

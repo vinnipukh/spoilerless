@@ -40,6 +40,8 @@ from backend.app.graph.change_set import (
     CHANGE_SET_DELETE_NODE_QUERY,
     CHANGE_SET_DELETE_RELATIONSHIP_QUERY,
     CHANGE_SET_READ_FOR_APPLY_QUERY,
+    CHANGE_SET_REVERT_DELETE_QUERY,
+    CHANGE_SET_REVISION_GET_QUERY,
     CHANGE_SET_UPDATE_CLAIM_QUERY,
     CHANGE_SET_UPDATE_NODE_QUERY,
     CHANGE_SET_UPDATE_RELATIONSHIP_QUERY,
@@ -47,6 +49,7 @@ from backend.app.graph.change_set import (
     MARK_CHANGE_SET_APPLIED_QUERY,
     MARK_CHANGE_SET_FAILED_QUERY,
     MARK_CHANGE_SET_REJECTED_QUERY,
+    MARK_CHANGE_SET_REVERTED_QUERY,
     TARGET_VISIBILITY_QUERY,
 )
 from backend.app.graph.database import Neo4jDatabase
@@ -74,6 +77,38 @@ class ChangeSetStale(RuntimeError):
 
 class ChangeSetOperationInvalid(ValueError):
     """An operation failed fresh re-validation at apply time — aborts the whole apply."""
+
+
+class ChangeSetNotRevertible(RuntimeError):
+    """The ChangeSet has no applied Revision to revert (never applied, rejected,
+    failed, or already reverted) — "nothing to revert" (RAG-15)."""
+
+
+class ChangeSetRevertUnsupported(ValueError):
+    """The ChangeSet includes an update/delete-shaped operation with no stored
+    prior state to restore — only create-shaped ChangeSets support revert
+    (mirrors ``api/revisions.py::revert_revision``'s "cannot revert a
+    Creation revision" discipline: some shapes have no well-defined restore
+    target and are rejected rather than silently mishandled, RAG-15)."""
+
+
+class ChangeSetRevertConflict(RuntimeError):
+    """A resource this ChangeSet created was modified or removed by a later,
+    unrelated change since this ChangeSet was applied — revert is aborted
+    rather than silently overwriting that later change."""
+
+
+# Only these operation types have a well-defined "pre-apply state" to
+# restore without any stored per-operation snapshot: for a create, the
+# pre-apply state is simply "the resource did not exist" — so revert is
+# "delete what was created". Update/delete-shaped operations have no
+# equivalent, since Stage 2 logs exactly one coarse ChangeSet-level Revision
+# (RAG-12's "one Revision per apply", not one per operation/target) with no
+# per-target `before` snapshot — restoring those would require inventing
+# state that was never recorded.
+_CREATE_OPERATION_TYPES = frozenset(
+    {"create_node", "create_relationship", "create_claim", "attach_evidence", "create_note"}
+)
 
 
 @dataclass(frozen=True)
@@ -113,6 +148,14 @@ class ApplyChangeSetCommand:
 
 @dataclass(frozen=True)
 class RejectChangeSetCommand:
+    change_set_id: str
+    user_id: str
+    series_id: str
+    now: datetime
+
+
+@dataclass(frozen=True)
+class RevertChangeSetCommand:
     change_set_id: str
     user_id: str
     series_id: str
@@ -229,6 +272,125 @@ class ChangeSetRepository:
         twice).
         """
         return await self._database.execute_write(self._reject_change_set, command)
+
+    async def revert(self, command: RevertChangeSetCommand) -> ChangeSetResponse:
+        """Revert a previously applied ChangeSet, inside one write transaction.
+
+        Follows ``api/revisions.py::revert_revision``'s read-branch-apply-log
+        shape, adapted to Stage 2's coarser one-Revision-per-apply model
+        (06-06): read the ChangeSet and its apply-time Revision fresh inside
+        the transaction, branch on whether every operation is create-shaped
+        (raising ``ChangeSetRevertUnsupported`` — the same "no prior state to
+        restore" rejection Phase 4 applies to a plain Creation revision — if
+        not), delete every resource this ChangeSet created only if it has not
+        been touched since (a fresh ``updated_at`` comparison, guarding
+        against silently overwriting a later, unrelated change), then log a
+        new ``Reverted``-action Revision and mark the ChangeSet ``reverted``
+        — all inside the same ``execute_write`` callback, never a second
+        transaction.
+
+        Raises ``ChangeSetNotFound`` (missing/cross-user, indistinguishable),
+        ``ChangeSetNotRevertible`` (no applied Revision to revert — never
+        applied, rejected, failed, or already reverted),
+        ``ChangeSetRevertUnsupported`` (an update/delete-shaped operation has
+        no stored prior state to restore), or ``ChangeSetRevertConflict`` (a
+        created resource was modified or removed by a later, unrelated
+        change — the whole revert rolls back, zero partial mutation).
+        """
+        return await self._database.execute_write(self._revert_change_set, command)
+
+    @staticmethod
+    async def _revert_change_set(tx: Any, command: RevertChangeSetCommand) -> ChangeSetResponse:
+        row = await _read_change_set_row(
+            tx, command.user_id, command.series_id, command.change_set_id
+        )
+        if row is None:
+            raise ChangeSetNotFound(
+                f"ChangeSet {command.change_set_id} not found for this user."
+            )
+        if row["status"] != "applied":
+            raise ChangeSetNotRevertible(
+                f"ChangeSet {command.change_set_id} has no applied Revision to revert "
+                f"(status={row['status']!r})."
+            )
+
+        revision_id = row["revision_id"]
+        assert revision_id, "an applied ChangeSet always has a revision_id"
+        revision_record = await (
+            await tx.run(
+                CHANGE_SET_REVISION_GET_QUERY,
+                revision_id=revision_id,
+                series_id=command.series_id,
+            )
+        ).single()
+        if revision_record is None:
+            raise ChangeSetNotRevertible(
+                f"Revision {revision_id} for ChangeSet {command.change_set_id} not found."
+            )
+        revision = _normalize(revision_record.data())
+        after = RevisionRepository._from_json(revision.get("after")) or {}
+        operation_types: list[str] = list(after.get("operation_types") or [])
+        affected_ids: list[str] = list(after.get("affected_ids") or [])
+
+        if any(op_type not in _CREATE_OPERATION_TYPES for op_type in operation_types):
+            raise ChangeSetRevertUnsupported(
+                f"ChangeSet {command.change_set_id} includes an update/delete operation "
+                "with no stored prior state to restore; only create-shaped ChangeSets "
+                "support revert."
+            )
+
+        for resource_id in affected_ids:
+            deleted = await (
+                await tx.run(
+                    CHANGE_SET_REVERT_DELETE_QUERY,
+                    change_set_id=command.change_set_id,
+                    resource_id=resource_id,
+                    series_id=command.series_id,
+                )
+            ).single()
+            if deleted is None:
+                raise ChangeSetRevertConflict(
+                    f"Resource {resource_id} was modified or removed by a later, "
+                    "unrelated change since this ChangeSet was applied; revert was "
+                    "aborted to avoid overwriting that change."
+                )
+
+        current_progress = await _read_current_progress(
+            tx, command.user_id, command.series_id
+        )
+        revert_visible_from_order = (
+            current_progress
+            if current_progress is not None
+            else row["visible_until_order_snapshot"]
+        )
+
+        # Log the Reverted revision BEFORE marking the ChangeSet reverted —
+        # never edits or deletes the original apply-time Revision node
+        # (Task 1 acceptance criteria); this is a second, independent
+        # Revision row, appended after it in creation order.
+        revert_revision = await RevisionRepository.log_revision(
+            tx,
+            series_id=command.series_id,
+            resource_type="ChangeSet",
+            resource_id=command.change_set_id,
+            action=RevisionAction.REVERTED,
+            before={"operation_types": operation_types, "affected_ids": affected_ids},
+            after=None,
+            visible_from_order=revert_visible_from_order,
+            created_at=command.now,
+        )
+
+        reverted_record = await (
+            await tx.run(
+                MARK_CHANGE_SET_REVERTED_QUERY,
+                id=command.change_set_id,
+                series_id=command.series_id,
+                user_id=command.user_id,
+                revert_revision_id=revert_revision["id"],
+            )
+        ).single()
+        assert reverted_record is not None, "ChangeSet existence already confirmed above"
+        return _to_response(_normalize(reverted_record.data()))
 
     @staticmethod
     async def _apply_change_set(
