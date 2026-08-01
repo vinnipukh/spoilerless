@@ -18,6 +18,7 @@ import { useSeries } from './hooks/useSeries'
 import { useEpisodes } from './hooks/useEpisodes'
 import { useGraph } from './hooks/useGraph'
 import { useWatchProgress } from './hooks/useWatchProgress'
+import type { CustomRelationshipResponse } from './types/userContent'
 import type { Citation } from './types/chat'
 import type { ChangeSet } from './types/changeSet'
 
@@ -79,6 +80,18 @@ function AuthenticatedApp() {
 
   function handleClearFocus() {
     setGraphFocus(null)
+  }
+
+  // Freshly created elements (relationship created in the inspector): frame
+  // them on screen. A chat `graph_focus` from an earlier turn would keep the
+  // layout from re-running (and can pin the viewport right-of-center, hiding
+  // the new edge under the chat sheet) — clear it so the reveal takes over.
+  const [revealIds, setRevealIds] = useState<FocusedElementIds | null>(null)
+
+  function handleRelationshipCreated(rel: CustomRelationshipResponse) {
+    graphState.refresh()
+    handleClearFocus()
+    setRevealIds({ nodeIds: [rel.source, rel.target], edgeIds: [rel.id] })
   }
 
   // "Show in graph" only ever sets the highlight — it must never touch
@@ -286,6 +299,8 @@ function AuthenticatedApp() {
             episodes={episodes}
             focusedElementIds={graphFocus}
             onClearFocus={handleClearFocus}
+            revealElementIds={revealIds}
+            onRevealDone={() => setRevealIds(null)}
           />
           {selectedElement?.kind === 'edge' &&
           graphState.data.edges.find((edge) => edge.id === selectedElement.id)?.claim_id == null ? (
@@ -298,6 +313,7 @@ function AuthenticatedApp() {
               visibleUntilOrder={watchProgress.confirmedOrder}
               onRefetchGraph={graphState.refetch}
               onRefreshGraph={graphState.refresh}
+              onRelationshipCreated={handleRelationshipCreated}
               episodes={episodes}
               open={selectedElement !== null}
               onDeselect={() => setSelectedElement(null)}

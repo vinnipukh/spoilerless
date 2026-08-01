@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils'
 import type { SelectedElement } from '../graph/GraphCanvas'
 import type { GraphClaim, GraphEvidence, GraphNode, GraphResponse } from '../../types/graph'
 import { useNotes } from '../../hooks/useNotes'
-import type { NoteResponse } from '../../types/userContent'
+import type { CustomRelationshipResponse, NoteResponse } from '../../types/userContent'
 import { createCustomRelationship } from '../../api/userContent'
 import { RevisionHistoryPanel } from './RevisionHistoryPanel'
 
@@ -90,6 +90,8 @@ type Props = {
    * create/edit/delete operations that land in the graph, so the canvas
    * updates without a destructive loading unmount. */
   onRefreshGraph?: () => void
+  /** Called with the created relationship so the caller can reveal/frame it. */
+  onRelationshipCreated?: (rel: CustomRelationshipResponse) => void
   episodes: { id: string; code: string; title: string; episode_order: number }[]
   // Inspector-panel open state is lifted to App.tsx — the panel opens whenever
   // an element is selected (`open={selected != null}`) and closes via
@@ -240,7 +242,7 @@ function CreateRelationshipDialog({
   selectedNodeLabel: string | null
   graphNodes: GraphNode[]
   episodes: { id: string; code: string; title: string }[]
-  onSuccess: () => void
+  onSuccess: (rel: CustomRelationshipResponse) => void
 }) {
   const [targetId, setTargetId] = useState('')
   const [predicate, setPredicate] = useState('KNOWS')
@@ -263,7 +265,7 @@ function CreateRelationshipDialog({
     setSaving(true)
     setError('')
     try {
-      await createCustomRelationship(seriesId, {
+      const rel = await createCustomRelationship(seriesId, {
         source_id: selectedNodeId,
         target_id: targetId,
         predicate,
@@ -272,7 +274,7 @@ function CreateRelationshipDialog({
       setTargetId('')
       setPredicate('KNOWS')
       onOpenChange(false)
-      onSuccess()
+      onSuccess(rel)
     } catch (err: any) {
       setError(err?.message ?? 'Failed to create relationship.')
     } finally {
@@ -419,6 +421,7 @@ export function DetailPanel({
   visibleUntilOrder,
   onRefetchGraph,
   onRefreshGraph,
+  onRelationshipCreated,
   episodes,
   open,
   onDeselect,
@@ -759,7 +762,10 @@ export function DetailPanel({
           selectedNodeLabel={selectedNode?.label ?? null}
           graphNodes={graph.nodes}
           episodes={episodes}
-          onSuccess={() => (onRefreshGraph ?? onRefetchGraph)?.()}
+          onSuccess={(rel) => {
+            ;(onRefreshGraph ?? onRefetchGraph)?.()
+            onRelationshipCreated?.(rel)
+          }}
         />
       </SheetContent>
     </Sheet>

@@ -17,7 +17,7 @@ import { GraphLegend } from './GraphLegend'
 import { GraphControls } from './GraphControls'
 import { GraphFocusIndicator } from './GraphFocusIndicator'
 import { createCustomNode } from '../../api/userContent'
-import type { CustomNodeType } from '../../types/userContent'
+import type { CustomNodeResponse, CustomNodeType } from '../../types/userContent'
 
 console.log('[GC-MODULE] GraphCanvas module loaded')
 
@@ -115,6 +115,10 @@ type Props = {
   onSelect: (element: SelectedElement | null) => void
   seriesId: string | null
   onRefetchGraph?: () => void
+  /** In-place graph refresh (useGraph's `refresh`) — preferred for
+   * create/edit operations so the canvas updates without a destructive
+   * loading unmount. */
+  onRefreshGraph?: () => void
   episodes: EpisodeResponse[]
   // Externally-driven highlight (06-10-PLAN.md) — a chat citation's "Show in
   // graph" action, wired through App.tsx. Optional/nullable so every
@@ -122,6 +126,12 @@ type Props = {
   // keeps compiling and rendering unmodified.
   focusedElementIds?: FocusedElementIds | null
   onClearFocus?: () => void
+  // Transient "reveal" of freshly created elements (new edge / new node):
+  // re-frame the viewport on them + brief highlight, then auto-clear via
+  // onRevealDone. Fixes newly created edges rendering out of view (e.g.
+  // right of the viewport under the chat sheet).
+  revealElementIds?: FocusedElementIds | null
+  onRevealDone?: () => void
 }
 
 const ALLOWED_NODE_TYPES: { value: CustomNodeType; label: string }[] = [
@@ -143,7 +153,7 @@ function CreateCustomNodeDialog({
   onOpenChange: (open: boolean) => void
   seriesId: string | null
   episodes: EpisodeResponse[]
-  onSuccess: () => void
+  onSuccess: (node: CustomNodeResponse) => void
 }) {
   const [nodeType, setNodeType] = useState<CustomNodeType>('Character')
   const [label, setLabel] = useState('')
@@ -164,11 +174,11 @@ function CreateCustomNodeDialog({
     setSaving(true)
     setError('')
     try {
-      await createCustomNode(seriesId, { node_type: nodeType, label: label.trim(), episode_id: episodeId })
+      const created = await createCustomNode(seriesId, { node_type: nodeType, label: label.trim(), episode_id: episodeId })
       setLabel('')
       setNodeType('Character')
       onOpenChange(false)
-      onSuccess()
+      onSuccess(created)
     } catch (err: any) {
       setError(err?.message ?? 'Failed to create node.')
     } finally {
@@ -253,15 +263,21 @@ export function GraphCanvas({
   onSelect,
   seriesId,
   onRefetchGraph,
+  onRefreshGraph,
   episodes,
   focusedElementIds = null,
   onClearFocus,
+  revealElementIds = null,
+  onRevealDone,
 }: Props) {
   const elements = useMemo(() => graphToElements(graph), [graph])
   const wiredCyRef = useRef<cytoscape.Core | null>(null)
   const cyInstanceRef = useRef<cytoscape.Core | null>(null)
   const stylesheet = useMemo(() => buildGraphStylesheet(prefersReducedMotion), [])
   const [dialogOpen, setDialogOpen] = useState(false)
+  // Locally-created custom node reveal (the dialog lives inside this
+  // component; App-level reveals arrive via the `revealElementIds` prop).
+  const [localReveal, setLocalReveal] = useState<FocusedElementIds | null>(null)
 
   // Re-run the layout whenever a new graph is fetched — UNLESS an external
   // `focusedElementIds` is active, in which case the graph change is an
@@ -344,6 +360,45 @@ export function GraphCanvas({
     // hard viewport reset that would discard the user's zoom/pan.
     if (typeof cy.fit === 'function') cy.fit(focused, 48)
   }, [focusedElementIds])
+
+  // Transient reveal of freshly created elements (new edge / custom node):
+  // bring them into view and briefly highlight them, then auto-clear. Same
+  // defensive typeof guards as the focus effect. Merges the external prop
+  // and any local custom-node reveal.
+  const revealTarget = revealElementIds ?? localReveal
+  useEffect(() => {
+    const cy = cyInstanceRef.current
+    if (!cy || !revealTarget) return
+    if (
+      typeof cy.elements !== 'function' ||
+      typeof cy.getElementById !== 'function' ||
+      typeof cy.collection !== 'function' ||
+      typeof cy.fit !== 'function'
+    ) {
+      return
+    }
+
+    cy.elements().removeClass('selected-dominant faded edge-active')
+    const requestedIds = [...revealTarget.nodeIds, ...revealTarget.edgeIds]
+    const revealed = cy.collection()
+    for (const id of requestedIds) {
+      const element = cy.getElementById(id)
+      if (element && element.length > 0) revealed.merge(element)
+    }
+    if (revealed.length === 0) return
+
+    revealed.addClass('selected-dominant edge-active')
+    cy.elements().difference(revealed).addClass('faded')
+    cy.fit(revealed, 60)
+
+    const timer = window.setTimeout(() => {
+      cy.elements().removeClass('selected-dominant faded edge-active')
+      if (revealElementIds) onRevealDone?.()
+      else setLocalReveal(null)
+    }, 2200)
+    return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revealTarget, revealElementIds])
 
   return (
     <TooltipProvider>
@@ -448,7 +503,13 @@ export function GraphCanvas({
           onOpenChange={setDialogOpen}
           seriesId={seriesId}
           episodes={episodes}
-          onSuccess={() => onRefetchGraph?.()}
+          onSuccess={(node) => {
+            // In-place refresh (no destructive loading unmount) then reveal
+            // the freshly created node so it is framed on screen instead of
+            // landing out of view.
+            ;(onRefreshGraph ?? onRefetchGraph)?.()
+            setLocalReveal({ nodeIds: [node.id], edgeIds: [] })
+          }}
         />
         )}
       </div>
