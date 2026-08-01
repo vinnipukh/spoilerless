@@ -1,4 +1,5 @@
-"""ChangeSet service — Stage 1 (Propose) orchestration (RAG-11, RAG-13).
+"""ChangeSet service — Stage 1 (Propose) and Stage 2 (Confirm/Apply)
+orchestration (RAG-11, RAG-12, RAG-13, RAG-14, RAG-15).
 
 Validates every operation's target server-side (existence, series scope,
 current visibility) in list order BEFORE any persistence happens — an
@@ -9,6 +10,15 @@ requested; the service transparently substitutes an honest
 ``create_note``-shaped override proposal referencing that resource instead
 (06-PRD-SOURCE.md §10 — "do not claim the assistant can overwrite canonical
 history when it cannot").
+
+``confirm``/``reject`` are thin orchestration over
+``ChangeSetRepository.confirm``/``reject`` — every actual re-validation
+(fresh progress read, fresh per-operation target visibility, transactional
+apply + single Revision log) happens repository-side, inside one Neo4j write
+transaction, per 06-PATTERNS.md Pattern 4. This service layer never itself
+calls ``tx.run`` — it only translates repository sentinel exceptions for the
+API layer, exactly like ``propose`` already does for
+``ChangeSetSessionNotFound``/``ChangeSetValidationError``.
 """
 
 from __future__ import annotations
@@ -26,15 +36,25 @@ from backend.app.domain.change_set import (
 from backend.app.domain.user_content import NoteTargetType
 from backend.app.graph.database import Neo4jDatabase
 from backend.app.repository.change_set import (
+    ApplyChangeSetCommand,
+    ChangeSetConflict,
+    ChangeSetNotFound,
+    ChangeSetOperationInvalid,
     ChangeSetRepository,
     ChangeSetSessionNotFound,
+    ChangeSetStale,
     ProposeChangeSetCommand,
+    RejectChangeSetCommand,
 )
 from backend.app.services.progress import ProgressService
 
 __all__ = [
     "ChangeSetService",
+    "ChangeSetConflict",
+    "ChangeSetNotFound",
+    "ChangeSetOperationInvalid",
     "ChangeSetSessionNotFound",
+    "ChangeSetStale",
     "ChangeSetValidationError",
 ]
 
@@ -153,6 +173,43 @@ class ChangeSetService:
                 operations=resolved_operations,
                 visible_until_order_snapshot=boundary,
                 created_at=_utc_now(),
+            )
+        )
+
+    async def confirm(
+        self, user_id: str, series_id: str, change_set_id: str
+    ) -> ChangeSetResponse:
+        """Confirm and apply a ChangeSet — Stage 2 (RAG-12, RAG-14).
+
+        Delegates entirely to ``ChangeSetRepository.confirm``, which re-reads
+        the ChangeSet, the current progress, and every operation's target
+        fresh inside a single Neo4j write transaction. Raises
+        ``ChangeSetNotFound``, ``ChangeSetConflict``, ``ChangeSetStale``, or
+        ``ChangeSetOperationInvalid`` — see that method's docstring.
+        """
+        return await self._repository.confirm(
+            ApplyChangeSetCommand(
+                change_set_id=change_set_id,
+                user_id=user_id,
+                series_id=series_id,
+                now=_utc_now(),
+            )
+        )
+
+    async def reject(
+        self, user_id: str, series_id: str, change_set_id: str
+    ) -> ChangeSetResponse:
+        """Reject a ChangeSet with zero graph mutation (RAG-14).
+
+        Raises ``ChangeSetNotFound`` or ``ChangeSetConflict`` (already
+        resolved — cannot reject/confirm twice).
+        """
+        return await self._repository.reject(
+            RejectChangeSetCommand(
+                change_set_id=change_set_id,
+                user_id=user_id,
+                series_id=series_id,
+                now=_utc_now(),
             )
         )
 
