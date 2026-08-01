@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MessageList } from './MessageList'
-import { claimCitation, evidenceCitation } from '../../test/fixtures/chatFixtures'
+import {
+  claimCitation,
+  evidenceCitation,
+  twoOperationChangeSet,
+} from '../../test/fixtures/chatFixtures'
 import type { ChatMessage } from '../../types/chat'
 
 const userMessage: ChatMessage = {
@@ -87,5 +91,57 @@ describe('MessageList', () => {
     // the destructive "no answer" slot, not a second copy of the question.
     expect(screen.getByText('Who is Dexter?')).toBeInTheDocument()
     expect(screen.getByText("Couldn't get a response. Retry?")).toBeInTheDocument()
+  })
+
+  it('renders the ChangeSetCard below the last assistant message when a ChangeSet is proposed', () => {
+    render(
+      <MessageList
+        messages={[userMessage, assistantMessage]}
+        citations={[]}
+        proposedChangeSet={twoOperationChangeSet}
+        seriesId="series_dexter"
+      />,
+    )
+    expect(screen.getByText('Proposed changes (2)')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Confirm changes' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reject changes' })).toBeInTheDocument()
+  })
+
+  it('never renders the ChangeSetCard without a proposed ChangeSet, without a seriesId, while streaming, or on a failed turn', () => {
+    const { rerender } = render(
+      <MessageList messages={[userMessage, assistantMessage]} citations={[]} seriesId="series_dexter" />,
+    )
+    expect(screen.queryByText(/Proposed change/)).not.toBeInTheDocument()
+
+    rerender(
+      <MessageList
+        messages={[userMessage, assistantMessage]}
+        citations={[]}
+        proposedChangeSet={twoOperationChangeSet}
+      />,
+    )
+    expect(screen.queryByText(/Proposed change/)).not.toBeInTheDocument()
+
+    rerender(
+      <MessageList
+        messages={[userMessage, assistantMessage]}
+        citations={[]}
+        proposedChangeSet={twoOperationChangeSet}
+        seriesId="series_dexter"
+        streamingText="partial"
+      />,
+    )
+    expect(screen.queryByText(/Proposed change/)).not.toBeInTheDocument()
+
+    rerender(
+      <MessageList
+        messages={[userMessage, assistantMessage]}
+        citations={[]}
+        proposedChangeSet={twoOperationChangeSet}
+        seriesId="series_dexter"
+        failedTurn={{ retryable: true, onRetry: vi.fn() }}
+      />,
+    )
+    expect(screen.queryByText(/Proposed change/)).not.toBeInTheDocument()
   })
 })

@@ -146,6 +146,190 @@ export const messageEnvelopeWithProposedChangeSet: MessageResponseEnvelope = {
   proposed_change_set: proposedChangeSetAwaitingConfirmation,
 }
 
+// ── 06-11: ChangeSetCard behavior fixtures (one per card truth) ──
+
+// Exactly two operations — the singular/plural title boundary (N=1 vs N>=2)
+// is asserted at N=1 vs N=2 in ChangeSetCard.test.tsx.
+export const twoOperationChangeSet: ChangeSet = {
+  id: 'change_set_two_ops',
+  user_id: 'user_1',
+  series_id: 'series_dexter',
+  chat_session_id: 'session_1',
+  status: 'awaiting_confirmation',
+  visible_until_order_snapshot: 1,
+  summary: 'Two operations proposal',
+  operations: [
+    {
+      operation_type: 'create_note',
+      target_type: 'Character',
+      target_id: 'char_dexter_morgan',
+      content: 'This is likely foreshadowing.',
+    },
+    {
+      operation_type: 'update_node',
+      node_id: 'char_debra_morgan',
+      label: 'Debra Morgan (detective)',
+    },
+  ],
+  created_at: '2026-01-01T00:01:05Z',
+  confirmed_at: null,
+  applied_at: null,
+  revision_id: null,
+  idempotency_key: null,
+}
+
+// Three operations, including one delete — exercises the "Proposed changes
+// (3)" title and the destructive banner in a single fixture.
+export const threeOperationChangeSetWithDelete: ChangeSet = {
+  id: 'change_set_three_ops',
+  user_id: 'user_1',
+  series_id: 'series_dexter',
+  chat_session_id: 'session_1',
+  status: 'awaiting_confirmation',
+  visible_until_order_snapshot: 1,
+  summary: 'Multi-operation proposal with a delete',
+  operations: [
+    {
+      operation_type: 'create_note',
+      target_type: 'Character',
+      target_id: 'char_dexter_morgan',
+      content: 'This is likely foreshadowing.',
+    },
+    {
+      operation_type: 'update_node',
+      node_id: 'char_debra_morgan',
+      label: 'Debra Morgan (detective)',
+    },
+    {
+      operation_type: 'delete_relationship',
+      relationship_id: 'edge_2',
+    },
+  ],
+  created_at: '2026-01-01T00:01:05Z',
+  confirmed_at: null,
+  applied_at: null,
+  revision_id: null,
+  idempotency_key: null,
+}
+
+// A create/update-only set — must never render the destructive banner.
+export const createUpdateOnlyChangeSet: ChangeSet = {
+  id: 'change_set_create_update',
+  user_id: 'user_1',
+  series_id: 'series_dexter',
+  chat_session_id: 'session_1',
+  status: 'awaiting_confirmation',
+  visible_until_order_snapshot: 1,
+  summary: 'Create and update only',
+  operations: [
+    {
+      operation_type: 'create_node',
+      node_type: 'Location',
+      label: "Rita's House",
+      episode_id: 'dexter_s01e01',
+    },
+    {
+      operation_type: 'update_node',
+      node_id: 'char_debra_morgan',
+      label: 'Debra Morgan (detective)',
+      properties: { description: 'Now a detective.' },
+    },
+  ],
+  created_at: '2026-01-01T00:01:05Z',
+  confirmed_at: null,
+  applied_at: null,
+  revision_id: null,
+  idempotency_key: null,
+}
+
+// A create_node-only set — the singular "Proposed change" title with zero
+// Before/After rows (nothing existed before a creation) and no destructive
+// banner. `create_node` is also the one operation that carries a
+// human-readable label at propose time (no persisted id yet), so its summary
+// line exercises the "{Create} {entity type}: {label}" format with a real
+// label rather than an id.
+export const createNodeOnlyChangeSet: ChangeSet = {
+  id: 'change_set_create_node_only',
+  user_id: 'user_1',
+  series_id: 'series_dexter',
+  chat_session_id: 'session_1',
+  status: 'awaiting_confirmation',
+  visible_until_order_snapshot: 1,
+  summary: 'Create a single node',
+  operations: [
+    {
+      operation_type: 'create_node',
+      node_type: 'Location',
+      label: "Rita's House",
+      episode_id: 'dexter_s01e01',
+    },
+  ],
+  created_at: '2026-01-01T00:01:05Z',
+  confirmed_at: null,
+  applied_at: null,
+  revision_id: null,
+  idempotency_key: null,
+}
+
+// Exactly one delete operation — singular destructive-banner copy.
+export const singleDeleteChangeSet: ChangeSet = {
+  ...twoOperationChangeSet,
+  id: 'change_set_single_delete',
+  summary: 'One delete',
+  operations: [
+    {
+      operation_type: 'delete_relationship',
+      relationship_id: 'edge_2',
+    },
+  ],
+}
+
+// Two delete operations — plural destructive-banner copy ("2 graph elements").
+export const twoDeleteChangeSet: ChangeSet = {
+  ...twoOperationChangeSet,
+  id: 'change_set_two_deletes',
+  summary: 'Two deletes',
+  operations: [
+    {
+      operation_type: 'delete_relationship',
+      relationship_id: 'edge_2',
+    },
+    {
+      operation_type: 'delete_node',
+      node_id: 'char_paul_bennett',
+    },
+  ],
+}
+
+// A canonical/candidate-edit refusal: the backend's `_override_note_content()`
+// emits this exact phrase in the create_note op's content, and the
+// ChangeSetCard's Protected badge (Lock icon, --destructive accent line,
+// "Propose a note instead") keys off it — the only structural signal the
+// frontend has that this create_note is a protection substitution.
+export const protectedOverrideChangeSet: ChangeSet = {
+  id: 'change_set_protected_override',
+  user_id: 'user_1',
+  series_id: 'series_dexter',
+  chat_session_id: 'session_1',
+  status: 'awaiting_confirmation',
+  visible_until_order_snapshot: 1,
+  summary: 'Protected canonical content override proposal',
+  operations: [
+    {
+      operation_type: 'create_note',
+      target_type: 'Character',
+      target_id: 'char_dexter_morgan',
+      content:
+        'char_dexter_morgan is canonical-origin content and stays exactly as it is — it cannot be edited or removed directly. This note proposes a linked annotation instead; the canonical record itself remains untouched.',
+    },
+  ],
+  created_at: '2026-01-01T00:01:05Z',
+  confirmed_at: null,
+  applied_at: null,
+  revision_id: null,
+  idempotency_key: null,
+}
+
 // ── Streaming-in-progress state ──
 //
 // Mirrors the `{status: 'streaming', streamingText}` shape useChatMessages.ts
