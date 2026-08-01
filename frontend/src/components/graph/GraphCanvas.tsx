@@ -278,6 +278,8 @@ export function GraphCanvas({
   // Locally-created custom node reveal (the dialog lives inside this
   // component; App-level reveals arrive via the `revealElementIds` prop).
   const [localReveal, setLocalReveal] = useState<FocusedElementIds | null>(null)
+  // Pending reveal target (external prop wins over the local custom-node one).
+  const revealTarget = revealElementIds ?? localReveal
 
   // Re-run the layout whenever a new graph is fetched — UNLESS an external
   // `focusedElementIds` is active, in which case the graph change is an
@@ -296,9 +298,14 @@ export function GraphCanvas({
     if (!cy) return
     if (lastLayoutGraphRef.current === graph) return
     lastLayoutGraphRef.current = graph
-    if (focusedElementIds) return
+    // Skip the destructive full relayout while a reveal is pending too:
+    // freshly created edges connect already-positioned nodes, and re-running
+    // cose-bilkent would animate the nodes AFTER the reveal's cy.fit, undoing
+    // the framing (the edge lands wherever the layout puts it — the user's
+    // "new edges show up on the right" complaint).
+    if (focusedElementIds || revealTarget) return
     runLayout(cy)
-  }, [graph, focusedElementIds])
+  }, [graph, focusedElementIds, revealTarget])
 
   // Apply/clear an externally-driven `graph_focus` highlight (RAG-17), keyed
   // on the `focusedElementIds` prop — the same "prop-driven effect" pattern
@@ -365,7 +372,6 @@ export function GraphCanvas({
   // bring them into view and briefly highlight them, then auto-clear. Same
   // defensive typeof guards as the focus effect. Merges the external prop
   // and any local custom-node reveal.
-  const revealTarget = revealElementIds ?? localReveal
   useEffect(() => {
     const cy = cyInstanceRef.current
     if (!cy || !revealTarget) return
@@ -389,14 +395,20 @@ export function GraphCanvas({
 
     revealed.addClass('selected-dominant edge-active')
     cy.elements().difference(revealed).addClass('faded')
-    cy.fit(revealed, 60)
+    // Let the just-updated element data land before framing — the layout
+    // effect above skips re-running while a reveal is pending, so this fit
+    // is not undone by a layout animation.
+    const frame = requestAnimationFrame(() => cy.fit(revealed, 60))
 
     const timer = window.setTimeout(() => {
       cy.elements().removeClass('selected-dominant faded edge-active')
       if (revealElementIds) onRevealDone?.()
       else setLocalReveal(null)
     }, 2200)
-    return () => window.clearTimeout(timer)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revealTarget, revealElementIds])
 
