@@ -3,17 +3,12 @@ status: complete
 phase: 06-spoiler-safe-graphrag-chat-and-graph-editing-agent
 source: [06-01-SUMMARY.md ... 06-12-SUMMARY.md, 06-MANUAL-ACCEPTANCE.md]
 started: 2026-08-01T22:40:00Z
-updated: 2026-08-01T19:45:58Z
+updated: 2026-08-02T00:05:00Z
 ---
 
 ## Current Test
-<!-- OVERWRITE each test - shows where we are -->
 
-number: 9
-name: Settings persistence
-expected: |
-  After saving provider/API key/config and logging out and back in, Settings still shows the stored config with the masked key ("••••1234 (stored — leave blank to keep)") — no re-entry needed.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -23,23 +18,20 @@ result: pass
 
 ### 2. Chat session auto-creation
 expected: In the chat sheet, sending a first message (or clicking "New conversation") creates a session titled "New conversation". No 422 validation error appears; the session appears in the session list.
-result: issue
-reported: "UI said there was a problem until I sent 3 messages; the first messages errored, the 3rd worked."
-severity: major
+result: pass
+previous_result: "issue (major) — UI said there was a problem until I sent 3 messages; the first messages errored, the 3rd worked. Retested 2026-08-02: passes."
 
 ### 3. Send a message, get an answer
 expected: Sending a question like "Who is Dexter Morgan?" streams a real answer from the LLM (DeepSeek) into the chat — no "Failed to load/save LLM settings", no silent empty reply.
-result: issue
-reported: "Got \"Something went wrong answering that. Try rephrasing your question.\" AND an answer came in. Hypothesis: while the app waits for the API to respond, the frontend shows a wrong (premature) error message."
-severity: major
-artifacts: [frontend/src/components/chat/MessageBubble.tsx:103 FailedMessageBubble non-retryable copy]
+result: pass
+previous_result: "issue (major) — Got \"Something went wrong answering that. Try rephrasing your question.\" AND an answer came in. Retested 2026-08-02: passes."
 
 ### 4. Stop generating button
 expected: While the answer streams, a Stop button is visible. When the answer completes (or fails), the Stop button disappears. It never stays stuck after the stream ends.
 result: issue
-reported: "Stop button works but the premature error persists — the \"Something went wrong answering that. Try rephrasing your question.\" message shows for ~5s while the previous turn is still being answered."
-severity: blocker
-artifacts: [frontend/src/components/chat/ChatPanel.tsx:40-45 classifyChatError, ChatPanel.tsx:154-179 handleSend, api/chat.py ConcurrentGenerationLimitExceeded]
+reported: "button doesnt dissappear. thinking thing still shows. generation stops."
+severity: major
+previous_result: "issue (blocker) — different symptom: premature error message shown ~5s while previous turn still answering. Retested 2026-08-02: that symptom gone, but a new/related stuck-UI symptom found (Stop button + thinking indicator don't clear after generation stops)."
 
 ### 5. Conversational tone
 expected: Asking "How do you feel about Dexter's future?" returns a warm, friendly interpretation grounded in watched content (visible events/relationships), with clearly marked speculation. It never returns the robotic "The watched graph does not contain enough information to answer that."
@@ -64,37 +56,39 @@ result: pass
 ## Summary
 
 total: 9
-passed: 6
-issues: 4
+passed: 8
+issues: 1
 pending: 0
 skipped: 0
 
 ## Gaps
 
 - truth: "In the chat sheet, sending a first message (or clicking New conversation) creates a session titled New conversation. No 422 validation error appears; the session appears in the session list."
-  status: failed
-  reason: "User reported: UI said there was a problem until I sent 3 messages; the first messages errored, the 3rd worked."
+  status: resolved
+  reason: "Retested 2026-08-02: passes now."
   severity: major
   test: 2
   artifacts: []
   missing: []
 - truth: "Sending a question streams a real answer from the LLM into the chat — no failure message, no silent empty reply."
-  status: failed
-  reason: "User reported: Got \"Something went wrong answering that. Try rephrasing your question.\" AND an answer came in. Hypothesis: while the app waits for the API to respond, the frontend shows a wrong (premature) error message."
+  status: resolved
+  reason: "Retested 2026-08-02: passes now."
   severity: major
   test: 3
   artifacts: [frontend/src/components/chat/MessageBubble.tsx:103]
   missing: []
-- truth: "While the answer streams, a Stop button is visible; when it completes the button disappears and no spurious error appears."
+- gap_id: G-06-4
+  truth: "While the answer streams, a Stop button is visible; when it completes (or fails) the Stop button disappears and no stuck loading/thinking indicator remains."
   status: failed
-  reason: "User reported: premature \"Something went wrong answering that. Try rephrasing your question.\" shown ~5s while the previous turn is still being answered (concurrent-slot 429 misclassified as non-retryable; no waiting feedback so users resend)."
-  severity: blocker
+  reason: "Retested 2026-08-02 — original premature-error symptom is gone, but user reports: Stop button doesn't disappear and the thinking indicator still shows after generation stops."
+  severity: major
   test: 4
-  artifacts: [frontend/src/components/chat/ChatPanel.tsx:40-45, ChatPanel.tsx:154-179, backend/app/api/chat.py ConcurrentGenerationLimitExceeded]
+  artifacts: [frontend/src/components/chat/ChatPanel.tsx, frontend/src/components/chat/MessageBubble.tsx]
   missing: []
 - truth: "User-created edges appear on the right part of the screen after creation (placement looks off)."
-  status: failed
-  reason: "User reported: Though it shows up on the right part of the screen (user created edges)"
+  status: resolved
+  reason: "Test 8 already shows result: pass in this file; fixed by commits 2efb572/8138167/6b5eb02 (reveal new edges/nodes in view, skip relayout while revealing, open in LEFT inspector) landed after this UAT gap was recorded."
+  resolved_by: "2efb572, 8138167, 6b5eb02"
   severity: minor
   test: 8
   artifacts: []
