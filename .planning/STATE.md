@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 06
 current_phase_name: spoiler-safe-graphrag-chat-and-graph-editing-agent
 status: executing
-stopped_at: Completed 06-07-PLAN.md
-last_updated: "2026-08-01T10:30:00.299Z"
+stopped_at: Completed 06-10-PLAN.md
+last_updated: "2026-08-01T10:56:17.651Z"
 last_activity: 2026-07-31
 last_activity_desc: Phase 06 execution resumed (wave continue)
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 35
-  completed_plans: 32
+  completed_plans: 33
 ---
 
 # HD Graf Cehennemi — Project State
@@ -137,11 +137,12 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 | Phase 06 P06 | 55min | 3 tasks | 9 files |
 | Phase 06 P09 | 1h 10min | 3 tasks | 19 files |
 | Phase 06 P07 | 40min | 2 tasks | 8 files |
+| Phase 06 P10 | 40min | 3 tasks | 7 files |
 
 ## Session
 
-**Last session:** 2026-08-01T10:29:48.454Z
-**Stopped at:** Completed 06-07-PLAN.md
+**Last session:** 2026-08-01T10:56:17.629Z
+**Stopped at:** Completed 06-10-PLAN.md
 **Resume file:** None
 
 ## Decisions
@@ -182,11 +183,14 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 - [Phase ?]: [Phase 06-09]: useChatMessages.sendMessage now optimistically appends the user's own message locally (Rule 1 fix) - previously only the assistant reply was appended, so sent questions vanished until next refetch
 - [Phase ?]: [Phase 06-07]: Revert scoped to create-shaped ChangeSets only (delete what was created) since Stage 2 (06-06) records one coarse Revision per apply with no per-operation before-snapshot; update/delete-shaped ChangeSets rejected 422 rather than silently mishandled
 - [Phase ?]: [Phase 06-07]: Revert conflict detection compares resource.updated_at against the ChangeSet's own applied_at entirely inside one Cypher statement, never a Python-side value (which would compare a driver-native datetime against a re-serialized ISO string and never match)
+- [Phase ?]: [Phase 06-10]: confirmChange() prefers the backend's echoed UserSeriesProgress over the locally-known nextOrder on success, falling back to the optimistic value only on failure
+- [Phase ?]: [Phase 06-10]: GraphFocusIndicator's count is the raw requested-target count (nodeIds.length + edgeIds.length), not the post-filter resolved-element count
+- [Phase ?]: [Phase 06-10]: Task 2 and Task 3 landed in a single commit since both edit the same App.tsx graphFocus region and were authored together
 
 ## Current Position
 
 Phase: 06 (spoiler-safe-graphrag-chat-and-graph-editing-agent) — EXECUTING
-Plan: 10 of 12
+Plan: 11 of 12
 Status: Ready to execute
 Last activity: 2026-07-31 — Phase 06 execution resumed (wave continue)
 

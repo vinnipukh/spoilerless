@@ -107,7 +107,7 @@ All requirements below are pending until their acceptance evidence is executed. 
 #### Frontend Chat & Graph Sync
 
 - [x] **RAG-16**: A chat interface integrated into the existing graph workspace (Inspector/Chat modes or resizable split) supports streaming, citations with "show in graph", proposed-change preview/confirm/reject cards, and a disabled-provider state — without displaying raw tool calls, Cypher, or hidden metadata.
-- [ ] **RAG-17**: Answering a question with `graph_focus` highlights/dims the relevant existing Cytoscape nodes/edges without destroying the user's view; applying a ChangeSet refreshes only affected graph data preserving episode filtering, images, and layout stability; lowering progress immediately hides graph/chat/citation content beyond the new boundary and invalidates unsafe draft ChangeSets.
+- [x] **RAG-17**: Answering a question with `graph_focus` highlights/dims the relevant existing Cytoscape nodes/edges without destroying the user's view; applying a ChangeSet refreshes only affected graph data preserving episode filtering, images, and layout stability; lowering progress immediately hides graph/chat/citation content beyond the new boundary and invalidates unsafe draft ChangeSets.
 
 **Phase 6 traceability:**
 
