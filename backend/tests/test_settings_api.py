@@ -55,16 +55,43 @@ class FakeUserRepo:
 def database() -> Iterator[Neo4jDatabase]:
     db = Neo4jDatabase()
     db.open()
+
+    # Backup the pre-existing AppSetting node (the user's real LLM config —
+    # this suite runs against the shared live Neo4j, so deleting the node in
+    # teardown would silently wipe the user's stored API key/enabled state,
+    # which is exactly what happened once: the stored `enabled:true` vanished
+    # and chat regressed to LLM_DISABLED until re-entered).
+    async def _backup() -> str | None:
+        clean = Neo4jDatabase()
+        clean.open()
+        try:
+            rows = await clean.execute_query(
+                "MATCH (s:AppSetting {key: $k}) RETURN s.value AS value", k="llm"
+            )
+            return rows[0]["value"] if rows and rows[0].get("value") else None
+        finally:
+            await clean.close()
+
+    backup = asyncio.run(_backup())
+
     yield db
 
-    # Clean up the test-created AppSetting node with a fresh driver + loop
-    # (the app's driver is bound to TestClient's portal loop; reusing it here
-    # would crash cross-loop — same pattern as test_chat_api.py).
+    # Restore the pre-existing value (or remove the node when none existed)
+    # with a fresh driver + loop (the app's driver is bound to TestClient's
+    # portal loop; reusing it here would crash cross-loop — same pattern as
+    # test_chat_api.py).
     async def _cleanup() -> None:
         clean = Neo4jDatabase()
         clean.open()
         try:
-            await clean.execute_query("MATCH (s:AppSetting {key: 'llm'}) DETACH DELETE s")
+            if backup is None:
+                await clean.execute_query(
+                    "MATCH (s:AppSetting {key: $k}) DETACH DELETE s", k="llm"
+                )
+            else:
+                await clean.execute_query(
+                    "MERGE (s:AppSetting {key: $k}) SET s.value = $v", k="llm", v=backup
+                )
         finally:
             await clean.close()
 
