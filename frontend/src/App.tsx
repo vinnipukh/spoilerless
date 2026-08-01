@@ -3,20 +3,45 @@ import { AuthProvider } from './providers/AuthProvider'
 import { useAuth } from './providers/useAuth'
 import { LoginPage } from './components/auth/LoginPage'
 import { AppShell } from './components/layout/AppShell'
+import { Button } from './components/ui/button'
 import { SeriesSelect } from './components/episode/SeriesSelect'
 import { EpisodeSelector } from './components/episode/EpisodeSelector'
 import { ConfirmAdvanceModal } from './components/episode/ConfirmAdvanceModal'
 import { GraphCanvas, type FocusedElementIds, type SelectedElement } from './components/graph/GraphCanvas'
 import { GraphLoadingState, GraphErrorState, GraphEmptyState } from './components/graph/GraphStatus'
-import { DetailPanel, type DetailPanelMode } from './components/detail/DetailPanel'
+import { DetailPanel } from './components/detail/DetailPanel'
 import { StructuralEdgeCard } from './components/detail/StructuralEdgeCard'
 import { ChatLauncher } from './components/chat/ChatLauncher'
+import { ChatSheet } from './components/chat/ChatSheet'
+import { SettingsPage } from './components/settings/SettingsPage'
 import { useSeries } from './hooks/useSeries'
 import { useEpisodes } from './hooks/useEpisodes'
 import { useGraph } from './hooks/useGraph'
 import { useWatchProgress } from './hooks/useWatchProgress'
 import type { Citation } from './types/chat'
 import type { ChangeSet } from './types/changeSet'
+
+// Inline SVG gear icon for the topBar Settings toggle (matches the inline
+// icon pattern used by AppShell's UserIcon and ChatLauncher).
+function SettingsIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-4 shrink-0"
+    >
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
 
 function AuthenticatedApp() {
   const { state, logout } = useAuth()
@@ -29,13 +54,20 @@ function AuthenticatedApp() {
   const graphState = useGraph(watchProgress.seriesId, watchProgress.confirmedOrder)
   const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null)
 
-  // DetailPanel's Sheet `open`/mode state, lifted here per 06-UI-SPEC.md
-  // "Chat & Panel Architecture" — `ChatLauncher` lives in AppShell's topBar
-  // slot, outside DetailPanel, so it needs to control the panel from here.
-  // Defaults closed/Inspector on every mount, never persisted across
-  // sessions (no sessionStorage/localStorage read for either value).
-  const [panelOpen, setPanelOpen] = useState(false)
-  const [panelMode, setPanelMode] = useState<DetailPanelMode>('inspector')
+  // ChatSheet's `open` state, lifted here per 06-UI-SPEC.md "Chat & Panel
+  // Architecture" — `ChatLauncher` lives in AppShell's topBar slot, outside
+  // ChatSheet, so it needs to control the sheet from here. The inspector
+  // panel (DetailPanel) has NO separate open state: it opens whenever an
+  // element is selected and closes when the selection is cleared — so the
+  // chat and the node info can be visible at the same time (chat right,
+  // inspector left), which the old single-panel mode toggle made impossible.
+  const [chatOpen, setChatOpen] = useState(false)
+
+  // Top-level view switch: the graph workspace or the settings page (no
+  // router in this app — navigation is state-driven, mirroring the existing
+  // auth/series state pattern). Entering settings unmounts the graph view
+  // (including the chat sheet); chat history survives server-side.
+  const [view, setView] = useState<'graph' | 'settings'>('graph')
 
   // Chat-driven graph_focus highlight (RAG-17, 06-10-PLAN.md) — set by a
   // citation chip's "Show in graph" action, cleared by GraphFocusIndicator's
@@ -104,20 +136,19 @@ function AuthenticatedApp() {
     setGraphFocus(focusTargetsForAppliedChangeSet(changeSet))
   }
 
-  // Clicking a citation chip's body switches to Inspector and selects the
-  // referenced resource — an intentional, expected mode switch (the user
-  // explicitly asked to see detail). Prefers a related node over a related
-  // edge when both are present; silently does nothing if neither resolves
-  // against the currently-fetched graph (defensively — RAG-08 already makes
-  // an unresolvable reference architecturally impossible).
+  // Clicking a citation chip's body selects the referenced resource, opening
+  // the left inspector — an intentional action (the user explicitly asked to
+  // see detail); the chat sheet on the right is unaffected and stays open.
+  // Prefers a related node over a related edge when both are present; silently
+  // does nothing if neither resolves against the currently-fetched graph
+  // (defensively — RAG-08 already makes an unresolvable reference
+  // architecturally impossible).
   function handleOpenDetail(citation: Citation) {
     if (graphState.status !== 'success') return
     const nodeId = citation.related_node_ids[0]
     if (nodeId) {
       const node = graphState.data.nodes.find((n) => n.id === nodeId)
       if (node) {
-        setPanelMode('inspector')
-        setPanelOpen(true)
         setSelectedElement({ kind: 'node', id: node.id, label: node.label, nodeType: node.type })
         return
       }
@@ -126,45 +157,21 @@ function AuthenticatedApp() {
     if (edgeId) {
       const edge = graphState.data.edges.find((e) => e.id === edgeId)
       if (edge) {
-        setPanelMode('inspector')
-        setPanelOpen(true)
         setSelectedElement({ kind: 'edge', id: edge.id, edgeType: edge.type, source: edge.source, target: edge.target })
       }
     }
   }
 
-  // Node/edge selection always surfaces the detail panel in Inspector mode.
-  // (06-09 originally kept Chat mode sticky — selecting while in Chat mode
-  // never switched back, which read as "clicking a node does nothing" and was
-  // reverted per user feedback: a canvas tap is an explicit request to see
-  // that element's details, so it force-switches the panel. The canvas's own
-  // `.selected-dominant` glow is unaffected either way — GraphCanvas.tsx owns
-  // that independently of DetailPanel.)
+  // Node/edge selection opens the left inspector. The chat sheet is an
+  // independent state, so both stay visible simultaneously.
   function handleSelectElement(element: SelectedElement | null) {
     setSelectedElement(element)
-    if (element) {
-      setPanelMode('inspector')
-      setPanelOpen(true)
-    }
   }
 
-  // Clicking ChatLauncher: opens the panel (if collapsed) and switches to
-  // Chat mode in one action; clicking again while already open in Chat mode
-  // collapses the entire right panel — the one way this panel can close.
+  // Clicking ChatLauncher toggles the right-side chat sheet; it never touches
+  // the inspector selection.
   function handleChatLauncherClick() {
-    if (panelMode === 'chat' && panelOpen) {
-      setPanelOpen(false)
-      return
-    }
-    setPanelMode('chat')
-    setPanelOpen(true)
-  }
-
-  // The Inspector/Chat pill toggle only ever renders while the panel is
-  // already open (it lives inside SheetHeader, which unmounts when closed),
-  // so this never needs to touch `panelOpen` itself.
-  function handlePanelModeChange(mode: DetailPanelMode) {
-    setPanelMode(mode)
+    setChatOpen((open) => !open)
   }
 
   // Progress decreasing (or any graph refetch) that hides a currently-
@@ -237,10 +244,25 @@ function AuthenticatedApp() {
             onSelect={handleEpisodeSelect}
             disabled={!selectedSeriesId}
           />
-          <ChatLauncher active={panelMode === 'chat' && panelOpen} onClick={handleChatLauncherClick} />
+          <ChatLauncher active={chatOpen} onClick={handleChatLauncherClick} />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setView((current) => (current === 'settings' ? 'graph' : 'settings'))}
+            type="button"
+            aria-label={view === 'settings' ? 'Back to graph' : 'Settings'}
+            aria-pressed={view === 'settings'}
+          >
+            <SettingsIcon />
+            <span className="hidden md:inline">{view === 'settings' ? 'Graph' : 'Settings'}</span>
+          </Button>
         </>
       }
     >
+      {view === 'settings' ? (
+        <SettingsPage onBack={() => setView('graph')} />
+      ) : (
+        <>
       {watchProgress.pendingChange && (
         <ConfirmAdvanceModal
           open
@@ -276,17 +298,27 @@ function AuthenticatedApp() {
               visibleUntilOrder={watchProgress.confirmedOrder}
               onRefetchGraph={graphState.refetch}
               episodes={episodes}
-              open={panelOpen}
-              mode={panelMode}
-              onModeChange={handlePanelModeChange}
-              onShowInGraph={handleShowInGraph}
-              onOpenDetail={handleOpenDetail}
-              onChangeSetApplied={handleChangeSetApplied}
+              open={selectedElement !== null}
+              onDeselect={() => setSelectedElement(null)}
             />
           )}
+          <ChatSheet
+            open={chatOpen}
+            onClose={() => setChatOpen(false)}
+            seriesId={watchProgress.seriesId}
+            seriesTitle={graphState.data.series.title}
+            currentEpisodeCode={
+              episodes.find((episode) => episode.episode_order === watchProgress.confirmedOrder)?.code ?? null
+            }
+            onShowInGraph={handleShowInGraph}
+            onOpenDetail={handleOpenDetail}
+            onChangeSetApplied={handleChangeSetApplied}
+          />
         </>
       )}
       {graphState.status === 'idle' && <GraphEmptyState />}
+        </>
+      )}
     </AppShell>
   )
 }

@@ -171,6 +171,18 @@ function fetchStub(input: RequestInfo | URL): Promise<Response> {
   if (url.startsWith('/api/series/series_dexter/chat/sessions')) {
     return Promise.resolve(jsonResponse([]))
   }
+  // Settings page (LLM provider configuration)
+  if (url === '/api/settings/llm') {
+    return Promise.resolve(
+      jsonResponse({
+        provider: 'gemini',
+        model: 'gemini-2.5-flash',
+        base_url: null,
+        api_key_configured: false,
+        api_key_masked: null,
+      }),
+    )
+  }
   return Promise.resolve(notFoundResponse())
 }
 
@@ -281,13 +293,36 @@ describe('App', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Open chat' }))
     expect(await screen.findByRole('heading', { name: 'Chat' })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Chat' })).toHaveAttribute('aria-checked', 'true')
 
     await user.click(screen.getByRole('button', { name: 'Close chat' }))
     expect(screen.queryByRole('heading', { name: 'Chat' })).not.toBeInTheDocument()
   })
 
-  it('selecting a node while the panel is in Chat mode force-switches it to Inspector and shows the node details', async () => {
+  it('toggles between the graph workspace and the settings page via the topBar button', async () => {
+    currentAuthState = 'authenticated'
+    sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
+
+    const user = userEvent.setup()
+    render(<App />)
+
+    // Graph workspace is the default view.
+    expect(await screen.findByTestId('graph-canvas-stub')).toBeInTheDocument()
+
+    // Open settings — the graph canvas unmounts, the settings form appears.
+    await user.click(screen.getByRole('button', { name: 'Settings' }))
+    expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+    expect(await screen.findByDisplayValue('gemini-2.5-flash')).toBeInTheDocument()
+    expect(screen.queryByTestId('graph-canvas-stub')).not.toBeInTheDocument()
+
+    // The toggle flips to "Back to graph" while on the settings page (the
+    // page itself also renders a "Back to graph" button — either returns to
+    // the graph workspace).
+    await user.click(screen.getAllByRole('button', { name: 'Back to graph' })[0])
+    expect(await screen.findByTestId('graph-canvas-stub')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Settings' })).not.toBeInTheDocument()
+  })
+
+  it('selecting a node while the chat sheet is open shows the node details AND keeps chat visible', async () => {
     currentAuthState = 'authenticated'
     sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
 
@@ -299,13 +334,11 @@ describe('App', () => {
 
     await user.click(await screen.findByTestId('graph-element-char_dexter_morgan'))
 
-    // A canvas tap is an explicit request to see the element's details — the
-    // panel switches to Inspector and shows the node, replacing Chat content.
-    // (Reverted from 06-09's sticky-Chat behavior per user feedback: "clicking
-    // a node shows nothing on the right".)
+    // The two panels are independent sheets: the left inspector shows the
+    // node's details while the right chat sheet stays open — both visible at
+    // the same time (06-12 split, replacing the single-panel mode toggle).
     expect(await screen.findByRole('heading', { name: 'Dexter Morgan' })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Inspector' })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.queryByRole('heading', { name: 'Chat' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Chat' })).toBeInTheDocument()
   })
 
   describe('citation graph-focus wiring (06-10, RAG-17)', () => {
@@ -341,9 +374,10 @@ describe('App', () => {
       await user.click(screen.getByRole('button', { name: 'Show in graph' }))
 
       expect(await screen.findByText('Highlighting 3 from chat')).toBeInTheDocument()
-      // Still Chat mode — "Show in graph" must never switch panel content.
+      // "Show in graph" only sets the highlight — it never touches the chat
+      // sheet (and never opens the inspector).
       expect(screen.getByRole('heading', { name: 'Chat' })).toBeInTheDocument()
-      expect(screen.getByRole('radio', { name: 'Chat' })).toHaveAttribute('aria-checked', 'true')
+      expect(screen.queryByRole('heading', { name: 'Dexter Morgan' })).not.toBeInTheDocument()
     })
 
     it('clicking a citation chip body switches to Inspector mode and selects the referenced resource', async () => {
@@ -361,8 +395,9 @@ describe('App', () => {
       await user.click(screen.getByRole('button', { name: 'script · S01E01' }))
 
       expect(await screen.findByRole('heading', { name: 'Dexter Morgan' })).toBeInTheDocument()
-      expect(screen.getByRole('radio', { name: 'Inspector' })).toHaveAttribute('aria-checked', 'true')
-      expect(screen.queryByRole('heading', { name: 'Chat' })).not.toBeInTheDocument()
+      // Both panels coexist: the chip body opened the left inspector for the
+      // referenced node while the right chat sheet stays open.
+      expect(screen.getByRole('heading', { name: 'Chat' })).toBeInTheDocument()
     })
   })
 

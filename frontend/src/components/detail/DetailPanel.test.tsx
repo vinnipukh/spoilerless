@@ -23,8 +23,7 @@ const defaultProps = {
   visibleUntilOrder: 1,
   episodes: [],
   open: true,
-  mode: 'inspector' as const,
-  onModeChange: vi.fn(),
+  onDeselect: vi.fn(),
 }
 
 describe('DetailPanel', () => {
@@ -176,7 +175,7 @@ describe('DetailPanel', () => {
     expect(await screen.findByText('canonical')).toBeInTheDocument()
   })
 
-  describe('collapsible Sheet + Inspector/Chat mode toggle (06-09)', () => {
+  describe('collapsible left inspector Sheet (06-09/06-12)', () => {
     it('renders no Sheet content at all when open is false', () => {
       const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
       render(<DetailPanel selected={selected} {...defaultProps} open={false} />)
@@ -186,31 +185,15 @@ describe('DetailPanel', () => {
       expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
     })
 
-    it('renders the Inspector/Chat mode toggle whenever the panel is open', async () => {
-      render(<DetailPanel selected={null} {...defaultProps} />)
-
-      expect(await screen.findByRole('radio', { name: 'Inspector' })).toBeInTheDocument()
-      expect(screen.getByRole('radio', { name: 'Chat' })).toBeInTheDocument()
-    })
-
-    it('calls onModeChange("chat") when the Chat segment is clicked', async () => {
-      const user = userEvent.setup()
-      const onModeChange = vi.fn()
-      render(<DetailPanel selected={null} {...defaultProps} onModeChange={onModeChange} />)
-
-      await user.click(await screen.findByRole('radio', { name: 'Chat' }))
-      expect(onModeChange).toHaveBeenCalledWith('chat')
-    })
-
-    it('mounts Chat-mode content (not Tabs) and preserves Overview/Claims/Evidence tabs for Inspector mode', async () => {
+    it('renders the inspector content (never the chat surface) when open', async () => {
       const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
-      render(<DetailPanel selected={selected} {...defaultProps} mode="chat" />)
+      render(<DetailPanel selected={selected} {...defaultProps} />)
 
-      expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
-      expect(screen.queryByRole('tab', { name: 'Claims' })).not.toBeInTheDocument()
-      // Chat-mode content (ChatPanel) renders the series+episode-less badge
-      // and empty-state heading rather than Inspector's Overview fields.
-      expect(await screen.findByRole('heading', { name: 'Ask about Dexter' })).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: 'Dexter Morgan' })).toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument()
+      // The chat surface lives in its own right-side sheet (ChatSheet) — this
+      // panel is inspector-only, so no chat content can appear here.
+      expect(screen.queryByRole('heading', { name: 'Ask about Dexter' })).not.toBeInTheDocument()
     })
   })
 })
