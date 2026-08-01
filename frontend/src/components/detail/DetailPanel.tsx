@@ -22,6 +22,7 @@ import type { NoteResponse } from '../../types/userContent'
 import { createCustomRelationship } from '../../api/userContent'
 import { RevisionHistoryPanel } from './RevisionHistoryPanel'
 import { ChatPanel } from '../chat/ChatPanel'
+import type { Citation } from '../../types/chat'
 
 // Reused by CitationChip.tsx (06-09-PLAN.md Task 2) so claim/evidence citation
 // accents are never redefined as a second, drifting hex literal — the exact
@@ -99,6 +100,13 @@ type Props = {
   open: boolean
   mode: DetailPanelMode
   onModeChange: (mode: DetailPanelMode) => void
+  // Threaded down into ChatPanel/MessageList/CitationChip (06-10-PLAN.md) —
+  // "Show in graph" only updates the graph-focus highlight (never touches
+  // `mode`); the chip body switches this panel to Inspector and selects the
+  // referenced resource (App.tsx owns both behaviors, since it owns
+  // `panelMode`/`selectedElement`).
+  onShowInGraph?: (citation: Citation) => void
+  onOpenDetail?: (citation: Citation) => void
 }
 
 type ResolvedEvidence = {
@@ -468,6 +476,8 @@ export function DetailPanel({
   open,
   mode,
   onModeChange,
+  onShowInGraph,
+  onOpenDetail,
 }: Props) {
   // Selection-aware state
   const [editingNote, setEditingNote] = useState<NoteResponse | null>(null)
@@ -616,6 +626,8 @@ export function DetailPanel({
               seriesId={seriesId}
               seriesTitle={graph.series.title}
               currentEpisodeCode={currentEpisodeCode}
+              onShowInGraph={onShowInGraph}
+              onOpenDetail={onOpenDetail}
             />
           )}
           {mode === 'inspector' && !selected && <p>Select a node to see details.</p>}

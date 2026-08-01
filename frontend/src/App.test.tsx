@@ -3,9 +3,34 @@ import { useRef } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
-import { graphResponseS01E01 } from './test/fixtures/graphResponse'
+import { graphResponseS01E01, graphResponseS01E03 } from './test/fixtures/graphResponse'
+import { claimCitation } from './test/fixtures/chatFixtures'
+import { useChatMessages } from './hooks/useChatMessages'
 import type { SeriesResponse, EpisodeResponse } from './types/series'
 import type { UserResponse } from './types/auth'
+import type { Citation } from './types/chat'
+
+// 06-10: citation-wiring tests (onShowInGraph/onOpenDetail -> App.tsx) mock
+// useChatMessages directly rather than driving a real SSE turn end-to-end
+// (already covered by CitationChip.test.tsx/MessageList.test.tsx at the
+// props-firing level) — this only needs to prove the wiring from ChatPanel's
+// rendered CitationChip up through DetailPanel into App.tsx's own
+// graphFocus/selection state actually exists.
+vi.mock('./hooks/useChatMessages', () => ({
+  useChatMessages: vi.fn(),
+}))
+
+function defaultChatMessagesReturn() {
+  return {
+    status: 'idle' as const,
+    messages: [],
+    citations: [],
+    graphFocus: { node_ids: [], edge_ids: [] },
+    proposedChangeSet: null,
+    sendMessage: vi.fn(),
+    stop: vi.fn(),
+  }
+}
 
 // react-cytoscapejs stub (same as before)
 type FakeCollection = { addClass: (cls: string) => FakeCollection; removeClass: (cls: string) => FakeCollection; difference: (other: unknown) => FakeCollection; union: (other: unknown) => FakeCollection }
@@ -103,6 +128,10 @@ function fetchStub(input: RequestInfo | URL): Promise<Response> {
   if (url === '/api/series') return Promise.resolve(jsonResponse(seriesFixture))
   if (url === '/api/series/series_dexter/episodes') return Promise.resolve(jsonResponse(episodesFixture))
   if (url.startsWith('/api/series/series_dexter/graph')) {
+    // 06-10: routed by boundary order — most tests only ever confirm order 1
+    // (graphResponseS01E01), but the progress-decrease-clears-stale-focus
+    // tests need a real order-3-vs-order-1 node-set difference to exercise.
+    if (url.includes('visible_until_order=3')) return Promise.resolve(jsonResponse(graphResponseS01E03))
     return Promise.resolve(jsonResponse(graphResponseS01E01))
   }
   // ChatPanel (mounted only once the panel switches to Chat mode) fetches
@@ -123,6 +152,7 @@ beforeEach(() => {
   currentAuthState = 'unauthenticated'
   sessionStorage.clear()
   vi.stubGlobal('fetch', vi.fn(fetchStub))
+  vi.mocked(useChatMessages).mockReturnValue(defaultChatMessagesReturn())
 })
 
 afterEach(() => {
@@ -244,5 +274,143 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: 'Chat' })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: 'Chat' })).toHaveAttribute('aria-checked', 'true')
     expect(screen.queryByRole('heading', { name: 'Dexter Morgan' })).not.toBeInTheDocument()
+  })
+
+  describe('citation graph-focus wiring (06-10, RAG-17)', () => {
+    function chatMessagesWithCitation() {
+      return {
+        ...defaultChatMessagesReturn(),
+        status: 'success' as const,
+        messages: [
+          {
+            id: 'message_assistant_1',
+            role: 'assistant',
+            content: 'Dexter works at Miami Metro.',
+            created_at: '2026-01-01T00:01:05Z',
+            visible_until_order_snapshot: 1,
+          },
+        ],
+        citations: [claimCitation],
+      }
+    }
+
+    it('clicking a citation chip\'s "Show in graph" icon updates the graph focus without leaving Chat mode', async () => {
+      currentAuthState = 'authenticated'
+      sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
+      vi.mocked(useChatMessages).mockReturnValue(chatMessagesWithCitation())
+
+      const user = userEvent.setup()
+      render(<App />)
+
+      await user.click(await screen.findByRole('button', { name: 'Open chat' }))
+      expect(await screen.findByRole('heading', { name: 'Chat' })).toBeInTheDocument()
+
+      // claimCitation: related_node_ids (2) + related_edge_ids (1) = 3.
+      await user.click(screen.getByRole('button', { name: 'Show in graph' }))
+
+      expect(await screen.findByText('Highlighting 3 from chat')).toBeInTheDocument()
+      // Still Chat mode — "Show in graph" must never switch panel content.
+      expect(screen.getByRole('heading', { name: 'Chat' })).toBeInTheDocument()
+      expect(screen.getByRole('radio', { name: 'Chat' })).toHaveAttribute('aria-checked', 'true')
+    })
+
+    it('clicking a citation chip body switches to Inspector mode and selects the referenced resource', async () => {
+      currentAuthState = 'authenticated'
+      sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
+      vi.mocked(useChatMessages).mockReturnValue(chatMessagesWithCitation())
+
+      const user = userEvent.setup()
+      render(<App />)
+
+      await user.click(await screen.findByRole('button', { name: 'Open chat' }))
+      expect(await screen.findByRole('heading', { name: 'Chat' })).toBeInTheDocument()
+
+      // claimCitation's chip body: "{source_type} · {episode_code}".
+      await user.click(screen.getByRole('button', { name: 'script · S01E01' }))
+
+      expect(await screen.findByRole('heading', { name: 'Dexter Morgan' })).toBeInTheDocument()
+      expect(screen.getByRole('radio', { name: 'Inspector' })).toHaveAttribute('aria-checked', 'true')
+      expect(screen.queryByRole('heading', { name: 'Chat' })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('progress-decrease clears stale graph focus (06-10 Task 3)', () => {
+    // char_paul_bennett only exists in graphResponseS01E03 (visible_from_order
+    // 3) — absent from graphResponseS01E01, so a focus referencing it must be
+    // cleared once progress decreases to order 1.
+    const paulBennettCitation: Citation = {
+      claim_id: 'claim_7',
+      evidence_id: null,
+      source_id: 'source_1',
+      source_label: 'S01E03 script',
+      source_type: 'script',
+      episode_code: 'S01E03',
+      locator: '00:10:00',
+      excerpt: 'Paul Bennett appears.',
+      related_node_ids: ['char_paul_bennett'],
+      related_edge_ids: [],
+    }
+
+    function chatMessagesWithCitation(citation: Citation) {
+      return {
+        ...defaultChatMessagesReturn(),
+        status: 'success' as const,
+        messages: [
+          {
+            id: 'message_assistant_1',
+            role: 'assistant',
+            content: 'Answer text.',
+            created_at: '2026-01-01T00:01:05Z',
+            visible_until_order_snapshot: 3,
+          },
+        ],
+        citations: [citation],
+      }
+    }
+
+    async function decreaseProgressToS01E01(user: ReturnType<typeof userEvent.setup>) {
+      await user.click(await screen.findByRole('combobox', { name: 'Watch progress' }))
+      await user.click(await screen.findByRole('option', { name: /S01E01/ }))
+      await user.click(await screen.findByRole('button', { name: 'Yes, unlock episode' }))
+    }
+
+    it('clears an active graph focus that references a node hidden by the new (lower) boundary', async () => {
+      currentAuthState = 'authenticated'
+      sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 3 }))
+      vi.mocked(useChatMessages).mockReturnValue(chatMessagesWithCitation(paulBennettCitation))
+
+      const user = userEvent.setup()
+      render(<App />)
+
+      await waitFor(() => expect(graphFetchCalls().some(([url]) => String(url).includes('visible_until_order=3'))).toBe(true))
+      await user.click(await screen.findByRole('button', { name: 'Open chat' }))
+      await user.click(await screen.findByRole('button', { name: 'Show in graph' }))
+      expect(await screen.findByText('Highlighting 1 from chat')).toBeInTheDocument()
+
+      await decreaseProgressToS01E01(user)
+
+      await waitFor(() => expect(screen.queryByText(/Highlighting/)).not.toBeInTheDocument())
+    })
+
+    it('leaves a graph focus untouched when a progress decrease does not hide any of its referenced elements', async () => {
+      currentAuthState = 'authenticated'
+      sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 3 }))
+      // claimCitation references char_dexter_morgan/loc_miami_metro/edge_2 —
+      // all present (by id) in both graphResponseS01E01 and graphResponseS01E03.
+      vi.mocked(useChatMessages).mockReturnValue(chatMessagesWithCitation(claimCitation))
+
+      const user = userEvent.setup()
+      render(<App />)
+
+      await waitFor(() => expect(graphFetchCalls().some(([url]) => String(url).includes('visible_until_order=3'))).toBe(true))
+      await user.click(await screen.findByRole('button', { name: 'Open chat' }))
+      await user.click(await screen.findByRole('button', { name: 'Show in graph' }))
+      expect(await screen.findByText('Highlighting 3 from chat')).toBeInTheDocument()
+
+      await decreaseProgressToS01E01(user)
+
+      await waitFor(() => expect(graphFetchCalls().some(([url]) => String(url).includes('visible_until_order=1'))).toBe(true))
+      expect(screen.getByText('Highlighting 3 from chat')).toBeInTheDocument()
+    })
   })
 })

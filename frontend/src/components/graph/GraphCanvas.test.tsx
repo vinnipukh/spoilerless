@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
-import { render } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { GraphCanvas } from './GraphCanvas'
 import { graphResponseS01E01, graphResponseS01E03 } from '../../test/fixtures/graphResponse'
 
@@ -12,26 +13,166 @@ import { graphResponseS01E01, graphResponseS01E03 } from '../../test/fixtures/gr
 // of a fake `cy` surface (`on`, `container`, no `layout`) that GraphCanvas's
 // real registration code (mouseover/mouseout/tap listeners, the `runLayout`
 // effect guarded by `typeof cy.layout !== 'function'`) doesn't throw.
+//
+// 06-10: the fake `cy` also grows a minimal, persistent (across re-renders)
+// element/class registry — `getElementById`/`collection`/`elements`/`fit` —
+// so the new `focusedElementIds` effect (and, for the "tap still works after
+// a focus update" truth, the pre-existing tap-to-select handlers) can be
+// exercised against real class-application behavior, not just prop capture.
 type CapturedElement = { data: Record<string, unknown> }
 let capturedElements: CapturedElement[] = []
 let capturedProps: Record<string, unknown> = {}
 
+type FakeCollection = {
+  ids: string[]
+  length: number
+  addClass: (cls: string) => FakeCollection
+  removeClass: (cls: string) => FakeCollection
+  merge: (other: FakeCollection) => FakeCollection
+  difference: (other: FakeCollection) => FakeCollection
+}
+
+type FakeElementHandle = {
+  id: () => string
+  data: (field: string) => unknown
+  addClass: (cls: string) => FakeElementHandle
+  removeClass: (cls: string) => FakeElementHandle
+  closedNeighborhood: () => FakeCollection
+  connectedEdges: () => FakeCollection
+  connectedNodes: () => FakeCollection
+}
+
+type Handler = (evt: unknown) => void
+
+let registry: Map<string, Set<string>> = new Map()
+let handlers: Record<string, Handler[]> = {}
+let fitCalls: Array<{ ids: string[]; padding: unknown }> = []
+
+function resetFakeCytoscape() {
+  registry = new Map()
+  handlers = {}
+  fitCalls = []
+}
+
+// Real cytoscape.js accepts a space-separated class list to addClass/
+// removeClass (e.g. `cy.elements().removeClass('selected-dominant faded')`,
+// exactly as GraphCanvas.tsx's tap handlers and the new focus effect both
+// do) — split accordingly rather than treating the whole string as one class.
+function splitClasses(cls: string): string[] {
+  return cls.split(/\s+/).filter(Boolean)
+}
+
+function makeCollection(ids: string[]): FakeCollection {
+  const collection: FakeCollection = {
+    ids,
+    length: ids.length,
+    addClass: (cls) => {
+      for (const id of collection.ids) {
+        for (const single of splitClasses(cls)) registry.get(id)?.add(single)
+      }
+      return collection
+    },
+    removeClass: (cls) => {
+      for (const id of collection.ids) {
+        for (const single of splitClasses(cls)) registry.get(id)?.delete(single)
+      }
+      return collection
+    },
+    // Mutating, per real cytoscape.js semantics (`eles.merge()` modifies the
+    // calling collection and returns it — distinct from the immutable
+    // `.union()`).
+    merge: (other) => {
+      for (const id of other.ids) {
+        if (!collection.ids.includes(id)) collection.ids.push(id)
+      }
+      collection.length = collection.ids.length
+      return collection
+    },
+    // Immutable, per real cytoscape.js semantics.
+    difference: (other) => makeCollection(collection.ids.filter((id) => !other.ids.includes(id))),
+  }
+  return collection
+}
+
+function ensureRegistered(id: string) {
+  if (!registry.has(id)) registry.set(id, new Set())
+}
+
+function classesFor(id: string): Set<string> {
+  return registry.get(id) ?? new Set()
+}
+
+function allIds(): string[] {
+  return [...registry.keys()]
+}
+
+function makeElementHandle(id: string, data: Record<string, unknown>): FakeElementHandle {
+  const handle: FakeElementHandle = {
+    id: () => id,
+    data: (field) => data[field],
+    addClass: (cls) => {
+      for (const single of splitClasses(cls)) registry.get(id)?.add(single)
+      return handle
+    },
+    removeClass: (cls) => {
+      for (const single of splitClasses(cls)) registry.get(id)?.delete(single)
+      return handle
+    },
+    closedNeighborhood: () => makeCollection([id]),
+    connectedEdges: () => makeCollection([]),
+    connectedNodes: () => makeCollection([]),
+  }
+  return handle
+}
+
+function simulateTap(kind: 'node' | 'edge', id: string) {
+  const el = capturedElements.find((element) => element.data.id === id)
+  if (!el) throw new Error(`no captured element for id ${id}`)
+  const target = makeElementHandle(id, el.data)
+  handlers[`tap:${kind}`]?.forEach((h) => h({ target }))
+}
+
+function simulateBackgroundTap(fakeCy: unknown) {
+  handlers['tap']?.forEach((h) => h({ target: fakeCy }))
+}
+
 vi.mock('react-cytoscapejs', () => {
-  console.log('[MOCK] factory called')
   function CytoscapeComponentStub(props: {
     elements: CapturedElement[]
     cy?: (cy: unknown) => void
     minZoom?: number
     maxZoom?: number
   }) {
-    console.log('[MOCK] component rendered, elements:', props.elements?.length)
     capturedElements = props.elements
     capturedProps = { minZoom: props.minZoom, maxZoom: props.maxZoom }
-    props.cy?.({
-      on: () => {},
+    for (const el of props.elements) ensureRegistered(el.data.id as string)
+
+    const fakeCy = {
+      on: (event: string, selectorOrHandler: unknown, maybeHandler?: Handler) => {
+        const selector = typeof selectorOrHandler === 'string' ? selectorOrHandler : undefined
+        const handler = (maybeHandler ?? selectorOrHandler) as Handler
+        const key = selector ? `${event}:${selector}` : event
+        handlers[key] = handlers[key] ?? []
+        handlers[key].push(handler)
+      },
       container: () => null,
-    })
-    return <div data-testid="graph-canvas-stub" />
+      elements: () => makeCollection(allIds()),
+      getElementById: (id: string) => makeCollection(registry.has(id) ? [id] : []),
+      collection: () => makeCollection([]),
+      fit: (elements: FakeCollection, padding: unknown) => {
+        fitCalls.push({ ids: elements?.ids ?? [], padding })
+      },
+    }
+    props.cy?.(fakeCy)
+
+    return (
+      <div data-testid="graph-canvas-stub">
+        {props.elements.map((el) => (
+          <div key={el.data.id as string} data-testid={`graph-element-${el.data.id}`} />
+        ))}
+        <div data-testid="graph-canvas-background" onClick={() => simulateBackgroundTap(fakeCy)} />
+      </div>
+    )
   }
   return { default: CytoscapeComponentStub }
 })
@@ -44,14 +185,16 @@ function edgeElements(elements: CapturedElement[]) {
   return elements.filter((el) => 'source' in el.data)
 }
 
+beforeEach(() => {
+  resetFakeCytoscape()
+})
+
 describe('GraphCanvas', () => {
   it('renders exactly the S01E01 fixture node/edge counts (11 nodes, 6 edges)', () => {
     const { container } = render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} />)
     console.log('[TEST] container HTML:', container.innerHTML.substring(0, 200))
     console.log('[TEST] capturedElements length:', capturedElements.length)
     console.log('[TEST] capturedProps:', JSON.stringify(capturedProps))
-    // Check for error boundary
-    console.log('[TEST] body HTML:', document.body.innerHTML.substring(0, 500))
 
     expect(nodeElements(capturedElements)).toHaveLength(graphResponseS01E01.nodes.length)
     expect(nodeElements(capturedElements)).toHaveLength(11)
@@ -113,5 +256,154 @@ describe('GraphCanvas', () => {
 
     const backdrop = container.querySelector('.graph-canvas-backdrop')
     expect(backdrop).toBeTruthy()
+  })
+
+  describe('focusedElementIds (06-10, RAG-17)', () => {
+    it('applies .selected-dominant to every named node/edge and .faded to everything else', () => {
+      const { rerender } = render(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          focusedElementIds={null}
+        />,
+      )
+
+      rerender(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          focusedElementIds={{ nodeIds: ['char_dexter_morgan', 'char_angel_batista'], edgeIds: ['edge_1'] }}
+        />,
+      )
+
+      expect(classesFor('char_dexter_morgan').has('selected-dominant')).toBe(true)
+      expect(classesFor('char_angel_batista').has('selected-dominant')).toBe(true)
+      expect(classesFor('edge_1').has('selected-dominant')).toBe(true)
+      expect(classesFor('char_debra_morgan').has('faded')).toBe(true)
+      expect(classesFor('char_dexter_morgan').has('faded')).toBe(false)
+    })
+
+    it('clears .selected-dominant/.faded from all elements when focusedElementIds transitions to null', () => {
+      const { rerender } = render(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          focusedElementIds={{ nodeIds: ['char_dexter_morgan'], edgeIds: [] }}
+        />,
+      )
+      expect(classesFor('char_dexter_morgan').has('selected-dominant')).toBe(true)
+      expect(classesFor('char_debra_morgan').has('faded')).toBe(true)
+
+      rerender(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          focusedElementIds={null}
+        />,
+      )
+
+      expect(classesFor('char_dexter_morgan').has('selected-dominant')).toBe(false)
+      expect(classesFor('char_debra_morgan').has('faded')).toBe(false)
+    })
+
+    it('calls cy.fit with the focused elements and the same padding=48 GraphControls.tsx uses', () => {
+      render(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          focusedElementIds={{ nodeIds: ['char_dexter_morgan'], edgeIds: [] }}
+        />,
+      )
+
+      expect(fitCalls).toHaveLength(1)
+      expect(fitCalls[0]?.padding).toBe(48)
+      expect(fitCalls[0]?.ids).toEqual(['char_dexter_morgan'])
+    })
+
+    it('silently drops a focusedElementIds reference that does not resolve to any rendered element (no throw)', () => {
+      expect(() =>
+        render(
+          <GraphCanvas
+            graph={graphResponseS01E01}
+            onSelect={() => {}}
+            seriesId="series:dexter"
+            episodes={[]}
+            focusedElementIds={{ nodeIds: ['char_dexter_morgan', 'node_does_not_exist'], edgeIds: [] }}
+          />,
+        ),
+      ).not.toThrow()
+
+      expect(classesFor('char_dexter_morgan').has('selected-dominant')).toBe(true)
+    })
+
+    it('does not break tap-to-select: a direct tap on a third node still works immediately after a focusedElementIds update', () => {
+      const onSelect = vi.fn()
+      render(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={onSelect}
+          seriesId="series:dexter"
+          episodes={[]}
+          focusedElementIds={{ nodeIds: ['char_dexter_morgan', 'char_angel_batista'], edgeIds: [] }}
+        />,
+      )
+
+      expect(classesFor('char_debra_morgan').has('faded')).toBe(true)
+
+      simulateTap('node', 'char_debra_morgan')
+
+      expect(onSelect).toHaveBeenCalledWith({
+        kind: 'node',
+        id: 'char_debra_morgan',
+        label: 'Debra Morgan',
+        nodeType: 'Character',
+      })
+      expect(classesFor('char_debra_morgan').has('selected-dominant')).toBe(true)
+    })
+  })
+
+  describe('GraphFocusIndicator (06-10, RAG-17)', () => {
+    it('renders "Highlighting {N} from chat" only when a focus is active, with a working Clear action', async () => {
+      const user = userEvent.setup()
+      const onClearFocus = vi.fn()
+      const { rerender } = render(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          focusedElementIds={null}
+          onClearFocus={onClearFocus}
+        />,
+      )
+
+      expect(screen.queryByText(/Highlighting/)).not.toBeInTheDocument()
+
+      rerender(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          focusedElementIds={{ nodeIds: ['char_dexter_morgan', 'char_angel_batista'], edgeIds: ['edge_1'] }}
+          onClearFocus={onClearFocus}
+        />,
+      )
+
+      expect(screen.getByText('Highlighting 3 from chat')).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Clear' }))
+      expect(onClearFocus).toHaveBeenCalledTimes(1)
+    })
   })
 })

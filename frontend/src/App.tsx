@@ -6,7 +6,7 @@ import { AppShell } from './components/layout/AppShell'
 import { SeriesSelect } from './components/episode/SeriesSelect'
 import { EpisodeSelector } from './components/episode/EpisodeSelector'
 import { ConfirmAdvanceModal } from './components/episode/ConfirmAdvanceModal'
-import { GraphCanvas, type SelectedElement } from './components/graph/GraphCanvas'
+import { GraphCanvas, type FocusedElementIds, type SelectedElement } from './components/graph/GraphCanvas'
 import { GraphLoadingState, GraphErrorState, GraphEmptyState } from './components/graph/GraphStatus'
 import { DetailPanel, type DetailPanelMode } from './components/detail/DetailPanel'
 import { StructuralEdgeCard } from './components/detail/StructuralEdgeCard'
@@ -15,6 +15,7 @@ import { useSeries } from './hooks/useSeries'
 import { useEpisodes } from './hooks/useEpisodes'
 import { useGraph } from './hooks/useGraph'
 import { useWatchProgress } from './hooks/useWatchProgress'
+import type { Citation } from './types/chat'
 
 function AuthenticatedApp() {
   const { state, logout } = useAuth()
@@ -34,6 +35,54 @@ function AuthenticatedApp() {
   // sessions (no sessionStorage/localStorage read for either value).
   const [panelOpen, setPanelOpen] = useState(false)
   const [panelMode, setPanelMode] = useState<DetailPanelMode>('inspector')
+
+  // Chat-driven graph_focus highlight (RAG-17, 06-10-PLAN.md) — set by a
+  // citation chip's "Show in graph" action, cleared by GraphFocusIndicator's
+  // "Clear" action or automatically whenever a progress change hides a
+  // referenced element (see the render-time reconciliation below). Deliberately
+  // independent of `selectedElement`/`panelMode` — highlighting never selects
+  // a node/edge or switches panel content on its own.
+  const [graphFocus, setGraphFocus] = useState<FocusedElementIds | null>(null)
+
+  function handleClearFocus() {
+    setGraphFocus(null)
+  }
+
+  // "Show in graph" only ever sets the highlight — it must never touch
+  // `panelMode`/`panelOpen` (06-UI-SPEC.md "Citations": "letting the user
+  // stay in Chat while looking at the canvas").
+  function handleShowInGraph(citation: Citation) {
+    setGraphFocus({ nodeIds: citation.related_node_ids, edgeIds: citation.related_edge_ids })
+  }
+
+  // Clicking a citation chip's body switches to Inspector and selects the
+  // referenced resource — an intentional, expected mode switch (the user
+  // explicitly asked to see detail). Prefers a related node over a related
+  // edge when both are present; silently does nothing if neither resolves
+  // against the currently-fetched graph (defensively — RAG-08 already makes
+  // an unresolvable reference architecturally impossible).
+  function handleOpenDetail(citation: Citation) {
+    if (graphState.status !== 'success') return
+    const nodeId = citation.related_node_ids[0]
+    if (nodeId) {
+      const node = graphState.data.nodes.find((n) => n.id === nodeId)
+      if (node) {
+        setPanelMode('inspector')
+        setPanelOpen(true)
+        setSelectedElement({ kind: 'node', id: node.id, label: node.label, nodeType: node.type })
+        return
+      }
+    }
+    const edgeId = citation.related_edge_ids[0]
+    if (edgeId) {
+      const edge = graphState.data.edges.find((e) => e.id === edgeId)
+      if (edge) {
+        setPanelMode('inspector')
+        setPanelOpen(true)
+        setSelectedElement({ kind: 'edge', id: edge.id, edgeType: edge.type, source: edge.source, target: edge.target })
+      }
+    }
+  }
 
   // Node/edge selection only opens the panel (in Inspector mode) when the
   // panel isn't already showing Chat — selecting while in Chat mode must
@@ -65,6 +114,31 @@ function AuthenticatedApp() {
   // so this never needs to touch `panelOpen` itself.
   function handlePanelModeChange(mode: DetailPanelMode) {
     setPanelMode(mode)
+  }
+
+  // Progress decreasing (or any graph refetch) that hides a currently-
+  // focused element clears the graph focus automatically — reuses
+  // `handleClearFocus`, the exact same function GraphFocusIndicator's manual
+  // "Clear" action calls, never a second clearing code path (06-10-PLAN.md
+  // Task 3). Adjusted during render (comparing a state copy of the previous
+  // "which node/edge ids exist in the fetched graph" key) — the same
+  // established "adjust state when a key changes" pattern useGraph.ts/
+  // ChatPanel.tsx already use for reacting to an external data source
+  // changing, rather than an effect + setState.
+  const graphElementIdsKey =
+    graphState.status === 'success'
+      ? `${graphState.data.nodes.map((node) => node.id).join(',')}|${graphState.data.edges.map((edge) => edge.id).join(',')}`
+      : ''
+  const [prevGraphElementIdsKey, setPrevGraphElementIdsKey] = useState(graphElementIdsKey)
+  if (prevGraphElementIdsKey !== graphElementIdsKey) {
+    setPrevGraphElementIdsKey(graphElementIdsKey)
+    if (graphFocus && graphState.status === 'success') {
+      const nodeIdSet = new Set(graphState.data.nodes.map((node) => node.id))
+      const edgeIdSet = new Set(graphState.data.edges.map((edge) => edge.id))
+      const stillVisible =
+        graphFocus.nodeIds.every((id) => nodeIdSet.has(id)) && graphFocus.edgeIds.every((id) => edgeIdSet.has(id))
+      if (!stillVisible) handleClearFocus()
+    }
   }
 
   const series = seriesState.status === 'success' ? seriesState.data : []
@@ -131,7 +205,15 @@ function AuthenticatedApp() {
       {graphState.status === 'success' && graphState.data.nodes.length === 0 && <GraphEmptyState />}
       {graphState.status === 'success' && graphState.data.nodes.length > 0 && (
         <>
-          <GraphCanvas graph={graphState.data} onSelect={handleSelectElement} seriesId={watchProgress.seriesId} onRefetchGraph={graphState.refetch} episodes={episodes} />
+          <GraphCanvas
+            graph={graphState.data}
+            onSelect={handleSelectElement}
+            seriesId={watchProgress.seriesId}
+            onRefetchGraph={graphState.refetch}
+            episodes={episodes}
+            focusedElementIds={graphFocus}
+            onClearFocus={handleClearFocus}
+          />
           {selectedElement?.kind === 'edge' &&
           graphState.data.edges.find((edge) => edge.id === selectedElement.id)?.claim_id == null ? (
             <StructuralEdgeCard selected={selectedElement} nodes={graphState.data.nodes} />
@@ -146,6 +228,8 @@ function AuthenticatedApp() {
               open={panelOpen}
               mode={panelMode}
               onModeChange={handlePanelModeChange}
+              onShowInGraph={handleShowInGraph}
+              onOpenDetail={handleOpenDetail}
             />
           )}
         </>

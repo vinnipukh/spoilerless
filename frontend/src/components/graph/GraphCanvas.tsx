@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { GraphLegend } from './GraphLegend'
 import { GraphControls } from './GraphControls'
+import { GraphFocusIndicator } from './GraphFocusIndicator'
 import { createCustomNode } from '../../api/userContent'
 import type { CustomNodeType } from '../../types/userContent'
 
@@ -102,12 +103,25 @@ export type SelectedEdge = {
 
 export type SelectedElement = SelectedNode | SelectedEdge
 
+// A chat-driven graph_focus target set (RAG-17) — externally-driven highlight
+// request, distinct from the canvas's own internal tap-to-select mechanism.
+export type FocusedElementIds = {
+  nodeIds: string[]
+  edgeIds: string[]
+}
+
 type Props = {
   graph: GraphResponse
   onSelect: (element: SelectedElement | null) => void
   seriesId: string | null
   onRefetchGraph?: () => void
   episodes: EpisodeResponse[]
+  // Externally-driven highlight (06-10-PLAN.md) — a chat citation's "Show in
+  // graph" action, wired through App.tsx. Optional/nullable so every
+  // pre-existing caller (and GraphCanvas.test.tsx's existing assertions)
+  // keeps compiling and rendering unmodified.
+  focusedElementIds?: FocusedElementIds | null
+  onClearFocus?: () => void
 }
 
 const ALLOWED_NODE_TYPES: { value: CustomNodeType; label: string }[] = [
@@ -234,7 +248,15 @@ function CreateCustomNodeDialog({
   )
 }
 
-export function GraphCanvas({ graph, onSelect, seriesId, onRefetchGraph, episodes }: Props) {
+export function GraphCanvas({
+  graph,
+  onSelect,
+  seriesId,
+  onRefetchGraph,
+  episodes,
+  focusedElementIds = null,
+  onClearFocus,
+}: Props) {
   console.log('[GC] GraphCanvas render called')
   const elements = useMemo(() => graphToElements(graph), [graph])
   const wiredCyRef = useRef<cytoscape.Core | null>(null)
@@ -248,6 +270,67 @@ export function GraphCanvas({ graph, onSelect, seriesId, onRefetchGraph, episode
     if (!cy) return
     runLayout(cy)
   }, [graph])
+
+  // Apply/clear an externally-driven `graph_focus` highlight (RAG-17), keyed
+  // on the `focusedElementIds` prop — the same "prop-driven effect" pattern
+  // `useGraph.ts` already uses elsewhere. This is a genuinely new capability
+  // (`cyInstanceRef` was never exposed outside this component before), and
+  // extends rather than forks the existing internal `cy.on('tap', ...)`
+  // handlers below: both mechanisms write to the same `.selected-dominant`/
+  // `.faded` classes, and a manual tap after a `graph_focus` update simply
+  // clears/reassigns them exactly as it always has (see the tap handlers'
+  // own full `removeClass`/`addClass` sequence further down).
+  //
+  // Deliberate, documented supersession: `03.1-UI-SPEC.md`'s Performance
+  // note states the `.selected-dominant` glow "applies to at most one node
+  // at a time" — that constraint was written for continuous per-frame tap
+  // selection, not a bounded, backend-size-limited `graph_focus` set
+  // (06-UI-SPEC.md "Graph synchronization"). `graph_focus` may highlight
+  // multiple nodes/edges simultaneously; documented here exactly as
+  // 03.1-UI-SPEC.md documented its own hover-color supersession of Phase 2.
+  //
+  // Guarded via `typeof` checks (not a bare call) so a test double's fake
+  // `cy` (GraphCanvas.test.tsx's stub only implements `on`/`container`) never
+  // throws into this effect — the same defensive style `runLayout` already
+  // uses for `cy.layout`.
+  useEffect(() => {
+    const cy = cyInstanceRef.current
+    if (!cy) return
+    if (
+      typeof cy.elements !== 'function' ||
+      typeof cy.getElementById !== 'function' ||
+      typeof cy.collection !== 'function'
+    ) {
+      return
+    }
+
+    // Always start from a clean slate — clears whatever the previous
+    // `focusedElementIds` value (or a manual tap) left behind, identically
+    // to tapping empty canvas.
+    cy.elements().removeClass('selected-dominant faded edge-active')
+
+    if (!focusedElementIds) return
+
+    const requestedIds = [...focusedElementIds.nodeIds, ...focusedElementIds.edgeIds]
+    const focused = cy.collection()
+    for (const id of requestedIds) {
+      // A `graph_focus` reference to an element the frontend cannot resolve
+      // in the currently-loaded graph (defensively, should be
+      // architecturally impossible per RAG-08) is silently dropped rather
+      // than causing a render error.
+      const element = cy.getElementById(id)
+      if (element && element.length > 0) focused.merge(element)
+    }
+    if (focused.length === 0) return
+
+    focused.addClass('selected-dominant')
+    cy.elements().difference(focused).addClass('faded')
+
+    // Gentle re-frame on the focused subgraph — same 48px padding
+    // convention GraphControls.tsx's fit-to-view button already uses, not a
+    // hard viewport reset that would discard the user's zoom/pan.
+    if (typeof cy.fit === 'function') cy.fit(focused, 48)
+  }, [focusedElementIds])
 
   return (
     <TooltipProvider>
@@ -321,6 +404,12 @@ export function GraphCanvas({ graph, onSelect, seriesId, onRefetchGraph, episode
             })
           }}
         />
+        {focusedElementIds && (
+          <GraphFocusIndicator
+            count={focusedElementIds.nodeIds.length + focusedElementIds.edgeIds.length}
+            onClear={() => onClearFocus?.()}
+          />
+        )}
         <GraphLegend />
         <GraphControls
           cyRef={cyInstanceRef}
