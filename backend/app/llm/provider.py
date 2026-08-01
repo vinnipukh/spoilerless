@@ -218,6 +218,178 @@ class OpenAICompatibleProvider:
             ) from exc
 
 
+def _to_gemini_contents(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Translate the pipeline's OpenAI-shaped messages to Gemini contents.
+
+    Role mapping: ``user`` -> ``user``, ``assistant`` -> ``model``. Assistant
+    ``tool_calls`` become ``functionCall`` parts; ``tool`` messages become
+    ``functionResponse`` parts (the call id -> tool name mapping is tracked
+    while translating). Consecutive same-role contents are merged, because the
+    Gemini API rejects back-to-back messages with the same role (the pipeline
+    can emit e.g. a tool response followed by the retrieved-context message,
+    both ``user``).
+    """
+
+    call_names: dict[str, str] = {}
+    contents: list[dict[str, Any]] = []
+
+    def _append(role: str, parts: list[dict[str, Any]]) -> None:
+        if contents and contents[-1]["role"] == role:
+            contents[-1]["parts"].extend(parts)
+        else:
+            contents.append({"role": role, "parts": parts})
+
+    for message in messages:
+        role = message.get("role")
+        if role == "user":
+            content = message.get("content")
+            if content:
+                _append("user", [{"text": content}])
+        elif role == "assistant":
+            tool_calls = message.get("tool_calls")
+            if tool_calls:
+                parts: list[dict[str, Any]] = []
+                for call in tool_calls:
+                    function = call.get("function") or {}
+                    name = function.get("name", "")
+                    call_id = call.get("id", "")
+                    if call_id:
+                        call_names[call_id] = name
+                    try:
+                        arguments = (
+                            json.loads(function.get("arguments") or "{}")
+                            if function.get("arguments")
+                            else {}
+                        )
+                    except json.JSONDecodeError:
+                        arguments = {}
+                    parts.append({"functionCall": {"name": name, "args": arguments}})
+                _append("model", parts)
+            elif message.get("content"):
+                _append("model", [{"text": message["content"]}])
+        elif role == "tool":
+            name = call_names.get(message.get("tool_call_id", ""), "unknown_tool")
+            raw = message.get("content") or "{}"
+            try:
+                response: Any = json.loads(raw)
+            except json.JSONDecodeError:
+                response = {"value": raw}
+            _append(
+                "user",
+                [{"functionResponse": {"name": name, "response": {"result": response}}}],
+            )
+    return contents
+
+
+class GeminiProvider:
+    """Google Gemini REST provider via httpx (v1beta, ``x-goog-api-key``).
+
+    Implements the same :class:`LLMProvider` contract as
+    ``OpenAICompatibleProvider`` using the ``:streamGenerateContent?alt=sse``
+    streaming endpoint (ai.google.dev/gemini-api/docs). Tool calls round-trip
+    through Gemini function calling: assistant ``tool_calls`` become
+    ``functionCall`` parts and ``tool`` results become ``functionResponse``
+    parts.
+
+    ``client`` is injectable so tests can pass an ``httpx.AsyncClient`` backed
+    by ``httpx.MockTransport`` (no network). The API key is stored only on the
+    client and never included in yielded events.
+    """
+
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        base_url: str = "https://generativelanguage.googleapis.com",
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
+        self._client = client or httpx.AsyncClient(base_url=base_url)
+        self._model = model
+        # The API key is applied per-request (not on the client) so an
+        # injected test client without headers still authenticates.
+        self._api_key = api_key
+
+    async def stream_chat(
+        self,
+        *,
+        system_prompt: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        max_output_tokens: int,
+        temperature: float,
+        timeout_seconds: int,
+    ) -> AsyncIterator[LLMEvent]:
+        payload: dict[str, Any] = {
+            "contents": _to_gemini_contents(messages),
+            "systemInstruction": {"parts": [{"text": system_prompt}]},
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": max_output_tokens,
+            },
+        }
+        if tools:
+            # TOOL_SCHEMAS are OpenAI-shaped ({type, function}); Gemini wants
+            # functionDeclarations, so unwrap each function object.
+            payload["tools"] = [
+                {"functionDeclarations": [tool["function"] for tool in tools]}
+            ]
+
+        text_parts: list[str] = []
+        tool_calls: list[tuple[str, dict[str, Any]]] = []
+        emitted = False
+
+        try:
+            async with self._client.stream(
+                "POST",
+                f"/v1beta/models/{self._model}:streamGenerateContent?alt=sse",
+                json=payload,
+                headers={"x-goog-api-key": self._api_key},
+                timeout=timeout_seconds,
+            ) as response:
+                if response.status_code >= 400:
+                    raise LLMProviderUnavailable(
+                        f"LLM provider returned HTTP {response.status_code}."
+                    )
+                async for line in response.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data = line[len("data: "):]
+                    try:
+                        chunk = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+                    candidates = chunk.get("candidates") or []
+                    if not candidates:
+                        continue
+                    candidate = candidates[0]
+                    for part in (candidate.get("content") or {}).get("parts") or []:
+                        if "text" in part and part["text"]:
+                            text_parts.append(part["text"])
+                            yield LLMEvent.text_delta(part["text"])
+                        elif "functionCall" in part:
+                            call = part["functionCall"] or {}
+                            tool_calls.append(
+                                (call.get("name", ""), call.get("args") or {})
+                            )
+                    if candidate.get("finishReason"):
+                        break
+
+                # Response ended: either a tool round (tool_call events only)
+                # or a final text answer (text_delta events + one done event).
+                if tool_calls:
+                    emitted = True
+                    for name, arguments in tool_calls:
+                        yield LLMEvent.tool_call(name, arguments)
+                else:
+                    yield LLMEvent.done("".join(text_parts))
+                    emitted = True
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            raise LLMProviderUnavailable(
+                f"LLM provider request failed: {type(exc).__name__}"
+            ) from exc
+
+
 class FakeLLMProvider:
     """Deterministic test double — yields a fixed event sequence per call.
 

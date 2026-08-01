@@ -1,0 +1,218 @@
+"""Tests for the settings API (LLM provider configuration).
+
+Covers: auth guard, masked GET response, PUT persistence with blank-key-keeps-
+old semantics, provider/model/base_url updates, and that the full API key never
+appears in any response (T-06-07). The auth layer is overridden with the
+in-memory fake (same pattern as test_chat_api.py); the SettingsService reads
+and writes the real Neo4j ``:AppSetting`` node.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from typing import Any, Iterator
+from uuid import uuid4
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from backend.app.api import deps
+from backend.app.api.settings import router as settings_router
+from backend.app.core.errors import install_database_error_handlers
+from backend.app.graph.database import Neo4jDatabase
+from backend.app.repository.session import InMemorySessionRepository
+from backend.app.services.auth import AuthService
+
+
+class FakeUserRepo:
+    def __init__(self) -> None:
+        self._store: dict[str, dict[str, Any]] = {}
+
+    async def upsert(
+        self, google_sub: str, email: str, display_name: str, avatar_url: str
+    ) -> dict[str, Any]:
+        record = {
+            "id": f"user:{uuid4()}",
+            "google_sub": google_sub,
+            "email": email,
+            "display_name": display_name,
+            "avatar_url": avatar_url,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+        }
+        self._store[google_sub] = record
+        return dict(record)
+
+    async def get_by_id(self, user_id: str) -> dict[str, Any] | None:
+        for record in self._store.values():
+            if record["id"] == user_id:
+                return dict(record)
+        return None
+
+
+@pytest.fixture
+def database() -> Iterator[Neo4jDatabase]:
+    db = Neo4jDatabase()
+    db.open()
+    yield db
+
+    # Clean up the test-created AppSetting node with a fresh driver + loop
+    # (the app's driver is bound to TestClient's portal loop; reusing it here
+    # would crash cross-loop — same pattern as test_chat_api.py).
+    async def _cleanup() -> None:
+        clean = Neo4jDatabase()
+        clean.open()
+        try:
+            await clean.execute_query("MATCH (s:AppSetting {key: 'llm'}) DETACH DELETE s")
+        finally:
+            await clean.close()
+
+    asyncio.run(_cleanup())
+
+
+@pytest.fixture
+def fake_user_repo() -> FakeUserRepo:
+    return FakeUserRepo()
+
+
+@pytest.fixture
+def session_repo() -> InMemorySessionRepository:
+    return InMemorySessionRepository()
+
+
+def _build_app(
+    database: Neo4jDatabase,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> FastAPI:
+    app = FastAPI()
+    install_database_error_handlers(app)
+    app.state.neo4j = database
+    app.state.session_repo = session_repo
+
+    def _override_auth_service() -> AuthService:
+        return AuthService(user_repo=fake_user_repo, session_repo=session_repo)
+
+    app.dependency_overrides[deps.get_auth_service] = _override_auth_service
+    app.include_router(settings_router)
+    return app
+
+
+@pytest.fixture
+def client(
+    database: Neo4jDatabase,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> Iterator[TestClient]:
+    # Context-managed TestClient keeps ONE portal loop alive for the whole
+    # test — the app's async Neo4j driver is only ever used inside that loop
+    # (test_graph_api.py/test_progress_api.py pattern). Without `with`,
+    # starlette starts a fresh per-request loop and pooled driver connections
+    # die with the first one ('NoneType' object has no attribute 'send').
+    with TestClient(
+        _build_app(database, fake_user_repo, session_repo),
+        raise_server_exceptions=False,
+    ) as client:
+        yield client
+
+
+def _authed(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    user = asyncio.run(
+        fake_user_repo.upsert(
+            google_sub=f"sub-{uuid4()}",
+            email="user@example.com",
+            display_name="Test User",
+            avatar_url="",
+        )
+    )
+    raw_token = asyncio.run(session_repo.create(user["id"], ttl_seconds=3600))
+    client.cookies.set("session", raw_token)
+
+
+def test_get_settings_requires_auth(client: TestClient) -> None:
+    response = client.get("/api/settings/llm")
+    assert response.status_code == 401
+
+
+def test_get_and_update_llm_settings_roundtrip(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    _authed(client, fake_user_repo, session_repo)
+
+    # Initial state: no stored settings -> env defaults, no key configured.
+    response = client.get("/api/settings/llm")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["api_key_configured"] is False
+    assert body["api_key_masked"] is None
+
+    # PUT a gemini config with a key.
+    response = client.put(
+        "/api/settings/llm",
+        json={
+            "provider": "gemini",
+            "api_key": "AIzaSyTestKey1234567890",
+            "model": "gemini-2.5-flash",
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["provider"] == "gemini"
+    assert body["model"] == "gemini-2.5-flash"
+    assert body["api_key_configured"] is True
+    assert body["api_key_masked"] == "••••7890"
+    # The full key must never appear in the response (T-06-07).
+    assert "AIzaSyTestKey1234567890" not in response.text
+
+    # GET reflects the stored config.
+    response = client.get("/api/settings/llm")
+    assert response.status_code == 200
+    assert response.json()["provider"] == "gemini"
+    assert response.json()["api_key_masked"] == "••••7890"
+
+    # Blank api_key keeps the stored one (client only ever sees the masked form).
+    response = client.put(
+        "/api/settings/llm",
+        json={"provider": "gemini", "model": "gemini-3.6-flash", "api_key": ""},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["model"] == "gemini-3.6-flash"
+    assert body["api_key_masked"] == "••••7890"
+    assert "AIzaSyTestKey1234567890" not in response.text
+
+    # Switch to openai_compatible with base_url; key still kept.
+    response = client.put(
+        "/api/settings/llm",
+        json={
+            "provider": "openai_compatible",
+            "base_url": "https://llm.example/v1",
+            "model": "gpt-4.1-mini",
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["provider"] == "openai_compatible"
+    assert body["base_url"] == "https://llm.example/v1"
+    assert body["model"] == "gpt-4.1-mini"
+    assert body["api_key_masked"] == "••••7890"
+
+
+def test_update_llm_settings_rejects_unknown_fields(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    _authed(client, fake_user_repo, session_repo)
+    response = client.put(
+        "/api/settings/llm",
+        json={"provider": "gemini", "sneaky": "field"},
+    )
+    assert response.status_code == 422

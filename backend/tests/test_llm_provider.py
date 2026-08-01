@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 from backend.app.core.errors import install_database_error_handlers
 from backend.app.llm.provider import (
     FakeLLMProvider,
+    GeminiProvider,
     LLMEvent,
     LLMProviderDisabled,
     LLMProviderUnavailable,
@@ -258,3 +259,175 @@ def test_llm_error_handlers_map_to_503_with_distinct_codes() -> None:
             "message": "The LLM provider is unavailable.",
         }
     }
+
+
+# ---------------------------------------------------------------------------
+# GeminiProvider — v1beta REST, SSE streaming, function calling
+# ---------------------------------------------------------------------------
+
+
+def _gemini_sse_line(payload: dict) -> str:
+    return f"data: {json.dumps(payload)}"
+
+
+def _gemini_text_chunk(text: str, finish: str | None = "STOP") -> dict:
+    chunk: dict = {"candidates": [{"content": {"parts": [{"text": text}]}}]}
+    if finish:
+        chunk["candidates"][0]["finishReason"] = finish
+    return chunk
+
+
+def _gemini_tool_chunk(name: str, args: dict) -> dict:
+    return {
+        "candidates": [
+            {
+                "content": {"parts": [{"functionCall": {"name": name, "args": args}}]},
+                "finishReason": "STOP",
+            }
+        ]
+    }
+
+
+def _gemini_transport(*events: dict) -> httpx.MockTransport:
+    body = "\n\n".join(_gemini_sse_line(event) for event in events) + "\n\n"
+    return httpx.MockTransport(lambda request: httpx.Response(200, text=body))
+
+
+def _gemini_provider(transport: httpx.MockTransport) -> GeminiProvider:
+    return GeminiProvider(
+        api_key="test-gemini-key",
+        model="gemini-2.5-flash",
+        base_url="https://generativelanguage.test",
+        client=httpx.AsyncClient(transport=transport, base_url="https://generativelanguage.test"),
+    )
+
+
+def _captured_request(transport: httpx.MockTransport) -> dict:
+    requests = transport.handler.calls if hasattr(transport.handler, "calls") else []
+    if requests:
+        return json.loads(requests[0].request.content)
+    return {}
+
+
+@pytest.mark.asyncio
+async def test_gemini_provider_streams_text_deltas_then_done() -> None:
+    transport = _gemini_transport(
+        _gemini_text_chunk("Dexter ", finish=None),
+        _gemini_text_chunk("Morgan", finish="STOP"),
+    )
+    provider = _gemini_provider(transport)
+
+    events = [event async for event in provider.stream_chat(**_stream_kwargs())]
+
+    assert [event.kind for event in events] == ["text_delta", "text_delta", "done"]
+    assert events[0].text == "Dexter "
+    assert events[2].content == "Dexter Morgan"
+
+
+@pytest.mark.asyncio
+async def test_gemini_provider_yields_tool_calls_without_done() -> None:
+    transport = _gemini_transport(
+        _gemini_tool_chunk("get_entity", {"entity_id": "dexter:character:dexter_morgan"})
+    )
+    provider = _gemini_provider(transport)
+
+    events = [event async for event in provider.stream_chat(**_stream_kwargs())]
+
+    assert [event.kind for event in events] == ["tool_call"]
+    assert events[0].tool_name == "get_entity"
+    assert events[0].arguments == {"entity_id": "dexter:character:dexter_morgan"}
+
+
+@pytest.mark.asyncio
+async def test_gemini_provider_translates_messages_and_tools_in_payload() -> None:
+    recorded: list[httpx.Request] = []
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        recorded.append(request)
+        return httpx.Response(200, text="")
+
+    provider = _gemini_provider(httpx.MockTransport(_handler))
+    messages = [
+        {"role": "user", "content": "Who is Dexter?"},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "get_entity", "arguments": '{"entity_id": "dexter:character:dexter_morgan"}'},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": '{"label": "Dexter Morgan"}'},
+        {"role": "user", "content": "Retrieved graph context for this question..."},
+    ]
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_entity",
+                "description": "Resolve one entity",
+                "parameters": {"type": "object", "properties": {"entity_id": {"type": "string"}}},
+            },
+        }
+    ]
+
+    try:
+        [event async for event in provider.stream_chat(
+            system_prompt="sys",
+            messages=messages,
+            tools=tools,
+            max_output_tokens=100,
+            temperature=0.0,
+            timeout_seconds=5,
+        )]
+    except Exception:
+        pass  # empty transport response — we only inspect the request payload
+
+    request = recorded[0]
+    payload = json.loads(request.content)
+    assert request.headers["x-goog-api-key"] == "test-gemini-key"
+    assert payload["systemInstruction"] == {"parts": [{"text": "sys"}]}
+    assert payload["tools"] == [
+        {
+            "functionDeclarations": [
+                {
+                    "name": "get_entity",
+                    "description": "Resolve one entity",
+                    "parameters": {"type": "object", "properties": {"entity_id": {"type": "string"}}},
+                }
+            ]
+        }
+    ]
+    contents = payload["contents"]
+    assert contents[0] == {"role": "user", "parts": [{"text": "Who is Dexter?"}]}
+    assert contents[1] == {
+        "role": "model",
+        "parts": [
+            {"functionCall": {"name": "get_entity", "args": {"entity_id": "dexter:character:dexter_morgan"}}}
+        ],
+    }
+    # The tool response and the following user context message are BOTH role
+    # "user" — they must be merged into one content, not sent back-to-back
+    # (Gemini rejects consecutive same-role contents).
+    assert len(contents) == 3
+    assert contents[2]["role"] == "user"
+    assert len(contents[2]["parts"]) == 2
+    assert contents[2]["parts"][0]["functionResponse"]["name"] == "get_entity"
+    assert contents[2]["parts"][0]["functionResponse"]["response"] == {
+        "result": {"label": "Dexter Morgan"}
+    }
+    assert contents[2]["parts"][1]["text"] == "Retrieved graph context for this question..."
+
+
+@pytest.mark.asyncio
+async def test_gemini_provider_maps_non_2xx_to_unavailable() -> None:
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(400, text='{"error": "invalid api key"}')
+    )
+    provider = _gemini_provider(transport)
+
+    with pytest.raises(LLMProviderUnavailable):
+        [event async for event in provider.stream_chat(**_stream_kwargs())]

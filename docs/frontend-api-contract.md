@@ -52,6 +52,8 @@ The following table is the complete locked inventory: **42 method/path operation
 | POST | `/api/auth/google` |
 | GET | `/api/auth/me` |
 | POST | `/api/auth/logout` |
+| GET | `/api/settings/llm` |
+| PUT | `/api/settings/llm` |
 
 ## Status and envelope contract
 

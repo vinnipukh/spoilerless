@@ -19,6 +19,7 @@ from backend.app.api.candidates import router as candidates_router
 from backend.app.api.progress import router as progress_router
 from backend.app.api.chat import router as chat_router
 from backend.app.api.change_set import router as change_set_router
+from backend.app.api.settings import router as settings_router
 from backend.app.core.config import get_settings
 from backend.app.core.errors import install_database_error_handlers
 from backend.app.graph.database import Neo4jDatabase
@@ -69,6 +70,7 @@ app.include_router(candidates_router)
 app.include_router(progress_router)
 app.include_router(chat_router)
 app.include_router(change_set_router)
+app.include_router(settings_router)
 
 settings = get_settings()
 _allowed_origins = [

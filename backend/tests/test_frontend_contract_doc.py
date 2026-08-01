@@ -59,6 +59,9 @@ EXPECTED_OPERATIONS: set[tuple[str, str]] = {
     ("post", "/api/auth/google"),
     ("get", "/api/auth/me"),
     ("post", "/api/auth/logout"),
+    # Settings (LLM provider configuration)
+    ("get", "/api/settings/llm"),
+    ("put", "/api/settings/llm"),
 }
 EXPECTED_TEMPLATES = {path for _, path in EXPECTED_OPERATIONS}
 
@@ -68,7 +71,7 @@ def _documented_operations(document: str) -> set[tuple[str, str]]:
     return {
         (method.lower(), path)
         for method, path in re.findall(
-            r"^\| (GET|POST|PATCH|DELETE) \| `([^`]+)` \|$", section, re.MULTILINE
+            r"^\| (GET|POST|PATCH|DELETE|PUT) \| `([^`]+)` \|$", section, re.MULTILINE
         )
     }
 
@@ -92,8 +95,8 @@ def test_document_and_openapi_have_exact_locked_inventory() -> None:
     assert generated == EXPECTED_OPERATIONS
     assert {path for _, path in documented} == EXPECTED_TEMPLATES
     assert set(app.openapi()["paths"]) == EXPECTED_TEMPLATES
-    assert len(documented) == len(generated) == 42
-    assert len(EXPECTED_TEMPLATES) == 31
+    assert len(documented) == len(generated) == 44
+    assert len(EXPECTED_TEMPLATES) == 32
     assert all("?" not in path for path in EXPECTED_TEMPLATES)
 
 

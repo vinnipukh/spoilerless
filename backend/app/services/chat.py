@@ -14,6 +14,7 @@ from typing import Annotated, Any, AsyncIterator
 
 from fastapi import Depends
 
+from backend.app.api.deps import DatabaseDependency
 from backend.app.core.config import get_settings
 from backend.app.domain.chat import (
     ChatMessageResponse,
@@ -23,14 +24,17 @@ from backend.app.domain.chat import (
     GraphFocus,
     MessageResponseEnvelope,
 )
+from backend.app.domain.settings import DEFAULT_GEMINI_BASE_URL
 from backend.app.graph.database import Neo4jDatabase
 from backend.app.llm.provider import (
+    GeminiProvider,
     LLMProvider,
     LLMProviderDisabled,
     LLMProviderUnavailable,
     OpenAICompatibleProvider,
 )
 from backend.app.repository.chat import ChatRepository, ChatSessionNotFound
+from backend.app.repository.settings import SettingsRepository
 from backend.app.retrieval.pipeline import RetrievalPipeline
 from backend.app.services.progress import ProgressNotFoundError, ProgressService
 
@@ -67,26 +71,42 @@ def _release_generation_slot(user_id: str) -> None:
         _concurrent_generations[user_id] = current - 1
 
 
-def get_llm_provider() -> LLMProvider:
-    """Build the configured LLM provider from ``Settings`` (env-driven).
+async def get_llm_provider(database: DatabaseDependency) -> LLMProvider:
+    """Build the configured LLM provider from stored settings (then env).
 
-    The API key is read only here, inside the provider constructor, from
-    settings — it never appears in a response model, a log line, or a
-    Revision record (T-06-07).
+    Resolution order per field: the persisted ``:AppSetting {key: 'llm'}``
+    node first, then the ``LLM_*`` env/settings fallback. The API key is read
+    only here, inside the provider constructor — it never appears in a
+    response model, a log line, or a Revision record (T-06-07). ``gemini``
+    falls back to the official Google endpoint when no ``base_url`` is
+    configured anywhere.
     """
     settings = get_settings()
     if not settings.llm_enabled:
         raise LLMProviderDisabled("The LLM provider is disabled.")
-    if settings.llm_provider != "openai_compatible":
-        raise LLMProviderUnavailable(
-            f"Unsupported LLM provider: {settings.llm_provider}"
+    stored = await SettingsRepository(database).get_llm() or {}
+    provider = stored.get("provider") or settings.llm_provider
+    api_key = stored.get("api_key") or settings.llm_api_key
+    model = stored.get("model") or settings.llm_model
+    base_url = stored.get("base_url") or settings.llm_base_url
+    if provider == "gemini":
+        if not api_key or not model:
+            raise LLMProviderUnavailable("The LLM provider is not configured.")
+        return GeminiProvider(
+            api_key=api_key,
+            model=model,
+            base_url=base_url or DEFAULT_GEMINI_BASE_URL,
         )
-    if not settings.llm_base_url or not settings.llm_api_key or not settings.llm_model:
+    if provider != "openai_compatible":
+        raise LLMProviderUnavailable(
+            f"Unsupported LLM provider: {provider}"
+        )
+    if not base_url or not api_key or not model:
         raise LLMProviderUnavailable("The LLM provider is not configured.")
     return OpenAICompatibleProvider(
-        base_url=settings.llm_base_url,
-        api_key=settings.llm_api_key,
-        model=settings.llm_model,
+        base_url=base_url,
+        api_key=api_key,
+        model=model,
     )
 
 
