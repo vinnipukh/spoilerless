@@ -561,6 +561,55 @@ async def find_path(
     return {"found": True, "path": path, "edges": edges, "hops": len(edges)}
 
 
+async def get_character_context(
+    database: Neo4jDatabase,
+    *,
+    character_id: str,
+    series_id: str,
+    visible_until_order: int,
+    limit: int = 10,
+) -> dict[str, Any]:
+    """Bounded interpretive-context pack for one visible Character.
+
+    Composes the existing visibility-filtered primitives — the character
+    itself, its visible neighborhood (nodes, claim edges, claims, evidence,
+    sources), and the character's most recent visible Events ordered by
+    recency — so a future-looking or interpretive question gets the visible
+    material it needs in one allowlisted, bounded call (conversational-tone
+    brief §4). Every resource is series-scoped and visibility-filtered; a
+    hidden or missing character yields an all-empty result (fail closed),
+    exactly like ``get_neighborhood``.
+
+    Result shape: ``{entity, recent_events, nodes, edges, claims, evidence,
+    sources}`` — the ``nodes/claims/evidence/sources/edges`` keys match
+    ``get_neighborhood`` so the pipeline's accumulator merges them unchanged.
+    """
+    hood = await get_neighborhood(
+        database,
+        entity_id=character_id,
+        series_id=series_id,
+        visible_until_order=visible_until_order,
+        depth=1,
+    )
+    limit = max(1, min(int(limit), MAX_RESULT_LIMIT))
+    events = [
+        node
+        for node in hood.get("nodes") or []
+        if node.get("type") == "Event"
+    ]
+    events.sort(
+        key=lambda event: (
+            event.get("visible_from_order") or 0,
+            event.get("id") or "",
+        ),
+        reverse=True,
+    )
+    return {
+        **hood,
+        "recent_events": events[:limit],
+    }
+
+
 async def get_timeline(
     database: Neo4jDatabase,
     *,

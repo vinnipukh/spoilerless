@@ -713,18 +713,19 @@ Browser: MessageBubble renders streamed text; CitationChip "Show in graph" calls
 
 ### Allowlisted-Retrieval-Tool Security Model
 
-The pipeline exposes exactly **ten** retrieval tools — nothing more. The model cannot call any other function, and it can never execute Cypher:
+The pipeline exposes exactly **eleven** retrieval tools — nothing more. The model cannot call any other function, and it can never execute Cypher:
 
 1. `search_entities` — keyword search over visible entities
 2. `get_entity` — fetch one visible entity by ID
 3. `get_neighborhood` — closed neighborhood of a visible entity
 4. `find_path` — bounded path search between two visible entities
 5. `get_timeline` — chronological visible events
-6. `get_claims` — visible claims matching filters
-7. `get_evidence` — evidence fragments backing visible claims
-8. `get_sources` — sources referenced by visible claims
-9. `get_current_visible_graph_summary` — aggregate summary of the visible graph
-10. `get_user_notes` — the user's own visible notes
+6. `get_character_context` — bounded interpretation pack for one visible Character (character + most recent visible Events + relationships/claims/evidence/sources); the tool for future-looking, opinion, and motivation questions
+7. `get_claims` — visible claims matching filters
+8. `get_evidence` — evidence fragments backing visible claims
+9. `get_sources` — sources referenced by visible claims
+10. `get_current_visible_graph_summary` — aggregate summary of the visible graph
+11. `get_user_notes` — the user's own visible notes
 
 Each tool is a small async function that:
 

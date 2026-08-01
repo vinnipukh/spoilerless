@@ -77,6 +77,11 @@ class Settings(BaseSettings):
         default=12000,
         description="Maximum total character budget for assembled context per turn.",
     )
+    # Optional overrides for the localized insufficient-evidence fallback
+    # (see llm/fallbacks.py for the defaults). Empty values fall back to the
+    # built-in per-language text.
+    llm_fallback_en: str | None = Field(default=None)
+    llm_fallback_tr: str | None = Field(default=None)
 
     model_config = SettingsConfigDict(
         env_file=".env",

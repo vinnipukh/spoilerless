@@ -346,11 +346,15 @@ async def test_one_order_beyond_and_many_orders_beyond_get_byte_identical_respon
 
 def test_template_never_hints_hidden_entity_exists() -> None:
     """The uncertainty template contains no phrasing resembling 'you haven't
-    met them yet' and never hints that a hidden entity specifically exists."""
+    met them yet' and never hints that a hidden entity specifically exists.
+    Note: 'spoiler-free' IS allowed — the product brief mandates spoiler-safe
+    language in the fallback; the guard targets hints about hidden content,
+    not the word spoiler itself."""
     template = pipeline_module.INSUFFICIENT_EVIDENCE_RESPONSE_TEMPLATE
-    for forbidden in ("haven't met", "haven’t met", "not yet", "future", "will meet", "spoiler"):
+    for forbidden in ("haven't met", "haven’t met", "not yet", "future", "will meet"):
         assert forbidden.lower() not in template.lower()
-    assert "enough information" in template
+    assert "enough information" not in template
+    assert "watched" in template
 
 
 @pytest.mark.asyncio
