@@ -133,15 +133,17 @@ function AuthenticatedApp() {
     }
   }
 
-  // Node/edge selection only opens the panel (in Inspector mode) when the
-  // panel isn't already showing Chat — selecting while in Chat mode must
-  // never force-switch the content mode back to Inspector (06-UI-SPEC.md
-  // "Mode state (independent of node/edge selection)"). The canvas's own
-  // `.selected-dominant` glow is unaffected either way (GraphCanvas.tsx owns
-  // that independently of DetailPanel).
+  // Node/edge selection always surfaces the detail panel in Inspector mode.
+  // (06-09 originally kept Chat mode sticky — selecting while in Chat mode
+  // never switched back, which read as "clicking a node does nothing" and was
+  // reverted per user feedback: a canvas tap is an explicit request to see
+  // that element's details, so it force-switches the panel. The canvas's own
+  // `.selected-dominant` glow is unaffected either way — GraphCanvas.tsx owns
+  // that independently of DetailPanel.)
   function handleSelectElement(element: SelectedElement | null) {
     setSelectedElement(element)
-    if (element && panelMode === 'inspector') {
+    if (element) {
+      setPanelMode('inspector')
       setPanelOpen(true)
     }
   }

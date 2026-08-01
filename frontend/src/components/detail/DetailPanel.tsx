@@ -603,7 +603,7 @@ export function DetailPanel({
   return (
     <Sheet open={open} modal={false}>
       <SheetContent
-        side="right"
+        side="left"
         showCloseButton={false}
         className={cn(
           'mt-0 max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!h-auto max-sm:!w-full max-sm:!border-t max-sm:!border-l-0',

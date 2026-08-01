@@ -287,7 +287,7 @@ describe('App', () => {
     expect(screen.queryByRole('heading', { name: 'Chat' })).not.toBeInTheDocument()
   })
 
-  it('selecting a node while the panel is in Chat mode does not force-switch it back to Inspector', async () => {
+  it('selecting a node while the panel is in Chat mode force-switches it to Inspector and shows the node details', async () => {
     currentAuthState = 'authenticated'
     sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
 
@@ -299,11 +299,13 @@ describe('App', () => {
 
     await user.click(await screen.findByTestId('graph-element-char_dexter_morgan'))
 
-    // Still showing Chat-mode content, not the node's Inspector Overview —
-    // the mode toggle itself still reads "Chat" as the checked segment.
-    expect(screen.getByRole('heading', { name: 'Chat' })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Chat' })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.queryByRole('heading', { name: 'Dexter Morgan' })).not.toBeInTheDocument()
+    // A canvas tap is an explicit request to see the element's details — the
+    // panel switches to Inspector and shows the node, replacing Chat content.
+    // (Reverted from 06-09's sticky-Chat behavior per user feedback: "clicking
+    // a node shows nothing on the right".)
+    expect(await screen.findByRole('heading', { name: 'Dexter Morgan' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Inspector' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.queryByRole('heading', { name: 'Chat' })).not.toBeInTheDocument()
   })
 
   describe('citation graph-focus wiring (06-10, RAG-17)', () => {
