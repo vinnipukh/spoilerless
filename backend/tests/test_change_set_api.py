@@ -170,6 +170,9 @@ def database() -> Iterator[Neo4jDatabase]:
         clean = Neo4jDatabase()
         clean.open()
         try:
+            await clean.execute_query(
+                "MATCH (n:Revision {resource_type: 'ChangeSet'}) DETACH DELETE n"
+            )
             await clean.execute_query("MATCH (n:ChangeSet) DETACH DELETE n")
             await clean.execute_query("MATCH (n:ChatSession) DETACH DELETE n")
             await clean.execute_query("MATCH (n:ChatMessage) DETACH DELETE n")
@@ -177,6 +180,11 @@ def database() -> Iterator[Neo4jDatabase]:
             await clean.execute_query(
                 "MATCH (n:Location {series_id: $series_id}) "
                 "WHERE NOT n.id STARTS WITH 'dexter:location:' DETACH DELETE n",
+                series_id=SERIES_ID,
+            )
+            await clean.execute_query(
+                "MATCH (n) WHERE n.id STARTS WITH 'user-node:' "
+                "AND n.series_id = $series_id DETACH DELETE n",
                 series_id=SERIES_ID,
             )
             await clean.execute_query(
@@ -462,3 +470,199 @@ def test_propose_same_content_twice_creates_distinct_change_sets(
 
     assert first.status_code == second.status_code == 201
     assert first.json()["id"] != second.json()["id"]
+
+
+# ---------------------------------------------------------------------------
+# Task 1 — Stage 2 (Confirm/Apply): transactional apply, full rollback,
+# server-derived origin/creator/visible_from_order, single Revision (RAG-12)
+# ---------------------------------------------------------------------------
+
+
+def _confirm(client: TestClient, change_set_id: str) -> Any:
+    return client.post(f"/api/series/{SERIES_ID}/change-sets/{change_set_id}/confirm")
+
+
+async def _revision_count_for_change_set(change_set_id: str) -> int:
+    rows = await _fresh_query(
+        "MATCH (r:Revision {resource_type: 'ChangeSet', resource_id: $id}) "
+        "RETURN count(r) AS c",
+        id=change_set_id,
+    )
+    return rows[0]["c"]
+
+
+async def _location_row(label: str) -> dict[str, Any] | None:
+    rows = await _fresh_query(
+        "MATCH (n:Location {series_id: $series_id, label: $label}) "
+        "RETURN n.id AS id, n.origin AS origin, n.created_by AS created_by, "
+        "n.visible_from_order AS visible_from_order",
+        series_id=SERIES_ID,
+        label=label,
+    )
+    return rows[0] if rows else None
+
+
+async def _change_set_status(change_set_id: str) -> str | None:
+    rows = await _fresh_query(
+        "MATCH (cs:ChangeSet {id: $id}) RETURN cs.status AS status", id=change_set_id
+    )
+    return rows[0]["status"] if rows else None
+
+
+async def _revision_before_for_change_set(change_set_id: str) -> Any:
+    rows = await _fresh_query(
+        "MATCH (r:Revision {resource_type: 'ChangeSet', resource_id: $id}) "
+        "RETURN r.before AS before",
+        id=change_set_id,
+    )
+    return rows[0]["before"] if rows else "MISSING"
+
+
+def _insert_user_node(node_id: str, label: str) -> None:
+    asyncio.run(
+        _fresh_query(
+            "CREATE (n:Location {id: $id, series_id: $series_id, label: $label, "
+            "episode_id: $episode_id, visible_from_order: 1, origin: 'user', "
+            "created_by: 'someone-else', created_at: datetime(), updated_at: datetime()})",
+            id=node_id,
+            series_id=SERIES_ID,
+            label=label,
+            episode_id=EPISODE_1,
+        )
+    )
+
+
+def _delete_node_by_id(node_id: str) -> None:
+    asyncio.run(_fresh_query("MATCH (n {id: $id}) DETACH DELETE n", id=node_id))
+
+
+def test_confirm_applies_all_operations_and_logs_exactly_one_revision(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_chat_session(client)
+    label_a = f"Confirm apply A {uuid4()}"
+    label_b = f"Confirm apply B {uuid4()}"
+
+    proposed = _propose(
+        client, session["id"], [_create_node_op(label=label_a), _create_node_op(label=label_b)]
+    )
+    assert proposed.status_code == 201, proposed.text
+    change_set_id = proposed.json()["id"]
+
+    response = _confirm(client, change_set_id)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "applied"
+    assert body["revision_id"] is not None
+    assert body["applied_at"] is not None
+    assert body["confirmed_at"] is not None
+
+    row_a = asyncio.run(_location_row(label_a))
+    row_b = asyncio.run(_location_row(label_b))
+    assert row_a is not None and row_b is not None
+
+    assert asyncio.run(_revision_count_for_change_set(change_set_id)) == 1
+
+
+def test_confirm_rolls_back_entirely_when_an_operation_fails_apply_time_revalidation(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_chat_session(client)
+    label = f"Never applied — rollback proof {uuid4()}"
+    target_node_id = f"user-node:rollback-target-{uuid4()}"
+    _insert_user_node(target_node_id, "Original label")
+
+    proposed = _propose(
+        client,
+        session["id"],
+        [
+            _create_node_op(label=label),
+            {
+                "operation_type": "update_node",
+                "node_id": target_node_id,
+                "label": "Updated after propose",
+            },
+        ],
+    )
+    assert proposed.status_code == 201, proposed.text
+    change_set_id = proposed.json()["id"]
+
+    # Simulate the target being deleted by another action between propose
+    # and confirm — the second operation must now fail fresh re-validation.
+    _delete_node_by_id(target_node_id)
+
+    response = _confirm(client, change_set_id)
+    assert response.status_code == 422, response.text
+
+    # Zero of the ChangeSet's operations were applied — not even the first,
+    # otherwise-valid create_node.
+    assert asyncio.run(_location_row(label)) is None
+    assert asyncio.run(_revision_count_for_change_set(change_set_id)) == 0
+    # The ChangeSet itself is untouched — still awaiting_confirmation, not a
+    # partial/failed state, so a corrected retry remains possible.
+    assert asyncio.run(_change_set_status(change_set_id)) == "awaiting_confirmation"
+
+
+def test_confirm_assigns_origin_user_and_creator_server_side_never_from_payload(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    user = _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_chat_session(client)
+    label = f"Origin/creator proof {uuid4()}"
+
+    proposed = _propose(client, session["id"], [_create_node_op(label=label)])
+    change_set_id = proposed.json()["id"]
+
+    response = _confirm(client, change_set_id)
+    assert response.status_code == 200, response.text
+
+    row = asyncio.run(_location_row(label))
+    assert row is not None
+    assert row["origin"] == "user"
+    assert row["created_by"] == user["id"]
+
+
+def test_confirm_derives_visible_from_order_from_current_progress(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_chat_session(client)
+    label = f"visible_from_order proof {uuid4()}"
+
+    proposed = _propose(client, session["id"], [_create_node_op(label=label)])
+    change_set_id = proposed.json()["id"]
+
+    response = _confirm(client, change_set_id)
+    assert response.status_code == 200, response.text
+
+    row = asyncio.run(_location_row(label))
+    assert row is not None
+    assert row["visible_from_order"] == 1
+
+
+def test_confirm_revision_before_snapshot_is_null_for_create_operations(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    _authed(client, fake_user_repo, session_repo, progress=1)
+    session = _create_chat_session(client)
+
+    proposed = _propose(client, session["id"], [_create_node_op()])
+    change_set_id = proposed.json()["id"]
+
+    response = _confirm(client, change_set_id)
+    assert response.status_code == 200, response.text
+
+    before = asyncio.run(_revision_before_for_change_set(change_set_id))
+    assert before is None
