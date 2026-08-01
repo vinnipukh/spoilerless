@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 06
 current_phase_name: spoiler-safe-graphrag-chat-and-graph-editing-agent
 status: executing
-stopped_at: Completed 06-06-PLAN.md
-last_updated: "2026-08-01T09:26:30.016Z"
+stopped_at: Completed 06-09-PLAN.md
+last_updated: "2026-08-01T10:10:57.890Z"
 last_activity: 2026-07-31
 last_activity_desc: Phase 06 execution resumed (wave continue)
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 35
-  completed_plans: 30
+  completed_plans: 31
 ---
 
 # HD Graf Cehennemi — Project State
@@ -135,11 +135,12 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 | Phase 06 P05 | 30min | 3 tasks | 11 files |
 | Phase 06 P08 | 45min | 3 tasks | 13 files |
 | Phase 06 P06 | 55min | 3 tasks | 9 files |
+| Phase 06 P09 | 1h 10min | 3 tasks | 19 files |
 
 ## Session
 
-**Last session:** 2026-08-01T09:26:29.995Z
-**Stopped at:** Completed 06-06-PLAN.md
+**Last session:** 2026-08-01T10:10:57.871Z
+**Stopped at:** Completed 06-09-PLAN.md
 **Resume file:** None
 
 ## Decisions
@@ -176,11 +177,13 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 - [Phase ?]: [Phase 06-06]: ChangeSet apply staleness check runs inside the same execute_write transaction as the apply itself (not a service-layer pre-check) to close a TOCTOU race window
 - [Phase ?]: [Phase 06-06]: Idempotency-key replay is keyed on ChangeSet id+status (not a client-supplied key param), matching the frontend's existing no-body confirmChangeSet client built ahead of this plan in 06-08
 - [Phase ?]: [Phase 06-06]: Stale-marker write returns a _StaleResult from inside execute_write instead of raising, so the failed-status write actually commits before ChangeSetStale is raised
+- [Phase ?]: [Phase 06-09]: Node/edge selection never touches panelMode (only pill toggle/ChatLauncher do), making chat-mode-survives-selection structurally true rather than a guarded exception
+- [Phase ?]: [Phase 06-09]: useChatMessages.sendMessage now optimistically appends the user's own message locally (Rule 1 fix) - previously only the assistant reply was appended, so sent questions vanished until next refetch
 
 ## Current Position
 
 Phase: 06 (spoiler-safe-graphrag-chat-and-graph-editing-agent) — EXECUTING
-Plan: 8 of 12
+Plan: 9 of 12
 Status: Ready to execute
 Last activity: 2026-07-31 — Phase 06 execution resumed (wave continue)
 
