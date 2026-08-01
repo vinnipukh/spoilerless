@@ -258,14 +258,39 @@ describe('App', () => {
     expect(graphFetchCalls()[0]?.[0]).toBe('/api/series/series_dexter/graph?visible_until_order=1')
 
     expect(await screen.findByTestId('graph-canvas-stub')).toBeInTheDocument()
+
     // 06-09: DetailPanel's Sheet now defaults closed until either a node is
     // selected or chat is opened this session — it is no longer permanently
     // visible with the "Select a node..." placeholder the instant a graph
     // loads (the highest-risk, deliberate behavior change this phase makes).
     expect(screen.queryByText('Select a node to see details.')).not.toBeInTheDocument()
-
     await user.click(await screen.findByTestId('graph-element-char_dexter_morgan'))
     expect(await screen.findByRole('heading', { name: 'Dexter Morgan' })).toBeInTheDocument()
+  })
+
+  it('opens the LEFT inspector for a user-created edge, never the right-side card', async () => {
+    currentAuthState = 'authenticated'
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(await screen.findByRole('combobox', { name: 'Series' }))
+    await user.click(await screen.findByRole('option', { name: 'Dexter' }))
+    await user.click(await screen.findByRole('combobox', { name: 'Watch progress' }))
+    await user.click(await screen.findByRole('option', { name: /S01E01/ }))
+    await user.click(screen.getByRole('button', { name: 'Yes, unlock episode' }))
+    expect(await screen.findByTestId('graph-canvas-stub')).toBeInTheDocument()
+
+    // A user-created relationship (claim_id null, origin 'user') must route to
+    // the LEFT DetailPanel inspector (edge-type title + Overview tab), not the
+    // right-side StructuralEdgeCard (regression: user edges used to match the
+    // `claim_id == null` structural-edge condition and open on the right).
+    await user.click(screen.getByTestId('graph-element-user-rel:test-1'))
+    expect(await screen.findByRole('heading', { name: 'KNOWS' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument()
+    // The left panel shows the edge endpoints (the canvas button also carries
+    // the node label, hence getAllByText).
+    expect(screen.getAllByText('Dexter Morgan').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Debra Morgan').length).toBeGreaterThan(0)
   })
 
   it('restores confirmed state from sessionStorage on mount without opening confirmation modal', async () => {

@@ -303,7 +303,8 @@ function AuthenticatedApp() {
             onRevealDone={() => setRevealIds(null)}
           />
           {selectedElement?.kind === 'edge' &&
-          graphState.data.edges.find((edge) => edge.id === selectedElement.id)?.claim_id == null ? (
+          graphState.data.edges.find((edge) => edge.id === selectedElement.id)?.claim_id == null &&
+          graphState.data.edges.find((edge) => edge.id === selectedElement.id)?.origin !== 'user' ? (
             <StructuralEdgeCard selected={selectedElement} nodes={graphState.data.nodes} />
           ) : (
             <DetailPanel

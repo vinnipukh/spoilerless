@@ -459,6 +459,9 @@ export function DetailPanel({
 
   const selectedNode =
     selected?.kind === 'node' ? graph.nodes.find((node) => node.id === selected.id) : undefined
+  const selectedEdge =
+    selected?.kind === 'edge' ? graph.edges.find((edge) => edge.id === selected.id) : undefined
+  const nodeLabel = (id: string) => graph.nodes.find((node) => node.id === id)?.label ?? id
   const relevantClaims = resolveClaimsForSelection(selected, graph)
   const activeClaim = selected?.kind === 'edge' ? relevantClaims[0] : undefined
   const evidenceEntries = resolveEvidenceForClaims(relevantClaims, graph)
@@ -528,7 +531,13 @@ export function DetailPanel({
     }
   }, [seriesId, notesState])
 
-  const title = selectedNode?.label ?? activeClaim?.label ?? 'Details'
+  const title =
+    selectedNode?.label ??
+    activeClaim?.label ??
+    (selected?.kind === 'edge'
+      ? graph.edges.find((edge) => edge.id === selected.id)?.type
+      : undefined) ??
+    'Details'
 
   // Workaround for stale-ref callback: keep the latest delete in a ref
   const handleDeleteNoteRef = useRef(handleDeleteNote)
@@ -631,6 +640,21 @@ export function DetailPanel({
                       <dd>{activeClaim.confidence_level}</dd>
                     </div>
                   </dl>
+                )}
+                {selected.kind === 'edge' && !activeClaim && selectedEdge && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 rounded-md border border-border p-3">
+                      <span>{nodeLabel(selectedEdge.source)}</span>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true">
+                        <path d="M5 12h14"></path>
+                        <path d="m12 5 7 7-7 7"></path>
+                      </svg>
+                      <span>{nodeLabel(selectedEdge.target)}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      User-created relationship (origin: user).
+                    </p>
+                  </div>
                 )}
               </TabsContent>
 

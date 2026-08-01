@@ -190,7 +190,7 @@ beforeEach(() => {
 })
 
 describe('GraphCanvas', () => {
-  it('renders exactly the S01E01 fixture node/edge counts (11 nodes, 6 edges)', () => {
+  it('renders exactly the S01E01 fixture node/edge counts (11 nodes, 7 edges)', () => {
     const { container } = render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} />)
     console.log('[TEST] container HTML:', container.innerHTML.substring(0, 200))
     console.log('[TEST] capturedElements length:', capturedElements.length)
@@ -199,7 +199,7 @@ describe('GraphCanvas', () => {
     expect(nodeElements(capturedElements)).toHaveLength(graphResponseS01E01.nodes.length)
     expect(nodeElements(capturedElements)).toHaveLength(11)
     expect(edgeElements(capturedElements)).toHaveLength(graphResponseS01E01.edges.length)
-    expect(edgeElements(capturedElements)).toHaveLength(6)
+    expect(edgeElements(capturedElements)).toHaveLength(7)
   })
 
   it('renders exactly the S01E03 fixture node count (20 nodes) after a boundary change', () => {
