@@ -24,6 +24,10 @@
    - [4.5 Authentication & Sessions](#45-authentication--sessions)
    - [4.6 Error Handling](#46-error-handling)
    - [4.7 Revision History](#47-revision-history)
+   - [4.7.1 Append-only Revision extension](#471-append-only-revision-extension)
+   - [4.8 GraphRAG-Lite Chat Pipeline](#48-graphrag-lite-chat-pipeline)
+   - [4.9 ChangeSet Two-Stage Mutation Flow](#49-changeset-two-stage-mutation-flow)
+   - [4.10 Spoiler-Safety Invariants](#410-spoiler-safety-invariants)
 5. [Data Flow Examples](#5-data-flow-examples)
 6. [Key Design Decisions](#6-key-design-decisions)
 7. [Future Extensibility Points](#7-future-extensibility-points)
@@ -203,7 +207,7 @@ The dev server proxies `/api` requests to the backend at `http://127.0.0.1:8000`
 
 **Location:** `backend/app/api/`
 
-Five route modules registering 24 HTTP operations across 17 unique path templates (plus `/health`).
+Nine route modules registering 42 HTTP operations across 31 unique path templates (plus `/health`). The authoritative locked inventory lives in [docs/frontend-api-contract.md](frontend-api-contract.md) and is verified by `backend/tests/test_openapi_contract.py` and `backend/tests/test_frontend_contract_doc.py`.
 
 #### Route Inventory
 
@@ -218,14 +222,28 @@ Five route modules registering 24 HTTP operations across 17 unique path template
 | `user_content.py` | `/api/series/{series_id}/custom-nodes` | POST | Create custom node |
 | `user_content.py` | `/api/series/{series_id}/custom-nodes/{node_id}` | GET, PATCH, DELETE | CRUD one custom node |
 | `user_content.py` | `/api/series/{series_id}/custom-relationships` | POST | Create custom relationship |
-|| `user_content.py` | `/api/series/{series_id}/custom-relationships/{id}` | GET, PATCH, DELETE | CRUD one relationship |
-|| `revisions.py` | `/api/series/{series_id}/revisions` | GET | List visible revisions |
-|| `revisions.py` | `/api/series/{series_id}/revisions/{revision_id}` | GET | Get one revision |
-|| `revisions.py` | `/api/series/{series_id}/revisions/{revision_id}/revert` | POST | Revert to a revision |
-|| `auth.py` | `/api/auth/google` | POST | Google Sign-In |
-|| `auth.py` | `/api/auth/me` | GET | Current user from session |
-|| `auth.py` | `/api/auth/logout` | POST | Logout |
-|| `main.py` | `/health` | GET | Health check |
+| `user_content.py` | `/api/series/{series_id}/custom-relationships/{relationship_id}` | GET, PATCH, DELETE | CRUD one relationship |
+| `revisions.py` | `/api/series/{series_id}/revisions` | GET | List visible revisions |
+| `revisions.py` | `/api/series/{series_id}/revisions/{revision_id}` | GET | Get one revision |
+| `revisions.py` | `/api/series/{series_id}/revisions/{revision_id}/revert` | POST | Revert to a revision |
+| `progress.py` | `/api/series/{series_id}/progress` | GET, POST | Read/update persisted watch progress |
+| `chat.py` | `/api/series/{series_id}/chat/sessions` | GET, POST | List/create chat sessions |
+| `chat.py` | `/api/series/{series_id}/chat/sessions/{session_id}` | GET, DELETE | Get/delete one session |
+| `chat.py` | `/api/series/{series_id}/chat/sessions/{session_id}/messages` | POST | Non-streaming chat turn (fallback) |
+| `chat.py` | `/api/series/{series_id}/chat/sessions/{session_id}/messages/stream` | POST | Streaming chat turn (SSE) |
+| `change_set.py` | `/api/series/{series_id}/change-sets` | POST | Propose a ChangeSet (Stage 1) |
+| `change_set.py` | `/api/series/{series_id}/change-sets/{change_set_id}/confirm` | POST | Confirm a ChangeSet (Stage 2) |
+| `change_set.py` | `/api/series/{series_id}/change-sets/{change_set_id}/reject` | POST | Reject a ChangeSet |
+| `change_set.py` | `/api/series/{series_id}/change-sets/{change_set_id}/revert` | POST | Revert an applied ChangeSet (Stage 3) |
+| `candidates.py` | `/api/series/{series_id}/candidates` | GET | List candidate claims |
+| `candidates.py` | `/api/series/{series_id}/candidates/ingest` | POST | Ingest extraction batch as candidates |
+| `candidates.py` | `/api/series/{series_id}/candidates/{claim_id}` | GET, PATCH | Get/edit one candidate claim |
+| `candidates.py` | `/api/series/{series_id}/candidates/{claim_id}/approve` | POST | Approve candidate → corroborated |
+| `candidates.py` | `/api/series/{series_id}/candidates/{claim_id}/reject` | POST | Reject candidate |
+| `auth.py` | `/api/auth/google` | POST | Google Sign-In |
+| `auth.py` | `/api/auth/me` | GET | Current user from session |
+| `auth.py` | `/api/auth/logout` | POST | Logout |
+| `main.py` | `/health` | GET | Health check |
 
 #### Architecture Pattern
 
@@ -252,7 +270,7 @@ This is the most architecturally significant endpoint. It:
 
 **Location:** `backend/app/services/`
 
-Three service classes encapsulate business logic:
+Service classes encapsulate business logic:
 
 #### `GraphService` (`graph.py`)
 - Orchestrates the spoiler-safe graph read
@@ -276,6 +294,21 @@ Three service classes encapsulate business logic:
 - User upsert (create or update by `google_sub`)
 - Session creation, retrieval, refresh, and revocation
 - All session tokens are SHA-256 hashed before storage; raw tokens never persisted
+
+#### `ProgressService` (`progress.py`)
+- Resolves the persisted watch-progress boundary for a user + series from the graph (`(:AppUser)-[:HAS_PROGRESS]->(:UserSeriesProgress)-[:FOR_SERIES]->(:Series)`)
+- Server-authoritative: the frontend cannot raise `visible_until_order` through a request; missing progress fails safe (lowest boundary)
+- Persists progress updates; decreasing progress is allowed and hides future-boundary chat messages (hide-not-delete)
+
+#### `ChatService` (`chat.py`)
+- Owns the GraphRAG-lite turn lifecycle: resolve boundary → load spoiler-filtered history → run the retrieval pipeline → stream the grounded answer back as SSE
+- Persists every `ChatMessage` with a `visible_until_order_snapshot` equal to the boundary resolved at turn time, so later boundary decreases can hide (never delete) previously generated future-boundary messages
+- Records a `ChangeSet` reference on the assistant message when the pipeline proposes one
+
+#### `ChangeSetService` (`change_set.py`)
+- Stage 1 **propose**: validates a typed operation list (13 operation types, Pydantic `extra="forbid"` discriminated union) against the ontology and the resolved boundary — no database write happens at propose time
+- Stage 2 **confirm/apply**: applies the validated operations in a single Neo4j transaction, idempotent via `idempotency_key`, stale-safe via `visible_until_order_snapshot` comparison, and logs a `Revision` in the same transaction
+- Stage 3 **revert**: restores the pre-apply state for create-shaped ChangeSets (well-defined delete); refuses when later unrelated changes conflict
 
 ---
 
@@ -612,6 +645,152 @@ The `Revision` module provides a version history model. Revisions are Neo4j `(:R
 
 **Frontend:** History tab fully integrated. The `frontend/src/types/revision.ts` types, `frontend/src/api/revisions.ts` API client, and `frontend/src/hooks/useRevisions.ts` hook provide the data layer. The `RevisionHistoryPanel` component renders a History tab in `DetailPanel` with color-coded action badges (Created/Updated/Deleted/Reverted), diff summary chips, and a one-shot revert flow with confirmation dialog and toast feedback. Revert button only appears on `Updated` and `Deleted` revisions. All dialog buttons use inline Tailwind (no DaisyUI). (Plans 04-04, 04-05 executed.)
 
+#### 4.7.1 Append-only Revision extension
+
+The Revision model is **append-only**: no revision is ever deleted or mutated in place. Every user-content mutation creates a new `Revision` node capturing before/after JSON snapshots in the **same Neo4j transaction** as the mutation (via the `RevisionRepository.log_revision` pattern). Reverting restores the captured state by creating a *new* `Reverted` revision — history is never destroyed, so the full audit trail always reconstructs "what changed, when, and by whom."
+
+ChangeSet applies extend this invariant: confirming a ChangeSet applies its operations and logs a single `Revision` in the same transaction (the ChangeSet response carries `revision_id`). Reverting an applied ChangeSet is itself a `Reverted` revision. The result is one coherent audit chain: `Revision → ChangeSet apply → Revision (Reverted)`.
+
+---
+
+## 4.8 GraphRAG-Lite Chat Pipeline
+
+**Location:** `backend/app/retrieval/` (`pipeline.py`, `tools.py`), `backend/app/llm/` (`provider.py`, `system_prompt.py`), `backend/app/services/chat.py`
+
+The chat feature is a **GraphRAG-lite** pipeline: the LLM answers questions by calling a small set of allowlisted retrieval tools against the spoiler-filtered graph, and every answer is grounded in citations that are validated against what was actually retrieved. The model never receives the raw graph — it only ever sees the filtered, bounded context the pipeline assembles for it.
+
+```
+Browser (React SPA, ChatPanel mounted inside DetailPanel's Chat mode)
+  │
+  │ 1. User types a question, ChatPanel calls POST .../messages/stream
+  │    (fetch + ReadableStream reader; credentials: include for session cookie)
+  ▼
+FastAPI router: backend/app/api/chat.py
+  │
+  │ 2. require_current_user dependency resolves AppUser from session cookie
+  ▼
+ChatService (backend/app/services/chat.py)
+  │
+  │ 3. ProgressService.resolve(user_id, series_id) → visible_until_order
+  │    (Neo4j read: (:AppUser)-[:HAS_PROGRESS]->(:UserSeriesProgress)-[:FOR_SERIES]->(:Series))
+  │
+  │ 4. ChatRepository loads recent, currently-visible ChatMessages for context
+  │    (filtered by visible_until_order_snapshot <= resolved boundary — hide-not-delete)
+  ▼
+RetrievalPipeline (backend/app/retrieval/pipeline.py)
+  │
+  │ 5. LLMProvider.stream_chat(system_prompt, history, tools=ALLOWLISTED_TOOLS)
+  │    → model requests tool calls (search_entities, get_neighborhood, get_claims, ...)
+  ▼
+Retrieval Tools (backend/app/retrieval/tools.py)
+  │
+  │ 6. Each tool independently re-derives visible_until_order from step 3 (never
+  │    from model output), runs parameterized Cypher via Neo4jDatabase.execute_query,
+  │    composing backend/app/spoiler/filter.py's existing visibility WHERE-clause pattern
+  ▼
+Neo4j (Community Edition, existing driver)
+  │
+  │ 7. Filtered rows return to the pipeline → context normalization (dedupe,
+  │    prioritize direct evidence, bound size) → back to LLMProvider for the
+  │    final answer, this time without tools
+  ▼
+Citation Validator (backend/app/retrieval/pipeline.py)
+  │
+  │ 8. Every claim_id/evidence_id/source_id the model cited is checked against
+  │    the actual retrieved context set — anything not present is stripped
+  ▼
+ChatService persists ChatMessage (role=assistant, visible_until_order_snapshot=step-3 value,
+  citations, graph_focus, change_set_id if a ChangeSet was proposed) via ChatRepository,
+  inside the same transaction pattern as RevisionRepository.log_revision when a ChangeSet exists
+  │
+  │ 9. Final SSE event streamed to the browser: {message, citations, graph_focus, proposed_change_set}
+  ▼
+Browser: MessageBubble renders streamed text; CitationChip "Show in graph" calls
+  GraphCanvas's focusedElementIds prop; ChangeSetCard renders Confirm/Reject,
+  which POST to backend/app/api/change_set.py's confirm/reject endpoints (a second,
+  separate request/response cycle — NOT part of the streaming response)
+```
+
+### Allowlisted-Retrieval-Tool Security Model
+
+The pipeline exposes exactly **ten** retrieval tools — nothing more. The model cannot call any other function, and it can never execute Cypher:
+
+1. `search_entities` — keyword search over visible entities
+2. `get_entity` — fetch one visible entity by ID
+3. `get_neighborhood` — closed neighborhood of a visible entity
+4. `find_path` — bounded path search between two visible entities
+5. `get_timeline` — chronological visible events
+6. `get_claims` — visible claims matching filters
+7. `get_evidence` — evidence fragments backing visible claims
+8. `get_sources` — sources referenced by visible claims
+9. `get_current_visible_graph_summary` — aggregate summary of the visible graph
+10. `get_user_notes` — the user's own visible notes
+
+Each tool is a small async function that:
+
+- **Takes only allowlisted, typed parameters** — never a free-text Cypher string or an unvalidated entity ID sourced directly from model output.
+- **Re-derives `visible_until_order` from the already-resolved server value** passed down by the pipeline — never re-read from the model's tool-call arguments, so a prompt-injected "show me everything" cannot widen the boundary.
+- **Issues parameterized Cypher** built the same way `spoiler/filter.py`'s constants are — label/relationship names selected only from server-side allowlists, values always bound as `$parameters`. No string interpolation of model-controlled text.
+
+This is the same fail-closed discipline as the graph read path: a misconfigured or injected tool call can only ever see the current user's visible graph.
+
+---
+
+## 4.9 ChangeSet Two-Stage Mutation Flow
+
+**Location:** `backend/app/api/change_set.py`, `backend/app/services/change_set.py`, `backend/app/repository/change_set.py`
+
+The LLM **cannot write to the graph directly** — not through tool calls, not through any endpoint. All graph edits flow through a typed, two-stage ChangeSet protocol (plus an explicit third stage for revert):
+
+```
+Stage 1 — PROPOSE (POST /api/series/{series_id}/change-sets)
+  Chat pipeline decides a write is warranted → builds a typed ChangeSet:
+  { summary, operations: [create_node | update_node | delete_node |
+    create_relationship | update_relationship | delete_relationship |
+    create_claim | update_claim | delete_claim | attach_evidence |
+    create_note | update_note | delete_note] }
+  ├── Pydantic validates: operation_type must be one of the 13 literals,
+  │   extra fields forbidden, at least one operation, ontology-valid labels/types
+  ├── Boundary validated: targets must be visible, same-series, visibility derived
+  │   server-side (never accepted from client), never above the resolved boundary
+  ├── Canonical/candidate protection: mutation of canonical or candidate content
+  │   is refused (create_note override pattern instead)
+  └── NO database write occurs at propose time — status: awaiting_confirmation
+
+Stage 2 — CONFIRM / APPLY (POST .../change-sets/{id}/confirm)  |  REJECT (POST .../reject)
+  Confirm:
+  ├── Ownership + status check (404 resource_not_found if missing/cross-user)
+  ├── Staleness check: visible_until_order_snapshot vs current boundary → 409 changeset_stale
+  ├── Idempotent: idempotency_key makes re-apply a no-op
+  ├── Single Neo4j transaction: all operations apply or none do (rollback on error)
+  └── Revision logged in the SAME transaction (revision_id on the applied ChangeSet)
+  Reject:
+  └── Marks the ChangeSet rejected; no database change; graph untouched
+
+Stage 3 — REVERT (POST .../change-sets/{id}/revert, applied ChangeSets only)
+  ├── Only create-shaped ChangeSets are revertible (pre-apply state = "did not exist")
+  ├── Conflict guard: if a later unrelated change modified/removed a created resource,
+  │   revert returns 409 rather than silently overwriting
+  └── Creates a new Reverted revision — the audit chain stays append-only
+```
+
+The frontend renders the proposed ChangeSet as a preview card (per-operation summary lines, Before/After rows for updates, destructive banner when deletes are present) with explicit **Confirm changes** / **Reject** controls — the *only* UI path into the confirm/reject endpoints. Nothing in the streaming chat response applies a write.
+
+---
+
+## 4.10 Spoiler-Safety Invariants
+
+These invariants are the phase's contract with the rest of the project — every one is enforced by backend code and locked by tests:
+
+1. **The LLM never receives the full unfiltered graph.** The pipeline assembles context exclusively through the ten allowlisted retrieval tools, each of which runs the same visibility-gated Cypher as the graph read path, then dedupes and bounds the result (`LLM_MAX_CONTEXT_ITEMS`, `LLM_MAX_CONTEXT_CHARACTERS`).
+2. **The LLM never receives future-episode data.** Every tool re-derives the user's resolved `visible_until_order` server-side and applies `visible_from_order <= boundary` on every hop (nodes, relationships, claims, evidence, sources). A hidden record behaves like a nonexistent one.
+3. **The LLM never executes arbitrary Cypher.** There is no text-to-Cypher surface anywhere. The model's only actions are the ten allowlisted tool calls with typed, validated parameters; all Cypher is server-side constant templates with `$parameter` bindings.
+4. **The LLM cannot directly mutate canonical or candidate content.** ChangeSet validation refuses mutation operations targeting `origin: canonical` or `origin: candidate` content — the pipeline substitutes a confirmable `create_note` annotation (the "Protected" refusal surfaced in the UI) instead.
+5. **Writes require typed ChangeSets and explicit confirmation.** The model can only *propose*; a human must confirm through the ChangeSetCard's Confirm/Reject controls before any transaction touches the graph.
+6. **Chat history is spoiler-filtered by the same boundary as the graph.** `ChatMessage` rows carry `visible_until_order_snapshot`; history loading filters `snapshot <= current boundary`, so hidden messages never enter the model's context.
+7. **Lowering progress hides previously generated future-boundary messages without deleting them.** Messages remain persisted (and re-appear if progress advances again); they are simply excluded from history loading and session previews below the boundary.
+8. **All graph content is treated as untrusted prompt data.** User notes, evidence text, labels, and any retrieved content are wrapped in strict delimiters with explicit instruction-ignore language (`SYSTEM_PROMPT_V1`); prompt-injection tests assert the malicious strings are contained verbatim inside the data sections and never interpreted as instructions.
+
 ---
 
 ## 5. Data Flow Examples
@@ -788,11 +967,11 @@ Response: NoteResponse with origin="user", visible_from_order inherited from tar
 
 ### 7.1 LLM-Powered Chat
 
-The graph structure is designed for natural-language querying:
-- Claims with evidence fragments provide grounded answers
-- Origin system distinguishes LLM-extracted (`candidate`) from curated (`canonical`)
-- Cypher queries can be generated from natural language and validated against the ontology
-- **Integration point:** New service layer (`backend/app/services/chat.py`) with an LLM client calling into the existing `GraphService` and `SpoilerFilter` for context-window-scoped data
+**Delivered in Phase 06.** The GraphRAG-lite chat pipeline (see [4.8](#48-graphrag-lite-chat-pipeline)) is implemented: persisted watch progress, ten allowlisted retrieval tools, a streaming grounded-answer endpoint with validated citations, spoiler-filtered chat history, and a typed ChangeSet graph-editing flow (see [4.9](#49-changeset-two-stage-mutation-flow)). Natural extension points that remain:
+
+- **Additional retrieval tools** — new allowlisted functions in `backend/app/retrieval/tools.py`, each following the fail-closed visibility pattern
+- **Additional providers** — new implementations of the `LLMProvider` protocol in `backend/app/llm/provider.py` (only `openai_compatible` ships today)
+- **Richer grounding** — e.g., multi-hop path explanations surfaced through the existing citation model
 
 ### 7.2 Auto-Extraction Pipeline
 

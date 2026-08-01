@@ -37,6 +37,21 @@ cp .env.example .env
 | `SESSION_TTL_SECONDS` | `604800` | Session time-to-live in seconds (default: 7 days). |
 | `SESSION_COOKIE_SECURE` | `false` | Set the `Secure` flag on the session cookie. Enable in production (HTTPS). |
 | `FRONTEND_ORIGINS` | `http://localhost:5173` | Comma-separated list of allowed CORS origins for the FastAPI backend. |
+| `LLM_ENABLED` | `false` | Master switch for the GraphRAG chat/retrieval endpoints. When `false` (default), chat turns return `LLM_DISABLED` and no provider is constructed. |
+| `LLM_PROVIDER` | `openai_compatible` | Provider implementation selector. The only shipped implementation is `openai_compatible` (any OpenAI-compatible `/chat/completions` endpoint). |
+| `LLM_BASE_URL` | _(empty)_ | Base URL of the OpenAI-compatible chat completions endpoint (e.g. `https://api.openai.com/v1` or a local vLLM/Ollama-compatible server). Required when `LLM_ENABLED=true`. |
+| `LLM_API_KEY` | _(empty)_ | Provider API key. Read only inside `OpenAICompatibleProvider`; never logged, never exposed to the frontend, never committed. |
+| `LLM_MODEL` | _(empty)_ | Model identifier passed to the provider (e.g. `gpt-4.1-mini`). Required when `LLM_ENABLED=true`. |
+| `LLM_TIMEOUT_SECONDS` | `60` | Per-request timeout for LLM provider calls. |
+| `LLM_MAX_OUTPUT_TOKENS` | `800` | Maximum tokens the model may generate per completion call. |
+| `LLM_TEMPERATURE` | `0.0` | Sampling temperature for LLM completions (0 = deterministic, preferred for grounded answers). |
+| `LLM_MAX_TOOL_ROUNDS` | `4` | Maximum bounded tool-calling rounds per chat turn. |
+| `LLM_MAX_CONTEXT_ITEMS` | `40` | Maximum number of retrieved context items assembled per turn. |
+| `LLM_MAX_CONTEXT_CHARACTERS` | `12000` | Maximum total character budget for the assembled context per turn. |
+
+> **Note:** The `LLM_*` block is backend-only and never exposed to clients. API keys must
+> never be committed: `.env.example` ships with empty values, and the Manual Acceptance
+> Matrix explicitly checks browser storage/logs for leaked tokens.
 
 > **Note:** There is currently no `ENVIRONMENT` (development/production) variable in the codebase. If you need environment-specific branching, add an `ENVIRONMENT` variable to `.env` and read it in `config.py`.
 

@@ -414,6 +414,27 @@ Once everything is running ([http://localhost:5173](http://localhost:5173)), the
 
 The same spoiler confirmation flow applies. With all three episodes visible, you see the complete Dexter S01 graph prototype.
 
+### 7.8 Enable the GraphRAG chat (optional)
+
+Chat is **disabled by default** (`LLM_ENABLED=false`). To turn it on you need an
+OpenAI-compatible chat-completions endpoint — OpenAI, a local vLLM server, or any
+compatible provider. Add these to the **backend** `.env` (project root):
+
+```bash
+LLM_ENABLED=true
+LLM_BASE_URL=https://api.openai.com/v1     # or your local endpoint
+LLM_API_KEY=your-key-here                  # never commit real values
+LLM_MODEL=gpt-4.1-mini                     # any model your endpoint exposes
+```
+
+Restart the backend. The remaining `LLM_*` knobs (`LLM_TIMEOUT_SECONDS`,
+`LLM_MAX_OUTPUT_TOKENS`, `LLM_TEMPERATURE`, `LLM_MAX_TOOL_ROUNDS`,
+`LLM_MAX_CONTEXT_ITEMS`, `LLM_MAX_CONTEXT_CHARACTERS`) are optional; see
+[`CONFIGURATION.md`](./CONFIGURATION.md) for defaults and bounds. With
+`LLM_ENABLED=false` (or no provider reachable), the chat panel still opens but
+turns return a clear "chat is disabled / provider unavailable" banner instead
+of crashing.
+
 ---
 
 ## 8. Troubleshooting
