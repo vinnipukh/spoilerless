@@ -171,6 +171,19 @@ def test_get_and_update_llm_settings_roundtrip(
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
 ) -> None:
+    # The suite runs against the shared live Neo4j — a real user-configured
+    # :AppSetting node may exist. Clear it for a deterministic start; the
+    # database fixture's teardown restores whatever was there.
+    async def _clear() -> None:
+        clean = Neo4jDatabase()
+        clean.open()
+        try:
+            await clean.execute_query("MATCH (s:AppSetting {key: 'llm'}) DETACH DELETE s")
+        finally:
+            await clean.close()
+
+    asyncio.run(_clear())
+
     _authed(client, fake_user_repo, session_repo)
 
     # Initial state: no stored settings -> env defaults, no key configured.

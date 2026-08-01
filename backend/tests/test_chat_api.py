@@ -196,6 +196,56 @@ def _authed(
     return user
 
 
+def _llm_settings_backup() -> str | None:
+    """Read the live :AppSetting {key:'llm'} payload (or None when absent)."""
+
+    async def _read() -> str | None:
+        clean = Neo4jDatabase()
+        clean.open()
+        try:
+            rows = await clean.execute_query(
+                "MATCH (s:AppSetting {key: $k}) RETURN s.value AS value", k="llm"
+            )
+            return rows[0]["value"] if rows and rows[0].get("value") else None
+        finally:
+            await clean.close()
+
+    return asyncio.run(_read())
+
+
+def _llm_settings_clear() -> None:
+    async def _clear() -> None:
+        clean = Neo4jDatabase()
+        clean.open()
+        try:
+            await clean.execute_query(
+                "MATCH (s:AppSetting {key: $k}) DETACH DELETE s", k="llm"
+            )
+        finally:
+            await clean.close()
+
+    asyncio.run(_clear())
+
+
+def _llm_settings_restore(backup: str | None) -> None:
+    async def _restore() -> None:
+        clean = Neo4jDatabase()
+        clean.open()
+        try:
+            if backup is None:
+                await clean.execute_query(
+                    "MATCH (s:AppSetting {key: $k}) DETACH DELETE s", k="llm"
+                )
+            else:
+                await clean.execute_query(
+                    "MERGE (s:AppSetting {key: $k}) SET s.value = $v", k="llm", v=backup
+                )
+        finally:
+            await clean.close()
+
+    asyncio.run(_restore())
+
+
 def _create_session(client: TestClient, title: str = "Test session") -> dict[str, Any]:
     response = client.post(
         f"/api/series/{SERIES_ID}/chat/sessions", json={"title": title}
@@ -417,6 +467,12 @@ def test_disabled_provider_returns_503_never_401(
 ) -> None:
     monkeypatch.setenv("LLM_ENABLED", "false")
     get_settings.cache_clear()
+    # Isolate from any stored LLM settings: a user-configured :AppSetting
+    # node (key + enabled:true) legitimately overrides the env flag, so the
+    # test must back up, clear, and restore it — never assume an empty DB
+    # (this suite runs against the shared live Neo4j).
+    backup = _llm_settings_backup()
+    _llm_settings_clear()
     try:
         app = _build_app(database, fake_user_repo, session_repo, provider=None)
         with TestClient(app, raise_server_exceptions=False) as client:
@@ -431,6 +487,7 @@ def test_disabled_provider_returns_503_never_401(
             assert response.json()["detail"]["code"] == "LLM_DISABLED"
             assert user["id"]
     finally:
+        _llm_settings_restore(backup)
         get_settings.cache_clear()
 
 
