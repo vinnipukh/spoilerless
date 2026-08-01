@@ -449,3 +449,48 @@ VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 
 > `GOOGLE_CLIENT_SECRET` is **not** used. Never add it to any configuration file.
 > Wait up to 5 minutes for Google Cloud configuration changes to propagate.
+
+---
+
+## Additional Environment Variables (undocumented above)
+
+Cross-checking `backend/app/core/config.py` against the Variable Reference table above surfaced two
+`Settings` fields that were not yet listed:
+
+| Variable | Default | Description |
+|---|---|---|
+| `LLM_FALLBACK_EN` | _(empty/unset — falls back to built-in text)_ | Optional override for the localized "insufficient evidence" fallback response in English. If unset or blank, the built-in `INSUFFICIENT_EVIDENCE_FALLBACK_EN` text in `backend/app/llm/fallbacks.py` is used. |
+| `LLM_FALLBACK_TR` | _(empty/unset — falls back to built-in text)_ | Optional override for the localized "insufficient evidence" fallback response in Turkish. If unset or blank, the built-in `INSUFFICIENT_EVIDENCE_FALLBACK_TR` text in `backend/app/llm/fallbacks.py` is used. |
+
+Both fields are typed `str | None` with a default of `None` in `Settings` (`backend/app/core/config.py`).
+The active fallback text is selected per-turn by `_fallback_for()` in `backend/app/retrieval/pipeline.py`,
+based on the "Assistant language" (`system_prompt_language`) selection described below — not by
+Turkish-character detection of the user's own message.
+
+---
+
+## Runtime LLM Settings Override (stored in Neo4j)
+
+In addition to the `LLM_*` environment variables above, the effective LLM provider configuration can be
+set at runtime through the API and is persisted in the graph — it is not purely `.env`-driven.
+
+- **Storage:** `SettingsRepository` persists a single `:AppSetting {key: 'llm'}` node in Neo4j
+  (`backend/app/repository/settings.py`, `backend/app/domain/settings.py`).
+- **Endpoints:** `GET /api/settings/llm` returns the effective configuration (API key masked, e.g.
+  `••••1234`); `PUT /api/settings/llm` updates it (`backend/app/api/settings.py`).
+- **Precedence:** For every field, the stored graph value wins if present; otherwise the corresponding
+  `LLM_*` environment variable/setting is used as the fallback (`backend/app/services/settings.py`,
+  `SettingsService`). This applies to `provider`, `api_key`, `base_url`, `model`, and `enabled`.
+- **Supported providers:** `backend/app/domain/settings.py` declares `LLM_PROVIDERS = ("gemini",
+  "openai_compatible")`. When `provider` is `gemini` and no `base_url` is stored or set via
+  `LLM_BASE_URL`, the service falls back to the official Google endpoint,
+  `https://generativelanguage.googleapis.com` (`DEFAULT_GEMINI_BASE_URL`).
+  <!-- VERIFY: Cross-check against the "Environment Variables" section above, which currently states
+  "The only shipped implementation is openai_compatible" for LLM_PROVIDER — the domain model shows a
+  second "gemini" provider is also supported via this runtime settings mechanism. -->
+- **Assistant language:** `system_prompt_language` (`"english"` or `"turkish"`, default `"english"`) is
+  also stored/updated through this endpoint and controls both the system prompt language and which
+  `LLM_FALLBACK_*` override/default is used for a turn.
+- **Security:** `PUT /api/settings/llm` accepts `api_key: str | None` — sending an empty/omitted value
+  keeps the previously stored key rather than clearing it. The `GET` response never returns the full key,
+  only a masked form (`mask_api_key()` in `backend/app/domain/settings.py`).

@@ -30,12 +30,12 @@
 
 ## 1. Test Suite Overview
 
-The project has **15 test files** across two test suites:
+The project has **53 test files** across two test suites:
 
 | Suite | Framework | Tests | Location | Command |
 |-------|-----------|-------|----------|---------|
-| **Backend** | pytest 9.x | 9 files | `backend/tests/` | `uv run pytest` |
-| **Frontend** | Vitest 4.x | 6 files | `frontend/src/` | `cd frontend && npm test` |
+| **Backend** | pytest 9.x | 29 files | `backend/tests/` | `uv run pytest` |
+| **Frontend** | Vitest 4.x | 24 files | `frontend/src/` | `cd frontend && npm test` |
 
 **Continuous Integration:** Not yet configured. All tests run locally. See §10.
 
@@ -168,14 +168,14 @@ All backend tests live under `backend/tests/`. They connect to a live Neo4j data
 | File | Lines | Dependencies | What it covers |
 |------|-------|-------------|----------------|
 | `conftest.py` | 18 | — | Environment defaults, `sys.path` setup, `os.environ` defaults for Neo4j connection |
-| `test_graph_api.py` | 361 | Live Neo4j | Spoiler boundary filtering (parametrized across S01E01/E02/E03), user relationship projection fail-closed, claim temporal validity, error responses (404/422/503), database-unavailable sanitization, Pydantic model validation (dangling edges), degraded startup |
-| `test_seed_idempotency.py` | 456 | Live Neo4j | Seed idempotency & completeness, Community-compatible schema (no property-existence constraints), visibility integrity audit, null-visibility rejection (reads + writes), claim provenance, user-layer preservation across re-seed |
-| `test_auth.py` | 516 | No DB | Google sign-in (success, failure, missing client ID), session creation/refresh/reuse, cookie lifecycle, logout, `/api/auth/me` (authenticated, unauthenticated, stale session) |
-| `test_user_content_api.py` | 371 | Live Neo4j | Notes CRUD, custom nodes CRUD, custom relationships CRUD, spoiler-gated reads (hidden notes return 404), cross-series isolation, 409 conflict on delete-with-dependents |
+| `test_graph_api.py` | 445 | Live Neo4j | Spoiler boundary filtering (parametrized across S01E01/E02/E03), user relationship projection fail-closed, claim temporal validity, error responses (404/422/503), database-unavailable sanitization, Pydantic model validation (dangling edges), degraded startup |
+| `test_seed_idempotency.py` | 475 | Live Neo4j | Seed idempotency & completeness, Community-compatible schema (no property-existence constraints), visibility integrity audit, null-visibility rejection (reads + writes), claim provenance, user-layer preservation across re-seed |
+| `test_auth.py` | 658 | No DB | Google sign-in (success, failure, missing client ID), session creation/refresh/reuse, cookie lifecycle, logout, `/api/auth/me` (authenticated, unauthenticated, stale session) |
+| `test_user_content_api.py` | 377 | Live Neo4j | Notes CRUD, custom nodes CRUD, custom relationships CRUD, spoiler-gated reads (hidden notes return 404), cross-series isolation, 409 conflict on delete-with-dependents |
 | `test_user_content_models.py` | 321 | No DB | Pydantic model validation: enum-ontology lock, field stripping/trimming, validation error messages for wrong types/missing fields/extra fields, `VisibleUntilOrder` boundary logic, `Origin` enum contract |
-| `test_user_content_repository.py` | 176 | No DB | Repository-layer unit tests with fake Neo4j driver: `execute_write` retry stability, query templating, parameter binding |
-| `test_openapi_contract.py` | 247 | No DB | Error response schema + component references, sanitized validation envelopes, strict payload mode, `http_error` helper, `error_responses` utility |
-| `test_frontend_contract_doc.py` | 152 | No DB | Locked operation inventory (21 operations, 14 path templates), document vs. OpenAPI schema parity, fail-closed wording, origin/boundary/error documentation checks |
+| `test_user_content_repository.py` | 182 | No DB | Repository-layer unit tests with fake Neo4j driver: `execute_write` retry stability, query templating, parameter binding |
+| `test_openapi_contract.py` | 300 | No DB | Error response schema + component references, sanitized validation envelopes, strict payload mode, `http_error` helper, `error_responses` utility |
+| `test_frontend_contract_doc.py` | 183 | No DB | Locked operation inventory (44 operations, 32 path templates), document vs. OpenAPI schema parity, fail-closed wording, origin/boundary/error documentation checks |
 
 ### 4.2 Key Testing Patterns
 
@@ -273,12 +273,12 @@ All frontend tests live under `frontend/src/` alongside their components, and us
 
 | File | Lines | What it covers |
 |------|-------|----------------|
-| `App.test.tsx` | 247 | End-to-end app flow: empty state → series select → episode confirm → graph render → node tap → DetailPanel → episode cancel → episode forward → episode backward; sessionStorage hydration on remount |
-| `components/graph/GraphCanvas.test.tsx` | 73 | Element count parity with backend boundary fixture (S01E01: 11 nodes, 6 edges; S01E03: 20 nodes, 16 edges) |
-| `components/detail/DetailPanel.test.tsx` | 73 | Locked state (no selection), node view (3 tabs: Overview/Claims/Evidence), claim-backed edge view, interactive tab switching |
+| `App.test.tsx` | 595 | End-to-end app flow: empty state → series select → episode confirm → graph render → node tap → DetailPanel → episode cancel → episode forward → episode backward; sessionStorage hydration on remount |
+| `components/graph/GraphCanvas.test.tsx` | 409 | Element count parity with backend boundary fixture (S01E01: 11 nodes, 6 edges; S01E03: 20 nodes, 16 edges) |
+| `components/detail/DetailPanel.test.tsx` | 247 | Locked state (no selection), node view (3 tabs: Overview/Claims/Evidence), claim-backed edge view, interactive tab switching |
 | `components/detail/StructuralEdgeCard.test.tsx` | 37 | Renders PART_OF edge with connected node labels; confirms no tablist |
 | `components/episode/ConfirmAdvanceModal.test.tsx` | 80 | Forward copy ("Unlock S01E02?"), backward copy ("Rewatch S01E01?"), cancel button, confirm button |
-| `hooks/useWatchProgress.test.ts` | 106 | Hydration from valid/invalid/malformed sessionStorage, empty state fallback, `requestChange()` / `confirmChange()` state transitions, pending change modal gating |
+| `hooks/useWatchProgress.test.ts` | 208 | Hydration from valid/invalid/malformed sessionStorage, empty state fallback, `requestChange()` / `confirmChange()` state transitions, pending change modal gating |
 
 ### 5.2 Key Testing Patterns
 
@@ -366,7 +366,7 @@ The project enforces an **OpenAPI contract via test** rather than relying on run
 
 **`test_frontend_contract_doc.py`** compares `docs/frontend-api-contract.md` against the generated OpenAPI schema:
 
-1. **Exact operation inventory** — 21 HTTP operations across 14 path templates, locked in both the document and the OpenAPI schema
+1. **Exact operation inventory** — 44 HTTP operations across 32 path templates, locked in both the document and the OpenAPI schema
 2. **Document content checks** — key phrases must appear: `fail-closed`, `required positive integer`, `persisted episode order`, `origin: canonical|candidate|user`, `hidden and missing direct reads are indistinguishable`, `no totals/counts`
 
 **`test_openapi_contract.py`** verifies the error response schema:
@@ -513,3 +513,57 @@ From `ROADMAP.md`, tests matter most for:
 - **M6 — User notes and manual editing**: The `test_user_content_*.py` files cover this milestone with CRUD + spoiler-gated read tests.
 - **M7 — Revision history**: No tests yet — this is a coverage gap to address when revision endpoints are built.
 - **M9 — Spoiler-grounded LLM chat**: Will need new test patterns for LLM output grounded in the spoiler boundary.
+
+---
+
+## 11. Test Inventory Addendum
+
+> Appended by doc supplement pass. The suite has grown substantially since §1/§4.1/§5.1 were last written (9 backend + 6 frontend files documented there). As of this pass there are **29 backend files** (`backend/tests/`, including `conftest.py`) and **24 frontend test files** (`frontend/src/**/*.test.{ts,tsx}`). The tables in §4.1 and §5.1 are preserved as-is; the files below are the ones not yet covered by those tables.
+
+### 11.1 Backend — files not in §4.1
+
+| File | Lines | What it covers |
+|------|-------|----------------|
+| `test_extraction_models.py` | 206 | Extraction schema and source-connector interface models (PREP-01, PREP-04) |
+| `test_candidate_ingest.py` | 124 | Candidate ingest, storage isolation, and spoiler filtering (PREP-02, PREP-05) |
+| `test_candidate_review.py` | 107 | Candidate review workflow: approve, reject, edit (PREP-03) |
+| `test_revision_models.py` | 113 | `RevisionAction`/`RevisionResponse` domain models: enum values, construction, optional before/after, extra-field rejection, naive-datetime rejection |
+| `test_revisions.py` | 627 | Revision history endpoints: create/update/delete logging, list filters, single-revision get, hidden-revision 404, revert (restores content, restores deleted notes) |
+| `test_progress_api.py` | 416 | Watch-progress persistence API (RAG-01), live Neo4j |
+| `test_llm_provider.py` | 481 | LLM provider abstraction (RAG-04): deterministic `FakeLLMProvider`, OpenAI-compatible provider behavior |
+| `test_retrieval_tools.py` | 912 | Allowlisted retrieval tools (RAG-02, RAG-03), live Neo4j seeded with Dexter S01E01-03 |
+| `test_retrieval_pipeline.py` | 479 | Retrieval-pipeline hardening (RAG-05..RAG-08): context normalization, dedup by stable ID |
+| `test_prompt_injection.py` | 325 | Prompt-injection defense (RAG-06 / T-06-06) against PRD-quoted malicious strings |
+| `test_citations.py` | 410 | Citation-validation hardening (RAG-07, RAG-08 / T-06-09): rejects model-scripted citations without matching evidence |
+| `test_conversational_tone.py` | 381 | Conversational-tone policy: friendly, grounded, spoiler-safe phrasing instead of robotic refusals |
+| `test_chat_api.py` | 1055 | Chat API vertical slice (RAG-04..RAG-10), live Neo4j, deterministic fake LLM |
+| `test_chat_persistence.py` | 359 | Chat session/message persistence at the repository layer (RAG-09), live Neo4j |
+| `test_session_repository.py` | 70 | Neo4j-persistent session repository; regression test for `HAS_SESSION` relationship-direction bug (T-AUTH-01) |
+| `test_settings_api.py` | 264 | Settings API (LLM provider configuration): auth guard, masked GET, PUT persistence with blank-key-keeps-existing semantics |
+| `test_change_set_api.py` | 668 | ChangeSet Stage 1 (Propose) vertical slice (RAG-11, RAG-13) |
+| `test_change_set_confirmation.py` | 415 | ChangeSet Stage 2 idempotency, staleness, and reject (RAG-12, RAG-14) |
+| `test_change_set_protection.py` | 377 | Canonical/candidate protection for ChangeSet propose (RAG-13): rejects direct mutation of `origin:canonical`/`candidate` |
+| `test_change_set_revision.py` | 579 | ChangeSet Stage 3 (Revert) (RAG-15) |
+
+### 11.2 Frontend — files not in §5.1
+
+| File | Lines | What it covers |
+|------|-------|----------------|
+| `api/changeSet.test.ts` | 85 | ChangeSet API client |
+| `api/chat.test.ts` | 267 | Chat API client, including `streamMessage` |
+| `api/progress.test.ts` | 60 | Watch-progress API client |
+| `components/chat/ChatLauncher.test.tsx` | 23 | Chat launcher trigger button |
+| `components/chat/ChatSheet.test.tsx` | 70 | Chat sheet/drawer container |
+| `components/chat/ChatPanel.test.tsx` | 267 | Chat panel, including streaming/error states |
+| `components/chat/MessageList.test.tsx` | 147 | Chat message list rendering |
+| `components/chat/MessageBubble.test.tsx` | 85 | `MessageBubble`, `StreamingMessageBubble`, `FailedMessageBubble` variants |
+| `components/chat/CitationChip.test.tsx` | 84 | Citation chip rendering/interaction |
+| `components/chat/ChangeSetCard.test.tsx` | 207 | ChangeSet proposal card in chat |
+| `components/chat/SessionPicker.test.tsx` | 116 | Chat session picker/switcher |
+| `components/detail/RevisionHistoryPanel.test.tsx` | 185 | Revision history panel in the detail inspector |
+| `components/settings/SettingsPage.test.tsx` | 142 | Settings page (LLM provider configuration UI) |
+| `components/graph/graphElements.test.ts` | 30 | `graphToElements` conversion (backend graph payload → Cytoscape elements) |
+| `components/graph/relationshipStyles.test.ts` | 17 | `edgeColorFor` relationship-to-color mapping |
+| `hooks/useChatMessages.test.tsx` | 131 | `useChatMessages` hook |
+| `hooks/useChatSessions.test.tsx` | 88 | `useChatSessions` hook |
+| `hooks/useRevisions.test.tsx` | 154 | `useRevisions` hook |

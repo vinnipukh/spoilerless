@@ -207,7 +207,7 @@ The dev server proxies `/api` requests to the backend at `http://127.0.0.1:8000`
 
 **Location:** `backend/app/api/`
 
-Nine route modules registering 42 HTTP operations across 31 unique path templates (plus `/health`). The authoritative locked inventory lives in [docs/frontend-api-contract.md](frontend-api-contract.md) and is verified by `backend/tests/test_openapi_contract.py` and `backend/tests/test_frontend_contract_doc.py`.
+Nine route modules registering 41 HTTP operations across 30 unique path templates (plus `/health`). The authoritative locked inventory lives in [docs/frontend-api-contract.md](frontend-api-contract.md) and is verified by `backend/tests/test_openapi_contract.py` and `backend/tests/test_frontend_contract_doc.py`.
 
 #### Route Inventory
 
@@ -783,14 +783,14 @@ The frontend renders the proposed ChangeSet as a preview card (per-operation sum
 
 These invariants are the phase's contract with the rest of the project — every one is enforced by backend code and locked by tests:
 
-1. **The LLM never receives the full unfiltered graph.** The pipeline assembles context exclusively through the ten allowlisted retrieval tools, each of which runs the same visibility-gated Cypher as the graph read path, then dedupes and bounds the result (`LLM_MAX_CONTEXT_ITEMS`, `LLM_MAX_CONTEXT_CHARACTERS`).
+1. **The LLM never receives the full unfiltered graph.** The pipeline assembles context exclusively through the eleven allowlisted retrieval tools, each of which runs the same visibility-gated Cypher as the graph read path, then `assemble_context` (`backend/app/retrieval/pipeline.py`) dedupes each section by ID via `_dedupe_by_id` and bounds the result using the `max_items` and `max_characters` parameters, sourced from the `Settings.llm_max_context_items` / `Settings.llm_max_context_characters` config fields.
 2. **The LLM never receives future-episode data.** Every tool re-derives the user's resolved `visible_until_order` server-side and applies `visible_from_order <= boundary` on every hop (nodes, relationships, claims, evidence, sources). A hidden record behaves like a nonexistent one.
-3. **The LLM never executes arbitrary Cypher.** There is no text-to-Cypher surface anywhere. The model's only actions are the ten allowlisted tool calls with typed, validated parameters; all Cypher is server-side constant templates with `$parameter` bindings.
+3. **The LLM never executes arbitrary Cypher.** There is no text-to-Cypher surface anywhere. The model's only actions are the eleven allowlisted tool calls with typed, validated parameters; all Cypher is server-side constant templates with `$parameter` bindings.
 4. **The LLM cannot directly mutate canonical or candidate content.** ChangeSet validation refuses mutation operations targeting `origin: canonical` or `origin: candidate` content — the pipeline substitutes a confirmable `create_note` annotation (the "Protected" refusal surfaced in the UI) instead.
 5. **Writes require typed ChangeSets and explicit confirmation.** The model can only *propose*; a human must confirm through the ChangeSetCard's Confirm/Reject controls before any transaction touches the graph.
 6. **Chat history is spoiler-filtered by the same boundary as the graph.** `ChatMessage` rows carry `visible_until_order_snapshot`; history loading filters `snapshot <= current boundary`, so hidden messages never enter the model's context.
 7. **Lowering progress hides previously generated future-boundary messages without deleting them.** Messages remain persisted (and re-appear if progress advances again); they are simply excluded from history loading and session previews below the boundary.
-8. **All graph content is treated as untrusted prompt data.** User notes, evidence text, labels, and any retrieved content are wrapped in strict delimiters with explicit instruction-ignore language (`SYSTEM_PROMPT_V1`); prompt-injection tests assert the malicious strings are contained verbatim inside the data sections and never interpreted as instructions.
+8. **All graph content is treated as untrusted prompt data.** User notes, evidence text, labels, and any retrieved content are wrapped in strict delimiters with explicit instruction-ignore language (`SYSTEM_PROMPT_ENG`/`SYSTEM_PROMPT_TR`); prompt-injection tests assert the malicious strings are contained verbatim inside the data sections and never interpreted as instructions.
 
 ---
 
@@ -968,7 +968,7 @@ Response: NoteResponse with origin="user", visible_from_order inherited from tar
 
 ### 7.1 LLM-Powered Chat
 
-**Delivered in Phase 06.** The GraphRAG-lite chat pipeline (see [4.8](#48-graphrag-lite-chat-pipeline)) is implemented: persisted watch progress, ten allowlisted retrieval tools, a streaming grounded-answer endpoint with validated citations, spoiler-filtered chat history, and a typed ChangeSet graph-editing flow (see [4.9](#49-changeset-two-stage-mutation-flow)). Natural extension points that remain:
+**Delivered in Phase 06.** The GraphRAG-lite chat pipeline (see [4.8](#48-graphrag-lite-chat-pipeline)) is implemented: persisted watch progress, eleven allowlisted retrieval tools, a streaming grounded-answer endpoint with validated citations, spoiler-filtered chat history, and a typed ChangeSet graph-editing flow (see [4.9](#49-changeset-two-stage-mutation-flow)). Natural extension points that remain:
 
 - **Additional retrieval tools** — new allowlisted functions in `backend/app/retrieval/tools.py`, each following the fail-closed visibility pattern
 - **Additional providers** — new implementations of the `LLMProvider` protocol in `backend/app/llm/provider.py` (only `openai_compatible` ships today)
@@ -1056,3 +1056,121 @@ The versioned ontology system supports:
 | Backend (Uvicorn) | 8000 |
 | Neo4j HTTP | 7474 |
 | Neo4j Bolt | 7687 |
+
+---
+
+## 8. Settings System — User-Configurable LLM Provider
+
+**Location:** `backend/app/api/settings.py`, `backend/app/services/settings.py`, `backend/app/repository/settings.py`, `backend/app/domain/settings.py`; `frontend/src/components/settings/SettingsPage.tsx`, `frontend/src/api/settings.ts`, `frontend/src/types/settings.ts`
+
+This subsystem lets an authenticated user configure the GraphRAG chat agent's LLM provider from the UI, instead of only via `.env` variables.
+
+#### Storage Model
+
+- A single `(:AppSetting {key: 'llm'})` node holds the configuration as a JSON-serialized string in its `value` property (Neo4j cannot store nested dict values directly).
+- `SettingsRepository` (`repository/settings.py`) exposes `get_llm()` / `set_llm(payload)`, using a `MERGE` upsert keyed on `key` — idempotent regardless of whether a uniqueness constraint exists yet.
+
+#### Precedence & Effective Resolution
+
+`SettingsService.get_llm()` (`services/settings.py`) resolves the *effective* configuration field-by-field: the stored graph value wins; the `LLM_*` environment settings (`core/config.py`) are the fallback/bootstrap path. For the `gemini` provider, an unset `base_url` falls back to the official endpoint (`https://generativelanguage.googleapis.com`, `domain/settings.py::DEFAULT_GEMINI_BASE_URL`).
+
+#### API Key Handling (write-only secret)
+
+- `GET /api/settings/llm` never returns the full API key — only `api_key_configured: bool` and `api_key_masked` (`"••••" + last 4 chars`, via `mask_api_key()`).
+- `PUT /api/settings/llm` accepts a new `api_key`; a blank/omitted value keeps the previously stored key rather than clearing it, so a client that only ever sees the masked form can update provider/model without clobbering the secret.
+- The full key never appears in any response model or log line.
+
+#### Routes
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/settings/llm` | GET | Effective LLM config, key masked (requires session) |
+| `/api/settings/llm` | PUT | Update provider/key/model/base_url/enabled/system_prompt_language |
+
+Both routes require `CurrentUserDependency` (an authenticated session) — this is a shared, single global configuration (one `AppSetting` node), not per-user.
+
+#### Effective Behavior
+
+- `provider`: `gemini` (default) or `openai_compatible`.
+- `enabled`: when `false`, every chat/retrieval endpoint returns a 503 `LLM_DISABLED` response (see `llm/provider.py`'s `LLMProviderDisabled` → `install_llm_error_handlers`).
+- `system_prompt_language`: `english` (default) or `turkish` — selects which system prompt variant (`llm/system_prompt.py`) the GraphRAG agent is given; the assistant always replies in that language.
+
+#### Frontend
+
+`SettingsPage.tsx` renders a form (provider select, masked API key input with show/hide toggle, model, base URL, assistant-language select, enabled switch). Load failures are non-blocking (the form stays editable with defaults so `PUT` can still succeed); save failures surface an inline error without discarding the user's in-progress edits.
+
+---
+
+## 9. Frontend Auth & Chat UI Layer
+
+The frontend directory structure in [3.1](#31-frontend-react--cytoscape) covers the graph-rendering components; this section documents three additional component/provider groups that exist under `frontend/src/` but sit outside that graph-rendering core.
+
+#### Auth Context (`frontend/src/providers/`)
+
+- **`AuthContext.ts`** — React context typing `AuthState` as a discriminated union: `loading | authenticated | unauthenticated | error`.
+- **`AuthProvider.tsx`** — On mount, calls `GET /api/auth/me` to silently restore a session from the cookie; any `ApiError` (including `unauthenticated`) resolves to the `unauthenticated` state rather than surfacing an error. Exposes `login(credential)` (posts the Google ID token to `POST /api/auth/google`) and `logout()` (best-effort — local state clears even if the server call fails).
+- **`useAuth.ts`** — Hook consuming `AuthContext` for components that need the current auth state or `login`/`logout` actions.
+
+#### Login UI (`frontend/src/components/auth/`)
+
+- **`LoginPage.tsx`** — Rendered when `AuthState.status === 'unauthenticated'`; hosts the Google Identity Services sign-in button and forwards the returned credential to `useAuth().login()`.
+
+#### Chat UI Component Tree (`frontend/src/components/chat/`)
+
+These components implement the browser side of the GraphRAG-lite pipeline described in [4.8](#48-graphrag-lite-chat-pipeline):
+
+| Component | Role |
+|---|---|
+| `ChatLauncher.tsx` | Entry point button that opens the chat surface |
+| `ChatSheet.tsx` | Slide-over/sheet container hosting the chat UI |
+| `ChatPanel.tsx` | Mounted inside `DetailPanel`'s Chat mode; orchestrates session state, message list, and the streaming composer |
+| `SessionPicker.tsx` | Lists/switches between chat sessions (`GET/POST /api/series/{series_id}/chat/sessions`) |
+| `MessageList.tsx` / `MessageBubble.tsx` | Renders the message history, streaming text as it arrives |
+| `CitationChip.tsx` | Renders a validated citation; "Show in graph" drives `GraphCanvas`'s `focusedElementIds` prop |
+| `ChangeSetCard.tsx` | Renders a proposed `ChangeSet` preview with Confirm/Reject controls (the only UI path into the confirm/reject endpoints — see [4.9](#49-changeset-two-stage-mutation-flow)) |
+
+Supporting hooks: `useChatSessions.ts`, `useChatMessages.ts` (`frontend/src/hooks/`); API clients: `api/chat.ts`, `api/changeSet.ts`.
+
+#### Settings UI (`frontend/src/components/settings/`)
+
+- **`SettingsPage.tsx`** — See [8. Settings System](#8-settings-system--user-configurable-llm-provider) above.
+
+---
+
+## 10. Candidate Extraction & Review Workflow
+
+**Location:** `backend/app/api/candidates.py`, `backend/app/graph/candidates.py`, `backend/app/domain/extraction.py`
+
+This is the intake path for the auto-extraction pipeline described as a future extensibility point in [7.2](#72-auto-extraction-pipeline) — the ingest side is already implemented, ahead of any actual extractor.
+
+#### Domain Model (`domain/extraction.py`)
+
+`ExtractionBatchEnvelope` wraps a list of `ExtractionClaim` entries — the payload shape a future NLP/extraction process would submit via `POST /api/series/{series_id}/candidates/ingest`. Each claim carries subject/predicate/object, evidence text + locator, source type + locator, and episode context.
+
+#### Deterministic, Idempotent IDs (`graph/candidates.py`)
+
+Unlike other entities (which use UUIDs or content-addressed prefixes chosen at creation time), candidate claims, their sources, and their evidence fragments derive their IDs from a SHA-256 hash of their own content:
+
+- `_derive_candidate_id()` — hash of `subject_id:predicate:object_id:evidence_text:evidence_locator:episode_id`
+- `_derive_source_id()` — hash of the source locator
+- `_derive_evidence_id()` — hash of `evidence_text:evidence_locator:episode_id`
+
+This makes re-ingesting the same extraction batch a no-op `MERGE` rather than creating duplicates — important because an extractor is expected to re-run over the same episode script multiple times as it improves.
+
+#### Layering Deviation: API → Repository Directly
+
+Every other feature in this codebase follows API → Service → Repository ([Section 2](#2-architecture-layers)). The candidates routes are the one exception: `backend/app/api/candidates.py` calls `CandidateRepository` (`graph/candidates.py`) directly — there is no `CandidateService`. The approve/reject/edit route handlers also inline their own managed-transaction logic (`db.execute_write`) rather than delegating to a repository method, calling `RevisionRepository.log_revision` directly in the same transaction as the mutation (mirroring the pattern in [4.7.1](#471-append-only-revision-extension), but without an intermediate service class).
+
+#### Review Lifecycle
+
+```
+POST .../candidates/ingest   → origin: candidate, status: candidate (deterministic MERGE, dedup-safe)
+GET  .../candidates          → list, optional visible_until_order filter
+GET  .../candidates/{id}     → one candidate claim
+PATCH .../candidates/{id}    → edit mutable fields (label, predicate, claim_type, confidence_level,
+                                relationship_effect, valid_from/until_order, evidence/source text)
+POST .../candidates/{id}/approve  → status: candidate → canonical (409 if origin isn't 'candidate')
+POST .../candidates/{id}/reject   → status: candidate → rejected
+```
+
+Every approve/reject/edit call logs a `Revision` with before/after snapshots in the same transaction as the mutation, so the candidate review workflow participates in the same append-only audit trail as user-content and ChangeSet mutations.

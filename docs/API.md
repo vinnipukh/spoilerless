@@ -1080,3 +1080,640 @@ The `origin` field is the **only** discriminator — do not introduce `is_custom
 ---
 
 *See [docs/frontend-api-contract.md](frontend-api-contract.md) for the Phase 03 backend handoff contract and additional implementation notes.*
+
+---
+
+## Supplement: Watch Progress, Candidates, Chat, Change Sets, and Settings
+
+> **Added by:** gsd-doc-writer (supplement mode). The five route groups below
+> (`progress`, `candidates`, `chat`, `change-sets`, `settings`) are registered
+> in `backend/app/main.py` but were absent from the sections and route
+> inventory above. Nothing above this line was modified. Section numbers
+> here are independent of the `1`–`17` numbering above to avoid renumbering
+> existing content.
+
+### S.1 Watch Progress
+
+Source: `backend/app/api/progress.py`. Every route requires an authenticated
+session (`CurrentUserDependency` — see [Session Cookie Contract](#15-session-cookie-contract)).
+`visible_until_order` is never accepted as a query parameter on any other
+endpoint's read path in this group — this is the *only* place a client may
+request a boundary change; the server resolves the boundary for chat/graph
+reads from this persisted record, not from client input.
+
+#### GET /api/series/{series_id}/progress
+
+Get the authenticated user's persisted watch-progress record for a series.
+
+**Path parameters:** `series_id`
+
+**200 response:**
+
+```json
+{
+  "id": "progress:2a1f4c7e",
+  "user_id": "user:abc123",
+  "series_id": "series:dexter",
+  "visible_until_order": 12,
+  "updated_at": "2026-07-29T10:00:00Z"
+}
+```
+
+**Hidden-vs-missing:** No progress record ever created for this user/series
+returns a generic `404 resource_not_found` — indistinguishable from any other
+missing-resource case.
+
+**Errors:** `401 AUTH_UNAUTHENTICATED`, `404 resource_not_found`
+
+#### POST /api/series/{series_id}/progress
+
+Create or update (upsert) the authenticated user's watch progress. Idempotent
+for an equal value.
+
+**Request body:**
+
+```json
+{
+  "visible_until_order": 12
+}
+```
+
+| Field | Type | Constraints |
+|---|---|---|
+| `visible_until_order` | integer | Same `VisibleUntilOrder` type used elsewhere (`>= 1`) |
+
+**200 response:** Same shape as `GET`.
+
+**Errors:** `401 AUTH_UNAUTHENTICATED`, `422 invalid_request`
+
+**Note on auth error code:** This group's 401 responses carry the code
+`AUTH_UNAUTHENTICATED` (uppercase, from `backend/app/api/deps.py`'s
+`require_current_user`), not the lowercase `unauthenticated` code documented
+in [section 12's Stable Error Codes table](#stable-error-codes) for
+`/api/auth/*`. Both are functionally 401s using the same `{"detail": {"code",
+"message"}}` envelope; only the code string differs by route group.
+
+---
+
+### S.2 Candidate Claims (Extraction Review)
+
+Source: `backend/app/api/candidates.py`, prefix
+`/api/series/{series_id}/candidates`. Candidate claims are `Claim` nodes with
+`origin: 'candidate'` produced by ingesting a future extractor's output; this
+route group lets a reviewer list, edit, approve (promote to canonical), or
+reject them. Unlike most of this API, these routes are **not** behind
+`CurrentUserDependency` — no session cookie is required.
+
+#### POST /api/series/{series_id}/candidates/ingest
+
+Ingest a batch of extraction claims as candidate claims. Body is an
+`ExtractionBatchEnvelope` (`backend/app/domain/extraction.py`).
+
+**Request body:**
+
+```json
+{
+  "extractor_name": "dexter-extractor-v0",
+  "extractor_version": "0.1.0",
+  "run_timestamp": "2026-07-30T10:00:00Z",
+  "claims": [
+    {
+      "schema_version": "0.1",
+      "subject_id": "character:dexter",
+      "predicate": "conceals",
+      "object_id": "object:blood_slides",
+      "claim_type": "observed_event",
+      "confidence_level": "high",
+      "relationship_effect": "strengthens",
+      "visible_from_order": 1,
+      "valid_from_order": 1,
+      "valid_until_order": null,
+      "evidence_text": "Dexter keeps his blood slides carefully organized in a hidden box.",
+      "evidence_locator": "S01E01:12:34",
+      "source_type": "transcript",
+      "source_locator": "https://opensubtitles.org/dexter-s01e01",
+      "episode_id": "episode:dexter:s01e01"
+    }
+  ]
+}
+```
+
+**200 response:**
+
+```json
+{
+  "created": ["extracted:a1b2c3d4e5f6g7h8"],
+  "errors": []
+}
+```
+
+**Note:** Returns `200` (not `201`) even though it creates resources — a
+partial-batch result (`created` + `errors` arrays) doesn't map cleanly to a
+single-resource `201 Created`. Each candidate's ID (`candidate_id`) is a
+deterministic SHA-256 hash of its normalized content, making re-ingestion of
+an identical claim idempotent.
+
+**Errors:** `422 invalid_extraction_payload` (batch or per-claim validation failure — includes the failing claim's index and reason in `message`)
+
+#### GET /api/series/{series_id}/candidates
+
+List all candidate claims for a series.
+
+**Query parameters:** `visible_until_order` (integer, optional — unlike the
+main graph endpoint, this filter is **optional** here; omitting it returns
+candidates at every visibility level, since this is a reviewer-facing
+endpoint, not an end-user spoiler-safe read).
+
+**200 response:** Array of claim dicts (same shape as `GraphClaim`, plus
+`schema_version` and `created_at`).
+
+#### GET /api/series/{series_id}/candidates/{claim_id}
+
+Get one candidate claim by ID.
+
+**200 response:** Single claim dict.
+
+**Errors:** `404 candidate_not_found`
+
+#### POST /api/series/{series_id}/candidates/{claim_id}/approve
+
+Promote a candidate claim to canonical (`status: 'canonical'`). Logs an
+`Updated` revision with before/after snapshots.
+
+**200 response:**
+
+```json
+{
+  "id": "extracted:a1b2c3d4e5f6g7h8",
+  "status": "canonical",
+  "origin": "candidate",
+  "revision_id": "revision:9f8e7d6c5b4a"
+}
+```
+
+**Note:** `origin` stays `"candidate"` after approval — only `status`
+transitions to `"canonical"`. Approving does not change the claim's `origin`
+field (see [Origin System](#16-origin-system); this is intentional per the
+domain model, not a bug).
+
+**Errors:** `404 candidate_not_found`, `409 cannot_approve_non_candidate` (claim's `origin` is not `"candidate"`), `422 invalid_extraction_payload`
+
+#### POST /api/series/{series_id}/candidates/{claim_id}/reject
+
+Reject a candidate claim (`status: 'rejected'`). Logs an `Updated` revision.
+
+**200 response:**
+
+```json
+{
+  "id": "extracted:a1b2c3d4e5f6g7h8",
+  "status": "rejected",
+  "origin": "candidate",
+  "revision_id": "revision:9f8e7d6c5b4a"
+}
+```
+
+**Errors:** `404 candidate_not_found`, `422 invalid_extraction_payload`
+
+#### PATCH /api/series/{series_id}/candidates/{claim_id}
+
+Edit a candidate claim's mutable fields (`label`, `predicate`, `claim_type`,
+`confidence_level`, `relationship_effect`, `valid_from_order`,
+`valid_until_order`, `evidence_text`, `evidence_locator`, `source_type`,
+`source_locator`). At least one field is required.
+
+**Request body (example, partial):**
+
+```json
+{
+  "confidence_level": "verified"
+}
+```
+
+**200 response:**
+
+```json
+{
+  "id": "extracted:a1b2c3d4e5f6g7h8",
+  "status": "edited",
+  "origin": "candidate",
+  "revision_id": "revision:9f8e7d6c5b4a",
+  "updates_applied": ["confidence_level"]
+}
+```
+
+**Errors:** `404 candidate_not_found`, `422 invalid_extraction_payload` (no fields provided, or edit failed)
+
+---
+
+### S.3 Chat (GraphRAG Conversational Agent)
+
+Source: `backend/app/api/chat.py`, prefix
+`/api/series/{series_id}/chat`. All routes require an authenticated session
+(`CurrentUserDependency`). A chat session belongs to exactly one user and
+series; foreign, cross-series, and missing sessions all return the identical
+generic `404 resource_not_found`.
+
+#### POST /api/series/{series_id}/chat/sessions
+
+Create a chat session.
+
+**Request body:**
+
+```json
+{
+  "title": "Season 1 questions"
+}
+```
+
+`title` defaults to `""` if omitted (max 200 chars).
+
+**201 response:**
+
+```json
+{
+  "id": "chat-session:2a1f4c7e",
+  "series_id": "series:dexter",
+  "title": "Season 1 questions",
+  "created_at": "2026-07-29T10:00:00Z",
+  "updated_at": "2026-07-29T10:00:00Z"
+}
+```
+
+**Errors:** `401 AUTH_UNAUTHENTICATED`, `422 invalid_request`
+
+#### GET /api/series/{series_id}/chat/sessions
+
+List the authenticated user's chat sessions for this series.
+
+**200 response:** Array of `ChatSessionResponse` (same shape as above).
+
+**Errors:** `401 AUTH_UNAUTHENTICATED`
+
+#### GET /api/series/{series_id}/chat/sessions/{session_id}
+
+Get a chat session with its boundary-visible messages.
+
+**200 response:**
+
+```json
+{
+  "session": {
+    "id": "chat-session:2a1f4c7e",
+    "series_id": "series:dexter",
+    "title": "Season 1 questions",
+    "created_at": "2026-07-29T10:00:00Z",
+    "updated_at": "2026-07-29T10:00:00Z"
+  },
+  "messages": [
+    {
+      "id": "chat-message:9f8e7d6c",
+      "role": "user",
+      "content": "Who killed the Ice Truck Killer?",
+      "created_at": "2026-07-29T10:00:05Z",
+      "visible_until_order_snapshot": 12
+    }
+  ]
+}
+```
+
+**Errors:** `401 AUTH_UNAUTHENTICATED`, `404 resource_not_found`
+
+#### DELETE /api/series/{series_id}/chat/sessions/{session_id}
+
+Hard-delete a chat session and its messages.
+
+**Response:** `204 No Content`
+
+**Errors:** `401 AUTH_UNAUTHENTICATED`, `404 resource_not_found`
+
+#### POST /api/series/{series_id}/chat/sessions/{session_id}/messages
+
+Send a message and receive the full grounded-answer envelope
+(non-streaming). Boundary comes from the user's persisted
+`UserSeriesProgress`, never from the request body.
+
+**Request body:**
+
+```json
+{
+  "question": "Who killed the Ice Truck Killer?"
+}
+```
+
+| Field | Type | Constraints |
+|---|---|---|
+| `question` | string | 1–4000 characters |
+
+**200 response (`MessageResponseEnvelope`):**
+
+```json
+{
+  "message": {
+    "id": "chat-message:9f8e7d6c",
+    "role": "assistant",
+    "content": "Dexter Morgan killed Brian Moser, the Ice Truck Killer, in S01E12.",
+    "created_at": "2026-07-29T10:00:06Z",
+    "visible_until_order_snapshot": 12
+  },
+  "citations": [
+    {
+      "claim_id": "claim:dexter_kills_ice_truck_killer",
+      "evidence_id": "evidence:dexter_s01e12_scene_45",
+      "source_id": "source:dexter_s01",
+      "source_label": "Dexter Season 1",
+      "source_type": "episode",
+      "episode_code": "S01E12",
+      "locator": "S01E12 - 38:45",
+      "excerpt": "Dexter slices Brian's throat with a scalpel.",
+      "related_node_ids": ["dexter:character:dexter_morgan", "dexter:character:brian_moser"],
+      "related_edge_ids": ["claim:dexter_kills_ice_truck_killer:edge"]
+    }
+  ],
+  "graph_focus": {
+    "node_ids": ["dexter:character:dexter_morgan", "dexter:character:brian_moser"],
+    "edge_ids": ["claim:dexter_kills_ice_truck_killer:edge"]
+  },
+  "proposed_change_set": null
+}
+```
+
+**Citation grounding invariant:** Every citation's IDs are validated against
+the set of IDs this turn's retrieval tools actually returned — a hallucinated
+or remembered ID from outside this turn's retrieval is stripped before the
+response is built.
+
+**Errors:** `401 AUTH_UNAUTHENTICATED`, `404 resource_not_found` (missing session or no persisted progress yet), `429 too_many_requests` (concurrent-generation limit exceeded), `503` (`LLM_DISABLED` or `LLM_PROVIDER_UNAVAILABLE` — see note below)
+
+#### POST /api/series/{series_id}/chat/sessions/{session_id}/messages/stream
+
+Same as above, but streams the answer as Server-Sent Events
+(`text/event-stream`). Session ownership and progress existence are checked
+*before* the stream opens, so a 404 can still be returned as a normal HTTP
+status. Once the SSE stream has started, further failures cannot change the
+HTTP status (headers are already sent) and are instead surfaced as a
+terminal `event: error` frame.
+
+**Request body:** Same `ChatMessageCreateRequest` as the non-streaming route.
+
+**Stream frames:**
+
+```
+data: {"type": "delta", "text": "Dexter"}
+
+data: {"type": "delta", "text": " Morgan killed..."}
+
+event: done
+data: {"message": {...}, "citations": [...], "graph_focus": {...}, "proposed_change_set": null}
+
+```
+
+**Error frames** (sent as `event: error` mid-stream, HTTP status is already 200 by this point):
+
+```
+event: error
+data: {"code": "too_many_requests", "message": "Too many concurrent requests."}
+```
+
+```
+event: error
+data: {"code": "LLM_PROVIDER_UNAVAILABLE", "message": "The LLM provider is unavailable. Check your API key and model in Settings, then try again."}
+```
+
+```
+event: error
+data: {"code": "LLM_STREAM_FAILED", "message": "The response ended unexpectedly. Please try again."}
+```
+
+**Pre-stream errors (real HTTP status):** `401 AUTH_UNAUTHENTICATED`, `404 resource_not_found`
+
+---
+
+### S.4 Change Sets (Chat-Driven Graph Mutations)
+
+Source: `backend/app/api/change_set.py`, prefix
+`/api/series/{series_id}/change-sets`. A `ChangeSet` is a typed, closed batch
+of graph mutation operations proposed by the chat agent — the LLM never
+executes a write directly. Propose (Stage 1) validates and persists only the
+draft; confirm (Stage 2) re-validates everything fresh and applies the whole
+batch in one Neo4j write transaction. All routes require an authenticated
+session.
+
+**Closed operation set (13 types, `operation_type` discriminator):**
+`create_node`, `update_node`, `delete_node`, `create_relationship`,
+`update_relationship`, `delete_relationship`, `create_claim`, `update_claim`,
+`delete_claim`, `attach_evidence`, `create_note`, `update_note`,
+`delete_note`. An `operation_type` outside this set — or any extra field on
+an operation model — is rejected by Pydantic before any repository/Cypher
+code runs.
+
+#### POST /api/series/{series_id}/change-sets
+
+Propose a ChangeSet (Stage 1). No target node/relationship/claim is mutated
+here — only the `ChangeSet` draft resource itself is written.
+
+**Request body:**
+
+```json
+{
+  "series_id": "series:dexter",
+  "chat_session_id": "chat-session:2a1f4c7e",
+  "summary": "Add a custom relationship between Dexter and Debra",
+  "operations": [
+    {
+      "operation_type": "create_relationship",
+      "source_id": "dexter:character:dexter_morgan",
+      "target_id": "dexter:character:debra_morgan",
+      "relationship_type": "FAMILY_OF",
+      "episode_id": "dexter:s01e01"
+    }
+  ]
+}
+```
+
+**201 response:**
+
+```json
+{
+  "id": "change-set:2a1f4c7e",
+  "user_id": "user:abc123",
+  "series_id": "series:dexter",
+  "chat_session_id": "chat-session:2a1f4c7e",
+  "status": "awaiting_confirmation",
+  "visible_until_order_snapshot": 12,
+  "summary": "Add a custom relationship between Dexter and Debra",
+  "operations": [
+    {
+      "operation_type": "create_relationship",
+      "source_id": "dexter:character:dexter_morgan",
+      "target_id": "dexter:character:debra_morgan",
+      "relationship_type": "FAMILY_OF",
+      "episode_id": "dexter:s01e01",
+      "properties": null
+    }
+  ],
+  "created_at": "2026-07-29T10:00:00Z",
+  "confirmed_at": null,
+  "applied_at": null,
+  "revision_id": null,
+  "idempotency_key": null
+}
+```
+
+**Body/path consistency check:** The route returns `422 invalid_request` if
+`payload.series_id` does not match the `series_id` path parameter.
+
+**Errors:** `401 AUTH_UNAUTHENTICATED`, `404 resource_not_found` (missing progress or chat session), `422 invalid_request`
+
+#### POST /api/series/{series_id}/change-sets/{change_set_id}/confirm
+
+Confirm and apply a ChangeSet (Stage 2). Re-validates every operation fresh
+and applies the entire batch in one write transaction. Confirming an
+already-`applied` ChangeSet is a safe idempotent no-op (the original stored
+result is returned).
+
+**200 response:** Same `ChangeSetResponse` shape, with `status: "applied"`,
+`confirmed_at`, `applied_at`, and `revision_id` populated.
+
+**Stale-boundary protection:** If the series' progress boundary has since
+been *lowered* below the boundary this ChangeSet was proposed at, confirm is
+rejected rather than silently applied.
+
+**Errors:** `401 AUTH_UNAUTHENTICATED`, `404 resource_not_found`, `409 changeset_stale` (progress boundary lowered since propose), `409 resource_conflict` (already resolved — rejected/failed/reverted), `422 invalid_request` (an operation is no longer valid on re-validation)
+
+#### POST /api/series/{series_id}/change-sets/{change_set_id}/reject
+
+Reject a ChangeSet. Zero graph mutation; cannot be confirmed afterward.
+
+**200 response:** `ChangeSetResponse` with `status: "rejected"`.
+
+**Errors:** `401 AUTH_UNAUTHENTICATED`, `404 resource_not_found`, `409 resource_conflict` (already resolved)
+
+#### POST /api/series/{series_id}/change-sets/{change_set_id}/revert
+
+Revert a previously **applied** ChangeSet's create-shaped operations —
+deletes every resource it created, restoring pre-apply state, and logs a new
+`Reverted` revision (the original apply-time revision is never edited or
+deleted).
+
+**200 response:** `ChangeSetResponse` with `status: "reverted"`.
+
+**Revert scope limitation:** Only ChangeSets whose operations are **entirely
+create-shaped** support revert — an update/delete-shaped operation has no
+stored prior state to restore.
+
+**Errors:**
+
+| Status | Code | When |
+|---|---|---|
+| 401 | `AUTH_UNAUTHENTICATED` | No session |
+| 404 | `resource_not_found` | ChangeSet missing |
+| 409 | `resource_conflict` | No applied revision to revert |
+| 409 | `resource_conflict` | A resource this ChangeSet created was modified/removed by a later unrelated change (revert aborted rather than overwrite it) |
+| 422 | `invalid_request` | ChangeSet contains a non-create-shaped operation (unsupported for revert) |
+
+---
+
+### S.5 LLM Settings
+
+Source: `backend/app/api/settings.py`, prefix `/api/settings`. Lets the
+authenticated user configure the LLM provider used by chat, persisted in
+Neo4j (`:AppSetting {key: 'llm'}`) so it can be set from the UI without
+editing `.env`. **The API key is write-only** — it is never returned in full
+by any response, and never logged.
+
+#### GET /api/settings/llm
+
+Get the effective LLM configuration, with the key masked.
+
+**200 response:**
+
+```json
+{
+  "provider": "gemini",
+  "model": "gemini-2.0-flash",
+  "base_url": null,
+  "enabled": true,
+  "system_prompt_language": "english",
+  "api_key_configured": true,
+  "api_key_masked": "••••1234"
+}
+```
+
+**Masking rule:** `api_key_masked` shows only the last 4 characters
+(`"••••" + key[-4:]`); a key of 4 characters or fewer is fully masked
+(`"••••"`, one bullet per character). `api_key_masked` is `null` when no key
+is configured.
+
+**Errors:** `401 AUTH_UNAUTHENTICATED`
+
+#### PUT /api/settings/llm
+
+Update the LLM provider configuration.
+
+**Request body:**
+
+```json
+{
+  "provider": "gemini",
+  "api_key": "sk-...",
+  "base_url": null,
+  "model": "gemini-2.0-flash",
+  "enabled": true,
+  "system_prompt_language": "english"
+}
+```
+
+| Field | Type | Constraints |
+|---|---|---|
+| `provider` | string | `"gemini"` or `"openai_compatible"`; default `"gemini"` |
+| `api_key` | string or null | Max 4096 chars. **Blank/omitted keeps the previously stored key** — since GET never returns the full key, a client that only ever sees the masked form can update provider/model without clobbering the secret. |
+| `base_url` | string or null | Max 2048 chars |
+| `model` | string or null | Max 256 chars |
+| `enabled` | boolean or null | `null` keeps the previously stored value. When effectively `false`, every chat/retrieval endpoint returns `503 LLM_DISABLED`. |
+| `system_prompt_language` | string | `"english"` or `"turkish"`; controls which system prompt language the GraphRAG agent receives |
+
+**200 response:** Same shape as `GET`.
+
+**Errors:** `401 AUTH_UNAUTHENTICATED`
+
+---
+
+### S.6 Supplementary Route Inventory
+
+These 20 operations across 15 unique path templates were not present in the
+[Appendix: Complete Route Inventory](#appendix-complete-route-inventory)
+table above:
+
+| Method | Path | Description | Auth Required |
+|---|---|---|---|
+| GET | `/api/series/{series_id}/progress` | Get persisted watch progress | Yes |
+| POST | `/api/series/{series_id}/progress` | Upsert watch progress | Yes |
+| POST | `/api/series/{series_id}/candidates/ingest` | Ingest extraction batch as candidates | No |
+| GET | `/api/series/{series_id}/candidates` | List candidate claims | No |
+| GET | `/api/series/{series_id}/candidates/{claim_id}` | Get one candidate claim | No |
+| PATCH | `/api/series/{series_id}/candidates/{claim_id}` | Edit candidate claim fields | No |
+| POST | `/api/series/{series_id}/candidates/{claim_id}/approve` | Approve (promote to canonical) | No |
+| POST | `/api/series/{series_id}/candidates/{claim_id}/reject` | Reject candidate claim | No |
+| POST | `/api/series/{series_id}/chat/sessions` | Create chat session | Yes |
+| GET | `/api/series/{series_id}/chat/sessions` | List chat sessions | Yes |
+| GET | `/api/series/{series_id}/chat/sessions/{session_id}` | Get session + messages | Yes |
+| DELETE | `/api/series/{series_id}/chat/sessions/{session_id}` | Delete chat session | Yes |
+| POST | `/api/series/{series_id}/chat/sessions/{session_id}/messages` | Send message (non-streaming) | Yes |
+| POST | `/api/series/{series_id}/chat/sessions/{session_id}/messages/stream` | Send message (SSE stream) | Yes |
+| POST | `/api/series/{series_id}/change-sets` | Propose ChangeSet | Yes |
+| POST | `/api/series/{series_id}/change-sets/{change_set_id}/confirm` | Confirm and apply ChangeSet | Yes |
+| POST | `/api/series/{series_id}/change-sets/{change_set_id}/reject` | Reject ChangeSet | Yes |
+| POST | `/api/series/{series_id}/change-sets/{change_set_id}/revert` | Revert applied ChangeSet | Yes |
+| GET | `/api/settings/llm` | Get masked LLM settings | Yes |
+| PUT | `/api/settings/llm` | Update LLM settings | Yes |
+
+### S.7 Corrected Operation Count
+
+Section 1 (Overview) and the Appendix above state **"24 HTTP operations over
+17 unique path templates."** That count is accurate only for the route
+groups documented in sections 1–11 (auth, health, series, episodes, graph,
+notes, custom-nodes, custom-relationships, revisions). Including the five
+groups in this supplement (progress, candidates, chat, change-sets,
+settings), the backend actually registers **44 HTTP operations over 32
+unique path templates** across `backend/app/main.py`'s ten included routers.
