@@ -310,6 +310,54 @@ def _captured_request(transport: httpx.MockTransport) -> dict:
 
 
 @pytest.mark.asyncio
+async def test_openai_provider_deepseek_model_disables_thinking_mode() -> None:
+    """DeepSeek reasoning models 400 on tool-call round-trips unless thinking
+    mode is disabled (the pipeline cannot echo `reasoning_content` back)."""
+    recorded: list[httpx.Request] = []
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        recorded.append(request)
+        return httpx.Response(200, text="")
+
+    provider = OpenAICompatibleProvider(
+        base_url="https://api.deepseek.test",
+        api_key="test-secret-key",
+        model="deepseek-v4-flash",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(_handler), base_url="https://api.deepseek.test"),
+    )
+    try:
+        [event async for event in provider.stream_chat(**_stream_kwargs())]
+    except Exception:
+        pass  # empty transport response — we only inspect the request payload
+
+    payload = json.loads(recorded[0].content)
+    assert payload["thinking"] == {"type": "disabled"}
+
+
+@pytest.mark.asyncio
+async def test_openai_provider_non_deepseek_model_has_no_thinking_param() -> None:
+    recorded: list[httpx.Request] = []
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        recorded.append(request)
+        return httpx.Response(200, text="")
+
+    provider = OpenAICompatibleProvider(
+        base_url="https://llm.test",
+        api_key="test-secret-key",
+        model="gpt-4.1-mini",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(_handler), base_url="https://llm.test"),
+    )
+    try:
+        [event async for event in provider.stream_chat(**_stream_kwargs())]
+    except Exception:
+        pass
+
+    payload = json.loads(recorded[0].content)
+    assert "thinking" not in payload
+
+
+@pytest.mark.asyncio
 async def test_gemini_provider_streams_text_deltas_then_done() -> None:
     transport = _gemini_transport(
         _gemini_text_chunk("Dexter ", finish=None),

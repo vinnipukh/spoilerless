@@ -144,6 +144,18 @@ class OpenAICompatibleProvider:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
 
+        # DeepSeek's reasoning models (e.g. deepseek-v4-flash) default to
+        # "thinking mode": every assistant chunk carries `reasoning_content`,
+        # and the NEXT request in a tool-calling round MUST echo it back or
+        # DeepSeek rejects the call with HTTP 400 ("The `reasoning_content`
+        # in the thinking mode must be passed back to the API."). The pipeline
+        # does not preserve that field across rounds, so disable thinking mode
+        # entirely — the model then streams plain `content` deltas and
+        # tool-call round-trips work. Gated on the model name because other
+        # OpenAI-compatible endpoints may reject the unknown `thinking` param.
+        if self._model.startswith("deepseek"):
+            payload["thinking"] = {"type": "disabled"}
+
         text_parts: list[str] = []
         pending_tool_calls: dict[int, dict[str, str]] = {}
         emitted_done = False
