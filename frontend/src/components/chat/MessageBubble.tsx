@@ -81,6 +81,31 @@ export function StreamingMessageBubble({ text }: { text: string }) {
   )
 }
 
+// Shown while a turn is generating but no text has streamed yet (the
+// pipeline's tool rounds can take many seconds before the first delta) —
+// without this, the user sees nothing and may resend, which is what caused
+// the spurious concurrent-slot errors.
+export function ThinkingBubble() {
+  return (
+    <div className="flex flex-col gap-1 items-start">
+      <div className="flex items-end gap-2">
+        <div
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-secondary/20 text-secondary"
+          aria-hidden="true"
+        >
+          <Sparkles className="h-4 w-4" />
+        </div>
+        <div className="flex items-center gap-1.5 rounded-lg bg-card px-4 py-2.5 text-sm text-muted-foreground">
+          <span className="size-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none" />
+          <span className="size-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none [animation-delay:150ms]" />
+          <span className="size-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none [animation-delay:300ms]" />
+          <span className="sr-only">Thinking</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // A failed turn's assistant-slot bubble: the user's own question is already
 // rendered as a normal MessageBubble (useChatMessages appends it
 // optimistically on send, 06-09 fix) — this only renders the

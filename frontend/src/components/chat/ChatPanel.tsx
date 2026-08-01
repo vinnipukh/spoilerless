@@ -35,11 +35,12 @@ function newestFirst<T extends { updated_at: string }>(sessions: T[]): T[] {
 // retrying) vs. "non-retryable" (an opaque/unrecognized error, including the
 // hook's own `unknown_error` catch-all fallback for a non-ApiError
 // exception — retrying identical content is unlikely to help).
-type ChatErrorKind = 'disabled' | 'provider-unavailable' | 'recoverable' | 'non-retryable'
+type ChatErrorKind = 'disabled' | 'provider-unavailable' | 'busy' | 'recoverable' | 'non-retryable'
 
 function classifyChatError(error: ApiError): ChatErrorKind {
   if (error.code === 'LLM_DISABLED') return 'disabled'
   if (error.code === 'LLM_PROVIDER_UNAVAILABLE') return 'provider-unavailable'
+  if (error.code === 'too_many_requests') return 'busy'
   if (error.code.startsWith('LLM_')) return 'recoverable'
   return 'non-retryable'
 }
@@ -155,6 +156,13 @@ export function ChatPanel({
     async (content: string) => {
       const trimmed = content.trim()
       if (!trimmed || !seriesId) return
+      // Never stack a second turn on top of a generating one: the backend
+      // serializes per-user generations (ConcurrentGenerationLimitExceeded)
+      // and showing that 429 as an error was the spurious "Something went
+      // wrong" the user kept seeing while the previous answer was still
+      // being produced. The Stop button is the way to cancel; Enter/chips
+      // are ignored while streaming.
+      if (chatMessages.status === 'streaming') return
       setDraft('')
 
       if (!activeSessionId) {
@@ -205,6 +213,7 @@ export function ChatPanel({
   const isStreaming = chatMessages.status === 'streaming'
   const providerDisabled = errorKind === 'disabled'
   const providerUnavailable = errorKind === 'provider-unavailable'
+  const assistantBusy = errorKind === 'busy'
   const messageFailed = errorKind === 'recoverable' || errorKind === 'non-retryable'
   const hasMessages = chatMessages.messages.length > 0
 
@@ -243,6 +252,15 @@ export function ChatPanel({
           >
             Retry
           </button>
+        </div>
+      )}
+
+      {assistantBusy && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/40 p-3">
+          <p className="text-xs text-foreground">
+            The assistant is still answering your previous question — please
+            wait a moment.
+          </p>
         </div>
       )}
 

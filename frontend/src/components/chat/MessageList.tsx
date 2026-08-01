@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { MessageBubble, StreamingMessageBubble, FailedMessageBubble } from './MessageBubble'
+import { MessageBubble, StreamingMessageBubble, FailedMessageBubble, ThinkingBubble } from './MessageBubble'
 import { CitationChip } from './CitationChip'
 import { ChangeSetCard } from './ChangeSetCard'
 import type { ChatMessage, Citation } from '../../types/chat'
@@ -104,7 +104,10 @@ export function MessageList({
             </div>
           )}
 
-          {streamingText != null && <StreamingMessageBubble text={streamingText} />}
+          {streamingText != null && (
+            <StreamingMessageBubble text={streamingText} />
+          )}
+          {streamingText === '' && <ThinkingBubble />}
 
           {failedTurn && (
             <FailedMessageBubble retryable={failedTurn.retryable} onRetry={failedTurn.onRetry} />
