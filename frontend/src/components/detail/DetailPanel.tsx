@@ -86,6 +86,10 @@ type Props = {
   seriesId: string | null
   visibleUntilOrder: number | null
   onRefetchGraph?: () => void
+  /** In-place graph data refresh (useGraph's `refresh`) — preferred for
+   * create/edit/delete operations that land in the graph, so the canvas
+   * updates without a destructive loading unmount. */
+  onRefreshGraph?: () => void
   episodes: { id: string; code: string; title: string; episode_order: number }[]
   // Inspector-panel open state is lifted to App.tsx — the panel opens whenever
   // an element is selected (`open={selected != null}`) and closes via
@@ -414,6 +418,7 @@ export function DetailPanel({
   seriesId,
   visibleUntilOrder,
   onRefetchGraph,
+  onRefreshGraph,
   episodes,
   open,
   onDeselect,
@@ -754,7 +759,7 @@ export function DetailPanel({
           selectedNodeLabel={selectedNode?.label ?? null}
           graphNodes={graph.nodes}
           episodes={episodes}
-          onSuccess={() => onRefetchGraph?.()}
+          onSuccess={() => (onRefreshGraph ?? onRefetchGraph)?.()}
         />
       </SheetContent>
     </Sheet>

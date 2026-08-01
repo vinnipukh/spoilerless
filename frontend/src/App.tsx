@@ -297,6 +297,7 @@ function AuthenticatedApp() {
               seriesId={watchProgress.seriesId}
               visibleUntilOrder={watchProgress.confirmedOrder}
               onRefetchGraph={graphState.refetch}
+              onRefreshGraph={graphState.refresh}
               episodes={episodes}
               open={selectedElement !== null}
               onDeselect={() => setSelectedElement(null)}
