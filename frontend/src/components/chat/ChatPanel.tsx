@@ -121,7 +121,7 @@ export function ChatPanel({
     if (!seriesId || creating) return
     setCreating(true)
     try {
-      const session = await createChatSession(seriesId, '')
+      const session = await createChatSession(seriesId, 'New conversation')
       setActiveSessionId(session.id)
       sessionsState.refetch()
     } catch {
@@ -159,7 +159,7 @@ export function ChatPanel({
 
       if (!activeSessionId) {
         try {
-          const session = await createChatSession(seriesId, '')
+          const session = await createChatSession(seriesId, 'New conversation')
           setActiveSessionId(session.id)
           sessionsState.refetch()
           setPendingContent(trimmed)

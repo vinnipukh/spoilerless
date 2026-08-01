@@ -62,7 +62,10 @@ class ChatRepository:
             user_id=user_id,
             series_id=series_id,
             session_id=f"chat-session:{uuid4()}",
-            title=title,
+            # Normalize so no client payload shape can brick session
+            # creation: empty/whitespace titles (the frontend's default)
+            # persist as the app's default conversation label.
+            title=title.strip() or "New conversation",
             created_at=now,
         )
         return ChatSessionResponse.model_validate(_normalize(records[0]))

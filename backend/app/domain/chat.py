@@ -74,7 +74,7 @@ class MessageResponseEnvelope(StrictModel):
 
 
 class ChatSessionCreateRequest(StrictModel):
-    title: str = Field(min_length=1, max_length=200)
+    title: str = Field(default='', max_length=200)
 
 
 class ChatMessageCreateRequest(StrictModel):

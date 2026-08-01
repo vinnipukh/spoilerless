@@ -111,7 +111,7 @@ describe('ChatPanel', () => {
     vi.mocked(createChatSession).mockResolvedValue({
       id: 'session_new',
       series_id: 'series_dexter',
-      title: '',
+      title: 'New conversation',
       created_at: '2026-01-01T00:00:00Z',
       updated_at: '2026-01-01T00:00:00Z',
     })
@@ -121,7 +121,7 @@ describe('ChatPanel', () => {
     expect(await screen.findByText('No conversations yet')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Start new conversation' }))
 
-    expect(createChatSession).toHaveBeenCalledWith('series_dexter', '')
+    expect(createChatSession).toHaveBeenCalledWith('series_dexter', 'New conversation')
     // useChatMessages is mocked at module level, so we can't observe the
     // real hook re-binding to the new session id here — that data-flow is
     // covered by useChatSessions.test.tsx/useChatMessages.test.tsx; this

@@ -203,7 +203,7 @@ async def stream_message(
     # this transport can give once the 200 status line has already gone out.
     try:
         await service.get_session_detail(user["id"], series_id, session_id)
-        await service.ensure_progress_exists(user["id"], series_id)
+        await service.ensure_progress_for_chat(user["id"], series_id)
     except (ChatSessionNotFound, ProgressNotFoundError):
         _not_found()
 

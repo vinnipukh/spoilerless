@@ -499,6 +499,30 @@ def test_session_list_is_user_scoped(
     assert first["id"] != second["id"]
 
 
+def test_empty_title_creates_session_with_default_title(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    """An empty/whitespace title must not 422 — the backend relaxes the
+    request model and normalizes to the default 'New conversation' label
+    (the frontend's default payload shape)."""
+    _authed(client, fake_user_repo, session_repo, progress=1)
+
+    response = client.post(
+        f"/api/series/{SERIES_ID}/chat/sessions", json={"title": ""}
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["title"] == "New conversation"
+
+    # A whitespace-only title is stripped to empty, then normalized the same.
+    response = client.post(
+        f"/api/series/{SERIES_ID}/chat/sessions", json={"title": "   "}
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["title"] == "New conversation"
+
+
 def test_non_streaming_message_returns_envelope(
     client: TestClient,
     fake_user_repo: FakeUserRepo,
@@ -519,20 +543,21 @@ def test_non_streaming_message_returns_envelope(
     assert envelope["message"]["content"] == "Dexter and Debra are siblings."
 
 
-def test_message_without_progress_returns_generic_404(
+def test_message_without_progress_auto_creates_order_1_progress(
     client: TestClient,
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
     fake_provider: FakeLLMProvider,
 ) -> None:
-    """No persisted progress must fail closed to the generic 404 — never a
-    raw 500 (RAG-01)."""
+    """No persisted progress must not block sending — the chat path
+    auto-creates the row at ``visible_until_order=1`` (the app's implied
+    default state, the graph already loads order 1) instead of failing
+    closed with a generic 404 (RAG-01)."""
     _authed(client, fake_user_repo, session_repo, progress=1)
     session = _create_session(client)
 
     # Wipe the just-created progress row so the session exists but the user
-    # has no persisted boundary — the scenario this endpoint must fail closed
-    # for (distinct from "session not found").
+    # has no persisted boundary — the scenario that used to 404.
     reset = client.post(
         f"/api/series/{SERIES_ID}/progress", json={"visible_until_order": 1}
     )
@@ -557,18 +582,24 @@ def test_message_without_progress_returns_generic_404(
         f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages",
         json={"question": "Who is Dexter related to?"},
     )
-    assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "resource_not_found"
+    assert response.status_code == 200, response.text
+    assert response.json()["message"]["content"] == "Dexter and Debra are siblings."
+
+    # The chat path auto-created the missing progress row at order 1.
+    progress = client.get(f"/api/series/{SERIES_ID}/progress")
+    assert progress.status_code == 200
+    assert progress.json()["visible_until_order"] == 1
 
 
-def test_stream_message_without_progress_returns_404_not_a_broken_stream(
+def test_stream_message_without_progress_auto_creates_order_1_progress(
     client: TestClient,
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
     fake_provider: FakeLLMProvider,
 ) -> None:
-    """Missing progress must be caught before the SSE stream opens — once
-    headers are sent an in-stream exception cannot become a clean 404."""
+    """Missing progress is resolved-or-created before the SSE stream opens —
+    the pre-check auto-creates the order-1 row, so the stream starts cleanly
+    and delivers a done envelope (never a 404, never a broken stream)."""
     _authed(client, fake_user_repo, session_repo, progress=1)
     session = _create_session(client)
 
@@ -592,8 +623,18 @@ def test_stream_message_without_progress_returns_404_not_a_broken_stream(
         f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages/stream",
         json={"question": "Who is Dexter related to?"},
     )
-    assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "resource_not_found"
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"].startswith("text/event-stream")
+    done_events = [
+        payload for kind, payload in _parse_sse(response.text) if kind == "done"
+    ]
+    assert len(done_events) == 1
+    assert done_events[0]["message"]["visible_until_order_snapshot"] == 1
+
+    # The chat path auto-created the missing progress row at order 1.
+    progress = client.get(f"/api/series/{SERIES_ID}/progress")
+    assert progress.status_code == 200
+    assert progress.json()["visible_until_order"] == 1
 
 
 def test_unknown_session_is_generic_404(

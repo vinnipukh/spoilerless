@@ -158,14 +158,33 @@ class ChatService:
     def release_generation_slot(self, user_id: str) -> None:
         _release_generation_slot(user_id)
 
-    async def ensure_progress_exists(self, user_id: str, series_id: str) -> None:
-        """Raise ``ProgressNotFoundError`` when no progress is persisted yet.
+    async def ensure_progress_for_chat(self, user_id: str, series_id: str) -> None:
+        """Resolve-or-create the boundary up-front so chat can run.
 
-        Used to fail closed *before* opening a streaming response — an error
-        raised mid-stream cannot cleanly become an HTTP error status once SSE
-        headers are already sent (RAG-01).
+        Used by the streaming route's pre-check: a missing progress row can
+        never surface as a mid-stream failure because the row is created
+        here at order 1 (see :meth:`_resolve_or_create_progress`); the
+        session-not-found check in the same pre-check remains the only 404
+        this path produces (RAG-01).
         """
-        await self._progress.resolve(user_id, series_id)
+        await self._resolve_or_create_progress(user_id, series_id)
+
+    async def _resolve_or_create_progress(self, user_id: str, series_id: str) -> int:
+        """Resolve the persisted boundary; auto-create order-1 when absent.
+
+        A user with no persisted watch-progress row is the app's implied
+        default state — the graph already loads order 1 — so the chat
+        message paths create the row at ``visible_until_order=1`` instead of
+        failing closed with ``ProgressNotFoundError``. The pipeline itself
+        already tolerates a missing boundary (empty context →
+        INSUFFICIENT_EVIDENCE answer, RAG-01 fail-closed), so the old 404
+        was purely a route-level UX wall.
+        """
+        try:
+            return await self._progress.resolve(user_id, series_id)
+        except ProgressNotFoundError:
+            await self._progress.upsert(user_id, series_id, 1)
+            return 1
 
     async def get_session_detail(
         self, user_id: str, series_id: str, session_id: str
@@ -214,7 +233,7 @@ class ChatService:
         """
         self.acquire_generation_slot(user_id)
         try:
-            boundary = await self._progress.resolve(user_id, series_id)
+            boundary = await self._resolve_or_create_progress(user_id, series_id)
             history = await self._repository.list_messages_for_context(
                 user_id, series_id, chat_session_id, boundary
             )
