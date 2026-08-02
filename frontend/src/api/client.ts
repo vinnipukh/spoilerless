@@ -13,10 +13,13 @@ export type ApiErrorDetail = {
 export class ApiError extends Error {
   code: string
 
-  constructor(detail: ApiErrorDetail) {
-    super(detail.message)
+  constructor(detail: ApiErrorDetail | Array<{ msg?: string }>) {
+    // FastAPI validation errors carry `detail` as an array of {loc, msg,
+    // type} entries rather than the app's {code, message} envelope —
+    // normalize both shapes so a 422 always surfaces a real message.
+    super(Array.isArray(detail) ? (detail[0]?.msg ?? 'Request failed.') : detail.message)
     this.name = 'ApiError'
-    this.code = detail.code
+    this.code = Array.isArray(detail) ? 'invalid_request' : detail.code
   }
 }
 

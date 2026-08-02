@@ -101,7 +101,7 @@ The `hdgraf-setup` command (defined as `backend.app.graph.setup:main` in `pyproj
 
 1. **Validates** the ontology YAML files (`ontology/node_types.yaml`, `ontology/relation_types.yaml`, `ontology/claim_types.yaml`).
 2. **Creates** Neo4j constraints and indexes (uniqueness constraints on node IDs, range indexes on `visible_from_order`, etc.).
-3. **Seeds** the Dexter S01E01–03 data: series, season, episodes, characters, locations, events, organizations, objects, claims, sources, and evidence fragments.
+3. **Seeds** the Dexter S01E01–03 data: series, episodes, characters, locations, events, claims, sources, and evidence fragments.
 4. **Runs** a visibility integrity audit.
 
 This step is idempotent — running it multiple times is safe (uses `MERGE`).
@@ -368,6 +368,49 @@ netstat -ano | findstr :7687
 3. Ensure the backend is running on `localhost:8000`.
 4. Verify the Vite proxy configuration in `frontend/vite.config.ts` points to the correct backend target.
 5. Clear sessionStorage (the app caches watch progress there — stale data can cause glitches).
+
+---
+
+## LLM / GraphRAG Configuration (Deployment Notes)
+
+The "Environment Configuration" variable reference table above predates the GraphRAG chat/retrieval
+feature and does not list the `LLM_*` settings. These are deployment-relevant because they control
+whether the chat/retrieval endpoints are active at all, and because part of the effective
+configuration is **not** purely `.env`-driven. See [CONFIGURATION.md](./CONFIGURATION.md#environment-variables)
+for the full variable reference; the notes below are deployment-specific additions.
+
+### Additional environment variables
+
+| Variable | Default | Required | Description |
+|----------|---------|----------|-------------|
+| `LLM_ENABLED` | `false` | No | Master switch for the GraphRAG chat/retrieval endpoints. Must be `true` to activate them in any environment. |
+| `LLM_PROVIDER` | `openai_compatible` | No | Provider selector. `openai_compatible` and `gemini` are both supported (see runtime override note below). |
+| `LLM_BASE_URL` | _(empty)_ | Yes, if `LLM_ENABLED=true` and no runtime override is stored | Base URL of the chat completions endpoint. |
+| `LLM_API_KEY` | _(empty)_ | Yes, if `LLM_ENABLED=true` and no runtime override is stored | Provider API key. Treat as a deployment secret — never commit, never log. |
+| `LLM_MODEL` | _(empty)_ | Yes, if `LLM_ENABLED=true` and no runtime override is stored | Model identifier passed to the provider. |
+| `LLM_TIMEOUT_SECONDS`, `LLM_MAX_OUTPUT_TOKENS`, `LLM_TEMPERATURE`, `LLM_MAX_TOOL_ROUNDS`, `LLM_MAX_CONTEXT_ITEMS`, `LLM_MAX_CONTEXT_CHARACTERS` | See CONFIGURATION.md | No | Tuning parameters for LLM provider calls; defaults are generally suitable for a first deployment. |
+| `LLM_FALLBACK_EN`, `LLM_FALLBACK_TR` | _(empty/unset)_ | No | Optional overrides for the localized "insufficient evidence" fallback response text. If unset, built-in defaults in `backend/app/llm/fallbacks.py` are used. |
+
+### Runtime override stored in Neo4j (deployment implication)
+
+The effective LLM provider configuration (`provider`, `api_key`, `base_url`, `model`, `enabled`) can be
+set at runtime via `PUT /api/settings/llm` and is persisted as an `:AppSetting {key: 'llm'}` node in
+Neo4j (`SettingsRepository`), taking precedence over the corresponding `LLM_*` environment variable
+whenever a stored value is present.
+
+This has deployment implications beyond what a `.env`-only configuration model would suggest:
+
+- **Secrets may live in the database, not just `.env`.** Anyone who can restore a Neo4j backup or
+  query the graph directly could potentially retrieve the stored API key. Restrict Neo4j network
+  access and backup storage accordingly (see the Security checklist above).
+- **Rotating the API key requires updating both places** if the key was ever set via the API: the
+  stored graph value must be cleared/updated through `PUT /api/settings/llm`, not just by changing
+  `LLM_API_KEY` in `.env` — otherwise the stored value continues to take precedence.
+- **`/api/settings/llm` should be treated as a privileged endpoint** in any production access control
+  scheme, since it can view (masked) and change the active LLM provider and key.
+
+<!-- VERIFY: Whether `PUT /api/settings/llm` currently has any authorization/role check beyond an
+authenticated session — confirm before exposing this endpoint in a production deployment. -->
 
 ---
 

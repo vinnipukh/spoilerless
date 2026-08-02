@@ -5,21 +5,23 @@ from __future__ import annotations
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 
+from backend.app.api.deps import (
+    AuthServiceDependency,
+    CurrentUserDependency,
+    get_auth_service,  # noqa: F401 — re-exported for backward compatibility
+    get_session_repo,  # noqa: F401 — re-exported for backward compatibility
+    require_current_user,
+)
 from backend.app.core.config import get_settings
 from backend.app.core.errors import error_responses, http_error
 from backend.app.domain.auth import GoogleAuthRequest, UserPublic, UserResponse
-from backend.app.repository.session import InMemorySessionRepository, SessionRepository
-from backend.app.repository.user import UserRepository
-from backend.app.graph.database import Neo4jDatabase, get_database
-from backend.app.services.auth import AuthService, GoogleTransportError, GoogleVerificationError
+from backend.app.services.auth import GoogleTransportError, GoogleVerificationError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
-
-DatabaseDependency = Annotated[Neo4jDatabase, Depends(get_database)]
 
 # ---------------------------------------------------------------------------
 # Error codes — stable machine-readable strings for the error envelope
@@ -93,26 +95,6 @@ async def verify_origin(request: Request) -> None:
         403, AUTH_ORIGIN_NOT_ALLOWED,
         "Request origin is not allowed.",
     )
-
-
-def get_session_repo(request: Request) -> SessionRepository:
-    return request.app.state.session_repo
-
-
-SessionRepoDependency = Annotated[SessionRepository, Depends(get_session_repo)]
-
-
-def get_auth_service(
-    database: DatabaseDependency,
-    session_repo: SessionRepoDependency,
-) -> AuthService:
-    return AuthService(
-        user_repo=UserRepository(database),
-        session_repo=session_repo,
-    )
-
-
-AuthServiceDependency = Annotated[AuthService, Depends(get_auth_service)]
 
 
 def _make_cookie(response: Response, raw_token: str, secure: bool, cookie_name: str) -> None:
@@ -222,22 +204,14 @@ async def google_auth(
     },
 )
 async def get_current_user(
-    request: Request,
-    service: AuthServiceDependency,
+    user: CurrentUserDependency,
 ) -> UserResponse:
     """Return the authenticated user identified by the session cookie.
 
-    Raises 401 with the standard error envelope when no valid session exists.
+    Delegates to the shared ``require_current_user`` dependency (same body the
+    route previously inlined); raises 401 with the standard error envelope when
+    no valid session exists.
     """
-    settings = get_settings()
-    raw_token = request.cookies.get(settings.session_cookie_name)
-
-    user = await service.get_current_user(
-        raw_token, session_ttl=settings.session_ttl_seconds
-    )
-    if user is None:
-        raise http_error(401, AUTH_UNAUTHENTICATED, "Authentication required.")
-
     return UserResponse(user=UserPublic.model_validate(
         {k: v for k, v in user.items() if k in UserPublic.model_fields}
     ))

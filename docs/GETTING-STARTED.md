@@ -245,7 +245,7 @@ Expected response:
 
 ### API overview
 
-The backend exposes **21 operations over 14 path templates**. Key endpoints for the demo:
+The backend exposes **43 route operations across `backend/app/api/*.py` plus `/health` (44 total)**. Key endpoints for the demo:
 
 | Endpoint | Purpose |
 |---|---|
@@ -414,6 +414,27 @@ Once everything is running ([http://localhost:5173](http://localhost:5173)), the
 
 The same spoiler confirmation flow applies. With all three episodes visible, you see the complete Dexter S01 graph prototype.
 
+### 7.8 Enable the GraphRAG chat (optional)
+
+Chat is **disabled by default** (`LLM_ENABLED=false`). To turn it on you need an
+OpenAI-compatible chat-completions endpoint — OpenAI, a local vLLM server, or any
+compatible provider. Add these to the **backend** `.env` (project root):
+
+```bash
+LLM_ENABLED=true
+LLM_BASE_URL=https://api.openai.com/v1     # or your local endpoint
+LLM_API_KEY=your-key-here                  # never commit real values
+LLM_MODEL=gpt-4.1-mini                     # any model your endpoint exposes
+```
+
+Restart the backend. The remaining `LLM_*` knobs (`LLM_TIMEOUT_SECONDS`,
+`LLM_MAX_OUTPUT_TOKENS`, `LLM_TEMPERATURE`, `LLM_MAX_TOOL_ROUNDS`,
+`LLM_MAX_CONTEXT_ITEMS`, `LLM_MAX_CONTEXT_CHARACTERS`) are optional; see
+[`CONFIGURATION.md`](./CONFIGURATION.md) for defaults and bounds. With
+`LLM_ENABLED=false` (or no provider reachable), the chat panel still opens but
+turns return a clear "chat is disabled / provider unavailable" banner instead
+of crashing.
+
 ---
 
 ## 8. Troubleshooting
@@ -538,3 +559,57 @@ open http://localhost:5173
 - [ ] Add a user note
 - [ ] Advance to S01E03
 - [ ] View the complete S01 graph with all three episodes unlocked
+
+---
+
+## 10. In-App Settings: Configuring the LLM Provider via UI
+
+Section 7.8 shows how to enable chat by editing the backend `.env` file. There's also a
+**Settings page inside the running app** that lets you configure (and reconfigure) the LLM
+provider at runtime, without touching `.env` or restarting the backend.
+
+1. With the frontend running and you're logged in, click the **gear icon** in the top bar.
+2. The Settings page (`frontend/src/components/settings/SettingsPage.tsx`) opens, replacing the
+   graph view. Click the gear again (now labeled "Graph") to return.
+3. The form lets you set:
+   - **Provider** — `openai_compatible` or `gemini` (a second provider not mentioned in step 7.8;
+     if `gemini` is selected and no base URL is given, it defaults to Google's official endpoint)
+   - **API key** — masked after saving (shown as `••••` + last 4 characters); leaving it blank on
+     a later save keeps the previously stored key rather than clearing it
+   - **Model**, **base URL**, **enabled** switch
+   - **Assistant language** (English or Turkish) — controls both the system prompt language and
+     which fallback text is used when the model can't answer from the visible graph
+4. Save. The new configuration is persisted in Neo4j (`:AppSetting {key: 'llm'}`) and takes effect
+   immediately for the current and future chat turns — no backend restart needed.
+
+**Precedence to know:** a value saved here always wins over the matching `LLM_*` environment
+variable; the `.env` values are only used as the initial fallback/bootstrap. So if chat behaves
+unexpectedly after changing `.env`, check the Settings page first — a previously saved value there
+may be overriding it. See [`CONFIGURATION.md`](./CONFIGURATION.md) for the full precedence and
+storage details.
+
+---
+
+## 11. Exploring the Candidate Extraction & Review Workflow (API-only, optional)
+
+The backend also exposes a **candidate claim review workflow** — the intake path a future
+NLP/extraction process would use to submit auto-extracted claims for human review before they
+become part of the canonical graph. There is currently **no dedicated frontend UI** for this flow;
+it's explored through the Swagger docs at [http://localhost:8000/docs](http://localhost:8000/docs).
+
+Endpoints (all under `/api/series/{series_id}/candidates`):
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /candidates/ingest` | Submit a batch of extracted claims (subject/predicate/object + evidence + source) as `origin: candidate` |
+| `GET /candidates` | List candidate claims, optionally filtered by `visible_until_order` |
+| `GET /candidates/{claim_id}` | Get one candidate claim |
+| `PATCH /candidates/{claim_id}` | Edit mutable fields (label, predicate, claim_type, confidence_level, etc.) before approving |
+| `POST /candidates/{claim_id}/approve` | Promote `candidate` → `canonical` |
+| `POST /candidates/{claim_id}/reject` | Mark `candidate` → `rejected` |
+
+Candidate claims derive deterministic, content-hashed IDs (not UUIDs), so re-ingesting the same
+extraction batch is idempotent — safe to retry. Every approve/reject/edit call logs a `Revision`
+with before/after snapshots, so candidate review participates in the same append-only audit trail
+as user notes and ChangeSets. Approved claims flow into the normal spoiler-filtered graph read path
+just like seeded canonical claims.

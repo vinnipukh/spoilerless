@@ -16,9 +16,14 @@ from backend.app.api.user_content import router as user_content_router
 from backend.app.api.auth import router as auth_router
 from backend.app.api.revisions import router as revision_router
 from backend.app.api.candidates import router as candidates_router
+from backend.app.api.progress import router as progress_router
+from backend.app.api.chat import router as chat_router
+from backend.app.api.change_set import router as change_set_router
+from backend.app.api.settings import router as settings_router
 from backend.app.core.config import get_settings
 from backend.app.core.errors import install_database_error_handlers
 from backend.app.graph.database import Neo4jDatabase
+from backend.app.llm.provider import install_llm_error_handlers
 from backend.app.repository.session import Neo4jSessionRepository
 
 SERVICE_NAME = "hdgrafcehennemi-backend"
@@ -62,6 +67,10 @@ app.include_router(user_content_router)
 app.include_router(auth_router)
 app.include_router(revision_router)
 app.include_router(candidates_router)
+app.include_router(progress_router)
+app.include_router(chat_router)
+app.include_router(change_set_router)
+app.include_router(settings_router)
 
 settings = get_settings()
 _allowed_origins = [
@@ -78,6 +87,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 install_database_error_handlers(app)
+install_llm_error_handlers(app)
 
 
 @app.get("/health", response_model=HealthResponse, summary="Check service and database health",

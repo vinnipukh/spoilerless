@@ -19,6 +19,15 @@ export function useGraph(seriesId: string | null, visibleUntilOrder: number | nu
   // series/order themselves.
   const [retryToken, setRetryToken] = useState(0)
 
+  // Bumped by `refresh()` (06-11: a ChangeSet-apply's incremental graph
+  // refresh) — re-issues the same getGraph call WITHOUT flipping the status
+  // back to 'loading', so the currently-mounted graph stays visible while
+  // the fresh data arrives and GraphCanvas is never unmounted/remounted.
+  // Distinct from `refetch()`: `refetch` is for error recovery (the Retry
+  // button re-enters the loading state), `refresh` is for in-place data
+  // updates where a loading flash would be a destructive relayout.
+  const [refreshToken, setRefreshToken] = useState(0)
+
   const [state, setState] = useState<State>(() =>
     canFetch(seriesId, visibleUntilOrder) ? { status: 'loading' } : { status: 'idle' },
   )
@@ -31,7 +40,9 @@ export function useGraph(seriesId: string | null, visibleUntilOrder: number | nu
   // key — React's documented "adjusting state when a prop changes" pattern —
   // so the effect below only ever sets 'success'/'error' from its async
   // callbacks. Including retryToken in the key means Retry re-enters the
-  // 'loading' state the same way a genuine boundary change does.
+  // 'loading' state the same way a genuine boundary change does. refreshToken
+  // is deliberately EXCLUDED from this key: a `refresh()` must not flip to
+  // 'loading' (it only re-runs the fetch effect, which shares this state).
   const key = `${seriesId ?? ''}:${visibleUntilOrder ?? ''}:${retryToken}`
   const [prevKey, setPrevKey] = useState(key)
   if (prevKey !== key) {
@@ -57,11 +68,15 @@ export function useGraph(seriesId: string | null, visibleUntilOrder: number | nu
     return () => {
       cancelled = true
     }
-  }, [seriesId, visibleUntilOrder, retryToken])
+  }, [seriesId, visibleUntilOrder, retryToken, refreshToken])
 
   function refetch() {
     setRetryToken((token) => token + 1)
   }
 
-  return { ...state, refetch }
+  function refresh() {
+    setRefreshToken((token) => token + 1)
+  }
+
+  return { ...state, refetch, refresh }
 }

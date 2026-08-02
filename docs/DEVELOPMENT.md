@@ -717,7 +717,7 @@ npx vitest src/components/graph/GraphCanvas.test.tsx
 ### 4.2 TypeScript Conventions
 
 - **React 19** — functional components with hooks, no class components
-- **TypeScript strict mode** — `strict: true` in `tsconfig.app.json`
+- **TypeScript linting** — no `strict` flag is set in `tsconfig.app.json`; type safety relies on `noUnusedLocals`, `noUnusedParameters`, and `noFallthroughCasesInSwitch`
 - **`@/` prefix** — all source imports use `@/` alias for `src/`
 - **Types mirror backend** — `types/` directory mirrors `backend/app/domain/` field-for-field
 - **No runtime visibility filtering** — frontend code must never check `visible_from_order`. If data is in the response, it's safe to render.
@@ -767,7 +767,7 @@ ontology/
 **When modifying the ontology:**
 
 1. Edit the appropriate YAML file (increment `ontology_version` for breaking changes)
-2. If adding new node labels, add uniqueness constraints in `backend/app/graph/setup.py` (`create_constraints()`)
+2. If adding new node labels, add uniqueness constraints in `backend/app/graph/seed.py` (`create_constraints()`)
 3. Add seed data in `data/dexter/seed/` or `data/dexter/metadata/`
 4. Update `NODE_LABELS` / `RELATIONSHIP_TYPES` tuples in `graph/seed.py` if adding new labels/types
 5. Restart the backend (live ontology reload is not yet supported)
@@ -787,27 +787,7 @@ These are **hard constraints** on the codebase:
 
 ### 4.6 Worktree Workflow
 
-The project uses **two git worktrees** for parallel development:
-
-| Worktree | Path | Focus |
-|---|---|---|
-| `main` (primary worktree) | `hdgrafcehennemi/` | Current development |
-| `backend-work` | Separate checkout | Backend-only work (Phase 3 backend slice) |
-| `frontend-work` | Separate checkout | Frontend-only work (pending) |
-
-When working on a backend-only feature:
-```bash
-cd ../hdgrafcehennemi-backend-work  # backend-work worktree
-# Make changes, commit, push
-```
-
-When working on a frontend-only feature:
-```bash
-cd ../hdgrafcehennemi-frontend-work  # frontend-work worktree
-# Make changes, commit, push
-```
-
-Current status (from ROADMAP): Phase 3 backend slice is complete and verified; Phase 2 and Phase 3 frontend acceptance remain pending in `frontend-work`.
+Only the single primary worktree currently exists on disk (verify with `git worktree list`). All backend and frontend development happens directly in this checkout — there are no separate `backend-work` or `frontend-work` worktrees at this time. If parallel worktrees are introduced later, add them with `git worktree add <path> <branch>` and document the paths here.
 
 ---
 
@@ -839,7 +819,7 @@ cd backend && uv run pytest -v
 ### Adding a New Relationship Type
 
 1. Add the type to the appropriate group in `ontology/relation_types.yaml`
-2. If user-safe, add to `user_safe_relationship_types` group
+2. If user-safe, add it to the `participation` or `character` group in `ontology/relation_types.yaml` — the `Ontology.user_safe_relationship_types` property in `backend/app/graph/ontology.py` computes the user-safe set by unioning those two YAML groups (there is no separate `user_safe_relationship_types` YAML group)
 3. Add to `STRUCTURAL_EDGES_QUERY` or `VISIBLE_CLAIMS_QUERY` in `spoiler/filter.py` as appropriate
 4. Update stylesheet in `frontend/src/components/graph/graphStylesheet.ts`
 5. Update frontend types in `frontend/src/types/graph.ts` if needed
@@ -908,3 +888,75 @@ curl "http://localhost:8000/api/series/series_dexter/graph?visible_until_order=1
 ```
 
 Compare counts across boundaries (order=1, order=2, order=3) to verify incremental visibility.
+
+---
+
+## 7. Newer Backend & Frontend Modules
+
+> The structure trees in [2.1 Backend Structure](#21-backend-structure) and [3.1 Frontend Structure](#31-frontend-structure) predate several subsystems that now exist in the codebase (chat/retrieval, settings, candidates, ChangeSets). This section documents them additively without editing those trees — see [docs/ARCHITECTURE.md](ARCHITECTURE.md) sections 4.8–4.9 for the full data-flow design.
+
+### 7.1 Additional Backend Modules
+
+| Directory | New files | Purpose |
+|---|---|---|
+| `backend/app/api/` | `candidates.py`, `change_set.py`, `chat.py`, `progress.py`, `settings.py` | Candidate-claim review, ChangeSet propose/confirm/reject/revert, chat sessions & streaming, watch-progress persistence, LLM settings |
+| `backend/app/domain/` | `extraction.py`, `change_set.py`, `chat.py`, `progress.py`, `revision.py`, `settings.py` | Pydantic contracts for the above (`ExtractionClaim`, `ExtractionBatchEnvelope`, `LLMSettingsResponse/Update`, etc.) |
+| `backend/app/graph/` | `candidates.py`, `change_set.py`, `chat.py`, `progress.py` | Neo4j access for candidate ingest, ChangeSet apply/revert, chat message persistence, progress read/write |
+| `backend/app/repository/` | `change_set.py`, `chat.py`, `progress.py`, `settings.py` | Repository layer for the same subsystems (`SettingsRepository`, `ChatRepository`, etc.) |
+| `backend/app/services/` | `change_set.py`, `chat.py`, `progress.py`, `settings.py` | Service orchestration (`ChangeSetService`, `ChatService`, `ProgressService`, `SettingsService`) |
+| `backend/app/retrieval/` (new top-level package) | `pipeline.py`, `tools.py` | GraphRAG-lite retrieval pipeline and the allowlisted retrieval tool functions |
+| `backend/app/llm/` (new top-level package) | `provider.py`, `system_prompt.py`, `fallbacks.py` | `LLMProvider` protocol + `OpenAICompatibleProvider`, system prompt template, localized fallback text |
+
+### 7.2 Additional Frontend Modules
+
+| Directory | New files | Purpose |
+|---|---|---|
+| `frontend/src/components/chat/` | `ChatLauncher`, `ChatSheet`, `ChatPanel`, `MessageList`, `MessageBubble`, `CitationChip`, `SessionPicker`, `ChangeSetCard` (+ `.test.tsx` per component) | The chat UI: launcher button, slide-over sheet, streaming message list, citation chips that focus the graph, and the ChangeSet confirm/reject preview card |
+| `frontend/src/components/settings/` | `SettingsPage.tsx` (+ test) | LLM provider configuration form (provider, model, base URL, API key, enable toggle, assistant language) |
+| `frontend/src/components/auth/` | `LoginPage.tsx` | Google Sign-In entry screen |
+| `frontend/src/providers/` (new top-level directory) | `AuthContext.ts`, `AuthProvider.tsx`, `useAuth.ts` | App-wide auth context wrapping the session-cookie flow; `useAuth()` throws if called outside `AuthProvider` |
+| `frontend/src/hooks/` | `useChatMessages.ts`, `useChatSessions.ts`, `useNotes.ts`, `useRevisions.ts` (+ `.test.tsx`/`.test.ts` per hook) | Chat session/message state, notes CRUD, revision history |
+| `frontend/src/api/` | `auth.ts`, `changeSet.ts`, `chat.ts`, `progress.ts`, `revisions.ts`, `settings.ts`, `userContent.ts` (+ `.test.ts` per client) | HTTP clients for each new subsystem |
+
+### 7.3 Adding a Candidate-Extraction Ingest Source
+
+The candidate pipeline lets a future extractor submit claims for review without touching canonical data. To add a new extractor/ingest path:
+
+1. Produce an `ExtractionBatchEnvelope` (`backend/app/domain/extraction.py`) — `extractor_name`, `extractor_version`, `run_timestamp`, and 1-500 `ExtractionClaim` items. Each claim carries `schema_version`, subject/predicate/object, `claim_type` and `confidence_level` (both validated against the loaded ontology via `field_validator`), `visible_from_order`, evidence text/locator, and source type/locator.
+2. `POST /api/series/{series_id}/candidates/ingest` hands the envelope to `CandidateRepository.ingest_batch()` (`backend/app/graph/candidates.py`), which runs one Neo4j write transaction per batch.
+3. IDs are **deterministic**, derived by hashing normalized claim content (`_derive_candidate_id`, `_derive_source_id`, `_derive_evidence_id` — SHA-256 prefix), so re-ingesting the same extraction output is idempotent (`MERGE ... ON CREATE / ON MATCH`).
+4. Ingested claims land with `origin: 'candidate'`, `status: 'candidate'` — visible in the graph but visually distinguished (dashed border) and excluded from canonical claim guarantees.
+5. Review lifecycle: `GET /candidates` (list) → `GET/PATCH /candidates/{claim_id}` (inspect/edit) → `POST /candidates/{claim_id}/approve` (promotes to `corroborated`) or `POST /candidates/{claim_id}/reject`.
+6. Add tests following `backend/tests/test_candidate_ingest.py` (batch ingest, idempotency) and `test_candidate_review.py` (approve/reject transitions).
+
+### 7.4 Settings Management Pattern (Runtime LLM Configuration)
+
+Unlike most configuration (env-var only, see [docs/CONFIGURATION.md](CONFIGURATION.md)), the LLM provider config is **runtime-editable and persisted in Neo4j**, with environment variables as the fallback. Reference implementation when adding a similar runtime-configurable setting:
+
+- **Domain** (`backend/app/domain/settings.py`) — `LLMSettingsResponse` / `LLMSettingsUpdate` Pydantic models; `mask_api_key()` produces a display-safe form (e.g. `••••1234`) and the full key is never included in any response model.
+- **Repository** (`backend/app/repository/settings.py`) — `SettingsRepository` persists a single `(:AppSetting {key: 'llm'})` node; reads/writes are plain `MERGE`/`SET`.
+- **Service** (`backend/app/services/settings.py`) — `SettingsService` implements the precedence rule: stored Neo4j value wins per-field if present, otherwise falls back to the matching `LLM_*` environment variable/setting.
+- **API** (`backend/app/api/settings.py`) — `GET /api/settings/llm` (masked key) and `PUT /api/settings/llm` (blank/omitted `api_key` keeps the previously stored key rather than clearing it); both require an authenticated session (`CurrentUserDependency`).
+- **Frontend** — `frontend/src/api/settings.ts` + `frontend/src/types/settings.ts` + `frontend/src/components/settings/SettingsPage.tsx`. The load-on-mount `GET` is treated as best-effort: a failed load never blocks the form or the subsequent `PUT` — it only sets an informational error message and leaves the form with editable defaults.
+- Add tests following `backend/tests/test_settings_api.py` (masking, precedence, partial-update key retention).
+
+### 7.5 Chat / Retrieval Development Pattern
+
+The chat feature (see [docs/ARCHITECTURE.md § 4.8](ARCHITECTURE.md#48-graphrag-lite-chat-pipeline)) has its own development pattern, distinct from the standard API/Service/Repository route pattern in [Section 2.4](#24-adding-a-new-route-backend):
+
+- **`backend/app/llm/provider.py`** — `LLMProvider` is a `Protocol`; `OpenAICompatibleProvider` is the only shipped implementation. Adding a new provider means implementing the protocol (`stream_chat(...)`) and registering it in `SettingsService`'s provider dispatch — never adding a second HTTP client ad hoc inside `ChatService`.
+- **`backend/app/retrieval/tools.py`** — Adding a new retrieval tool means writing a small async function that (a) accepts only allowlisted, typed parameters — never a free-text Cypher string, (b) re-derives `visible_until_order` from the value already resolved by the pipeline (never from tool-call arguments), and (c) issues parameterized Cypher built the same way as `spoiler/filter.py`. Register the new tool in the pipeline's allowlist in `backend/app/retrieval/pipeline.py`.
+- **`backend/app/retrieval/pipeline.py`** — Orchestrates the tool-calling loop and the citation validator (strips any `claim_id`/`evidence_id`/`source_id` the model cited that wasn't actually present in retrieved context).
+- **Streaming** — `POST .../messages/stream` returns Server-Sent Events; the frontend (`ChatPanel.tsx`) consumes it via `fetch` + a `ReadableStream` reader (not `EventSource`, since it needs `credentials: 'include'` for the session cookie). A non-streaming fallback endpoint (`POST .../messages`) exists for environments where SSE isn't viable.
+- Add backend tests following `backend/tests/test_retrieval_tools.py` (per-tool visibility enforcement), `test_retrieval_pipeline.py` (citation validation, context bounding), `test_chat_api.py` / `test_chat_persistence.py` (session lifecycle, hide-not-delete on progress decrease), and `test_llm_provider.py` (provider protocol compliance).
+- Add frontend tests following `ChatPanel.test.tsx` / `MessageList.test.tsx` (streaming render) and `useChatMessages.test.tsx` / `useChatSessions.test.tsx` (hook state).
+
+### 7.6 ChangeSet Development Pattern
+
+When adding a new ChangeSet operation type (see [docs/ARCHITECTURE.md § 4.9](ARCHITECTURE.md#49-changeset-two-stage-mutation-flow)):
+
+1. Add the new operation literal to the discriminated union in `backend/app/domain/change_set.py` (extend, don't loosen — `extra="forbid"` must still reject unknown fields).
+2. Implement the apply-time Cypher for the new operation in `backend/app/graph/change_set.py`, inside the same single-transaction apply path used by existing operations.
+3. Add ontology/boundary validation for the new operation in `backend/app/services/change_set.py`'s propose-time validator (target must be visible, same-series, not canonical/candidate unless explicitly permitted).
+4. Update `frontend/src/components/chat/ChangeSetCard.tsx` to render a summary line and Before/After rows for the new operation type.
+5. Add tests following `backend/tests/test_change_set_api.py` (propose validation), `test_change_set_confirmation.py` (apply/reject/idempotency), `test_change_set_protection.py` (canonical/candidate refusal), and `test_change_set_revision.py` (revision logging + revert).

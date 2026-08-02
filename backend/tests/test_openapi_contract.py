@@ -127,12 +127,26 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         "/api/series/{series_id}/candidates/{claim_id}",
         "/api/series/{series_id}/candidates/{claim_id}/approve",
         "/api/series/{series_id}/candidates/{claim_id}/reject",
+        # Chat sessions and watch progress (phase 06 GraphRAG chat)
+        "/api/series/{series_id}/progress",
+        "/api/series/{series_id}/chat/sessions",
+        "/api/series/{series_id}/chat/sessions/{session_id}",
+        "/api/series/{series_id}/chat/sessions/{session_id}/messages",
+        "/api/series/{series_id}/chat/sessions/{session_id}/messages/stream",
+        # ChangeSets (phase 06 graph-editing agent, Stage 1 propose + Stage 2
+        # confirm/apply + Stage 3 revert)
+        "/api/series/{series_id}/change-sets",
+        "/api/series/{series_id}/change-sets/{change_set_id}/confirm",
+        "/api/series/{series_id}/change-sets/{change_set_id}/reject",
+        "/api/series/{series_id}/change-sets/{change_set_id}/revert",
         # Authentication
         "/api/auth/google", "/api/auth/me", "/api/auth/logout",
+        # Settings (LLM provider configuration)
+        "/api/settings/llm",
     }
     assert set(schema["paths"]) == expected_paths
     methods = {(method, path) for path, item in schema["paths"].items()
-               for method in item if method in {"get", "post", "patch", "delete"}}
+               for method in item if method in {"get", "post", "patch", "delete", "put"}}
     assert methods == {
         ("get", "/health"), ("get", "/api/series"), ("get", "/api/series/{series_id}"),
         ("get", "/api/series/{series_id}/episodes"), ("get", "/api/series/{series_id}/graph"),
@@ -159,11 +173,29 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         ("patch", "/api/series/{series_id}/candidates/{claim_id}"),
         ("post", "/api/series/{series_id}/candidates/{claim_id}/approve"),
         ("post", "/api/series/{series_id}/candidates/{claim_id}/reject"),
+        # Chat sessions and watch progress (phase 06 GraphRAG chat)
+        ("get", "/api/series/{series_id}/progress"),
+        ("post", "/api/series/{series_id}/progress"),
+        ("get", "/api/series/{series_id}/chat/sessions"),
+        ("post", "/api/series/{series_id}/chat/sessions"),
+        ("get", "/api/series/{series_id}/chat/sessions/{session_id}"),
+        ("delete", "/api/series/{series_id}/chat/sessions/{session_id}"),
+        ("post", "/api/series/{series_id}/chat/sessions/{session_id}/messages"),
+        ("post", "/api/series/{series_id}/chat/sessions/{session_id}/messages/stream"),
+        # ChangeSets (phase 06 graph-editing agent, Stage 1 propose + Stage 2
+        # confirm/apply + Stage 3 revert)
+        ("post", "/api/series/{series_id}/change-sets"),
+        ("post", "/api/series/{series_id}/change-sets/{change_set_id}/confirm"),
+        ("post", "/api/series/{series_id}/change-sets/{change_set_id}/reject"),
+        ("post", "/api/series/{series_id}/change-sets/{change_set_id}/revert"),
         ("post", "/api/auth/google"),
         ("get", "/api/auth/me"),
         ("post", "/api/auth/logout"),
+        # Settings (LLM provider configuration)
+        ("get", "/api/settings/llm"),
+        ("put", "/api/settings/llm"),
     }
-    assert len(schema["paths"]) == 22
+    assert len(schema["paths"]) == 32
     for path, item in schema["paths"].items():
         for method, operation in item.items():
             if method not in {"get", "post", "patch", "delete"}:

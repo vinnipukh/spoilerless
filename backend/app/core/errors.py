@@ -68,6 +68,11 @@ _ERROR_SPECS: dict[int, tuple[str, str, str]] = {
         "The request conflicts with the current resource state.",
     ),
     422: ("invalid_request", "Request validation failed.", "The request is invalid."),
+    429: (
+        "too_many_requests",
+        "Too many concurrent requests.",
+        "The request was rejected because of a concurrency limit.",
+    ),
     503: (
         "database_unavailable",
         "The graph database is unavailable.",

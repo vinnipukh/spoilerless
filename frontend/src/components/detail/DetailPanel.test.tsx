@@ -1,12 +1,48 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { DetailPanel } from './DetailPanel'
 import { graphResponseS01E01 } from '../../test/fixtures/graphResponse'
 import type { SelectedElement } from '../graph/GraphCanvas'
 
+// ChatPanel (mounted only when mode === 'chat') calls the real chat API
+// client on mount via useChatSessions — stub it so mode-toggle tests that
+// switch into Chat mode don't hit a real/undefined `fetch`.
+vi.mock('../../api/chat', () => ({
+  listChatSessions: vi.fn().mockResolvedValue([]),
+  getChatSession: vi.fn(),
+  createChatSession: vi.fn(),
+  deleteChatSession: vi.fn(),
+  streamMessage: vi.fn(),
+}))
+
+vi.mock('../../api/userContent', () => ({
+  createCustomRelationship: vi.fn().mockResolvedValue({
+    id: 'user-rel:test',
+    source_id: 'dexter:character:dexter_morgan',
+    target_id: 'dexter:character:debra_morgan',
+    predicate: 'KNOWS',
+    origin: 'user',
+  }),
+  // useNotes (Notes tab) also imports from this module — stub it so the
+  // module-level mock doesn't break the Notes tab's initial load.
+  getNotes: vi.fn().mockResolvedValue([]),
+  createNote: vi.fn(),
+  updateNote: vi.fn(),
+  deleteNote: vi.fn(),
+}))
+
+import { createCustomRelationship } from '../../api/userContent'
+
 const graph = graphResponseS01E01
-const defaultProps = { graph, seriesId: 'series:dexter' as const, visibleUntilOrder: 1, episodes: [] }
+const defaultProps = {
+  graph,
+  seriesId: 'series:dexter' as const,
+  visibleUntilOrder: 1,
+  episodes: [],
+  open: true,
+  onDeselect: vi.fn(),
+}
 
 describe('DetailPanel', () => {
   it('renders the locked no-selection placeholder with no Tabs', async () => {
@@ -141,7 +177,7 @@ describe('DetailPanel', () => {
       ),
     }
     const selected: SelectedElement = { kind: 'node', id: 'char_ice_truck_killer', label: 'The Ice Truck Killer', nodeType: 'Character' }
-    render(<DetailPanel selected={selected} graph={graphWithUserNode} seriesId="series:dexter" visibleUntilOrder={1} episodes={[]} />)
+    render(<DetailPanel selected={selected} {...defaultProps} graph={graphWithUserNode} />)
 
     expect(await screen.findByText('User')).toBeInTheDocument()
     // The badge should have dashed border styling
@@ -155,5 +191,57 @@ describe('DetailPanel', () => {
     render(<DetailPanel selected={selected} {...defaultProps} />)
 
     expect(await screen.findByText('canonical')).toBeInTheDocument()
+  })
+
+  describe('collapsible left inspector Sheet (06-09/06-12)', () => {
+    it('renders no Sheet content at all when open is false', () => {
+      const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
+      render(<DetailPanel selected={selected} {...defaultProps} open={false} />)
+
+      expect(screen.queryByRole('heading', { name: 'Dexter Morgan' })).not.toBeInTheDocument()
+      expect(screen.queryByText('Select a node to see details.')).not.toBeInTheDocument()
+      expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
+    })
+
+    it('renders the inspector content (never the chat surface) when open', async () => {
+      const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
+      render(<DetailPanel selected={selected} {...defaultProps} />)
+
+      expect(await screen.findByRole('heading', { name: 'Dexter Morgan' })).toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument()
+      // The chat surface lives in its own right-side sheet (ChatSheet) — this
+      // panel is inspector-only, so no chat content can appear here.
+      expect(screen.queryByRole('heading', { name: 'Ask about Dexter' })).not.toBeInTheDocument()
+    })
+
+  it('refreshes the graph in place after creating a relationship', async () => {
+    const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
+    const onRefreshGraph = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <DetailPanel
+        selected={selected}
+        {...defaultProps}
+        episodes={[{ id: 'dexter_s01e01', code: 'S01E01', title: 'Dexter', episode_order: 1 }]}
+        onRefreshGraph={onRefreshGraph}
+      />,
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Create relationship' }))
+    await user.selectOptions(await screen.findByLabelText('To'), 'char_debra_morgan')
+    await user.click(screen.getByRole('button', { name: 'Create' }))
+
+    expect(createCustomRelationship).toHaveBeenCalledWith(
+      'series:dexter',
+      expect.objectContaining({
+        source_id: 'char_dexter_morgan',
+        target_id: 'char_debra_morgan',
+        predicate: 'KNOWS',
+      }),
+    )
+    // The success path must reload the graph data in place so the new edge
+    // appears without a manual reload (and without a destructive remount).
+    expect(onRefreshGraph).toHaveBeenCalledTimes(1)
+  })
   })
 })

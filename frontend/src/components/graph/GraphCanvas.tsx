@@ -15,8 +15,9 @@ import {
 } from '@/components/ui/dialog'
 import { GraphLegend } from './GraphLegend'
 import { GraphControls } from './GraphControls'
+import { GraphFocusIndicator } from './GraphFocusIndicator'
 import { createCustomNode } from '../../api/userContent'
-import type { CustomNodeType } from '../../types/userContent'
+import type { CustomNodeResponse, CustomNodeType } from '../../types/userContent'
 
 console.log('[GC-MODULE] GraphCanvas module loaded')
 
@@ -102,12 +103,35 @@ export type SelectedEdge = {
 
 export type SelectedElement = SelectedNode | SelectedEdge
 
+// A chat-driven graph_focus target set (RAG-17) — externally-driven highlight
+// request, distinct from the canvas's own internal tap-to-select mechanism.
+export type FocusedElementIds = {
+  nodeIds: string[]
+  edgeIds: string[]
+}
+
 type Props = {
   graph: GraphResponse
   onSelect: (element: SelectedElement | null) => void
   seriesId: string | null
   onRefetchGraph?: () => void
+  /** In-place graph refresh (useGraph's `refresh`) — preferred for
+   * create/edit operations so the canvas updates without a destructive
+   * loading unmount. */
+  onRefreshGraph?: () => void
   episodes: EpisodeResponse[]
+  // Externally-driven highlight (06-10-PLAN.md) — a chat citation's "Show in
+  // graph" action, wired through App.tsx. Optional/nullable so every
+  // pre-existing caller (and GraphCanvas.test.tsx's existing assertions)
+  // keeps compiling and rendering unmodified.
+  focusedElementIds?: FocusedElementIds | null
+  onClearFocus?: () => void
+  // Transient "reveal" of freshly created elements (new edge / new node):
+  // re-frame the viewport on them + brief highlight, then auto-clear via
+  // onRevealDone. Fixes newly created edges rendering out of view (e.g.
+  // right of the viewport under the chat sheet).
+  revealElementIds?: FocusedElementIds | null
+  onRevealDone?: () => void
 }
 
 const ALLOWED_NODE_TYPES: { value: CustomNodeType; label: string }[] = [
@@ -129,7 +153,7 @@ function CreateCustomNodeDialog({
   onOpenChange: (open: boolean) => void
   seriesId: string | null
   episodes: EpisodeResponse[]
-  onSuccess: () => void
+  onSuccess: (node: CustomNodeResponse) => void
 }) {
   const [nodeType, setNodeType] = useState<CustomNodeType>('Character')
   const [label, setLabel] = useState('')
@@ -150,11 +174,11 @@ function CreateCustomNodeDialog({
     setSaving(true)
     setError('')
     try {
-      await createCustomNode(seriesId, { node_type: nodeType, label: label.trim(), episode_id: episodeId })
+      const created = await createCustomNode(seriesId, { node_type: nodeType, label: label.trim(), episode_id: episodeId })
       setLabel('')
       setNodeType('Character')
       onOpenChange(false)
-      onSuccess()
+      onSuccess(created)
     } catch (err: any) {
       setError(err?.message ?? 'Failed to create node.')
     } finally {
@@ -234,20 +258,159 @@ function CreateCustomNodeDialog({
   )
 }
 
-export function GraphCanvas({ graph, onSelect, seriesId, onRefetchGraph, episodes }: Props) {
-  console.log('[GC] GraphCanvas render called')
+export function GraphCanvas({
+  graph,
+  onSelect,
+  seriesId,
+  onRefetchGraph,
+  onRefreshGraph,
+  episodes,
+  focusedElementIds = null,
+  onClearFocus,
+  revealElementIds = null,
+  onRevealDone,
+}: Props) {
   const elements = useMemo(() => graphToElements(graph), [graph])
   const wiredCyRef = useRef<cytoscape.Core | null>(null)
   const cyInstanceRef = useRef<cytoscape.Core | null>(null)
   const stylesheet = useMemo(() => buildGraphStylesheet(prefersReducedMotion), [])
   const [dialogOpen, setDialogOpen] = useState(false)
+  // Locally-created custom node reveal (the dialog lives inside this
+  // component; App-level reveals arrive via the `revealElementIds` prop).
+  const [localReveal, setLocalReveal] = useState<FocusedElementIds | null>(null)
+  // Pending reveal target (external prop wins over the local custom-node one).
+  const revealTarget = revealElementIds ?? localReveal
 
-  // Re-run the layout whenever a new graph is fetched.
+  // Re-run the layout whenever a new graph is fetched — UNLESS an external
+  // `focusedElementIds` is active, in which case the graph change is an
+  // incremental refresh (06-11: a ChangeSet apply) that must NOT trigger the
+  // destructive full relayout: the focus effect below already provides the
+  // gentle `cy.fit(focused, 48)` re-frame (06-UI-SPEC.md "Applying a
+  // ChangeSet"), and running cose-bilkent again would discard the user's
+  // zoom/pan. Element data still updates in place; the layout re-runs on the
+  // next non-focused graph change (e.g. a progress boundary change once the
+  // focus has been cleared). The ref guard keeps focus clear/apply state
+  // changes (which re-run this effect via `focusedElementIds` in the deps)
+  // from ever re-laying-out an unchanged graph.
+  const lastLayoutGraphRef = useRef<GraphResponse | null>(null)
   useEffect(() => {
     const cy = cyInstanceRef.current
     if (!cy) return
+    if (lastLayoutGraphRef.current === graph) return
+    lastLayoutGraphRef.current = graph
+    // Skip the destructive full relayout while a reveal is pending too:
+    // freshly created edges connect already-positioned nodes, and re-running
+    // cose-bilkent would animate the nodes AFTER the reveal's cy.fit, undoing
+    // the framing (the edge lands wherever the layout puts it — the user's
+    // "new edges show up on the right" complaint).
+    if (focusedElementIds || revealTarget) return
     runLayout(cy)
-  }, [graph])
+  }, [graph, focusedElementIds, revealTarget])
+
+  // Apply/clear an externally-driven `graph_focus` highlight (RAG-17), keyed
+  // on the `focusedElementIds` prop — the same "prop-driven effect" pattern
+  // `useGraph.ts` already uses elsewhere. This is a genuinely new capability
+  // (`cyInstanceRef` was never exposed outside this component before), and
+  // extends rather than forks the existing internal `cy.on('tap', ...)`
+  // handlers below: both mechanisms write to the same `.selected-dominant`/
+  // `.faded` classes, and a manual tap after a `graph_focus` update simply
+  // clears/reassigns them exactly as it always has (see the tap handlers'
+  // own full `removeClass`/`addClass` sequence further down).
+  //
+  // Deliberate, documented supersession: `03.1-UI-SPEC.md`'s Performance
+  // note states the `.selected-dominant` glow "applies to at most one node
+  // at a time" — that constraint was written for continuous per-frame tap
+  // selection, not a bounded, backend-size-limited `graph_focus` set
+  // (06-UI-SPEC.md "Graph synchronization"). `graph_focus` may highlight
+  // multiple nodes/edges simultaneously; documented here exactly as
+  // 03.1-UI-SPEC.md documented its own hover-color supersession of Phase 2.
+  //
+  // Guarded via `typeof` checks (not a bare call) so a test double's fake
+  // `cy` (GraphCanvas.test.tsx's stub only implements `on`/`container`) never
+  // throws into this effect — the same defensive style `runLayout` already
+  // uses for `cy.layout`.
+  useEffect(() => {
+    const cy = cyInstanceRef.current
+    if (!cy) return
+    if (
+      typeof cy.elements !== 'function' ||
+      typeof cy.getElementById !== 'function' ||
+      typeof cy.collection !== 'function'
+    ) {
+      return
+    }
+
+    // Always start from a clean slate — clears whatever the previous
+    // `focusedElementIds` value (or a manual tap) left behind, identically
+    // to tapping empty canvas.
+    cy.elements().removeClass('selected-dominant faded edge-active')
+
+    if (!focusedElementIds) return
+
+    const requestedIds = [...focusedElementIds.nodeIds, ...focusedElementIds.edgeIds]
+    const focused = cy.collection()
+    for (const id of requestedIds) {
+      // A `graph_focus` reference to an element the frontend cannot resolve
+      // in the currently-loaded graph (defensively, should be
+      // architecturally impossible per RAG-08) is silently dropped rather
+      // than causing a render error.
+      const element = cy.getElementById(id)
+      if (element && element.length > 0) focused.merge(element)
+    }
+    if (focused.length === 0) return
+
+    focused.addClass('selected-dominant')
+    cy.elements().difference(focused).addClass('faded')
+
+    // Gentle re-frame on the focused subgraph — same 48px padding
+    // convention GraphControls.tsx's fit-to-view button already uses, not a
+    // hard viewport reset that would discard the user's zoom/pan.
+    if (typeof cy.fit === 'function') cy.fit(focused, 48)
+  }, [focusedElementIds])
+
+  // Transient reveal of freshly created elements (new edge / custom node):
+  // bring them into view and briefly highlight them, then auto-clear. Same
+  // defensive typeof guards as the focus effect. Merges the external prop
+  // and any local custom-node reveal.
+  useEffect(() => {
+    const cy = cyInstanceRef.current
+    if (!cy || !revealTarget) return
+    if (
+      typeof cy.elements !== 'function' ||
+      typeof cy.getElementById !== 'function' ||
+      typeof cy.collection !== 'function' ||
+      typeof cy.fit !== 'function'
+    ) {
+      return
+    }
+
+    cy.elements().removeClass('selected-dominant faded edge-active')
+    const requestedIds = [...revealTarget.nodeIds, ...revealTarget.edgeIds]
+    const revealed = cy.collection()
+    for (const id of requestedIds) {
+      const element = cy.getElementById(id)
+      if (element && element.length > 0) revealed.merge(element)
+    }
+    if (revealed.length === 0) return
+
+    revealed.addClass('selected-dominant edge-active')
+    cy.elements().difference(revealed).addClass('faded')
+    // Let the just-updated element data land before framing — the layout
+    // effect above skips re-running while a reveal is pending, so this fit
+    // is not undone by a layout animation.
+    const frame = requestAnimationFrame(() => cy.fit(revealed, 60))
+
+    const timer = window.setTimeout(() => {
+      cy.elements().removeClass('selected-dominant faded edge-active')
+      if (revealElementIds) onRevealDone?.()
+      else setLocalReveal(null)
+    }, 2200)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revealTarget, revealElementIds])
 
   return (
     <TooltipProvider>
@@ -321,6 +484,12 @@ export function GraphCanvas({ graph, onSelect, seriesId, onRefetchGraph, episode
             })
           }}
         />
+        {focusedElementIds && (
+          <GraphFocusIndicator
+            count={focusedElementIds.nodeIds.length + focusedElementIds.edgeIds.length}
+            onClear={() => onClearFocus?.()}
+          />
+        )}
         <GraphLegend />
         <GraphControls
           cyRef={cyInstanceRef}
@@ -346,7 +515,13 @@ export function GraphCanvas({ graph, onSelect, seriesId, onRefetchGraph, episode
           onOpenChange={setDialogOpen}
           seriesId={seriesId}
           episodes={episodes}
-          onSuccess={() => onRefetchGraph?.()}
+          onSuccess={(node) => {
+            // In-place refresh (no destructive loading unmount) then reveal
+            // the freshly created node so it is framed on screen instead of
+            // landing out of view.
+            ;(onRefreshGraph ?? onRefetchGraph)?.()
+            setLocalReveal({ nodeIds: [node.id], edgeIds: [] })
+          }}
         />
         )}
       </div>

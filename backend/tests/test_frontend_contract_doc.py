@@ -40,10 +40,28 @@ EXPECTED_OPERATIONS: set[tuple[str, str]] = {
     ("patch", "/api/series/{series_id}/candidates/{claim_id}"),
     ("post", "/api/series/{series_id}/candidates/{claim_id}/approve"),
     ("post", "/api/series/{series_id}/candidates/{claim_id}/reject"),
+    # Chat sessions and watch progress (phase 06 GraphRAG chat)
+    ("get", "/api/series/{series_id}/progress"),
+    ("post", "/api/series/{series_id}/progress"),
+    ("get", "/api/series/{series_id}/chat/sessions"),
+    ("post", "/api/series/{series_id}/chat/sessions"),
+    ("get", "/api/series/{series_id}/chat/sessions/{session_id}"),
+    ("delete", "/api/series/{series_id}/chat/sessions/{session_id}"),
+    ("post", "/api/series/{series_id}/chat/sessions/{session_id}/messages"),
+    ("post", "/api/series/{series_id}/chat/sessions/{session_id}/messages/stream"),
+    # ChangeSets (phase 06 graph-editing agent, Stage 1 propose + Stage 2
+    # confirm/apply + Stage 3 revert)
+    ("post", "/api/series/{series_id}/change-sets"),
+    ("post", "/api/series/{series_id}/change-sets/{change_set_id}/confirm"),
+    ("post", "/api/series/{series_id}/change-sets/{change_set_id}/reject"),
+    ("post", "/api/series/{series_id}/change-sets/{change_set_id}/revert"),
     # Authentication
     ("post", "/api/auth/google"),
     ("get", "/api/auth/me"),
     ("post", "/api/auth/logout"),
+    # Settings (LLM provider configuration)
+    ("get", "/api/settings/llm"),
+    ("put", "/api/settings/llm"),
 }
 EXPECTED_TEMPLATES = {path for _, path in EXPECTED_OPERATIONS}
 
@@ -53,7 +71,7 @@ def _documented_operations(document: str) -> set[tuple[str, str]]:
     return {
         (method.lower(), path)
         for method, path in re.findall(
-            r"^\| (GET|POST|PATCH|DELETE) \| `([^`]+)` \|$", section, re.MULTILINE
+            r"^\| (GET|POST|PATCH|DELETE|PUT) \| `([^`]+)` \|$", section, re.MULTILINE
         )
     }
 
@@ -77,8 +95,8 @@ def test_document_and_openapi_have_exact_locked_inventory() -> None:
     assert generated == EXPECTED_OPERATIONS
     assert {path for _, path in documented} == EXPECTED_TEMPLATES
     assert set(app.openapi()["paths"]) == EXPECTED_TEMPLATES
-    assert len(documented) == len(generated) == 30
-    assert len(EXPECTED_TEMPLATES) == 22
+    assert len(documented) == len(generated) == 44
+    assert len(EXPECTED_TEMPLATES) == 32
     assert all("?" not in path for path in EXPECTED_TEMPLATES)
 
 

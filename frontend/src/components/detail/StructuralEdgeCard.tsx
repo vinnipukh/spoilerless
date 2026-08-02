@@ -30,7 +30,7 @@ export function StructuralEdgeCard({ selected, nodes }: Props) {
   return (
     <Sheet open modal={false}>
       <SheetContent
-        side="right"
+        side="left"
         showCloseButton={false}
         className="mt-0 max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!h-auto max-sm:max-h-[70vh] max-sm:!w-full max-sm:!border-t max-sm:!border-l-0 lg:max-w-md"
       >

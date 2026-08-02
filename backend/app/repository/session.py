@@ -224,7 +224,7 @@ class Neo4jSessionRepository:
               AND s.expires_at > $now
             RETURN s.token_hash AS token_hash,
                    s.id AS session_id,
-                   [(s)-[:HAS_SESSION]->(u:AppUser) | u.id][0] AS user_id,
+                   [(s)<-[:HAS_SESSION]-(u:AppUser) | u.id][0] AS user_id,
                    s.created_at AS created_at,
                    s.expires_at AS expires_at,
                    s.last_seen_at AS last_seen_at,

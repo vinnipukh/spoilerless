@@ -30,6 +30,9 @@ export const graphResponseS01E01: GraphResponse = {
     { id: 'edge_4', source: 'char_dexter_morgan', target: 'char_debra_morgan', type: 'FAMILY_OF', visible_from_order: 1, origin: 'canonical', claim_id: 'claim_3' },
     { id: 'edge_5', source: 'char_debra_morgan', target: 'loc_miami_metro', type: 'OCCURRED_IN', visible_from_order: 1, origin: 'canonical', claim_id: null },
     { id: 'edge_6', source: 'char_dexter_morgan', target: 'event_first_kill', type: 'OCCURRED_IN', visible_from_order: 1, origin: 'canonical', claim_id: 'claim_4' },
+    // A user-created relationship (claim_id null, origin user) — must open the
+    // LEFT inspector, never the right-side StructuralEdgeCard (App routing).
+    { id: 'user-rel:test-1', source: 'char_dexter_morgan', target: 'char_debra_morgan', type: 'KNOWS', visible_from_order: 1, origin: 'user', claim_id: null },
   ],
   claims: [
     {

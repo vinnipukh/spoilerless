@@ -2,17 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Awaiting next milestone
-stopped_at: Phase 4 fully executed — backend + frontend history panel and revert UI (13/13 new tests)
-last_updated: "2026-07-30T20:04:57.833Z"
-last_activity: 2026-07-30
-last_activity_desc: Milestone v1.0 completed and archived
+current_phase: 06
+status: "Phase 06 shipped — PR #5"
+stopped_at: Completed 06-13-PLAN.md
+last_updated: "2026-08-02T10:44:13.388Z"
+last_activity: 2026-08-02
 progress:
-  total_phases: 7
-  completed_phases: 6
-  total_plans: 23
-  completed_plans: 23
-current_phase: 05.1
+  total_phases: 8
+  completed_phases: 7
+  total_plans: 36
+  completed_plans: 36
+current_phase_name: spoiler-safe-graphrag-chat-and-graph-editing-agent
+last_activity_desc: Phase 06 complete
 ---
 
 # HD Graf Cehennemi — Project State
@@ -113,6 +114,7 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 - Phase 1 edited: Rebaselined Prototype v0 into five vertical delivery phases; Phase 1 now consolidates canonical milestones 1-4 without narrowing scope.
 - Phase 03.1 inserted after Phase 2: Frontend-only cinematic visual overhaul of graph UI, requested out-of-band from canonical requirements (URGENT). Now complete.
 - Phase 05.1 inserted after Phase 5: Candidate review frontend UI (approve/reject/edit) — deferred from Phase 5's backend-only scope; user requested completion (URGENT)
+- Phase 6 added: Spoiler-safe GraphRAG chat and graph-editing agent (RAG-01..17) — opens root ROADMAP.md milestone 9 (LLM chat, later phase), expanded with a typed ChangeSet graph-editing flow per `06-PRD-SOURCE.md`; depends functionally on Phase 3 (origin model) + Phase 4 (revision model), not on the still-unplanned Phase 05.1
 
 ## Performance Metrics
 
@@ -124,12 +126,25 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 | Phase 03.1 P02 | 7 min | 2 tasks | DetailPanel restyle, card accents, responsive sheet |
 | Phase 03.1 P03 | 3 min | 2 tasks | AppShell wordmark, segmented episode control, SeriesSelect polish |
 | Phase 03.1 P04 | 3 min | 2 tasks | GraphLegend, GraphControls, shadcn tooltip/collapsible |
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 06 P03 | 15min | 2 tasks | 6 files |
+| Phase 06 P04 | 20min | 3 tasks | 10 files |
+| Phase 06 P05 | 30min | 3 tasks | 11 files |
+| Phase 06 P08 | 45min | 3 tasks | 13 files |
+| Phase 06 P06 | 55min | 3 tasks | 9 files |
+| Phase 06 P09 | 1h 10min | 3 tasks | 19 files |
+| Phase 06 P07 | 40min | 2 tasks | 8 files |
+| Phase 06 P10 | 40min | 3 tasks | 7 files |
+| Phase 06 P13 | 6min | 2 tasks | 2 files |
 
 ## Session
 
-**Last session:** 2026-07-30T14:38:00.000Z
-**Stopped at:** Phase 4 fully executed — backend + frontend history panel and revert UI (13/13 new tests)
-**Resume file:** None — Phase 4 fully delivered. Next: Phase 5 (Future-Extraction Preparation).
+**Last session:** 2026-08-02T09:19:09.794Z
+**Stopped at:** Completed 06-13-PLAN.md
+**Resume file:** None
 
 ## Decisions
 
@@ -155,13 +170,31 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 - [Phase 03.1-04]: GraphControls reset reuses the existing module-scope runLayout function from GraphCanvas.tsx — not a second layout code path
 - [Phase 03.1-04]: select.tsx animation classes removed and z-index bumped from z-50 to z-[100] — fix for episode dropdown not being visible
 - [Phase 03.1 test]: setup.ts React.act polyfill uses `Object.defineProperty` on the CJS require cache — required for React 19.2.x compatibility with @testing-library/react
+- [Phase ?]: [Phase 06-03]: Fixed ProgressNotFoundError propagating as raw 500 in chat message endpoints and RetrievalPipeline.answer() - caught and mapped to generic 404 / fail-closed empty boundary
+- [Phase ?]: [Phase 06-04]: DELETE session uses a single user-scoped Cypher MATCH (no origin-conflict two-query pattern needed - ChatSession has no 409 case)
+- [Phase ?]: [Phase 06-04]: Concurrent-generation slot acquire/release lives inside ChatService.answer_stream's try/finally, covering both streaming and non-streaming paths symmetrically
+- [Phase ?]: [Phase 06-05]: Single label-agnostic TARGET_VISIBILITY_QUERY reused for every ChangeSet operation target kind (node/Claim/UserNote) rather than one query per label
+- [Phase ?]: [Phase 06-05]: Canonical/candidate protection is a service-layer transparent substitution (create_note override op) inside propose(), never a bare rejection
+- [Phase ?]: [Phase 06-08]: proposed_change_set typed ChangeSet | null in types/chat.ts (forward-compatible), not null alone, ahead of 06-09..11's eventual chat-triggered proposal wiring
+- [Phase ?]: [Phase 06-08]: confirmChangeSet/rejectChangeSet/revertChangeSet routes built from 06-06/06-07 PLAN.md route text since those plans hadn't executed yet at authoring time
+- [Phase ?]: [Phase 06-06]: ChangeSet apply staleness check runs inside the same execute_write transaction as the apply itself (not a service-layer pre-check) to close a TOCTOU race window
+- [Phase ?]: [Phase 06-06]: Idempotency-key replay is keyed on ChangeSet id+status (not a client-supplied key param), matching the frontend's existing no-body confirmChangeSet client built ahead of this plan in 06-08
+- [Phase ?]: [Phase 06-06]: Stale-marker write returns a _StaleResult from inside execute_write instead of raising, so the failed-status write actually commits before ChangeSetStale is raised
+- [Phase ?]: [Phase 06-09]: Node/edge selection never touches panelMode (only pill toggle/ChatLauncher do), making chat-mode-survives-selection structurally true rather than a guarded exception
+- [Phase ?]: [Phase 06-09]: useChatMessages.sendMessage now optimistically appends the user's own message locally (Rule 1 fix) - previously only the assistant reply was appended, so sent questions vanished until next refetch
+- [Phase ?]: [Phase 06-07]: Revert scoped to create-shaped ChangeSets only (delete what was created) since Stage 2 (06-06) records one coarse Revision per apply with no per-operation before-snapshot; update/delete-shaped ChangeSets rejected 422 rather than silently mishandled
+- [Phase ?]: [Phase 06-07]: Revert conflict detection compares resource.updated_at against the ChangeSet's own applied_at entirely inside one Cypher statement, never a Python-side value (which would compare a driver-native datetime against a re-serialized ISO string and never match)
+- [Phase ?]: [Phase 06-10]: confirmChange() prefers the backend's echoed UserSeriesProgress over the locally-known nextOrder on success, falling back to the optimistic value only on failure
+- [Phase ?]: [Phase 06-10]: GraphFocusIndicator's count is the raw requested-target count (nodeIds.length + edgeIds.length), not the post-filter resolved-element count
+- [Phase ?]: [Phase 06-10]: Task 2 and Task 3 landed in a single commit since both edit the same App.tsx graphFocus region and were authored together
+- [Phase ?]: [Phase 06-13]: Reused existing 'success' status value for post-abort terminal state instead of adding a new Status union member — matches every existing consumer's treatment of 'success' as not-streaming/no-error
 
 ## Current Position
 
-Phase: 05.1 — Candidate review frontend UI (INSERTED, urgent)
-Plan: —
-Status: Planning
-Last activity: 2026-07-30 — Phase 05.1 inserted after Phase 5 (backend-only PREP-01..05 left the review UI deferred); planning underway
+Phase: 06
+Plan: Not started
+Status: Phase 06 shipped — PR #5
+Last activity: 2026-08-02
 
 ## Operator Next Steps
 

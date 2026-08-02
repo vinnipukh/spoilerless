@@ -198,6 +198,23 @@ async def create_constraints(database: Neo4jDatabase) -> None:
         "CREATE INDEX session_expires_at_idx IF NOT EXISTS FOR (s:Session) ON (s.expires_at)"
     )
 
+    # Chat and watch-progress constraints and indexes (phase 06 GraphRAG chat)
+    # UserSeriesProgress is queried by the authenticated user and by series
+    # (progress repository); ChatSession denormalizes user_id onto the node
+    # (see graph/chat.py) and ChatMessage is listed per session.
+    await database.execute_query(
+        "CREATE INDEX progress_user_idx IF NOT EXISTS FOR (n:UserSeriesProgress) ON (n.user_id)"
+    )
+    await database.execute_query(
+        "CREATE INDEX progress_series_idx IF NOT EXISTS FOR (n:UserSeriesProgress) ON (n.series_id)"
+    )
+    await database.execute_query(
+        "CREATE INDEX chatsession_user_idx IF NOT EXISTS FOR (n:ChatSession) ON (n.user_id)"
+    )
+    await database.execute_query(
+        "CREATE INDEX chatmessage_session_idx IF NOT EXISTS FOR (n:ChatMessage) ON (n.session_id)"
+    )
+
 
 async def audit_visibility_integrity(database: Neo4jDatabase, series_id: str) -> None:
     """Fail if any node under *series_id* has a null ``visible_from_order``.

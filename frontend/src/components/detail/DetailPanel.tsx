@@ -13,12 +13,20 @@ import {
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import type { SelectedElement } from '../graph/GraphCanvas'
 import type { GraphClaim, GraphEvidence, GraphNode, GraphResponse } from '../../types/graph'
 import { useNotes } from '../../hooks/useNotes'
-import type { NoteResponse } from '../../types/userContent'
+import type { CustomRelationshipResponse, NoteResponse } from '../../types/userContent'
 import { createCustomRelationship } from '../../api/userContent'
 import { RevisionHistoryPanel } from './RevisionHistoryPanel'
+
+// Reused by CitationChip.tsx (06-09-PLAN.md Task 2) so claim/evidence citation
+// accents are never redefined as a second, drifting hex literal — the exact
+// same visual meaning ("this points at that Claims/Evidence card") applies to
+// a citation chip as it does to these Overview-tab accent bars.
+export const CLAIM_ACCENT_COLOR = '#D946EF'
+export const EVIDENCE_ACCENT_COLOR = '#FB923C'
 
 function initialsFor(label: string): string {
   const initials = label
@@ -78,7 +86,21 @@ type Props = {
   seriesId: string | null
   visibleUntilOrder: number | null
   onRefetchGraph?: () => void
-  episodes: { id: string; code: string; title: string }[]
+  /** In-place graph data refresh (useGraph's `refresh`) — preferred for
+   * create/edit/delete operations that land in the graph, so the canvas
+   * updates without a destructive loading unmount. */
+  onRefreshGraph?: () => void
+  /** Called with the created relationship so the caller can reveal/frame it. */
+  onRelationshipCreated?: (rel: CustomRelationshipResponse) => void
+  episodes: { id: string; code: string; title: string; episode_order: number }[]
+  // Inspector-panel open state is lifted to App.tsx — the panel opens whenever
+  // an element is selected (`open={selected != null}`) and closes via
+  // `onDeselect` (canvas background tap clears the selection in App.tsx).
+  // The chat surface lives in its own independent right-side sheet (ChatSheet);
+  // this component is the left-side inspector only, so both can be open at
+  // once.
+  open: boolean
+  onDeselect: () => void
 }
 
 type ResolvedEvidence = {
@@ -220,7 +242,7 @@ function CreateRelationshipDialog({
   selectedNodeLabel: string | null
   graphNodes: GraphNode[]
   episodes: { id: string; code: string; title: string }[]
-  onSuccess: () => void
+  onSuccess: (rel: CustomRelationshipResponse) => void
 }) {
   const [targetId, setTargetId] = useState('')
   const [predicate, setPredicate] = useState('KNOWS')
@@ -243,7 +265,7 @@ function CreateRelationshipDialog({
     setSaving(true)
     setError('')
     try {
-      await createCustomRelationship(seriesId, {
+      const rel = await createCustomRelationship(seriesId, {
         source_id: selectedNodeId,
         target_id: targetId,
         predicate,
@@ -252,7 +274,7 @@ function CreateRelationshipDialog({
       setTargetId('')
       setPredicate('KNOWS')
       onOpenChange(false)
-      onSuccess()
+      onSuccess(rel)
     } catch (err: any) {
       setError(err?.message ?? 'Failed to create relationship.')
     } finally {
@@ -392,10 +414,18 @@ function NoteEditor({
   )
 }
 
-export function DetailPanel({ selected, graph, seriesId, visibleUntilOrder, onRefetchGraph, episodes }: Props) {
-  const CLAIM_ACCENT_COLOR = '#D946EF'
-  const EVIDENCE_ACCENT_COLOR = '#FB923C'
-
+export function DetailPanel({
+  selected,
+  graph,
+  seriesId,
+  visibleUntilOrder,
+  onRefetchGraph,
+  onRefreshGraph,
+  onRelationshipCreated,
+  episodes,
+  open,
+  onDeselect,
+}: Props) {
   // Selection-aware state
   const [editingNote, setEditingNote] = useState<NoteResponse | null>(null)
   const [showNewNoteForm, setShowNewNoteForm] = useState(false)
@@ -429,6 +459,9 @@ export function DetailPanel({ selected, graph, seriesId, visibleUntilOrder, onRe
 
   const selectedNode =
     selected?.kind === 'node' ? graph.nodes.find((node) => node.id === selected.id) : undefined
+  const selectedEdge =
+    selected?.kind === 'edge' ? graph.edges.find((edge) => edge.id === selected.id) : undefined
+  const nodeLabel = (id: string) => graph.nodes.find((node) => node.id === id)?.label ?? id
   const relevantClaims = resolveClaimsForSelection(selected, graph)
   const activeClaim = selected?.kind === 'edge' ? relevantClaims[0] : undefined
   const evidenceEntries = resolveEvidenceForClaims(relevantClaims, graph)
@@ -498,28 +531,44 @@ export function DetailPanel({ selected, graph, seriesId, visibleUntilOrder, onRe
     }
   }, [seriesId, notesState])
 
-  const title = selectedNode?.label ?? activeClaim?.label ?? 'Details'
+  const title =
+    selectedNode?.label ??
+    activeClaim?.label ??
+    (selected?.kind === 'edge'
+      ? graph.edges.find((edge) => edge.id === selected.id)?.type
+      : undefined) ??
+    'Details'
 
   // Workaround for stale-ref callback: keep the latest delete in a ref
   const handleDeleteNoteRef = useRef(handleDeleteNote)
   handleDeleteNoteRef.current = handleDeleteNote
 
   return (
-    <Sheet open modal={false}>
+    <Sheet open={open} onOpenChange={(next) => !next && onDeselect()} modal={false}>
       <SheetContent
-        side="right"
+        side="left"
         showCloseButton={false}
-        className="mt-0 max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!h-auto max-sm:max-h-[70vh] max-sm:!w-full max-sm:!border-t max-sm:!border-l-0 lg:max-w-md"
+        // Two independent non-modal Radix sheets (left inspector + right chat)
+        // must coexist: without this, opening one fires DismissableLayer's
+        // focus-outside on the other (Radix Dialog closes a non-modal dialog
+        // when a second dialog steals focus) and the first silently closes.
+        // Close is driven by selection state (onDeselect), never by outside
+        // interaction or Escape.
+        onInteractOutside={(event) => event.preventDefault()}
+        onEscapeKeyDown={(event) => event.preventDefault()}
+        className={cn(
+          'mt-0 max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!h-auto max-sm:!w-full max-sm:!border-t max-sm:!border-l-0 max-sm:max-h-[70vh] lg:max-w-md',
+        )}
       >
         <SheetHeader>
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             {selectedNode?.type === 'Character' && (
               <CharacterPortrait key={selectedNode.id} node={selectedNode} />
             )}
-            <SheetTitle>{selected ? title : 'Details'}</SheetTitle>
+            <SheetTitle className="truncate">{selected ? title : 'Details'}</SheetTitle>
           </div>
         </SheetHeader>
-        <div className="flex flex-col gap-2 px-4 pb-4 text-sm">
+        <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pb-4 text-sm">
           {!selected && <p>Select a node to see details.</p>}
           {selected && (
             <Tabs defaultValue="overview">
@@ -591,6 +640,21 @@ export function DetailPanel({ selected, graph, seriesId, visibleUntilOrder, onRe
                       <dd>{activeClaim.confidence_level}</dd>
                     </div>
                   </dl>
+                )}
+                {selected.kind === 'edge' && !activeClaim && selectedEdge && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 rounded-md border border-border p-3">
+                      <span>{nodeLabel(selectedEdge.source)}</span>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true">
+                        <path d="M5 12h14"></path>
+                        <path d="m12 5 7 7-7 7"></path>
+                      </svg>
+                      <span>{nodeLabel(selectedEdge.target)}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      User-created relationship (origin: user).
+                    </p>
+                  </div>
                 )}
               </TabsContent>
 
@@ -722,7 +786,10 @@ export function DetailPanel({ selected, graph, seriesId, visibleUntilOrder, onRe
           selectedNodeLabel={selectedNode?.label ?? null}
           graphNodes={graph.nodes}
           episodes={episodes}
-          onSuccess={() => onRefetchGraph?.()}
+          onSuccess={(rel) => {
+            ;(onRefreshGraph ?? onRefetchGraph)?.()
+            onRelationshipCreated?.(rel)
+          }}
         />
       </SheetContent>
     </Sheet>

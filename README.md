@@ -224,6 +224,17 @@ This prototype builds toward:
 8. **M8 — LLM extraction pipeline preparation**
 9. **M9 — Spoiler-grounded LLM chat**
 
+### Enabling the GraphRAG chat locally (optional)
+
+The chat feature is **disabled by default**. To try it, point the backend at any
+OpenAI-compatible chat-completions endpoint by setting `LLM_ENABLED=true`,
+`LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL` in your root `.env` (never commit
+real key values). See [`docs/GETTING-STARTED.md`](./docs/GETTING-STARTED.md)
+section 7.8 and [`docs/CONFIGURATION.md`](./docs/CONFIGURATION.md) for the full
+`LLM_*` reference. The LLM only ever sees the spoiler-filtered, tool-allowlisted
+context — see [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) §4.10
+"Spoiler-Safety Invariants" for the guarantees.
+
 See [`ROADMAP.md`](./ROADMAP.md) for details.
 
 ---

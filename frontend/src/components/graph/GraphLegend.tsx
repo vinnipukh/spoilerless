@@ -137,7 +137,7 @@ export function GraphLegend() {
     <Collapsible
       open={open}
       onOpenChange={setOpen}
-      className="fixed bottom-4 left-4 z-[60] max-w-56"
+      className="fixed bottom-4 left-20 z-[60] max-w-56"
     >
       <CollapsibleTrigger
         aria-expanded={open}
@@ -150,7 +150,7 @@ export function GraphLegend() {
         Legend
       </CollapsibleTrigger>
 
-      <CollapsibleContent className="rounded-md rounded-t-none bg-card p-3 text-xs shadow-sm ring-1 ring-border data-[state=closed]:hidden">
+      <CollapsibleContent className="max-h-56 overflow-y-auto rounded-md rounded-t-none bg-card p-3 text-xs shadow-sm ring-1 ring-border data-[state=closed]:hidden">
         {/* Node Types */}
         <div className="mb-3">
           <h4 className="mb-1.5 font-medium text-foreground">Node Types</h4>
