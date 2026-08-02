@@ -154,7 +154,7 @@ Actual source retrieval/parsing/ingestion, operational LLM extraction, and LLM c
 **Goal:** Add a conversational interface where the authenticated user asks questions about the selected series and receives answers grounded only in graph data visible up to their persisted watch progress (backend-authoritative, never frontend-supplied), with clickable Claim/Evidence/Source citations and graph highlighting; support safe graph modification through a typed propose/confirm ChangeSet flow that never lets the LLM execute Cypher directly, preserves the canonical/candidate mutation invariant, and records every applied edit as an auditable revision.
 **Requirements**: RAG-01..RAG-17
 **Depends on:** Phase 3 (Notes/custom-content origin model this phase extends), Phase 4 (revision/audit model this phase extends)
-**Plans:** 13/13 plans executed
+**Plans:** 13/13 plans complete
 
 **Success criteria:** the LLM never receives a raw Neo4j driver, unrestricted Cypher, or graph/chat content beyond the user's persisted `visible_until_order`; every retrieval and mutation tool is allowlisted, parameterized, and independently fail-closed; chat history obeys the same spoiler boundary (lowering progress hides future-boundary messages/citations without deleting them); citations are validated against retrieved context; user-origin ChangeSets apply transactionally with revision/audit metadata after explicit confirmation while `origin:canonical`/`origin:candidate` resources stay protected; existing graph/auth/Notes/revision/spoiler behavior has zero regression; backend + frontend automated test suites, lint, typecheck, and production build all pass; a documented manual acceptance checklist is executed before the branch is called safe to commit.
 
