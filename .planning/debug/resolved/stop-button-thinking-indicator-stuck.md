@@ -1,8 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "While the answer streams, a Stop button is visible; when it completes (or fails) the Stop button disappears and no stuck loading/thinking indicator remains. actual: button doesnt dissappear. thinking thing still shows. generation stops."
 created: 2026-08-02T00:00:00Z
-updated: 2026-08-02T00:30:00Z
+updated: 2026-08-02T01:05:00Z
+resolved_by: "06-13-PLAN.md (commit 8a396e0)"
 ---
 
 ## Current Focus
