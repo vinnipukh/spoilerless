@@ -262,3 +262,50 @@ def test_update_llm_settings_rejects_unknown_fields(
         json={"provider": "gemini", "sneaky": "field"},
     )
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "bad_url",
+    [
+        "file:///etc/passwd",
+        "gopher://internal:70/",
+        "ftp://internal/",
+        "javascript:alert(1)",
+        "not-a-url",
+        "://missing-scheme",
+    ],
+)
+def test_update_llm_settings_rejects_non_http_base_url(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+    bad_url: str,
+) -> None:
+    # SSRF-via-scheme guard (see domain/settings.py's _validate_base_url):
+    # only http/https may reach the provider client.
+    _authed(client, fake_user_repo, session_repo)
+    response = client.put(
+        "/api/settings/llm",
+        json={"provider": "openai_compatible", "base_url": bad_url},
+    )
+    assert response.status_code == 422, response.text
+
+
+def test_update_llm_settings_accepts_local_http_base_url(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    # Local vLLM/Ollama endpoints remain a documented, supported deployment —
+    # the scheme guard must not regress this (see docs/GETTING-STARTED.md 7.8).
+    _authed(client, fake_user_repo, session_repo)
+    response = client.put(
+        "/api/settings/llm",
+        json={
+            "provider": "openai_compatible",
+            "base_url": "http://127.0.0.1:11434/v1",
+            "model": "llama3",
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["base_url"] == "http://127.0.0.1:11434/v1"
