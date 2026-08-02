@@ -1,8 +1,9 @@
+<!-- generated-by: gsd-doc-writer -->
 # HD Graf Cehennemi
 
 **A spoiler-aware, source-grounded television-series knowledge graph application.**
 
-Explore characters, events, locations, claims, and relationships through an interactive graph interface — with spoiler protection enforced at the backend data-access layer.
+Explore characters, events, locations, claims, and relationships through an interactive graph interface — with spoiler protection enforced at the backend data-access layer, plus an optional spoiler-safe LLM chat over the same filtered graph.
 
 > **Prototype scope:** Dexter, Season 1, Episodes 1–3.
 
@@ -11,12 +12,14 @@ Explore characters, events, locations, claims, and relationships through an inte
 ## Features
 
 - **Interactive knowledge graph** — Browse a Cytoscape.js-powered graph of narrative entities (characters, events, locations, organizations, objects) and their relationships.
-- **Spoiler-aware filtering** — Set your watch progress by episode. The backend enforces visibility at the data-access layer: nodes, claims, relationships, and evidence fragments beyond your selected episode are never returned — not merely hidden in the UI.
-- **Source-grounded claims** — Every claim is backed by at least one evidence fragment with source metadata (type, URL, episode, timestamp). Confidence and status are tracked separately from relationship semantics.
+- **Spoiler-aware filtering** — Set your watch progress by episode. Graph and boundary-aware user-content reads enforce visibility at the backend data-access layer; candidate review reads are an exception because their boundary is optional or absent.
+- **Source-grounded claims** — Curated canonical claims are backed by evidence fragments whose sources include type, episode, locator, and retrieval date metadata; user-authored relationship claims may have no evidence. Confidence and status are tracked separately from relationship semantics.
 - **User notes & custom content** — Add plain-text notes attached to characters or claims. Create custom nodes and relationships that are visually distinct from canonical seed data.
 - **Revision history** — All user edits, corrections, and rejections are recorded in a revision log, enabling inspect-and-revert workflows.
-|- **Google OAuth authentication** — Sign-in with Google ID tokens. Sessions are managed via HttpOnly cookies with configurable TTL. A Google Cloud OAuth client is required to log in. |
-- **Future-ready architecture** — Clean extension points for LLM-powered extraction pipelines, candidate claim review workflows, and spoiler-grounded LLM chat.
+- **Candidate claim review** — Extraction candidates go through a review workflow before entering the canonical graph.
+- **Change sets** — Batched, confirmable edits with revision tracking and protection against conflicting changes.
+- **Google OAuth authentication** — Sign in with Google ID tokens. Sessions are managed via HttpOnly cookies with configurable TTL. A Google Cloud OAuth client is required to log in.
+- **Spoiler-grounded LLM chat (optional)** — Disabled by default. When enabled, an OpenAI-compatible chat model answers questions using only the spoiler-filtered, tool-allowlisted graph context for the user's watch progress.
 
 ---
 
@@ -40,7 +43,9 @@ React + TypeScript frontend
 (Cytoscape.js interactive graph)
 ```
 
-The **spoiler boundary** is the system's core architectural invariant. Every story-sensitive entity carries a `visible_from_order` field. When a user sets their watch progress to episode N, the backend queries only data with `visible_from_order <= N`. Neither the frontend nor any future LLM integration ever receives data beyond this boundary.
+The **spoiler boundary** is the system's core architectural invariant. Every story-sensitive entity carries a `visible_from_order` field. When a user sets their watch progress to episode N, graph and GraphRAG queries return only data with `visible_from_order <= N`; candidate review reads remain the documented exception because their boundary is optional or absent.
+
+See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the full system breakdown.
 
 ---
 
@@ -65,21 +70,22 @@ The **spoiler boundary** is the system's core architectural invariant. Every sto
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (for Neo4j)
 - [uv](https://docs.astral.sh/uv/) — Python package manager
-- [Node.js](https://nodejs.org/) — v18 or later
+- [Node.js](https://nodejs.org/) — `^22.22.2`, `^24.15.0`, or `>=26.0.0` (the committed `jsdom` lockfile requirement is stricter than Vite's)
 
 ### 1. Clone and configure
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/vinnipukh/hdgrafcehennemi.git
 cd hdgrafcehennemi
 cp .env.example .env
 ```
 
-Edit `.env` to set your Neo4j password.
+Edit `.env` to set `NEO4J_PASSWORD` so it matches `docker-compose.yml` (the Compose default is `hdgraf-local-password`).
 
 ### 2. Set up Google OAuth
 
 This application **requires** a Google OAuth 2.0 client to log in.
+<!-- VERIFY: Google Cloud Console OAuth 2.0 client setup steps (console.cloud.google.com) are external service details. -->
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials
 2. Create an **OAuth 2.0 Client ID** of type **Web application**
@@ -108,16 +114,16 @@ docker compose up -d
 
 Neo4j Browser will be available at `http://localhost:7474`.
 
-### 3. Install Python dependencies and seed the database
+### 4. Install Python dependencies and seed the database
 
 ```bash
 uv sync
-uv run hdgraf-setup
+uv run --project backend python -m backend.app.graph.setup
 ```
 
-The `hdgraf-setup` command creates Neo4j constraints and seeds the Dexter series, episodes, characters, locations, events, claims, sources, and evidence fragments.
+The setup module creates Neo4j constraints and seeds the Dexter series, episodes, characters, locations, events, claims, sources, and evidence fragments. Although `pyproject.toml` declares an `hdgraf-setup` script, the current project packaging configuration does not install that executable through `uv sync`.
 
-### 4. Start the backend
+### 5. Start the backend
 
 ```bash
 uv run uvicorn backend.app.main:app --reload
@@ -125,7 +131,7 @@ uv run uvicorn backend.app.main:app --reload
 
 API documentation (Swagger UI) opens at `http://localhost:8000/docs`.
 
-### 5. Start the frontend
+### 6. Start the frontend
 
 ```bash
 cd frontend
@@ -137,6 +143,8 @@ Make sure `frontend/.env.local` exists with your `VITE_GOOGLE_CLIENT_ID` (set in
 
 The frontend opens at `http://localhost:5173` and immediately shows the login screen. Sign in with your Google account to access the graph.
 
+For a full walkthrough with troubleshooting, see [`docs/GETTING-STARTED.md`](./docs/GETTING-STARTED.md).
+
 ---
 
 ## Project Structure
@@ -144,16 +152,20 @@ The frontend opens at `http://localhost:5173` and immediately shows the login sc
 ```
 hdgrafcehennemi/
 ├── backend/
-│   └── app/
-│       ├── api/            # Route handlers (series, graph, user_content, auth)
-│       ├── core/           # Config, error handling
-│       ├── domain/         # Pydantic models / schemas
-│       ├── graph/          # Neo4j database, ontology, seed, setup
-│       ├── repository/     # Data access layer (sessions, users, user content)
-│       ├── revisions/      # Revision history model
-│       ├── services/       # Business logic
-│       ├── spoiler/        # Spoiler-aware filtering logic
-│       └── main.py         # FastAPI application entry point
+│   ├── app/
+│   │   ├── api/            # Route handlers (series, graph, user_content, auth,
+│   │   │                   #   revisions, candidates, progress, chat, change_set, settings)
+│   │   ├── core/           # Config, error handling
+│   │   ├── domain/         # Pydantic models / schemas
+│   │   ├── graph/          # Neo4j database, ontology, seed, setup
+│   │   ├── llm/            # LLM provider, fallbacks, system prompt (GraphRAG chat)
+│   │   ├── repository/     # Data access layer (sessions, users, user content, etc.)
+│   │   ├── retrieval/      # Retrieval pipeline and tools for chat context
+│   │   ├── revisions/      # Revision history model
+│   │   ├── services/       # Business logic
+│   │   ├── spoiler/        # Spoiler-aware filtering logic
+│   │   └── main.py         # FastAPI application entry point
+│   └── tests/              # pytest test suite
 ├── frontend/
 │   └── src/
 │       ├── api/            # API client calls
@@ -169,7 +181,7 @@ hdgrafcehennemi/
 │   └── claim_types.yaml
 ├── docs/                   # Project documentation
 ├── docker-compose.yml      # Neo4j container orchestration
-├── pyproject.toml           # Python project config & dependencies
+├── pyproject.toml          # Python project config & dependencies
 └── .env.example            # Environment variable template
 ```
 
@@ -177,26 +189,39 @@ hdgrafcehennemi/
 
 ## API Overview
 
-The backend exposes **21 operations over 14 path templates**, documented via OpenAPI at `/docs`.
+The backend exposes REST endpoints grouped by area, documented via OpenAPI at `/docs`. See [`docs/API.md`](./docs/API.md) for the full reference.
 
-| Endpoint | Description |
-|---|---|
-| `GET /health` | Service and database health check |
-| `GET /api/series` | List all series |
-| `GET /api/series/{series_id}` | Get series details |
-| `GET /api/series/{series_id}/episodes` | List episodes for a series |
-| `GET /api/series/{series_id}/graph?visible_until_order=N` | Get spoiler-filtered graph |
-| `POST/GET /api/series/{series_id}/notes` | Create / list user notes |
-| `PATCH/DELETE /api/series/{series_id}/notes/{note_id}` | Update / delete a note |
-| `POST/GET /api/series/{series_id}/custom-nodes` | Create / get custom nodes |
-| `PATCH/DELETE /api/series/{series_id}/custom-nodes/{node_id}` | Update / delete a custom node |
-| `POST/GET /api/series/{series_id}/custom-relationships` | Create / get custom relationships |
-| `PATCH/DELETE /api/series/{series_id}/custom-relationships/{...}` | Update / delete a custom relationship |
-| `POST /api/auth/google` | Sign in with Google ID token |
-| `GET /api/auth/me` | Get current user |
-| `POST /api/auth/logout` | Sign out |
+| Area | Path prefix | Description |
+|---|---|---|
+| Health | `GET /health` | Service and database health check |
+| Series | `/api/series` | List/get series and episodes |
+| Graph | `/api/series/{series_id}/graph` | Spoiler-filtered graph, keyed by `visible_until_order` |
+| Auth | `/api/auth` | Google sign-in, current user, logout |
+| User content | `/api/series/{series_id}/notes`, `/custom-nodes`, `/custom-relationships` | User notes and custom graph content |
+| Revisions | `/api/series/{series_id}/...` | Revision history for user edits |
+| Candidates | `/api/series/{series_id}/candidates` | Candidate claim review workflow |
+| Progress | `/api/series/{series_id}/progress` | User watch-progress tracking |
+| Chat | `/api/series/{series_id}/chat` | Spoiler-grounded LLM chat (enabled through stored application settings or the `LLM_ENABLED` environment fallback) |
+| Change sets | `/api/series/{series_id}/change-sets` | Batched, confirmable graph edits |
+| Settings | `/api/settings` | Application settings |
 
-Spoiler-aware endpoints require a `visible_until_order` query parameter — a positive integer identifying the user's last watched episode order. Backend filtering is **fail-closed**: data beyond the boundary is never returned.
+Spoiler boundaries vary by endpoint: graph and boundary-aware user-content reads require a positive `visible_until_order` query parameter, chat resolves persisted watch progress server-side, the candidate list accepts an optional boundary, and candidate detail has no boundary parameter.
+
+---
+
+## Usage
+
+Once the stack is running and you are signed in, the frontend at `http://localhost:5173` renders the interactive graph filtered to your watch progress. The API is also usable directly:
+
+```bash
+# List series (the Dexter prototype ships with series_dexter)
+curl http://localhost:8000/api/series
+
+# Fetch the spoiler-filtered graph visible up to the end of episode 2
+curl "http://localhost:8000/api/series/series_dexter/graph?visible_until_order=2"
+```
+
+Watch progress is persisted per user via `GET/POST /api/series/{series_id}/progress`. Progress and chat endpoints require the Google OAuth session cookie; note and custom-content routes currently have no session dependency. See [`docs/API.md`](./docs/API.md) for the full reference.
 
 ---
 
@@ -210,19 +235,18 @@ Spoiler-aware endpoints require a `visible_until_order` query parameter — a po
 
 ---
 
-## Roadmap
+## Documentation
 
-This prototype builds toward:
-
-1. **M1 — Local infrastructure** (Neo4j + FastAPI + Vite running)
-2. **M2 — Metadata graph** (series/episode nodes and relationships)
-3. **M3 — Spoiler-aware graph endpoint** (backend filtering with `visible_from_order`)
-4. **M4 — Manual seed graph** (Dexter S01E01–03 character network)
-5. **M5 — Frontend graph UI** (Cytoscape.js visualization, episode selector, spoiler modal)
-6. **M6 — User notes and manual editing**
-7. **M7 — Revision history**
-8. **M8 — LLM extraction pipeline preparation**
-9. **M9 — Spoiler-grounded LLM chat**
+| Document | What it covers |
+|---|---|
+| [`docs/GETTING-STARTED.md`](./docs/GETTING-STARTED.md) | Step-by-step local setup and demo walkthrough |
+| [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | System architecture, layer breakdown, spoiler model, ontology |
+| [`docs/CONFIGURATION.md`](./docs/CONFIGURATION.md) | Environment variables, Docker Compose, backend settings |
+| [`docs/API.md`](./docs/API.md) | Full HTTP API reference |
+| [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md) | Local development workflow, build/lint/format commands |
+| [`docs/TESTING.md`](./docs/TESTING.md) | Test framework, running tests, coverage |
+| [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) | Deployment targets and pipeline |
+| [`docs/frontend-api-contract.md`](./docs/frontend-api-contract.md) | Frontend-facing API contract |
 
 ### Enabling the GraphRAG chat locally (optional)
 
@@ -230,12 +254,10 @@ The chat feature is **disabled by default**. To try it, point the backend at any
 OpenAI-compatible chat-completions endpoint by setting `LLM_ENABLED=true`,
 `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL` in your root `.env` (never commit
 real key values). See [`docs/GETTING-STARTED.md`](./docs/GETTING-STARTED.md)
-section 7.8 and [`docs/CONFIGURATION.md`](./docs/CONFIGURATION.md) for the full
-`LLM_*` reference. The LLM only ever sees the spoiler-filtered, tool-allowlisted
-context — see [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) §4.10
-"Spoiler-Safety Invariants" for the guarantees.
-
-See [`ROADMAP.md`](./ROADMAP.md) for details.
+and [`docs/CONFIGURATION.md`](./docs/CONFIGURATION.md) for the full `LLM_*`
+reference. The LLM only ever sees the spoiler-filtered, tool-allowlisted
+context — see [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the
+spoiler-safety guarantees.
 
 ---
 

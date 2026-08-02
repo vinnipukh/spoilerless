@@ -38,7 +38,7 @@ The prototype must look polished and must demonstrate that spoiler restrictions 
 
 ### 1.1 One-Week Delivery Boundary
 
-The one-week build uses **manually curated seed data** for Dexter S01E01-S01E03. The coding agent must not interpret the existence of `Source`, `EvidenceFragment`, `Claim`, or `origin: automatic` fields as permission to build an automatic ingestion system during this sprint.
+The one-week build uses **manually curated seed data** for Dexter S01E01-S01E03. The coding agent must not interpret the existence of `Source`, `EvidenceFragment`, `Claim`, or `origin: candidate` fields as permission to build an automatic ingestion system during this sprint.
 
 For this prototype:
 
@@ -126,7 +126,7 @@ These rules are project invariants. Do not violate them without explicit user ap
 
 ### 3.1 Spoiler Filtering Happens on the Backend
 
-Future data must never be sent to the frontend and then hidden with CSS.
+Future data must never be sent to the frontend and then hidden with CSS. The current candidate-review API is a known exception to this invariant: its list boundary is optional, and its single-candidate read has no watch boundary.
 
 Bad:
 
@@ -226,9 +226,9 @@ Use an explicit field such as:
 
 ```text
 origin:
-- automatic
+- candidate
 - user
-- curated
+- canonical
 ```
 
 A user correction must not silently overwrite the automatic source record.
@@ -475,7 +475,7 @@ Every claim should be explainable.
 }
 ```
 
-The public UI should display source metadata and links, not republish complete copyrighted scripts or subtitles.
+The public UI currently displays source metadata and locators as plain text; it does not render navigable source links. It must not republish complete copyrighted scripts or subtitles.
 
 The prototype can use manually curated source references. Automated downloading and parsing are future work unless all core prototype tasks are already complete.
 
@@ -539,8 +539,7 @@ Running the seed command twice must not duplicate nodes or relationships.
 Suggested command:
 
 ```powershell
-cd backend
-uv run python -m app.graph.seed
+uv run --project backend python -m backend.app.graph.setup
 ```
 
 ### 7.4 Parameterized Queries
@@ -675,7 +674,7 @@ Recommended interaction:
 - Immediate neighbors remain highlighted.
 - Unrelated nodes fade.
 - Edge labels appear on hover or selection.
-- A right-side panel shows claims, evidence, source links, and revision history.
+- A left-side detail panel shows claims, evidence, plain-text source locators, and revision history.
 - A top episode selector displays the active spoiler boundary.
 - Moving to a later episode requires explicit confirmation.
 
@@ -1161,13 +1160,13 @@ Do not implement these unless the core vertical slice is already complete:
 - Full OpenSubtitles automation
 - LLM-based entity and relation extraction
 - Automatic entity linking or alias resolution
-- Candidate-claim review workflows
+- Candidate-claim review expansion beyond the implemented ingest, list/get, approve, reject, and edit workflow
 - Full script PDF ingestion pipeline
 - Podcast transcription
 - IMDb scraping
 - Fandom scraping
 - News ingestion
-- Authentication
+- Authentication expansion beyond the implemented Google sign-in and session-cookie flow
 - Multi-user authorization
 - GraphQL
 - Vector search

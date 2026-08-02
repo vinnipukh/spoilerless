@@ -1,103 +1,50 @@
+<!-- generated-by: gsd-doc-writer -->
 # HD Graf Cehennemi — Architecture Guide
 
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
 > **Project:** Spoiler-aware TV series knowledge graph
+> **Prototype scope:** Dexter, Season 1, Episodes 1–3
 
 ---
 
 ## Table of Contents
 
 1. [System Overview](#1-system-overview)
-2. [Architecture Layers](#2-architecture-layers)
-3. [Layer-by-Layer Breakdown](#3-layer-by-layer-breakdown)
-   - [3.1 Frontend (React + Cytoscape)](#31-frontend-react--cytoscape)
-   - [3.2 API Layer (FastAPI)](#32-api-layer-fastapi)
-   - [3.3 Service Layer](#33-service-layer)
-   - [3.4 Repository & Database Layer](#34-repository--database-layer)
-   - [3.5 Neo4j Graph Database](#35-neo4j-graph-database)
-4. [Cross-Cutting Concerns](#4-cross-cutting-concerns)
-   - [4.1 Spoiler-Aware Data Flow](#41-spoiler-aware-data-flow)
-   - [4.2 The Claim Model](#42-the-claim-model)
-   - [4.3 Ontology System](#43-ontology-system)
-   - [4.4 Origin System](#44-origin-system)
-   - [4.5 Authentication & Sessions](#45-authentication--sessions)
-   - [4.6 Error Handling](#46-error-handling)
-   - [4.7 Revision History](#47-revision-history)
-   - [4.7.1 Append-only Revision extension](#471-append-only-revision-extension)
-   - [4.8 GraphRAG-Lite Chat Pipeline](#48-graphrag-lite-chat-pipeline)
-   - [4.9 ChangeSet Two-Stage Mutation Flow](#49-changeset-two-stage-mutation-flow)
-   - [4.10 Spoiler-Safety Invariants](#410-spoiler-safety-invariants)
-5. [Data Flow Examples](#5-data-flow-examples)
-6. [Key Design Decisions](#6-key-design-decisions)
-7. [Future Extensibility Points](#7-future-extensibility-points)
+2. [Component Diagram](#2-component-diagram)
+3. [Directory Structure Rationale](#3-directory-structure-rationale)
+4. [Layer-by-Layer Breakdown](#4-layer-by-layer-breakdown)
+   - [4.1 Frontend (React + Cytoscape)](#41-frontend-react--cytoscape)
+   - [4.2 API Layer (FastAPI)](#42-api-layer-fastapi)
+   - [4.3 Service Layer](#43-service-layer)
+   - [4.4 Repository & Database Layer](#44-repository--database-layer)
+   - [4.5 Neo4j Graph Database](#45-neo4j-graph-database)
+5. [Key Abstractions](#5-key-abstractions)
+6. [Data Flow Examples](#6-data-flow-examples)
+7. [Cross-Cutting Concerns](#7-cross-cutting-concerns)
+   - [7.1 Spoiler-Aware Data Flow](#71-spoiler-aware-data-flow)
+   - [7.2 The Claim Model](#72-the-claim-model)
+   - [7.3 Ontology System](#73-ontology-system)
+   - [7.4 Origin System](#74-origin-system)
+   - [7.5 Authentication & Sessions](#75-authentication--sessions)
+   - [7.6 Error Handling](#76-error-handling)
+   - [7.7 Revision History](#77-revision-history)
+   - [7.8 GraphRAG-Lite Chat Pipeline](#78-graphrag-lite-chat-pipeline)
+   - [7.9 ChangeSet Two-Stage Mutation Flow](#79-changeset-two-stage-mutation-flow)
+   - [7.10 Spoiler-Safety Invariants](#710-spoiler-safety-invariants)
+   - [7.11 Settings System (User-Configurable LLM Provider)](#711-settings-system-user-configurable-llm-provider)
+   - [7.12 Candidate Extraction & Review Workflow](#712-candidate-extraction--review-workflow)
+8. [Key Design Decisions](#8-key-design-decisions)
+9. [Future Extensibility Points](#9-future-extensibility-points)
+10. [Appendices](#10-appendices)
 
 ---
 
 ## 1. System Overview
 
-HD Graf Cehennemi is a **spoiler-aware TV series knowledge graph** application. It lets users explore character relationships, events, locations, and narrative claims from a TV series — all filtered by how much of the series they've watched. The core architectural invariant is that **spoilery content is never transmitted to the client** if the user hasn't progressed far enough.
+HD Graf Cehennemi is a **spoiler-aware TV series knowledge graph** application. It lets a signed-in user explore character relationships, events, locations, organizations, and narrative claims from a TV series — all filtered by how much of the series they've watched. Users can also attach notes, create custom nodes/relationships, and — when an LLM provider is configured — ask a spoiler-grounded chat agent questions about the graph.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Frontend (React 19 + Vite)               │
-│  ┌──────────┐  ┌──────────────┐  ┌───────────┐  ┌───────────┐ │
-│  │ Series   │  │ Episode      │  │ GraphCanvas│  │ Detail    │ │
-│  │ Select   │  │ Selector     │  │ (Cytoscape)│  │ Panel     │ │
-│  └──────────┘  └──────────────┘  └───────────┘  └───────────┘ │
-│                         │ http://localhost:5173                  │
-│                         │ Vite proxy → :8000                    │
-└─────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     Backend (FastAPI + Uvicorn)                  │
-│                                                                  │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │  API Layer (backend/app/api/)                               ││
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────────┐ ┌───────────┐ ││
-│  │  │ series.py│ │graph.py  │ │auth.py   │ │user_content   │ │revisions │ ││
-│  │  │          │ │          │ │          │ │.py            │ │.py       │ ││
-│  │  └──────────┘ └──────────┘ └──────────┘ └───────────────┘ └───────────┘ ││
-│  └─────────────────────────────────────────────────────────────┘│
-│                          │                                       │
-│                          ▼                                       │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │  Service Layer (backend/app/services/)                      ││
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐                    ││
-│  │  │ series.py│ │graph.py  │ │auth.py   │                    ││
-│  │  └──────────┘ └──────────┘ └──────────┘                    ││
-│  └─────────────────────────────────────────────────────────────┘│
-│                          │                                       │
-│                          ▼                                       │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │  Repository Layer (backend/app/repository/)                 ││
-│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           ││
-│  │  │ user.py     │ │session.py   │ │user_content │           ││
-│  │  │ (Neo4j)     │ │(In-Memory)  │ │.py (Neo4j)  │           ││
-│  │  └─────────────┘ └─────────────┘ └─────────────┘           ││
-│  └─────────────────────────────────────────────────────────────┘│
-│                          │                                       │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │  Database Layer (backend/app/graph/)                        ││
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐      ││
-│  │  │database  │ │ontology  │ │seed.py   │ │setup.py  │      ││
-│  │  │.py       │ │.py       │ │          │ │          │      ││
-│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘      ││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
-                          │ bolt://localhost:7687
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                  Neo4j Community (Docker)                        │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │  Constraints, Indexes, Graph Nodes & Relationships          ││
-│  │  Labels: Series, Episode, Character, Event, Location,       ││
-│  │  Organization, Object, Claim, Source, EvidenceFragment,     ││
-│  │  UserNote, AppUser                                          ││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
-```
+The core architectural invariant is that **spoilery content is never transmitted to the client** (or to the LLM) unless the requester has already reached that point in the story. Spoiler-sensitive content nodes, relationships, and claims carry a `visible_from_order` field; system records such as users, sessions, progress, chat, ChangeSets, and settings do not universally carry it. Spoiler-aware reads filter content at the Cypher layer rather than after retrieval.
+
+The system is a multi-series-capable web application composed of three deployable parts: a React single-page application, a FastAPI backend, and a Neo4j graph database running in Docker. Authentication scopes progress, chat, and ChangeSets to users, but ordinary notes, custom nodes, and custom relationships have no general `AppUser` ownership binding and are not isolated per user.
 
 ### Stack Summary
 
@@ -105,248 +52,239 @@ HD Graf Cehennemi is a **spoiler-aware TV series knowledge graph** application. 
 |---|---|
 | Frontend | React 19, TypeScript 6, Vite 8, Cytoscape.js 3 + cose-bilkent |
 | UI Library | Radix UI, shadcn/ui, Tailwind CSS 4, Lucide icons |
-| Backend | Python 3.13, FastAPI 0.140+, Uvicorn |
-| Database | Neo4j 2026 Community via Docker |
-| Graph Driver | neo4j 6.2+ (async Python driver) |
-| Auth | Google Sign-In (ID token verification via google-auth) |
-| Container | Docker Compose |
-| Package | uv (Python), npm (frontend) |
+| Backend | Python 3.13+, FastAPI 0.140+, Uvicorn, Pydantic v2 |
+| Database | Neo4j 2026 Community (Docker Compose) |
+| Graph driver | `neo4j` Python driver 6.2+ (async) |
+| Auth | Google Sign-In (ID token verification via `google-auth`) |
+| LLM (optional) | Any OpenAI-compatible or Gemini-compatible chat-completions endpoint |
+| Package management | `uv` (Python), `npm` (frontend) |
+| Orchestration | Docker Compose (Neo4j container only — backend/frontend run natively) |
 
 ---
 
-## 2. Architecture Layers
-
-The backend follows a strict layered architecture with clear dependency direction:
+## 2. Component Diagram
 
 ```
-┌──────────────────────┐
-│      API Layer       │  ← HTTP handlers, routing, request validation
-├──────────────────────┤
-│    Domain Models     │  ← Pydantic schemas shared across layers
-├──────────────────────┤
-│   Service Layer      │  ← Business logic orchestration
-├──────────────────────┤
-│  Repository Layer    │  ← Data access abstraction
-├──────────────────────┤
-│  Database Layer      │  ← Neo4j driver, connection management
-├──────────────────────┤
-│  Spoiler Filter      │  ← Cypher queries with built-in visibility gating
-│  (backend/app/spoiler)│
-└──────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    Frontend (React 19 + Vite, :5173)             │
+│  AuthProvider → LoginPage / AppShell                              │
+│   ┌──────────┐ ┌──────────────┐ ┌────────────┐ ┌─────────────┐  │
+│   │ Series/  │ │ GraphCanvas  │ │ DetailPanel│ │ ChatPanel   │  │
+│   │ Episode  │ │ (Cytoscape)  │ │ (claims/   │ │ (GraphRAG-  │  │
+│   │ Select   │ │              │ │  history)  │ │  lite chat) │  │
+│   └──────────┘ └──────────────┘ └────────────┘ └─────────────┘  │
+│              Vite dev-server proxy: /api → http://127.0.0.1:8000 │
+└─────────────────────────────────────────────────────────────────┘
+                          │  fetch (credentials: include)
+                          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                Backend (FastAPI + Uvicorn, :8000)                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ API Layer — backend/app/api/                               │  │
+│  │ series · graph · user_content · auth · revisions ·         │  │
+│  │ candidates · progress · chat · change_set · settings       │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                          │                                        │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ Service Layer — backend/app/services/                      │  │
+│  │ SeriesService · GraphService · AuthService ·                │  │
+│  │ ProgressService · ChatService · ChangeSetService ·          │  │
+│  │ SettingsService                                             │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                          │                                        │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ Repository Layer — backend/app/repository/                 │  │
+│  │ UserRepository · SessionRepository (Neo4j) ·                │  │
+│  │ UserContentRepository · ChangeSetRepository ·               │  │
+│  │ ChatRepository · ProgressRepository · SettingsRepository    │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                          │                                        │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ Graph / Spoiler Layer — backend/app/graph/, spoiler/        │  │
+│  │ Neo4jDatabase · ontology.py · seed.py · setup.py ·           │  │
+│  │ filter.py (parameterized, visibility-gated Cypher)          │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                   │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ GraphRAG-lite (optional) — backend/app/retrieval/, llm/     │  │
+│  │ RetrievalPipeline · 11 allowlisted tools · LLMProvider      │  │
+│  └───────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                          │  bolt://localhost:7687
+                          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              Neo4j 2026 Community (Docker, :7474 / :7687)         │
+│  Series, Season, Episode, Scene, Character, Location,             │
+│  Organization, Object, Event, Claim, Source, EvidenceFragment,    │
+│  UserNote, Revision, AppUser, ChangeSet, ChatMessage, AppSetting  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-**Key rule:** Each layer depends only on the layer directly below it. Domain models are shared across all layers.
+The backend predominantly follows a layered architecture, but several API modules use repositories or transaction/data-access modules directly:
+
+```
+API Layer        ← HTTP handlers, routing, request validation
+Domain Models     ← Pydantic schemas shared across all layers
+Service Layer     ← business logic orchestration
+Repository Layer  ← data-access abstraction
+Database Layer    ← Neo4j driver, connection management
+Spoiler Filter    ← parameterized Cypher with built-in visibility gating
+```
+
+**Intended dependency flow:** API → service → repository → database, while domain models (`backend/app/domain/`) are imported across layers. The current code has explicit route-level deviations: `candidates.py` and `revisions.py` contain direct transaction/data-access logic, `user_content.py` constructs and calls `UserContentRepository` in handlers, and chat session handlers reach `ChatRepository` through `ChatService` while `chat.py` imports repository exceptions directly.
 
 ---
 
-## 3. Layer-by-Layer Breakdown
+## 3. Directory Structure Rationale
 
-### 3.1 Frontend (React + Cytoscape)
+```
+hdgrafcehennemi/
+├── backend/
+│   └── app/
+│       ├── api/            # Route handlers — one module per resource area
+│       ├── core/           # Settings (pydantic-settings) and error-envelope helpers
+│       ├── domain/         # Pydantic models — the request/response contract
+│       ├── graph/          # Neo4j driver, ontology loader, seed pipeline, candidate
+│       │                    #   ingest, and feature Cypher constants (chat, change_set,
+│       │                    #   progress) alongside spoiler/filter.py's graph reads
+│       ├── llm/            # LLM provider abstraction, system prompts, fallback text
+│       ├── repository/     # Data-access layer (Neo4j queries; session store — Neo4j
+│       │                    #   by default, in-memory implementation for dev/tests)
+│       ├── retrieval/      # GraphRAG-lite pipeline and allowlisted retrieval tools
+│       ├── revisions/      # Revision (audit trail) domain module
+│       ├── services/       # Business logic orchestration, one class per feature
+│       ├── spoiler/        # Isolated, dependency-free spoiler-filter Cypher constants
+│       └── main.py         # FastAPI app assembly, router registration, CORS, lifespan
+│   └── tests/               # pytest suite (backend/tests/, see pyproject.toml testpaths)
+├── frontend/
+│   └── src/
+│       ├── api/            # Typed fetch clients, one file per backend resource
+│       ├── components/     # React components grouped by feature (graph, chat, auth, ...)
+│       ├── hooks/           # Data-fetching and state hooks
+│       ├── providers/       # React context providers (auth)
+│       └── types/           # TypeScript types mirroring backend/app/domain/*.py
+├── data/dexter/             # Seed data for the Dexter S01E01–03 prototype
+│   ├── metadata/            # Series and episode metadata
+│   └── seed/                # Characters, claims, events, evidence, locations, sources
+├── ontology/                 # Versioned YAML type system (node/relation/claim types)
+├── docs/                     # Project documentation (this directory)
+├── docker-compose.yml         # Neo4j container orchestration only
+├── pyproject.toml             # Python project config, dependencies, pytest config
+└── .env.example                # Environment variable template
+```
+
+The split between `data/` (content) and `ontology/` (schema) lets the seed pipeline validate every seeded entity against the type system before writing to Neo4j — a malformed seed file fails fast at `hdgraf-setup` time rather than producing an inconsistent graph. The backend's `api/ → services/ → repository/ → graph/` layering mirrors a conventional three-tier backend, with `spoiler/` singled out as its own directory specifically because the spoiler-filtering Cypher is the system's central invariant and is kept free of FastAPI/Pydantic imports so it can be unit-tested and audited in isolation.
+
+---
+
+## 4. Layer-by-Layer Breakdown
+
+### 4.1 Frontend (React + Cytoscape)
 
 **Location:** `frontend/`
 
-The frontend is a single-page application that renders an interactive knowledge graph using Cytoscape.js.
+A single-page application that renders an interactive knowledge graph using Cytoscape.js, gated behind Google Sign-In.
 
 #### Directory Structure
 
 ```
 frontend/src/
-├── api/              # HTTP client layer
-│   ├── client.ts     # Shared fetch wrapper with ApiError
-│   ├── graph.ts      # GET /api/series/{id}/graph
-│   └── series.ts     # GET /api/series, /api/series/{id}/episodes
+├── api/              # client.ts (fetch wrapper + ApiError), graph.ts, series.ts,
+│                      # auth.ts, revisions.ts, progress.ts, chat.ts, changeSet.ts,
+│                      # settings.ts, userContent.ts
 ├── components/
-│   ├── detail/       # DetailPanel, StructuralEdgeCard
-│   ├── episode/      # EpisodeSelector, SeriesSelect, ConfirmAdvanceModal
-│   ├── graph/        # GraphCanvas, graphElements, graphStylesheet, GraphStatus
-│   ├── layout/       # AppShell
-│   └── ui/           # shadcn/ui primitives (alert, badge, button, card, etc.)
-├── hooks/
-│   ├── useGraph.ts       # Graph fetching with retry
-│   ├── useWatchProgress.ts  # sessionStorage-backed watch progress
-│   ├── useSeries.ts      # Series list fetching
-│   └── useEpisodes.ts    # Episode list fetching
-├── types/
-│   ├── graph.ts      # Mirrors backend domain/graph.py
-│   └── series.ts     # Mirrors backend domain/series.py
-└── test/fixtures/    # Test data
+│   ├── auth/          # LoginPage
+│   ├── chat/           # ChatLauncher, ChatSheet, ChatPanel, SessionPicker,
+│   │                    # MessageList/MessageBubble, CitationChip, ChangeSetCard
+│   ├── detail/          # DetailPanel, StructuralEdgeCard, RevisionHistoryPanel
+│   ├── episode/          # EpisodeSelector, SeriesSelect, ConfirmAdvanceModal
+│   ├── graph/             # GraphCanvas, graphElements, graphStylesheet, GraphStatus
+│   ├── layout/             # AppShell
+│   ├── settings/            # SettingsPage
+│   └── ui/                  # shadcn/ui primitives (button, card, dialog, alert, ...)
+├── hooks/               # useGraph, useWatchProgress, useSeries, useEpisodes,
+│                         # useNotes, useRevisions, useChatSessions, useChatMessages
+├── providers/            # AuthContext, AuthProvider, useAuth
+└── types/                # graph.ts, series.ts, revision.ts, settings.ts — mirror
+                           # backend/app/domain/*.py
 ```
 
 #### Key Components
 
-**`GraphCanvas.tsx`** — The core visualization component. Wraps `react-cytoscapejs` with:
-- **cose-bilkent layout** as the primary graph layout algorithm (falls back to built-in `cose` on failure)
-- Tap-driven selection: tapping a node highlights its closed neighborhood and dims everything else
-- Hover tooltips for truncated labels
-- Layout re-run on graph data change (episode boundary progression)
-
-**`graphElements.ts`** — Pure function mapping `GraphResponse` → Cytoscape `ElementDefinition[]`. The backend has already applied the spoiler filter; this function never re-filters by `visible_from_order`.
-
-**`graphStylesheet.ts`** — Full Cytoscape stylesheet mapping:
-- Node types to shapes: Character → ellipse, Event → round-rectangle, Location → round-rectangle, Organization → diamond, Episode → tag, Series → star, UserNote → dashed round-rectangle
-- Origin treatment: canonical nodes get solid borders, others get dashed
-- Selection/fade: faded class at 0.25/0.15 opacity, selected-dominant with accent border
-
-**`useWatchProgress.ts`** — sessionStorage-backed state machine with three states:
-- `confirmedOrder` — the actual spoiler boundary
-- `pendingChange` — an unconfirmed forward/backward jump (triggers confirmation modal)
-- Hydration from sessionStorage on mount (no modal on page refresh)
-
-**`App.tsx`** — Root component orchestrating:
-- Series selection → episode list loading → watch progress state → graph fetching
-- Centralized D-06/D-07 branch: routes structural edges to `StructuralEdgeCard` and claim-backed edges to `DetailPanel`
-- Modal confirmation for watch-progress changes
+- **`GraphCanvas.tsx`** — wraps `react-cytoscapejs`. Uses the `cose-bilkent` layout as primary (falls back to the built-in `cose` layout on failure); tapping a node highlights its closed neighborhood and dims the rest; layout re-runs when the graph data changes (i.e. on episode-boundary progression).
+- **`graphElements.ts`** — pure function mapping the backend `GraphResponse` to Cytoscape `ElementDefinition[]`. It performs **no** re-filtering by `visible_from_order` — the backend has already applied the spoiler filter, and the frontend trusts it completely.
+- **`graphStylesheet.ts`** — maps node types to shapes (Character → ellipse, Event/Location → round-rectangle, Organization → diamond, Episode → tag, Series → star, UserNote → dashed round-rectangle) and origin to border style (canonical = solid, candidate/user = dashed).
+- **`useWatchProgress.ts`** — watch-progress state machine with a `confirmedOrder` (the actual spoiler boundary) and a `pendingChange` (an unconfirmed jump that triggers a confirmation modal). The backend is authoritative: `sessionStorage` is used only as a loading-state cache, and on mount the hook reconciles the hydrated value against `GET /api/series/{id}/progress`, overriding it with the server record. `confirmChange()` awaits the `updateProgress()` backend write before committing local state (optimistically committing on transient network failure); hydrates from `sessionStorage` on mount so a page refresh never re-prompts.
+- **`AuthProvider.tsx`** — on mount calls `GET /api/auth/me` to silently restore a session from the cookie; any auth error resolves to an `unauthenticated` state rather than surfacing an error banner.
+- **`App.tsx` / `AppShell`** — orchestrates series selection → episode list loading → watch-progress state → graph fetching, and routes edge selection to either `StructuralEdgeCard` (topological edges) or `DetailPanel` (claim-backed edges).
 
 #### Vite Configuration
 
-The dev server proxies `/api` requests to the backend at `http://127.0.0.1:8000`, avoiding CORS issues during development.
+The dev server proxies `/api` requests to `http://127.0.0.1:8000`, avoiding CORS issues in local development.
 
 ---
 
-### 3.2 API Layer (FastAPI)
+### 4.2 API Layer (FastAPI)
 
 **Location:** `backend/app/api/`
 
-Nine route modules registering 41 HTTP operations across 30 unique path templates (plus `/health`). The authoritative locked inventory lives in [docs/frontend-api-contract.md](frontend-api-contract.md) and is verified by `backend/tests/test_openapi_contract.py` and `backend/tests/test_frontend_contract_doc.py`.
+Ten route modules registering **44 HTTP operations** (including `GET /health` in `main.py`) across roughly 32 unique path templates.
 
 #### Route Inventory
 
-| Module | Path | Methods | Purpose |
-|---|---|---|---|
-| `series.py` | `/api/series` | GET | List all series |
-| `series.py` | `/api/series/{series_id}` | GET | Get one series |
-| `series.py` | `/api/series/{series_id}/episodes` | GET | List episodes (no spoiler filter) |
-| `graph.py` | `/api/series/{series_id}/graph` | GET | Spoiler-safe graph read |
-| `user_content.py` | `/api/series/{series_id}/notes` | GET, POST | List/create user notes |
-| `user_content.py` | `/api/series/{series_id}/notes/{note_id}` | GET, PATCH, DELETE | CRUD one note |
-| `user_content.py` | `/api/series/{series_id}/custom-nodes` | POST | Create custom node |
-| `user_content.py` | `/api/series/{series_id}/custom-nodes/{node_id}` | GET, PATCH, DELETE | CRUD one custom node |
-| `user_content.py` | `/api/series/{series_id}/custom-relationships` | POST | Create custom relationship |
-| `user_content.py` | `/api/series/{series_id}/custom-relationships/{relationship_id}` | GET, PATCH, DELETE | CRUD one relationship |
-| `revisions.py` | `/api/series/{series_id}/revisions` | GET | List visible revisions |
-| `revisions.py` | `/api/series/{series_id}/revisions/{revision_id}` | GET | Get one revision |
-| `revisions.py` | `/api/series/{series_id}/revisions/{revision_id}/revert` | POST | Revert to a revision |
-| `progress.py` | `/api/series/{series_id}/progress` | GET, POST | Read/update persisted watch progress |
-| `chat.py` | `/api/series/{series_id}/chat/sessions` | GET, POST | List/create chat sessions |
-| `chat.py` | `/api/series/{series_id}/chat/sessions/{session_id}` | GET, DELETE | Get/delete one session |
-| `chat.py` | `/api/series/{series_id}/chat/sessions/{session_id}/messages` | POST | Non-streaming chat turn (fallback) |
-| `chat.py` | `/api/series/{series_id}/chat/sessions/{session_id}/messages/stream` | POST | Streaming chat turn (SSE) |
-| `change_set.py` | `/api/series/{series_id}/change-sets` | POST | Propose a ChangeSet (Stage 1) |
-| `change_set.py` | `/api/series/{series_id}/change-sets/{change_set_id}/confirm` | POST | Confirm a ChangeSet (Stage 2) |
-| `change_set.py` | `/api/series/{series_id}/change-sets/{change_set_id}/reject` | POST | Reject a ChangeSet |
-| `change_set.py` | `/api/series/{series_id}/change-sets/{change_set_id}/revert` | POST | Revert an applied ChangeSet (Stage 3) |
-| `candidates.py` | `/api/series/{series_id}/candidates` | GET | List candidate claims |
-| `candidates.py` | `/api/series/{series_id}/candidates/ingest` | POST | Ingest extraction batch as candidates |
-| `candidates.py` | `/api/series/{series_id}/candidates/{claim_id}` | GET, PATCH | Get/edit one candidate claim |
-| `candidates.py` | `/api/series/{series_id}/candidates/{claim_id}/approve` | POST | Approve candidate → corroborated |
-| `candidates.py` | `/api/series/{series_id}/candidates/{claim_id}/reject` | POST | Reject candidate |
-| `auth.py` | `/api/auth/google` | POST | Google Sign-In |
-| `auth.py` | `/api/auth/me` | GET | Current user from session |
-| `auth.py` | `/api/auth/logout` | POST | Logout |
-| `main.py` | `/health` | GET | Health check |
+| Module | Base path | Purpose |
+|---|---|---|
+| `series.py` | `/api/series` | List/get series, list episodes (no spoiler filter — metadata is public) |
+| `graph.py` | `/api/series/{series_id}/graph` | Spoiler-safe graph read (the critical read path) |
+| `user_content.py` | `/api/series/{series_id}/notes`, `/custom-nodes`, `/custom-relationships` | CRUD for user notes, custom nodes, custom relationships |
+| `revisions.py` | `/api/series/{series_id}/revisions` | List/get revisions, revert to a revision |
+| `progress.py` | `/api/series/{series_id}/progress` | Read/persist a user's watch-progress boundary |
+| `chat.py` | `/api/series/{series_id}/chat/sessions` | Chat session CRUD, non-streaming and streaming (SSE) chat turns |
+| `change_set.py` | `/api/series/{series_id}/change-sets` | Propose / confirm / reject / revert a graph mutation |
+| `candidates.py` | `/api/series/{series_id}/candidates` | Ingest, list, edit, approve, reject candidate claims |
+| `auth.py` | `/api/auth` | Google Sign-In, current-user lookup, logout |
+| `settings.py` | `/api/settings/llm` | Read/update the configurable LLM provider settings |
+| `main.py` | `/health` | Service + database health check |
 
 #### Architecture Pattern
 
-Each route module follows a consistent pattern:
-1. FastAPI `APIRouter` with prefix and tags
-2. Typed dependencies via `Annotated` (FastAPI's `Depends` typing)
-3. Constructor-injected services/repositories
-4. Standard error envelope via `core/errors.py`
-5. Pydantic domain models for request/response validation
+Route modules consistently use FastAPI `APIRouter`s and Pydantic request/response models, but dependency and data-access patterns vary: most inject services or repositories, `user_content.py` constructs its repository inside handlers, and `candidates.py`/`revisions.py` include direct transaction or data-access logic.
 
 #### Graph Route — The Critical Read Path
 
-`GET /api/series/{series_id}/graph?visible_until_order=N`
+`GET /api/series/{series_id}/graph?visible_until_order=N` is the most architecturally significant endpoint. It validates the series exists, resolves the boundary against a persisted episode order, delegates to `GraphService.fetch_graph()` (which runs seven Cypher queries concurrently), and returns a closed-form `GraphResponse` containing every visible node, edge, claim, source, and evidence fragment.
 
-This is the most architecturally significant endpoint. It:
-1. Validates the series exists
-2. Resolves the boundary against persisted episode orders
-3. Delegates to `GraphService.fetch_graph()` which runs **7 concurrent Cypher queries**
-4. Returns a closed-form `GraphResponse` containing all visible nodes, edges, claims, sources, and evidence
+The locked operation inventory (method/path templates and response schemas) is maintained separately in [`docs/frontend-api-contract.md`](./frontend-api-contract.md); the OpenAPI spec generated by `backend.app.main:app` is authoritative.
 
 ---
 
-### 3.3 Service Layer
+### 4.3 Service Layer
 
 **Location:** `backend/app/services/`
 
-Service classes encapsulate business logic:
-
-#### `GraphService` (`graph.py`)
-- Orchestrates the spoiler-safe graph read
-- `fetch_graph()` runs 7 Cypher queries concurrently via `asyncio.gather()`:
-  1. Series metadata
-  2. Visible nodes (all types with `visible_from_order <= boundary`)
-  3. Structural edges (PART_OF, PRECEDES, OCCURRED_IN)
-  4. Visible claims (canonical + candidate, non-user-authored)
-  5. Visible user-authored relationships
-  6. Sources referenced by visible claims
-  7. Evidence fragments backing visible claims
-- **Projects claim edges:** Each visible claim is projected as a `GraphEdge` with `claim_id` set, linking subject→object with the claim's predicate as the edge type
-- Assembles the complete `GraphResponse`
-
-#### `SeriesService` (`series.py`)
-- Thin wrapper: lists series, gets one series, lists episodes
-- No spoiler filtering (episode metadata is not spoilery)
-
-#### `AuthService` (`auth.py`)
-- Google ID token verification via `ProductionGoogleVerifier` (injectable for tests)
-- User upsert (create or update by `google_sub`)
-- Session creation, retrieval, refresh, and revocation
-- All session tokens are SHA-256 hashed before storage; raw tokens never persisted
-
-#### `ProgressService` (`progress.py`)
-- Resolves the persisted watch-progress boundary for a user + series from the graph (`(:AppUser)-[:HAS_PROGRESS]->(:UserSeriesProgress)-[:FOR_SERIES]->(:Series)`)
-- Server-authoritative: the frontend cannot raise `visible_until_order` through a request; missing progress fails safe (lowest boundary)
-- Persists progress updates; decreasing progress is allowed and hides future-boundary chat messages (hide-not-delete)
-
-#### `ChatService` (`chat.py`)
-- Owns the GraphRAG-lite turn lifecycle: resolve boundary → load spoiler-filtered history → run the retrieval pipeline → stream the grounded answer back as SSE
-- Persists every `ChatMessage` with a `visible_until_order_snapshot` equal to the boundary resolved at turn time, so later boundary decreases can hide (never delete) previously generated future-boundary messages
-- Records a `ChangeSet` reference on the assistant message when the pipeline proposes one
-
-#### `ChangeSetService` (`change_set.py`)
-- Stage 1 **propose**: validates a typed operation list (13 operation types, Pydantic `extra="forbid"` discriminated union) against the ontology and the resolved boundary — no database write happens at propose time
-- Stage 2 **confirm/apply**: applies the validated operations in a single Neo4j transaction, idempotent via `idempotency_key`, stale-safe via `visible_until_order_snapshot` comparison, and logs a `Revision` in the same transaction
-- Stage 3 **revert**: restores the pre-apply state for create-shaped ChangeSets (well-defined delete); refuses when later unrelated changes conflict
+- **`GraphService`** (`graph.py`) — orchestrates the spoiler-safe graph read. `fetch_graph()` runs 7 Cypher queries concurrently via `asyncio.gather()`: series metadata, visible nodes, structural edges, visible claims, visible user-authored relationships, sources, and evidence. Each visible claim is projected into a `GraphEdge` (subject → object, typed by predicate, carrying `claim_id`).
+- **`SeriesService`** (`series.py`) — thin wrapper: lists series, gets one series, lists episodes. No spoiler filtering — episode metadata is not spoilery.
+- **`AuthService`** (`auth.py`) — verifies Google ID tokens via an injectable `ProductionGoogleVerifier`, upserts users by `google_sub`, and manages session creation/retrieval/refresh/revocation. Session tokens are SHA-256 hashed before storage; raw tokens are never persisted.
+- **`ProgressService`** (`progress.py`) — resolves the persisted watch-progress boundary for a user + series from the graph pattern `(:AppUser)-[:HAS_PROGRESS]->(:UserSeriesProgress)-[:FOR_SERIES]->(:Series)`. `POST /progress` accepts a client-selected positive `visible_until_order` and persists it without checking for a matching `Episode`; `resolve()` raises `ProgressNotFoundError` when no record exists. `GET /progress` maps that absence to `404`, retrieval fails closed, and chat message paths separately create an order-1 record. Decreasing progress is allowed and hides (never deletes) future-boundary chat messages.
+- **`ChatService`** (`chat.py`) — owns the GraphRAG-lite turn lifecycle: resolve boundary → load spoiler-filtered history → run the retrieval pipeline → stream the grounded answer back over SSE. Persists every `ChatMessage` with a `visible_until_order_snapshot` equal to the boundary resolved at turn time.
+- **`ChangeSetService`** (`change_set.py`) — Stage 1 **propose** validates a typed operation list against the ontology and the resolved boundary, then persists an `awaiting_confirmation` ChangeSet draft and its linking relationships without mutating target graph content. Stage 2 **confirm/apply** applies the validated operations in a single Neo4j transaction, prevents replay by returning the stored result when the ChangeSet status is already `applied`, and logs a `Revision` in the same transaction; the random `idempotency_key` is generated only after mutation and is not checked for replay detection. Stage 3 **revert** restores pre-apply state for create-shaped ChangeSets.
+- **`SettingsService`** (`settings.py`) — resolves the effective LLM configuration (stored graph value wins, `LLM_*` env settings are the fallback) and masks the API key on read.
 
 ---
 
-### 3.4 Repository & Database Layer
+### 4.4 Repository & Database Layer
 
 **Location:** `backend/app/repository/`, `backend/app/graph/`
 
-#### `Neo4jDatabase` (`graph/database.py`)
-
-The central database abstraction:
-- Lazy-initialized async Neo4j driver (no import-time side effects)
-- `open()` / `close()` lifecycle managed by FastAPI lifespan
-- `execute_query(query, **params)` — retryable read/write Cypher execution, returns `list[dict]`
-- `execute_write(work, command)` — managed transaction wrapper for write operations
-- `verify_connection()` — health check
-
-#### `UserRepository` (`repository/user.py`)
-- `upsert()` — MERGE on `google_sub`, sets all profile fields
-- `get_by_id()` — lookup by application-local user ID
-- Users stored as `(:AppUser)` nodes for future graph relationship linking
-
-#### `InMemorySessionRepository` (`repository/session.py`)
-- Sessions live outside Neo4j (ephemeral, in-memory)
-- Token hashing via SHA-256; raw `secrets.token_urlsafe(48)` tokens
-- Lazy expiry on read (no background sweep)
-- Protocol-based design: swap for Redis/DB in production
-
-#### `UserContentRepository` (`repository/user_content.py`)
-- Manages notes, custom nodes, and custom relationships in Neo4j
-- All queries are parameterized and stored as module-level constants
-- Visibility is **derived from the target entity** (notes inherit target's `visible_from_order`, custom relationships use `MAX(source, target, episode)`)
-- Validates namespacing (`user-note:`, `user-node:`, `user-rel:` prefixes)
-- Ownership gated by `origin = 'user'`
-- Delete protection: custom nodes with attached notes/claims return 409 conflict
+- **`Neo4jDatabase`** (`graph/database.py`) — lazy-initialized async Neo4j driver with no import-time side effects; `open()`/`close()` lifecycle managed by the FastAPI `lifespan` context; `execute_query()` for retryable read/write Cypher returning `list[dict]`; `execute_write()` for managed-transaction writes; `verify_connection()` for the health check.
+- **`UserRepository`** (`repository/user.py`) — `upsert()` (MERGE on `google_sub`), `get_by_id()`. Users are stored as `(:AppUser)` nodes.
+- **`SessionRepository`** (`repository/session.py`) — a `SessionRepository` protocol with two implementations: `Neo4jSessionRepository` (the default, wired directly into `main.py`'s lifespan) persists sessions as `(:Session)` nodes linked via `(:AppUser)-[:HAS_SESSION]->(:Session)`, with uniqueness constraints on `id` and `token_hash` and an index on `expires_at` (created by the seed pipeline); `InMemorySessionRepository` is a plain-dictionary store with no synchronization, suitable only for single-process development and tests. Tokens are `secrets.token_urlsafe(48)`; only the SHA-256 hash is ever persisted; expired/revoked sessions are rejected lazily at read time (a periodic `DETACH DELETE` cleanup task is a documented TODO).
+- **`UserContentRepository`** (`repository/user_content.py`) — manages notes, custom nodes, and custom relationships. Visibility is **derived from the target entity** (notes inherit the target's `visible_from_order`; custom relationships use `MAX(source, target, episode)`). It validates ID namespacing (`user-note:`, `user-node:`, `user-rel:` prefixes) and mutation queries gate on `origin = 'user'`, but these routes do not bind an authenticated owner ID, so content is not isolated per user. Deleting a custom node with attached notes/claims returns `409`.
+- **`ChangeSetRepository`**, **`ChatRepository`**, **`SettingsRepository`** — the corresponding data-access layers for the ChangeSet, chat, and settings subsystems described in [7.9](#79-changeset-two-stage-mutation-flow), [7.8](#78-graphrag-lite-chat-pipeline), and [7.11](#711-settings-system-user-configurable-llm-provider).
 
 ---
 
-### 3.5 Neo4j Graph Database
+### 4.5 Neo4j Graph Database
 
 **Location:** Docker Compose, `backend/app/graph/seed.py`
 
@@ -356,7 +294,7 @@ The central database abstraction:
 services:
   neo4j:
     image: neo4j:2026-community
-    ports: [7474:7474, 7687:7687]
+    ports: ["7474:7474", "7687:7687"]
     volumes: [neo4j_data, neo4j_logs, neo4j_import, neo4j_plugins]
 ```
 
@@ -368,7 +306,7 @@ services:
 | Narrative | `Character`, `Location`, `Organization`, `Object`, `Event` |
 | Knowledge | `Claim`, `Source`, `EvidenceFragment` |
 | User | `UserNote` |
-| System | `Revision`, `AppUser` |
+| System | `Revision`, `AppUser`, `Session`, `UserSeriesProgress`, `ChatSession`, `ChangeSet`, `ChatMessage`, `AppSetting` |
 
 #### Relationship Types
 
@@ -379,424 +317,39 @@ services:
 | Character | `KNOWS`, `FAMILY_OF`, `WORKS_WITH`, `TRUSTS`, `DISTRUSTS`, `HELPS`, `OPPOSES`, `THREATENS`, `ATTACKS`, `KILLS` |
 | Provenance | `SUPPORTED_BY`, `CONTRADICTED_BY`, `DERIVED_FROM`, `REFERS_TO` |
 | Revision | `CORRECTS`, `SUPERSEDES`, `REVERTS_TO` |
+| System/application | `HAS_SESSION`, `HAS_PROGRESS`, `FOR_SERIES`, `HAS_CHAT_SESSION`, `IN_SERIES`, `HAS_MESSAGE`, `PROPOSED_CHANGE_SET`, `FOR_SESSION` |
 
 #### Constraints & Indexes
 
-Created idempotently during `setup_database()`:
-- Uniqueness constraints on `n.id` for every node label
-- Range indexes on `visible_from_order` for all node labels
-- Specific indexes on `series_id` for Episode, Character, Event, Location, Claim, Source, EvidenceFragment, Organization, Object, UserNote
-- Composite index on `UserNote(series_id, target_type, target_id)`
-- Index on `Episode.episode_order`
+Created idempotently by `setup_database()`: `id` uniqueness constraints for the 12 labels in `seed.py`'s `NODE_LABELS` plus `AppUser` and `Session` (with additional `google_sub`/`token_hash` constraints); `visible_from_order` indexes for those 12 seed labels only; selected `series_id` indexes for episode/content/revision labels plus separate progress/chat lookup indexes; a composite index on `UserNote(series_id, target_type, target_id)`; and an index on `Episode.episode_order`. `UserSeriesProgress`, `ChatSession`, `ChatMessage`, `ChangeSet`, and `AppSetting` do not receive universal `id`, visibility, and per-label `series_id` indexes.
 
-> **Note:** Property existence constraints require Neo4j Enterprise and are intentionally omitted. Null visibility is prevented through Pydantic validation, service-layer guards, and a post-seed integrity audit.
+> Property existence constraints require Neo4j Enterprise and are intentionally omitted. Null visibility is prevented through Pydantic validation, service-layer guards, and a post-seed integrity audit.
 
-#### Seed Data
+#### Seed Pipeline
 
-The `setup_database()` pipeline:
-1. Load seed JSON from `data/dexter/` (series metadata, episodes, characters, events, locations, claims, sources, evidence fragments)
-2. Validate against ontology (node types, relationship types, claim types, claim statuses, confidence levels, ID uniqueness, evidence completeness)
-3. Create constraints and indexes
-4. Upsert all nodes via `MERGE`
-5. Create structural relationships (PART_OF, PRECEDES, OCCURRED_IN)
-6. Create provenance relationships (SUPPORTED_BY, REFERS_TO)
-7. Run visibility integrity audit
+The `setup_database()` pipeline (invoked via `uv run hdgraf-setup`, registered in `pyproject.toml` as the `hdgraf-setup` script) loads seed JSON from `data/dexter/`, validates it against the ontology (node types, relationship types, claim types/statuses/confidence levels, ID uniqueness, evidence completeness), creates constraints and indexes, upserts all nodes via `MERGE`, creates structural and provenance relationships, and runs a visibility integrity audit.
 
 ---
 
-## 4. Cross-Cutting Concerns
+## 5. Key Abstractions
 
-### 4.1 Spoiler-Aware Data Flow
-
-This is the **core architectural invariant** of the system. Spoiler filtering happens entirely on the backend — the frontend never receives data to hide.
-
-#### The `visible_from_order` Mechanism
-
-Every node, relationship, and claim in the graph carries a `visible_from_order` integer field. This represents the earliest episode order at which the entity is "visible" (i.e., no longer a spoiler).
-
-The `visible_until_order` query parameter represents how far the user has watched. The backend's Cypher queries apply a universal filter:
-
-```cypher
-WHERE entity.visible_from_order <= $visible_until_order
-```
-
-#### Fail-Closed Design
-
-- Missing, malformed, zero, negative, or non-persisted boundaries return **422** responses
-- The boundary must match a persisted episode's `episode_order`
-- Every entity in a query chain (claim → subject → object → evidence → source) must individually satisfy the visibility filter
-- Hidden direct reads (e.g., `GET /notes/{id}` for a future note) return indistinguishable **404** responses
-- Response collections contain no counts or metadata
-
-#### Claim Temporal Validity
-
-Claims can have optional `valid_from_order` and `valid_until_order` for time-bounded claims (e.g., a character's temporary allegiance):
-
-```cypher
-AND (claim.valid_from_order IS NULL OR claim.valid_from_order <= $visible_until_order)
-AND (claim.valid_until_order IS NULL OR claim.valid_until_order >= $visible_until_order)
-```
-
-#### The Spoiler Filter Module
-
-**Location:** `backend/app/spoiler/filter.py`
-
-Contains all parameterized Cypher queries as raw Python string constants. This module is intentionally isolated — it has no FastAPI or Pydantic dependencies. Every query is a closed form with `$series_id` and `$visible_until_order` parameters.
-
-**Seven query families:**
-1. `SERIES_LIST_QUERY` / `SERIES_BY_ID_QUERY` — no spoiler filter (metadata is public)
-2. `SERIES_EPISODES_QUERY` — no spoiler filter (episode names/orders are public)
-3. `NODES_QUERY` — all story nodes filtered by `visible_from_order`
-4. `STRUCTURAL_EDGES_QUERY` — PART_OF/PRECEDES/OCCURRED_IN edges with filter on source, target, and edge
-5. `VISIBLE_CLAIMS_QUERY` — claims with origin `canonical` or `candidate`, not `user_authored`; includes temporal validity
-6. `VISIBLE_USER_RELATIONSHIPS_QUERY` — user-authored relationships with `claim_type = 'user_authored'` and `origin = 'user'`
-7. `SOURCES_QUERY` / `EVIDENCE_QUERY` — provenance chain filtered on every hop
-
-### 4.2 The Claim Model
-
-Claims are the **core knowledge representation** in the system. A claim represents a statement about the narrative world.
-
-#### Claim Structure
-
-```
-Claim {
-  id: string             # e.g., "claim:dexter_kills_the_ice_truck_killer"
-  label: string          # Human-readable summary
-  subject_id: string     # ID of the subject node
-  predicate: string      # Relationship type (e.g., "KILLS")
-  object_id: string      # ID of the object node
-  claim_type: string     # explicit_fact | observed_event | inferred_state |
-                         # external_interpretation | user_authored
-  status: string         # candidate | corroborated | canonical | disputed | rejected
-  confidence_level: string  # low | medium | high | verified
-  relationship_effect: float  # Numeric weight for visualization
-  visible_from_order: int
-  valid_from_order: int | null    # Temporal validity start
-  valid_until_order: int | null   # Temporal validity end
-  source_id: string
-  evidence_ids: string[]
-  origin: string         # canonical | candidate | user
-}
-```
-
-#### Claim Provenance Chain
-
-```
-Claim ──SUPPORTED_BY──► EvidenceFragment ──REFERS_TO──► Source
-  │                                                          
-  └─────────────────────REFERS_TO───────────────────────────► Source
-```
-
-Every automatic claim requires:
-1. At least one `EvidenceFragment` (linked by `SUPPORTED_BY`)
-2. A `Source` (linked by `REFERS_TO`) that each evidence fragment also references
-3. Evidence includes the actual text excerpt, locator, and content hash
-
-#### User-Authored Claims (Custom Relationships)
-
-User-created relationships are stored as `Claim` nodes with:
-- `claim_type: 'user_authored'`
-- `origin: 'user'`
-- `id` prefixed with `user-rel:`
-- No evidence or source requirement (the user is the authority)
-
-They appear in the graph response as `GraphEdge`s via the `VISIBLE_USER_RELATIONSHIPS_QUERY`, not through the regular `VISIBLE_CLAIMS_QUERY`.
-
-#### Origin Distinguishability
-
-Automatic and user-created content must remain distinguishable:
-- `origin: canonical` — curated, canonical data from seed
-- `origin: candidate` — automatically extracted, awaiting review
-- `origin: user` — user-created content
-
-This is never collapsed into a boolean flag. The visual treatment differs: canonical gets solid borders, others get dashed.
-
-### 4.3 Ontology System
-
-**Location:** `ontology/` directory
-
-The ontology is versioned via YAML files that define the graph's type system. Each file carries an `ontology_version: "0.1"` declaration.
-
-#### `node_types.yaml`
-```
-structural: [Series, Season, Episode, Scene]
-narrative: [Character, Location, Organization, Object, Event]
-knowledge: [Claim, Source, EvidenceFragment]
-user: [UserNote]
-system: [Revision]
-```
-
-#### `relation_types.yaml`
-```
-structural: [PART_OF, PRECEDES, OCCURRED_IN, LOCATED_IN]
-participation: [PARTICIPATED_IN, WITNESSED, CAUSED, AFFECTED, TARGETED, MENTIONED]
-character: [KNOWS, FAMILY_OF, WORKS_WITH, TRUSTS, DISTRUSTS, HELPS, OPPOSES, THREATENS, ATTACKS, KILLS]
-provenance: [SUPPORTED_BY, CONTRADICTED_BY, DERIVED_FROM, REFERS_TO]
-revision: [CORRECTS, SUPERSEDES, REVERTS_TO]
-```
-
-#### `claim_types.yaml`
-```
-claim_types: [explicit_fact, observed_event, inferred_state, external_interpretation, user_authored]
-claim_statuses: [candidate, corroborated, canonical, disputed, rejected]
-confidence_levels: [low, medium, high, verified]
-```
-
-#### Runtime Validation (`graph/ontology.py`)
-
-The `Ontology` dataclass is created by `load_ontology()` which reads all three YAML files, validates the version, and creates immutable type sets. It provides:
-- `require_node_type()`, `require_relationship_type()`, `require_claim_type()` — validation methods that raise `OntologyValidationError`
-- `user_safe_node_types` / `user_safe_relationship_types` — subset of types users can create
-- Version-gated: mismatched `ontology_version` raises on load
-
-### 4.4 Origin System
-
-The `origin` field is a `StrEnum` with exactly three values: `canonical`, `candidate`, `user`.
-
-- **`canonical`** — Curated, seed data; the authoritative ground truth
-- **`candidate`** — Automatically extracted or suggested; not yet reviewed
-- **`user`** — User-created content (notes, custom nodes, custom relationships)
-
-Visual consequences:
-- Canonical nodes get solid borders in the graph
-- Non-canonical nodes (candidate, user) get dashed borders
-- Custom relationship edges appear via their own query path
-
-The frontend contract explicitly forbids branching on a `'curated'` string — the actual wire value is `'canonical'`.
-
-### 4.5 Authentication & Sessions
-
-#### Google Sign-In
-
-1. Frontend initiates Google Sign-In with the Google Identity Services library
-2. Google returns an ID token (JWT)
-3. Frontend sends token to `POST /api/auth/google`
-4. Backend verifies: signature, issuer (`accounts.google.com`), audience (`GOOGLE_CLIENT_ID`), expiration
-5. User record upserted in Neo4j (keyed on Google's `sub` claim)
-6. Session created with SHA-256-hashed token
-7. HttpOnly, SameSite=Lax cookie set on response
-
-#### Session Management
-
-- Sessions stored in `InMemorySessionRepository` (memory-resident `dict`; swap for Redis in production)
-- Token hash (SHA-256) stored server-side; raw 48-byte URL-safe token in cookie
-- Configurable TTL (default: 7 days)
-- Lazy expiry on read; no background sweep
-- `GET /api/auth/me` reads cookie, validates session, refreshes TTL
-- `POST /api/auth/logout` revokes session, clears cookie (always 204)
-
-#### CSRF Strategy
-
-- Baseline: `SameSite=Lax` on cookies
-- State-changing requests require same-origin or configured CORS frontend origin
-- Future: custom header check (`X-Requested-With`) as secondary defense
-
-### 4.6 Error Handling
-
-**Location:** `backend/app/core/errors.py`
-
-Structured error envelope shared by all endpoints:
-
-```json
-{
-  "detail": {
-    "code": "series_not_found",
-    "message": "Series not found."
-  }
-}
-```
-
-#### Stable Error Codes
-
-| Status | Code | When |
+| Abstraction | Location | Purpose |
 |---|---|---|
-| 401 | `unauthenticated` | No valid session |
-| 401 | `authentication_failed` | Token verification failed |
-| 401 | `auth_disabled` | Google auth not configured |
-| 404 | `series_not_found` | Series lookup missed |
-| 404 | `resource_not_found` | Hidden or absent resource |
-| 409 | `resource_conflict` | Ownership violation or dependency |
-| 422 | `invalid_request` | Validation failure |
-| 422 | `invalid_visible_until_order` | Bad boundary value |
-| 503 | `database_unavailable` | Neo4j unreachable |
-
-#### Error Handler Installation
-
-`install_error_handlers()` registers:
-- `RequestValidationError` → 422 (sanitized, never exposes field names)
-- `ConstraintError` → 409 (Neo4j constraint violation)
-- `ServiceUnavailable`, `AuthError`, `ClientError`, `Neo4jError` → 503
-
-Database error messages are intentionally generic — never leak Cypher, connection details, or database internals.
-
-### 4.7 Revision History
-
-**Location:** `backend/app/revisions/`
-
-The `Revision` module provides a version history model. Revisions are Neo4j `(:Revision)` nodes.
-
-**Status:** Backend fully integrated. Every user-content mutation (note create/update/delete, custom-node create/update/delete, custom-relationship create/update/delete) auto-creates a `Revision` record in the same Neo4j transaction. API routes:
-
-| Route | Method | Purpose |
-|-------|--------|---------|
-| `GET /api/series/{series_id}/revisions` | GET | List visible revisions, most-recent-first, with optional `resource_type`/`resource_id` filters |
-| `GET /api/series/{series_id}/revisions/{revision_id}` | GET | Get one revision (hidden revisions return 404) |
-| `POST /api/series/{series_id}/revisions/{revision_id}/revert` | POST | Restore resource to the state captured in the revision. Creates a new `Reverted` revision — history never destroyed |
-
-**Frontend:** History tab fully integrated. The `frontend/src/types/revision.ts` types, `frontend/src/api/revisions.ts` API client, and `frontend/src/hooks/useRevisions.ts` hook provide the data layer. The `RevisionHistoryPanel` component renders a History tab in `DetailPanel` with color-coded action badges (Created/Updated/Deleted/Reverted), diff summary chips, and a one-shot revert flow with confirmation dialog and toast feedback. Revert button only appears on `Updated` and `Deleted` revisions. All dialog buttons use inline Tailwind (no DaisyUI). (Plans 04-04, 04-05 executed.)
-
-#### 4.7.1 Append-only Revision extension
-
-The Revision model is **append-only**: no revision is ever deleted or mutated in place. Every user-content mutation creates a new `Revision` node capturing before/after JSON snapshots in the **same Neo4j transaction** as the mutation (via the `RevisionRepository.log_revision` pattern). Reverting restores the captured state by creating a *new* `Reverted` revision — history is never destroyed, so the full audit trail always reconstructs "what changed, when, and by whom."
-
-ChangeSet applies extend this invariant: confirming a ChangeSet applies its operations and logs a single `Revision` in the same transaction (the ChangeSet response carries `revision_id`). Reverting an applied ChangeSet is itself a `Reverted` revision. The result is one coherent audit chain: `Revision → ChangeSet apply → Revision (Reverted)`.
+| `visible_from_order` filtering | `backend/app/spoiler/filter.py` | The universal Cypher `WHERE` predicate applied to every story-sensitive entity; the system's single most important invariant |
+| `Neo4jDatabase` | `backend/app/graph/database.py` | Central async driver abstraction; all Cypher execution flows through `execute_query()`/`execute_write()` |
+| `Ontology` | `backend/app/graph/ontology.py` | Loads and validates the versioned YAML type system; exposes `require_node_type()`, `require_relationship_type()`, `require_claim_type()`, and the user-safe type subsets |
+| `Claim` domain model | `backend/app/domain/graph.py` | The atomic knowledge-representation unit — subject/predicate/object plus type, status, confidence, and provenance |
+| `origin` enum | shared across `domain/` modules | Three-way `StrEnum` (`canonical` / `candidate` / `user`) distinguishing seed data, extracted-but-unreviewed data, and user-created data |
+| `LLMProvider` protocol | `backend/app/llm/provider.py` | Provider-agnostic interface for chat-completions backends (only an OpenAI/Gemini-compatible implementation ships today) |
+| `RetrievalPipeline` | `backend/app/retrieval/pipeline.py` | Orchestrates allowlisted tool calls, context assembly, and citation validation for the GraphRAG-lite chat |
+| `ChangeSetService` | `backend/app/services/change_set.py` | The typed, two-stage (propose/confirm) protocol that is the only path through which the graph can be mutated by chat-driven writes |
+| `RevisionRepository.log_revision` | `backend/app/revisions/__init__.py` (used across services and repositories) | Shared pattern for writing an append-only before/after audit record in the same transaction as any content mutation |
 
 ---
 
-## 4.8 GraphRAG-Lite Chat Pipeline
+## 6. Data Flow Examples
 
-**Location:** `backend/app/retrieval/` (`pipeline.py`, `tools.py`), `backend/app/llm/` (`provider.py`, `system_prompt.py`), `backend/app/services/chat.py`
-
-The chat feature is a **GraphRAG-lite** pipeline: the LLM answers questions by calling a small set of allowlisted retrieval tools against the spoiler-filtered graph, and every answer is grounded in citations that are validated against what was actually retrieved. The model never receives the raw graph — it only ever sees the filtered, bounded context the pipeline assembles for it.
-
-```
-Browser (React SPA, ChatPanel mounted inside DetailPanel's Chat mode)
-  │
-  │ 1. User types a question, ChatPanel calls POST .../messages/stream
-  │    (fetch + ReadableStream reader; credentials: include for session cookie)
-  ▼
-FastAPI router: backend/app/api/chat.py
-  │
-  │ 2. require_current_user dependency resolves AppUser from session cookie
-  ▼
-ChatService (backend/app/services/chat.py)
-  │
-  │ 3. ProgressService.resolve(user_id, series_id) → visible_until_order
-  │    (Neo4j read: (:AppUser)-[:HAS_PROGRESS]->(:UserSeriesProgress)-[:FOR_SERIES]->(:Series))
-  │
-  │ 4. ChatRepository loads recent, currently-visible ChatMessages for context
-  │    (filtered by visible_until_order_snapshot <= resolved boundary — hide-not-delete)
-  ▼
-RetrievalPipeline (backend/app/retrieval/pipeline.py)
-  │
-  │ 5. LLMProvider.stream_chat(system_prompt, history, tools=ALLOWLISTED_TOOLS)
-  │    → model requests tool calls (search_entities, get_neighborhood, get_claims, ...)
-  ▼
-Retrieval Tools (backend/app/retrieval/tools.py)
-  │
-  │ 6. Each tool independently re-derives visible_until_order from step 3 (never
-  │    from model output), runs parameterized Cypher via Neo4jDatabase.execute_query,
-  │    composing backend/app/spoiler/filter.py's existing visibility WHERE-clause pattern
-  ▼
-Neo4j (Community Edition, existing driver)
-  │
-  │ 7. Filtered rows return to the pipeline → context normalization (dedupe,
-  │    prioritize direct evidence, bound size) → back to LLMProvider for the
-  │    final answer, this time without tools
-  ▼
-Citation Validator (backend/app/retrieval/pipeline.py)
-  │
-  │ 8. Every claim_id/evidence_id/source_id the model cited is checked against
-  │    the actual retrieved context set — anything not present is stripped
-  ▼
-ChatService persists ChatMessage (role=assistant, visible_until_order_snapshot=step-3 value,
-  citations, graph_focus, change_set_id if a ChangeSet was proposed) via ChatRepository,
-  inside the same transaction pattern as RevisionRepository.log_revision when a ChangeSet exists
-  │
-  │ 9. Final SSE event streamed to the browser: {message, citations, graph_focus, proposed_change_set}
-  ▼
-Browser: MessageBubble renders streamed text; CitationChip "Show in graph" calls
-  GraphCanvas's focusedElementIds prop; ChangeSetCard renders Confirm/Reject,
-  which POST to backend/app/api/change_set.py's confirm/reject endpoints (a second,
-  separate request/response cycle — NOT part of the streaming response)
-```
-
-### Allowlisted-Retrieval-Tool Security Model
-
-The pipeline exposes exactly **eleven** retrieval tools — nothing more. The model cannot call any other function, and it can never execute Cypher:
-
-1. `search_entities` — keyword search over visible entities
-2. `get_entity` — fetch one visible entity by ID
-3. `get_neighborhood` — closed neighborhood of a visible entity
-4. `find_path` — bounded path search between two visible entities
-5. `get_timeline` — chronological visible events
-6. `get_character_context` — bounded interpretation pack for one visible Character (character + most recent visible Events + relationships/claims/evidence/sources); the tool for future-looking, opinion, and motivation questions
-7. `get_claims` — visible claims matching filters
-8. `get_evidence` — evidence fragments backing visible claims
-9. `get_sources` — sources referenced by visible claims
-10. `get_current_visible_graph_summary` — aggregate summary of the visible graph
-11. `get_user_notes` — the user's own visible notes
-
-Each tool is a small async function that:
-
-- **Takes only allowlisted, typed parameters** — never a free-text Cypher string or an unvalidated entity ID sourced directly from model output.
-- **Re-derives `visible_until_order` from the already-resolved server value** passed down by the pipeline — never re-read from the model's tool-call arguments, so a prompt-injected "show me everything" cannot widen the boundary.
-- **Issues parameterized Cypher** built the same way `spoiler/filter.py`'s constants are — label/relationship names selected only from server-side allowlists, values always bound as `$parameters`. No string interpolation of model-controlled text.
-
-This is the same fail-closed discipline as the graph read path: a misconfigured or injected tool call can only ever see the current user's visible graph.
-
----
-
-## 4.9 ChangeSet Two-Stage Mutation Flow
-
-**Location:** `backend/app/api/change_set.py`, `backend/app/services/change_set.py`, `backend/app/repository/change_set.py`
-
-The LLM **cannot write to the graph directly** — not through tool calls, not through any endpoint. All graph edits flow through a typed, two-stage ChangeSet protocol (plus an explicit third stage for revert):
-
-```
-Stage 1 — PROPOSE (POST /api/series/{series_id}/change-sets)
-  Chat pipeline decides a write is warranted → builds a typed ChangeSet:
-  { summary, operations: [create_node | update_node | delete_node |
-    create_relationship | update_relationship | delete_relationship |
-    create_claim | update_claim | delete_claim | attach_evidence |
-    create_note | update_note | delete_note] }
-  ├── Pydantic validates: operation_type must be one of the 13 literals,
-  │   extra fields forbidden, at least one operation, ontology-valid labels/types
-  ├── Boundary validated: targets must be visible, same-series, visibility derived
-  │   server-side (never accepted from client), never above the resolved boundary
-  ├── Canonical/candidate protection: mutation of canonical or candidate content
-  │   is refused (create_note override pattern instead)
-  └── NO database write occurs at propose time — status: awaiting_confirmation
-
-Stage 2 — CONFIRM / APPLY (POST .../change-sets/{id}/confirm)  |  REJECT (POST .../reject)
-  Confirm:
-  ├── Ownership + status check (404 resource_not_found if missing/cross-user)
-  ├── Staleness check: visible_until_order_snapshot vs current boundary → 409 changeset_stale
-  ├── Idempotent: idempotency_key makes re-apply a no-op
-  ├── Single Neo4j transaction: all operations apply or none do (rollback on error)
-  └── Revision logged in the SAME transaction (revision_id on the applied ChangeSet)
-  Reject:
-  └── Marks the ChangeSet rejected; no database change; graph untouched
-
-Stage 3 — REVERT (POST .../change-sets/{id}/revert, applied ChangeSets only)
-  ├── Only create-shaped ChangeSets are revertible (pre-apply state = "did not exist")
-  ├── Conflict guard: if a later unrelated change modified/removed a created resource,
-  │   revert returns 409 rather than silently overwriting
-  └── Creates a new Reverted revision — the audit chain stays append-only
-```
-
-The frontend renders the proposed ChangeSet as a preview card (per-operation summary lines, Before/After rows for updates, destructive banner when deletes are present) with explicit **Confirm changes** / **Reject** controls — the *only* UI path into the confirm/reject endpoints. Nothing in the streaming chat response applies a write.
-
----
-
-## 4.10 Spoiler-Safety Invariants
-
-These invariants are the phase's contract with the rest of the project — every one is enforced by backend code and locked by tests:
-
-1. **The LLM never receives the full unfiltered graph.** The pipeline assembles context exclusively through the eleven allowlisted retrieval tools, each of which runs the same visibility-gated Cypher as the graph read path, then `assemble_context` (`backend/app/retrieval/pipeline.py`) dedupes each section by ID via `_dedupe_by_id` and bounds the result using the `max_items` and `max_characters` parameters, sourced from the `Settings.llm_max_context_items` / `Settings.llm_max_context_characters` config fields.
-2. **The LLM never receives future-episode data.** Every tool re-derives the user's resolved `visible_until_order` server-side and applies `visible_from_order <= boundary` on every hop (nodes, relationships, claims, evidence, sources). A hidden record behaves like a nonexistent one.
-3. **The LLM never executes arbitrary Cypher.** There is no text-to-Cypher surface anywhere. The model's only actions are the eleven allowlisted tool calls with typed, validated parameters; all Cypher is server-side constant templates with `$parameter` bindings.
-4. **The LLM cannot directly mutate canonical or candidate content.** ChangeSet validation refuses mutation operations targeting `origin: canonical` or `origin: candidate` content — the pipeline substitutes a confirmable `create_note` annotation (the "Protected" refusal surfaced in the UI) instead.
-5. **Writes require typed ChangeSets and explicit confirmation.** The model can only *propose*; a human must confirm through the ChangeSetCard's Confirm/Reject controls before any transaction touches the graph.
-6. **Chat history is spoiler-filtered by the same boundary as the graph.** `ChatMessage` rows carry `visible_until_order_snapshot`; history loading filters `snapshot <= current boundary`, so hidden messages never enter the model's context.
-7. **Lowering progress hides previously generated future-boundary messages without deleting them.** Messages remain persisted (and re-appear if progress advances again); they are simply excluded from history loading and session previews below the boundary.
-8. **All graph content is treated as untrusted prompt data.** User notes, evidence text, labels, and any retrieved content are wrapped in strict delimiters with explicit instruction-ignore language (`SYSTEM_PROMPT_ENG`/`SYSTEM_PROMPT_TR`); prompt-injection tests assert the malicious strings are contained verbatim inside the data sections and never interpreted as instructions.
-
----
-
-## 5. Data Flow Examples
-
-### Flow 1: User opens the app (Read Path)
+### Flow 1 — User opens the app (read path)
 
 ```
 User selects "Dexter" series
@@ -804,227 +357,324 @@ User selects "Dexter" series
   ▼
 App.tsx sets selectedSeriesId = "series:dexter"
   │
-  ├──► useEpisodes("series:dexter")
-  │      │
-  │      ▼
-  │    GET /api/series/{series_id}/episodes
-  │      │
-  │      ▼
-  │    SeriesService.list_episodes()
-  │      │
-  │      ▼
-  │    Neo4j: MATCH (episode:Episode)-[:PART_OF]->(Series)
-  │      │
-  │      ▼
-  │    Returns list of EpisodeResponse
+  ├──► useEpisodes("series:dexter") → GET /api/series/{id}/episodes
+  │      → SeriesService.list_episodes() → Neo4j MATCH (Episode)-[:PART_OF]->(Series)
   │
   └──► useGraph("series:dexter", visibleUntilOrder=1)
-         │
-         ▼
-       GET /api/series/{series_id}/graph?visible_until_order=1
-         │
-         ▼
-       GraphService.fetch_graph("series:dexter", 1)
-         │
-         ▼  (7 concurrent queries via asyncio.gather)
-       ┌─────────────────────────────────────────────────────┐
-       │ 1. SERIES_QUERY           → Series metadata         │
-       │ 2. NODES_QUERY            → Nodes with vfo <= 1     │
-       │ 3. STRUCTURAL_EDGES_QUERY → Edges with vfo <= 1     │
-       │ 4. VISIBLE_CLAIMS_QUERY   → Claims visible at ep 1  │
-       │ 5. VISIBLE_USER_RELS_QUERY→ User rels visible at 1  │
-       │ 6. SOURCES_QUERY          → Sources for claims      │
-       │ 7. EVIDENCE_QUERY         → Evidence for claims     │
-       └─────────────────────────────────────────────────────┘
-         │
-         ▼
-       GraphResponse assembled (claims projected to edges)
-         │
-         ▼
-       graphToElements() → Cytoscape ElementDefinition[]
-         │
-         ▼
-       GraphCanvas renders with cose-bilkent layout
+         → GET /api/series/{id}/graph?visible_until_order=1
+         → GraphService.fetch_graph("series:dexter", 1)
+              (7 concurrent Cypher queries via asyncio.gather)
+              1. SERIES_QUERY            → series metadata
+              2. NODES_QUERY             → nodes with visible_from_order <= 1
+              3. STRUCTURAL_EDGES_QUERY  → structural edges with visible_from_order <= 1
+              4. VISIBLE_CLAIMS_QUERY    → claims visible at episode 1
+              5. VISIBLE_USER_RELATIONSHIPS_QUERY → user relationships visible at 1
+              6. SOURCES_QUERY           → sources referenced by visible claims
+              7. EVIDENCE_QUERY          → evidence backing visible claims
+         → GraphResponse assembled (claims projected to edges)
+         → graphToElements() → Cytoscape ElementDefinition[]
+         → GraphCanvas renders with the cose-bilkent layout
 ```
 
-### Flow 2: User advances watch progress
+### Flow 2 — User advances watch progress
 
 ```
 User selects "S01E05" in EpisodeSelector
-  │
-  ▼
-useWatchProgress.requestChange("series:dexter", 5)
-  │                     direction: "forward"
-  ▼
-ConfirmAdvanceModal opens (warning: you'll see spoilers for up to S01E05)
-  │
-  ├── User confirms
-  │     │
-  │     ▼
-  │   useWatchProgress.confirmChange()
-  │     │  sessionStorage.setItem("hdgraf.watchProgress", {seriesId, visibleUntilOrder: 5})
-  │     ▼
-  │   useGraph("series:dexter", 5) re-fetches with new boundary
-  │     │
-  │     ▼
-  │   Entire Flow 1 repeats with visible_until_order=5
-  │     New nodes/edges/claims become visible
-  │
-  └── User cancels
-        │
-        ▼
-      watchProgress.cancelChange() → discards pending change
+  → useWatchProgress.requestChange("series:dexter", 5)  (direction: forward)
+  → ConfirmAdvanceModal opens (warning: spoilers up to S01E05)
+      confirm → confirmChange() → POST /api/series/{id}/progress (backend write,
+             server-authoritative) → sessionStorage cache updated
+             → useGraph re-fetches with visible_until_order=5 → Flow 1 repeats
+      cancel  → cancelChange() discards the pending change
 ```
 
-### Flow 3: User creates a note
+### Flow 3 — User creates a note
 
 ```
-User writes a note on a character node (e.g., "character:dexter")
-  │
-  ▼
-POST /api/series/{series_id}/notes
-  {
-    "target_type": "Character",
-    "target_id": "character:dexter",
-    "content": "Remember this detail."
-  }
-  │
-  ▼
-UserContentRepository.create_note(series_id, payload)
-  │
-  ├── Validates: target exists in same series, visible_from_order >= 1
-  ├── Generates: id = "user-note:{uuid4}", timestamps
-  └── Neo4j:
-        MATCH (target:Character {id: $target_id, series_id: $series_id})
-        WHERE target.visible_from_order >= 1
-        CREATE (note:UserNote {id: $id, ...})
-        CREATE (note)-[:REFERS_TO {origin: 'user'}]->(target)
-  │
-  ▼
-Response: NoteResponse with origin="user", visible_from_order inherited from target
+POST /api/series/{series_id}/notes { target_type, target_id, content }
+  → UserContentRepository.create_note()
+      validates the target exists in the same series and has visible_from_order >= 1
+      generates id = "user-note:{uuid4}"
+      Neo4j: MATCH target WHERE target.visible_from_order >= 1 (no request boundary is accepted or resolved)
+             CREATE (:UserNote)-[:REFERS_TO {origin:'user'}]->(target)
+  → Response: NoteResponse with origin="user", visible_from_order inherited from target
 ```
 
 ---
 
-## 6. Key Design Decisions
+## 7. Cross-Cutting Concerns
 
-### D-01: Spoiler filtering at the database layer
+### 7.1 Spoiler-Aware Data Flow
 
-**Decision:** All spoiler filtering happens in Cypher queries in `spoiler/filter.py`, not in application code after data retrieval.
+This is the **core architectural invariant** of the system. Spoiler filtering happens entirely on the backend — the frontend never receives data it would need to hide.
 
-**Rationale:** Fail-closed by default — if a query is misconfigured, no data leaks. The frontend never receives data it would need to hide. Performance: filtering at the database level avoids transferring and discarding large result sets.
+Story-sensitive content nodes, content relationships, and claims carry a `visible_from_order` integer: the earliest episode order at which the entity stops being a spoiler. System records and links such as `AppUser`, `Session`, `AppSetting`, `HAS_SESSION`, and progress/chat ownership relationships do not universally carry it. The `visible_until_order` query parameter represents how far the user has watched. Relevant spoiler-aware Cypher queries apply:
 
-### D-02: Visible `from`/`until` order on every entity
+```cypher
+WHERE entity.visible_from_order <= $visible_until_order
+```
 
-**Decision:** Every node, relationship, and claim carries its own `visible_from_order`. Claims also carry optional `valid_from_order` and `valid_until_order`.
+**Fail-closed design:** explicit graph and user-content read boundaries are positive and validated against a persisted episode before those queries run; malformed, zero, negative, or non-matching values return `422`. Persisted progress is a separate path: `POST /progress` stores any positive integer and `ProgressService.resolve()` returns it without an `Episode` lookup, so GraphRAG uses that stored integer directly. Every entity in a query chain (claim → subject → object → evidence → source) must individually satisfy the visibility filter. Direct reads of hidden resources (e.g. `GET /notes/{id}` for a future note) return an indistinguishable `404`.
 
-**Rationale:** Fine-grained visibility control per entity, not per type. A season finale character has a different visibility than a pilot character. Temporal validity allows time-bounded claims (e.g., "character X is loyal to Y" during seasons 1-3 but not after).
+Claims can additionally carry `valid_from_order`/`valid_until_order` for time-bounded facts (e.g. a temporary allegiance):
 
-### D-03: Claims projected as edges
+```cypher
+AND (claim.valid_from_order IS NULL OR claim.valid_from_order <= $visible_until_order)
+AND (claim.valid_until_order IS NULL OR claim.valid_until_order >= $visible_until_order)
+```
 
-**Decision:** Each visible claim is projected into a `GraphEdge` in the response (the edge carries `claim_id` referencing the source claim). Structural edges (`PART_OF`, `PRECEDES`, `OCCURRED_IN`) have `claim_id = null`.
+`backend/app/spoiler/filter.py` holds the core graph-read spoiler queries as raw, parameterized Python string constants. Additional visibility-gated Cypher lives in `graph/candidates.py`, `graph/change_set.py`, `graph/chat.py`, `retrieval/tools.py`, `repository/user_content.py`, and `api/revisions.py`.
 
-**Rationale:** Single unified edge representation in the frontend. The `claim_id` field disambiguates narrative edges (backed by claims) from structural edges (graph topology). The `DetailPanel` renders claim-backed edges with claims/evidence tabs; `StructuralEdgeCard` handles topological edges.
+### 7.2 The Claim Model
 
-### D-04: Seven concurrent queries for graph read
+Claims are the core knowledge-representation unit — a statement about the narrative world:
 
-**Decision:** `GraphService.fetch_graph()` runs seven independent Cypher queries concurrently via `asyncio.gather()`, not one giant query.
+```
+Claim {
+  id, label, subject_id, predicate, object_id,
+  claim_type: explicit_fact | observed_event | inferred_state |
+              external_interpretation | user_authored,
+  status: candidate | corroborated | canonical | disputed | rejected,
+  confidence_level: low | medium | high | verified,
+  relationship_effect: float,
+  visible_from_order, valid_from_order, valid_until_order,
+  source_id, evidence_ids, origin: canonical | candidate | user
+}
+```
 
-**Rationale:** Each query targets different node labels and relationship patterns. A unified query would be exponentially more complex and harder to optimize. Concurrent execution minimizes latency without complex query engineering.
+Every automatic claim requires at least one `EvidenceFragment` (`SUPPORTED_BY`) and a `Source`, but the two ingest paths use different source-link topologies: seeded claims create `Claim-[:REFERS_TO]->Source` and store `EvidenceFragment.source_id` without an evidence-to-source relationship, while candidate ingest creates `EvidenceFragment-[:REFERS_TO]->Source` without a claim-to-source relationship. Evidence carries the actual text excerpt, locator, and content hash. User-authored relationships are stored as `Claim` nodes with `claim_type: 'user_authored'`, `origin: 'user'`, and an `id` prefixed `user-rel:` — they need no evidence or source, and are surfaced via `VISIBLE_USER_RELATIONSHIPS_QUERY` rather than `VISIBLE_CLAIMS_QUERY`.
 
-### D-05: Backend-only visibility authority
+### 7.3 Ontology System
 
-**Decision:** The frontend never checks `visible_from_order`. `graphToElements()` maps all received data to Cytoscape elements without any visibility filter.
+**Location:** `ontology/` — `node_types.yaml`, `relation_types.yaml`, `claim_types.yaml`, each carrying an `ontology_version: "0.1"` declaration. `backend/app/graph/ontology.py`'s `load_ontology()` reads all three files, validates the version, and produces an immutable `Ontology` dataclass with `require_node_type()`, `require_relationship_type()`, `require_claim_type()`, and `user_safe_node_types`/`user_safe_relationship_types` (the subset of types end users are allowed to create). A version mismatch raises on load.
 
-**Rationale:** Eliminates the risk of frontend/backend visibility drift. If a node is in the response, it's safe to show. Contradictory proof: test fixtures verify the backend returns no node with `visible_from_order > visible_until_order`.
+### 7.4 Origin System
 
-### D-06: sessionStorage for watch progress
+`origin` is a `StrEnum` with exactly three values: `canonical` (curated seed data — the authoritative ground truth), `candidate` (automatically extracted or suggested, not yet reviewed), and `user` (user-created content). Canonical nodes render with solid borders in the graph; candidate/user nodes render with dashed borders. This distinction is never collapsed into a boolean, and the frontend contract explicitly forbids branching on a `'curated'` string — the wire value is `'canonical'`.
 
-**Decision:** Watch progress (current series, episode boundary) is stored in `sessionStorage`, not localStorage or server-side.
+### 7.5 Authentication & Sessions
 
-**Rationale:** Tab-scoped: each browser tab maintains independent progress. No server-side state for a client-side concern. Hydration on page refresh without re-prompting the user. The `pendingChange` → `confirmChange` workflow ensures deliberate forward jumps.
+1. The frontend initiates Google Sign-In via the Google Identity Services library and receives an ID token (JWT).
+2. The token is sent to `POST /api/auth/google`.
+3. The backend verifies signature, issuer (`accounts.google.com`), audience (`GOOGLE_CLIENT_ID`), and expiration.
+4. The user record is upserted in Neo4j, keyed on Google's `sub` claim.
+5. A session is created with a SHA-256-hashed token (persisted as a `(:Session)` node by `Neo4jSessionRepository`); an HttpOnly, `SameSite=Lax` cookie is set on the response.
 
-### D-07: Asynchronous graph fetching with retry
+`GET /api/auth/me` reads the cookie, validates the session, and refreshes its TTL (default 7 days, `SESSION_TTL_SECONDS`). `POST /api/auth/logout` revokes the session and always returns `204`. The session cookie uses `SameSite=Lax`; the explicit `verify_origin` origin/referer dependency is attached only to `POST /api/auth/google`, not to logout or the other state-changing routes.
 
-**Decision:** `useGraph` implements an explicit `refetch()` mechanism via a `retryToken` state counter, distinct from the `seriesId`/`visibleUntilOrder` dependency.
+### 7.6 Error Handling
 
-**Rationale:** Allows error recovery without changing the watch progress state. A broken network or transient server error gets a Retry button that re-issues the exact same request.
+**Location:** `backend/app/core/errors.py`. A structured error envelope used by the API endpoints, except `/health`'s `503` response, which returns the `HealthResponse` fields `status`, `database`, and `service`:
 
-### D-08: Immutable PATCH contracts
+```json
+{ "detail": { "code": "series_not_found", "message": "Series not found." } }
+```
 
-**Decision:** PATCH routes accept only the mutable field (`content` for notes, `label` for custom nodes, `predicate` for custom relationships). Endpoints, origin, visibility, ownership are immutable.
+| Status | Code | When |
+|---|---|---|
+| 401 | `AUTH_UNAUTHENTICATED` | No valid session |
+| 401 | `AUTH_INVALID_GOOGLE_CREDENTIAL` | Google token verification failed |
+| 401 | `AUTH_DISABLED` | Google auth or session TTL not configured |
+| 404 | `series_not_found` | Series lookup missed |
+| 404 | `resource_not_found` | Hidden or absent resource |
+| 409 | `resource_conflict` | Ownership violation or dependency |
+| 422 | `invalid_request` | Validation failure |
+| 422 | `invalid_visible_until_order` | Bad boundary value |
+| 503 | `database_unavailable` | Neo4j unreachable |
 
-**Rationale:** Prevents client-authoritative visibility manipulation. Simplifies server-side validation. The server owns all structural metadata; the client owns only content.
+`install_database_error_handlers()` and `install_llm_error_handlers()` (installed in `main.py`) register handlers so validation, constraint, connectivity, and LLM-provider errors are translated into this envelope. Database error messages are intentionally generic — never leaking Cypher, connection details, or internals.
 
-### D-09: Visibility derived from entity, not client
+### 7.7 Revision History
 
-**Decision:** For creates, `visible_from_order` is derived from the referenced target entity (e.g., a note inherits the target's visibility), never accepted from the client.
+**Location:** `backend/app/revisions/`. `Revision` is an append-only Neo4j `(:Revision)` node model: no revision is ever deleted or mutated in place. Every user-content mutation (note/custom-node/custom-relationship create, update, delete) auto-creates a `Revision` capturing before/after JSON snapshots in the **same Neo4j transaction** as the mutation. Reverting restores the captured state by creating a new `Reverted` revision, so history is never destroyed.
 
-**Rationale:** The client has no authority to set visibility. A note attached to a season-5 character is only visible to users who've reached season 5, regardless of what the client submits.
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/series/{series_id}/revisions` | GET | List visible revisions, most-recent-first, with optional `resource_type`/`resource_id` filters |
+| `/api/series/{series_id}/revisions/{revision_id}` | GET | Get one revision (hidden revisions return 404) |
+| `/api/series/{series_id}/revisions/{revision_id}/revert` | POST | Restore a resource to the state captured in the revision |
+
+The frontend's History tab (part of `DetailPanel`) renders color-coded action badges (Created/Updated/Deleted/Reverted), diff-summary chips, and a one-shot revert flow with a confirmation dialog. The revert button appears only on `Updated` and `Deleted` revisions.
+
+ChangeSet applies extend this same invariant: confirming a ChangeSet logs a single `Revision` in the same transaction it applies in (the ChangeSet response carries `revision_id`), and reverting an applied ChangeSet is itself a `Reverted` revision — one coherent audit chain across every mutation surface in the system.
+
+### 7.8 GraphRAG-Lite Chat Pipeline
+
+**Location:** `backend/app/retrieval/` (`pipeline.py`, `tools.py`), `backend/app/llm/` (`provider.py`, `system_prompt.py`), `backend/app/services/chat.py`. Disabled by default (`LLM_ENABLED=false`); enabled by configuring an OpenAI-compatible or Gemini-compatible provider via environment variables or the Settings UI (see [7.11](#711-settings-system-user-configurable-llm-provider)).
+
+The chat feature is **GraphRAG-lite**: the LLM answers questions by calling a small allowlisted set of retrieval tools against the spoiler-filtered graph, and any citations it supplies are validated against what was actually retrieved. A non-empty model answer with no citations can pass unchanged; fallback replacement occurs when supplied citations are all stripped or the content is empty. The model never receives the raw graph — only the filtered, bounded context the pipeline assembles.
+
+```
+Browser (ChatPanel, mounted by the independent right-side ChatSheet)
+  │ 1. User submits a question → POST .../messages/stream (SSE, credentials: include)
+  ▼
+FastAPI router: backend/app/api/chat.py
+  │ 2. require_current_user resolves AppUser from the session cookie
+  ▼
+ChatService (backend/app/services/chat.py)
+  │ 3. ProgressService.resolve(user_id, series_id) → visible_until_order
+  │ 4. ChatRepository loads recent, currently-visible ChatMessages for context
+  ▼
+RetrievalPipeline (backend/app/retrieval/pipeline.py)
+  │ 5. LLMProvider.stream_chat(system_prompt, history, tools=ALLOWLISTED_TOOLS)
+  ▼
+Retrieval Tools (backend/app/retrieval/tools.py)
+  │ 6. The pipeline passes the boundary resolved in step 3 to each tool (never
+  │    from model output); tools run parameterized visibility-gated Cypher
+  ▼
+Neo4j
+  │ 7. Filtered rows → context normalization (dedupe, bound size) → back to the
+  │    LLMProvider for the final answer, this time without tools
+  ▼
+Citation Validator (backend/app/retrieval/pipeline.py)
+  │ 8. Every cited claim_id/evidence_id/source_id is checked against the actual
+  │    retrieved context set — anything not present is stripped
+  ▼
+ChatService persists the ChatMessage (citations and graph_focus; no
+  change_set_id integration) via ChatRepository
+  │ 9. Final SSE event: {message, citations, graph_focus, proposed_change_set: null}
+  ▼
+Browser: MessageBubble renders streamed text; CitationChip "Show in graph" sets
+  GraphCanvas's focusedElementIds; ChangeSetCard's Confirm/Reject buttons POST
+  to change_set.py's confirm/reject endpoints — a separate request cycle
+```
+
+#### Allowlisted retrieval tools
+
+The pipeline exposes exactly **eleven** retrieval tools defined in `backend/app/retrieval/tools.py` — nothing more, and the model can never execute raw Cypher:
+
+1. `search_entities` — keyword search over visible entities
+2. `get_entity` — fetch one visible entity by ID
+3. `get_neighborhood` — closed neighborhood of a visible entity
+4. `find_path` — bounded path search between two visible entities
+5. `get_timeline` — chronological visible events
+6. `get_character_context` — bounded interpretation pack for one visible Character
+7. `get_claims` — visible claims matching filters
+8. `get_evidence` — evidence fragments backing visible claims
+9. `get_sources` — sources referenced by visible claims
+10. `get_current_visible_graph_summary` — aggregate summary of the visible graph
+11. `get_user_notes` — the user's own visible notes
+
+Each tool takes only allowlisted, typed parameters (never a free-text Cypher string or an unvalidated ID sourced from model output), re-derives `visible_until_order` from the server-resolved value, and issues parameterized Cypher built the same way `spoiler/filter.py`'s constants are — label/relationship names chosen only from server-side allowlists, values always bound as `$parameters`.
+
+### 7.9 ChangeSet Two-Stage Mutation Flow
+
+**Location:** `backend/app/api/change_set.py`, `backend/app/services/change_set.py`, `backend/app/repository/change_set.py`. The LLM **cannot write to the graph directly**. Typed staged ChangeSet endpoints exist for separately submitted proposals, but the current chat/retrieval pipeline does not create or return them and always emits `proposed_change_set: null`:
+
+```
+Stage 1 — PROPOSE (POST /api/series/{series_id}/change-sets)
+  A typed ChangeSet: { summary, operations: [create_node | update_node |
+  delete_node | create_relationship | update_relationship |
+  delete_relationship | create_claim | update_claim | delete_claim |
+  attach_evidence | create_note | update_note | delete_note] }
+  ├── Pydantic validates: operation_type is one of 13 literals, extra fields
+  │   forbidden, at least one operation, ontology-valid labels/types
+  ├── Targets must be visible, same-series, visibility derived server-side
+  ├── Mutating canonical/candidate content is refused (a create_note
+  │   annotation is substituted instead)
+  └── Persists the ChangeSet draft and linking relationships — status: awaiting_confirmation; target graph content is unchanged
+
+Stage 2 — CONFIRM (POST .../confirm) | REJECT (POST .../reject)
+  Confirm: ownership/status check → staleness check (409 changeset_stale) →
+  replay prevented by stored `status == 'applied'` (the post-apply random idempotency key is not checked) → single Neo4j transaction (all-or-nothing)
+  → Revision logged in the same transaction
+  Reject: marks the ChangeSet rejected; no database change
+
+Stage 3 — REVERT (POST .../revert, applied ChangeSets only)
+  Only create-shaped ChangeSets are revertible; a conflict guard returns 409
+  if a later unrelated change touched the created resource; creates a new
+  Reverted revision
+```
+
+The frontend renders a proposed ChangeSet as a preview card (per-operation summary, before/after rows for updates, a destructive banner when deletes are present) with explicit Confirm/Reject controls — the only UI path into the confirm/reject endpoints.
+
+### 7.10 Spoiler-Safety Invariants
+
+1. **The LLM never receives the full unfiltered graph.** Context is assembled exclusively through the eleven allowlisted tools; `assemble_context` (`retrieval/pipeline.py`) dedupes by ID and bounds the result via `Settings.llm_max_context_items` / `Settings.llm_max_context_characters`.
+2. **Retrieval applies the persisted progress integer as its spoiler boundary, with incomplete hop coverage in some queries.** The pipeline resolves it once server-side, but `GET_EVIDENCE_QUERY` and `GET_SOURCES_QUERY` do not visibility-gate the matched `Claim`, and `GRAPH_SUMMARY_COUNTS_QUERY` counts claims without gating their subject/object endpoints. The progress update path accepts any positive integer and does not verify that it matches an `Episode.episode_order`.
+3. **The LLM never executes arbitrary Cypher.** There is no text-to-Cypher surface; every query is a server-side constant template with `$parameter` bindings.
+4. **The LLM cannot directly mutate canonical or candidate content.** ChangeSet validation refuses operations targeting `origin: canonical` or `origin: candidate`.
+5. **ChangeSet endpoint writes require typed proposals and explicit confirmation.** `ChangeSetCard` can confirm a supplied proposal before target content is mutated, but the model/chat pipeline currently produces no proposal (`proposed_change_set` is always `null`).
+6. **Chat history is spoiler-filtered by the same boundary as the graph.** `ChatMessage` rows carry `visible_until_order_snapshot`; history loading filters `snapshot <= current boundary`.
+7. **Lowering progress hides — never deletes — previously generated future-boundary messages.** They re-appear if progress advances again.
+8. **All graph content is treated as untrusted prompt data.** User notes, evidence text, and retrieved content are wrapped in strict delimiters with explicit instruction-ignore language in the system prompt.
+
+### 7.11 Settings System (User-Configurable LLM Provider)
+
+**Location:** `backend/app/api/settings.py`, `backend/app/services/settings.py`, `backend/app/repository/settings.py`, `backend/app/domain/settings.py`; `frontend/src/components/settings/SettingsPage.tsx`.
+
+Lets an authenticated user configure the GraphRAG chat agent's LLM provider from the UI instead of only via `.env`. A single `(:AppSetting {key: 'llm'})` node holds the configuration as a JSON-serialized string. `SettingsService.get_llm()` resolves the *effective* configuration field-by-field: the stored graph value wins, the `LLM_*` environment settings are the fallback/bootstrap path.
+
+**API key handling (write-only secret):** `GET /api/settings/llm` never returns the full key — only `api_key_configured: bool` and a masked form. `PUT /api/settings/llm` accepts a new `api_key`; a blank/omitted value keeps the previously stored key rather than clearing it. The full key never appears in any response model or log line. Both routes require an authenticated session and operate on a single shared global configuration, not a per-user one.
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/settings/llm` | GET | Effective LLM config, key masked |
+| `/api/settings/llm` | PUT | Update provider/key/model/base_url/enabled/system_prompt_language |
+
+`provider` is `openai_compatible` (application default) or `gemini`; `enabled: false` makes the message-generation endpoints return `503` (`LLM_DISABLED`), while chat session create/list/get/delete remain available; `system_prompt_language` (`english` default, or `turkish`) selects which system prompt variant the agent is given.
+
+### 7.12 Candidate Extraction & Review Workflow
+
+**Location:** `backend/app/api/candidates.py`, `backend/app/graph/candidates.py`, `backend/app/domain/extraction.py`. This is the intake path for a future auto-extraction pipeline — the ingest side is implemented ahead of any actual extractor.
+
+`ExtractionBatchEnvelope` wraps a list of `ExtractionClaim` entries, the payload shape an NLP/extraction process would submit via `POST /api/series/{series_id}/candidates/ingest`. Each claim carries subject/predicate/object, evidence text + locator, source type + locator, and episode context.
+
+Candidate claims, their sources, and their evidence fragments derive deterministic IDs from a SHA-256 hash of their own content (subject:predicate:object:evidence_text:evidence_locator:episode_id for the claim; source locator for the source; evidence_text:evidence_locator:episode_id for the evidence). This makes re-ingesting the same extraction batch a no-op `MERGE` rather than creating duplicates.
+
+**Layering deviation:** `candidates.py` calls `CandidateRepository` directly — there is no `CandidateService` — and approve/reject/edit handlers inline managed-transaction logic, calling `RevisionRepository.log_revision` in the mutation transaction. It is not the only API-layer bypass: `user_content.py` calls `UserContentRepository` directly, `revisions.py` performs direct database/transaction work, and chat session routing constructs `ChatService`, which owns `ChatRepository`, while `chat.py` imports repository exceptions.
+
+```
+POST .../candidates/ingest       → origin: candidate, status: candidate (idempotent MERGE)
+GET  .../candidates               → list, optional visible_until_order filter
+GET  .../candidates/{id}          → one candidate claim
+PATCH .../candidates/{id}         → edit mutable fields
+POST .../candidates/{id}/approve  → status: candidate → canonical (409 if origin isn't candidate)
+POST .../candidates/{id}/reject   → status: candidate → rejected
+```
+
+Every approve/reject/edit call logs a `Revision` with before/after snapshots in the same transaction, so candidate review participates in the same append-only audit trail as user-content and ChangeSet mutations.
 
 ---
 
-## 7. Future Extensibility Points
+## 8. Key Design Decisions
 
-### 7.1 LLM-Powered Chat
+**D-01 — Spoiler filtering at the database layer.** Filtering happens in visibility-gated Cypher before retrieval. Core graph reads live in `spoiler/filter.py`; candidate, ChangeSet, chat, retrieval-tool, user-content, and revision modules also define spoiler-aware queries. This avoids transferring and then discarding hidden result sets.
 
-**Delivered in Phase 06.** The GraphRAG-lite chat pipeline (see [4.8](#48-graphrag-lite-chat-pipeline)) is implemented: persisted watch progress, eleven allowlisted retrieval tools, a streaming grounded-answer endpoint with validated citations, spoiler-filtered chat history, and a typed ChangeSet graph-editing flow (see [4.9](#49-changeset-two-stage-mutation-flow)). Natural extension points that remain:
+**D-02 — Visibility boundaries on story-sensitive content.** Content nodes, content relationships, and claims carry `visible_from_order`; system/auth/session/progress/chat/ChangeSet/settings records do not universally carry it. Claims additionally carry optional `valid_from_order`/`valid_until_order` for time-bounded facts.
 
-- **Additional retrieval tools** — new allowlisted functions in `backend/app/retrieval/tools.py`, each following the fail-closed visibility pattern
-- **Additional providers** — new implementations of the `LLMProvider` protocol in `backend/app/llm/provider.py` (only `openai_compatible` ships today)
-- **Richer grounding** — e.g., multi-hop path explanations surfaced through the existing citation model
+**D-03 — Claims projected as edges.** Every visible claim becomes a `GraphEdge` carrying `claim_id`; structural edges (`PART_OF`/`PRECEDES`/`OCCURRED_IN`) carry `claim_id: null`. This gives the frontend a single unified edge representation while still letting `DetailPanel` and `StructuralEdgeCard` render claim-backed vs. topological edges differently.
 
-### 7.2 Auto-Extraction Pipeline
+**D-04 — Seven concurrent queries for the graph read.** `GraphService.fetch_graph()` runs seven independent Cypher queries via `asyncio.gather()` rather than one giant query, minimizing latency without complex query engineering.
 
-New content extraction from episode scripts/transcripts:
-- **Claim extraction:** NLP → new `Claim` nodes with `origin: 'candidate'`
-- **Relationship extraction:** New `Claim` nodes with relationship effects
-- **Confidence scoring:** Uses existing `confidence_level` enum
-- **Review workflow:** `claim_status` → `candidate` → `corroborated` → `canonical`
-- **Integration point:** New repository methods in `UserContentRepository` pattern, new `ClaimRepository`, new service for bulk import
+**D-05 — Backend-only visibility authority.** The frontend never checks `visible_from_order`; `graphToElements()` maps all received data without filtering. If a node is in the response, it is safe to show.
 
-### 7.3 Revision History Integration
+**D-06 — Server-authoritative watch progress with `sessionStorage` as a loading-state cache.** The spoiler boundary is persisted in Neo4j (`(:AppUser)-[:HAS_PROGRESS]->(:UserSeriesProgress)`); `sessionStorage` only caches the last-known value across refreshes and is reconciled against `GET /api/series/{id}/progress` on mount. `confirmChange()` awaits the backend write before committing local state (optimistic commit on transient failure), and the `pendingChange` → `confirmChange` workflow ensures deliberate forward jumps.
 
-The `Revision` module is fully integrated into all user-content write paths. Every note, custom-node, and custom-relationship mutation auto-creates a `Revision` with before/after JSON snapshots in the same Neo4j transaction. A revert API restores prior state by creating a new `Reverted` revision — history is never destroyed.
+**D-07 — Asynchronous graph fetching with retry.** `useGraph` exposes an explicit `refetch()` via a `retryToken` counter distinct from the `seriesId`/`visibleUntilOrder` dependency, so a transient error gets a Retry button that re-issues the same request.
 
-What's been delivered:
-- **History panel UI** — plans 04-04 (revision types, API client, hook) and 04-05 (DetailPanel History tab + revert UI) executed. The History tab shows action badges, diff summaries, and one-shot revert with confirmation dialog and toast.
-- **Time-travel queries** (graph state at a given revision) — post-v0
-- **Decision journaling** with author attribution — post-v0
+**D-08 — Immutable PATCH contracts.** PATCH routes accept only the mutable field (`content` for notes, `label` for custom nodes, `predicate` for custom relationships) — endpoints, origin, visibility, and ownership are immutable.
 
-### 7.4 Multi-Series Support
-
-The architecture is already series-scoped (`series_id` on every node). Extending to additional TV series requires:
-- New seed data directories (`data/{series_name}/`)
-- Updated ontology (if the new series needs different relationship types)
-- Query parameterization already handles multi-tenancy
-
-### 7.5 Redis Session Store
-
-The `InMemorySessionRepository` implements the `SessionRepository` protocol. Swapping to Redis for production:
-- Create `RedisSessionRepository` satisfying the same protocol
-- Session records already carry TTL, expiry, revocation fields
-- Cookie contract unchanged
-
-### 7.6 Real-Time Collaboration
-
-The `UserNote` and user-created content model supports:
-- WebSocket notification on content changes
-- Revision history per note
-- User attribution via the existing `AppUser` node model
-
-### 7.7 Granular Ontology Evolution
-
-The versioned ontology system supports:
-- Non-breaking additions (new relationship types with `interface_version`)
-- Migration scripts for breaking changes
-- Forward-compatible seed data validation (skips unknown types with a warning)
+**D-09 — Visibility derived from entity, not client.** For creates, `visible_from_order` is derived from the referenced target entity, never accepted from the client — a note attached to a season-5 character is only visible to users who've reached season 5, regardless of what the client submits.
 
 ---
 
-## Appendices
+## 9. Future Extensibility Points
 
-### A. Quick Reference: Path Conventions
+- **Additional retrieval tools** — new allowlisted functions in `backend/app/retrieval/tools.py`, each following the fail-closed visibility pattern.
+- **Additional LLM providers** — new implementations of the `LLMProvider` protocol in `backend/app/llm/provider.py` (`gemini` and `openai_compatible` ship today).
+- **Richer grounding** — e.g. multi-hop path explanations surfaced through the existing citation model.
+- **Auto-extraction pipeline** — NLP-driven claim/relationship extraction feeding the existing candidate-review workflow ([7.12](#712-candidate-extraction--review-workflow)), reusing the `confidence_level` enum and `candidate → corroborated → canonical` status progression.
+- **Multi-series support** — most story-content queries are parameterized by `series_id`, while global nodes such as `AppUser`, `Session`, and `AppSetting` are not series-scoped. The seed loader currently hardcodes `data/dexter/metadata`, `data/dexter/seed`, and fixed filenames, so adding a series requires generalizing or changing the seed-loading code as well as adding data (and updating the ontology if new types are needed).
+- **Session cleanup** — `Neo4jSessionRepository` is already the default persistent store; the documented TODO is a periodic background task that `DETACH DELETE`s expired/revoked `(:Session)` nodes (they are currently only rejected lazily at read time).
+- **Real-time collaboration** — a future extension could add WebSocket routes and content-change notifications; neither is implemented today, and current user-content records are not bound to an `AppUser` owner ID.
+- **Ontology evolution** — the versioned ontology system supports declared additions, but unknown node, relationship, claim, status, or confidence types raise `OntologyValidationError` and fail seed validation rather than being skipped.
+
+---
+
+## 10. Appendices
+
+### A. Path Conventions
 
 | Concept | Backend Path | Frontend Path |
 |---|---|---|
@@ -1034,19 +684,23 @@ The versioned ontology system supports:
 | Ontology | `ontology/` | — |
 | Seed data | `data/dexter/` | — |
 
-### B. Environment Variables
+### B. Environment Variables (selected)
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `NEO4J_URI` | — | Neo4j connection URI |
-| `NEO4J_USERNAME` | — | Neo4j username |
-| `NEO4J_PASSWORD` | — | Neo4j password |
+| `NEO4J_URI` | — (required) | Neo4j connection URI |
+| `NEO4J_USERNAME` | — (required) | Neo4j username |
+| `NEO4J_PASSWORD` | — (required) | Neo4j password |
 | `NEO4J_DATABASE` | `neo4j` | Target database name |
 | `GOOGLE_CLIENT_ID` | `""` | Google OAuth client ID |
 | `SESSION_COOKIE_NAME` | `session` | HttpOnly cookie name |
 | `SESSION_TTL_SECONDS` | `604800` | Session lifetime (7 days) |
-| `SESSION_COOKIE_SECURE` | `False` | Secure flag on cookie |
-| `FRONTEND_ORIGINS` | `http://localhost:5173` | CORS allowed origins |
+| `SESSION_COOKIE_SECURE` | `False` | Secure flag on the session cookie |
+| `FRONTEND_ORIGINS` | `http://localhost:5173` | Comma-separated CORS allowed origins |
+| `LLM_ENABLED` | `False` | Enable the GraphRAG chat/retrieval endpoints |
+| `LLM_PROVIDER` | `openai_compatible` | LLM provider implementation selector |
+
+See [`docs/CONFIGURATION.md`](./CONFIGURATION.md) for the complete, authoritative reference.
 
 ### C. Key Ports
 
@@ -1054,123 +708,5 @@ The versioned ontology system supports:
 |---|---|
 | Frontend (Vite dev) | 5173 |
 | Backend (Uvicorn) | 8000 |
-| Neo4j HTTP | 7474 |
+| Neo4j HTTP (Browser) | 7474 |
 | Neo4j Bolt | 7687 |
-
----
-
-## 8. Settings System — User-Configurable LLM Provider
-
-**Location:** `backend/app/api/settings.py`, `backend/app/services/settings.py`, `backend/app/repository/settings.py`, `backend/app/domain/settings.py`; `frontend/src/components/settings/SettingsPage.tsx`, `frontend/src/api/settings.ts`, `frontend/src/types/settings.ts`
-
-This subsystem lets an authenticated user configure the GraphRAG chat agent's LLM provider from the UI, instead of only via `.env` variables.
-
-#### Storage Model
-
-- A single `(:AppSetting {key: 'llm'})` node holds the configuration as a JSON-serialized string in its `value` property (Neo4j cannot store nested dict values directly).
-- `SettingsRepository` (`repository/settings.py`) exposes `get_llm()` / `set_llm(payload)`, using a `MERGE` upsert keyed on `key` — idempotent regardless of whether a uniqueness constraint exists yet.
-
-#### Precedence & Effective Resolution
-
-`SettingsService.get_llm()` (`services/settings.py`) resolves the *effective* configuration field-by-field: the stored graph value wins; the `LLM_*` environment settings (`core/config.py`) are the fallback/bootstrap path. For the `gemini` provider, an unset `base_url` falls back to the official endpoint (`https://generativelanguage.googleapis.com`, `domain/settings.py::DEFAULT_GEMINI_BASE_URL`).
-
-#### API Key Handling (write-only secret)
-
-- `GET /api/settings/llm` never returns the full API key — only `api_key_configured: bool` and `api_key_masked` (`"••••" + last 4 chars`, via `mask_api_key()`).
-- `PUT /api/settings/llm` accepts a new `api_key`; a blank/omitted value keeps the previously stored key rather than clearing it, so a client that only ever sees the masked form can update provider/model without clobbering the secret.
-- The full key never appears in any response model or log line.
-
-#### Routes
-
-| Route | Method | Purpose |
-|---|---|---|
-| `/api/settings/llm` | GET | Effective LLM config, key masked (requires session) |
-| `/api/settings/llm` | PUT | Update provider/key/model/base_url/enabled/system_prompt_language |
-
-Both routes require `CurrentUserDependency` (an authenticated session) — this is a shared, single global configuration (one `AppSetting` node), not per-user.
-
-#### Effective Behavior
-
-- `provider`: `gemini` (default) or `openai_compatible`.
-- `enabled`: when `false`, every chat/retrieval endpoint returns a 503 `LLM_DISABLED` response (see `llm/provider.py`'s `LLMProviderDisabled` → `install_llm_error_handlers`).
-- `system_prompt_language`: `english` (default) or `turkish` — selects which system prompt variant (`llm/system_prompt.py`) the GraphRAG agent is given; the assistant always replies in that language.
-
-#### Frontend
-
-`SettingsPage.tsx` renders a form (provider select, masked API key input with show/hide toggle, model, base URL, assistant-language select, enabled switch). Load failures are non-blocking (the form stays editable with defaults so `PUT` can still succeed); save failures surface an inline error without discarding the user's in-progress edits.
-
----
-
-## 9. Frontend Auth & Chat UI Layer
-
-The frontend directory structure in [3.1](#31-frontend-react--cytoscape) covers the graph-rendering components; this section documents three additional component/provider groups that exist under `frontend/src/` but sit outside that graph-rendering core.
-
-#### Auth Context (`frontend/src/providers/`)
-
-- **`AuthContext.ts`** — React context typing `AuthState` as a discriminated union: `loading | authenticated | unauthenticated | error`.
-- **`AuthProvider.tsx`** — On mount, calls `GET /api/auth/me` to silently restore a session from the cookie; any `ApiError` (including `unauthenticated`) resolves to the `unauthenticated` state rather than surfacing an error. Exposes `login(credential)` (posts the Google ID token to `POST /api/auth/google`) and `logout()` (best-effort — local state clears even if the server call fails).
-- **`useAuth.ts`** — Hook consuming `AuthContext` for components that need the current auth state or `login`/`logout` actions.
-
-#### Login UI (`frontend/src/components/auth/`)
-
-- **`LoginPage.tsx`** — Rendered when `AuthState.status === 'unauthenticated'`; hosts the Google Identity Services sign-in button and forwards the returned credential to `useAuth().login()`.
-
-#### Chat UI Component Tree (`frontend/src/components/chat/`)
-
-These components implement the browser side of the GraphRAG-lite pipeline described in [4.8](#48-graphrag-lite-chat-pipeline):
-
-| Component | Role |
-|---|---|
-| `ChatLauncher.tsx` | Entry point button that opens the chat surface |
-| `ChatSheet.tsx` | Slide-over/sheet container hosting the chat UI |
-| `ChatPanel.tsx` | Mounted inside `DetailPanel`'s Chat mode; orchestrates session state, message list, and the streaming composer |
-| `SessionPicker.tsx` | Lists/switches between chat sessions (`GET/POST /api/series/{series_id}/chat/sessions`) |
-| `MessageList.tsx` / `MessageBubble.tsx` | Renders the message history, streaming text as it arrives |
-| `CitationChip.tsx` | Renders a validated citation; "Show in graph" drives `GraphCanvas`'s `focusedElementIds` prop |
-| `ChangeSetCard.tsx` | Renders a proposed `ChangeSet` preview with Confirm/Reject controls (the only UI path into the confirm/reject endpoints — see [4.9](#49-changeset-two-stage-mutation-flow)) |
-
-Supporting hooks: `useChatSessions.ts`, `useChatMessages.ts` (`frontend/src/hooks/`); API clients: `api/chat.ts`, `api/changeSet.ts`.
-
-#### Settings UI (`frontend/src/components/settings/`)
-
-- **`SettingsPage.tsx`** — See [8. Settings System](#8-settings-system--user-configurable-llm-provider) above.
-
----
-
-## 10. Candidate Extraction & Review Workflow
-
-**Location:** `backend/app/api/candidates.py`, `backend/app/graph/candidates.py`, `backend/app/domain/extraction.py`
-
-This is the intake path for the auto-extraction pipeline described as a future extensibility point in [7.2](#72-auto-extraction-pipeline) — the ingest side is already implemented, ahead of any actual extractor.
-
-#### Domain Model (`domain/extraction.py`)
-
-`ExtractionBatchEnvelope` wraps a list of `ExtractionClaim` entries — the payload shape a future NLP/extraction process would submit via `POST /api/series/{series_id}/candidates/ingest`. Each claim carries subject/predicate/object, evidence text + locator, source type + locator, and episode context.
-
-#### Deterministic, Idempotent IDs (`graph/candidates.py`)
-
-Unlike other entities (which use UUIDs or content-addressed prefixes chosen at creation time), candidate claims, their sources, and their evidence fragments derive their IDs from a SHA-256 hash of their own content:
-
-- `_derive_candidate_id()` — hash of `subject_id:predicate:object_id:evidence_text:evidence_locator:episode_id`
-- `_derive_source_id()` — hash of the source locator
-- `_derive_evidence_id()` — hash of `evidence_text:evidence_locator:episode_id`
-
-This makes re-ingesting the same extraction batch a no-op `MERGE` rather than creating duplicates — important because an extractor is expected to re-run over the same episode script multiple times as it improves.
-
-#### Layering Deviation: API → Repository Directly
-
-Every other feature in this codebase follows API → Service → Repository ([Section 2](#2-architecture-layers)). The candidates routes are the one exception: `backend/app/api/candidates.py` calls `CandidateRepository` (`graph/candidates.py`) directly — there is no `CandidateService`. The approve/reject/edit route handlers also inline their own managed-transaction logic (`db.execute_write`) rather than delegating to a repository method, calling `RevisionRepository.log_revision` directly in the same transaction as the mutation (mirroring the pattern in [4.7.1](#471-append-only-revision-extension), but without an intermediate service class).
-
-#### Review Lifecycle
-
-```
-POST .../candidates/ingest   → origin: candidate, status: candidate (deterministic MERGE, dedup-safe)
-GET  .../candidates          → list, optional visible_until_order filter
-GET  .../candidates/{id}     → one candidate claim
-PATCH .../candidates/{id}    → edit mutable fields (label, predicate, claim_type, confidence_level,
-                                relationship_effect, valid_from/until_order, evidence/source text)
-POST .../candidates/{id}/approve  → status: candidate → canonical (409 if origin isn't 'candidate')
-POST .../candidates/{id}/reject   → status: candidate → rejected
-```
-
-Every approve/reject/edit call logs a `Revision` with before/after snapshots in the same transaction as the mutation, so the candidate review workflow participates in the same append-only audit trail as user-content and ChangeSet mutations.

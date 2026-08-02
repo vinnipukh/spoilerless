@@ -302,7 +302,7 @@ A claim should not be treated as final truth unless its status is `canonical` or
 
 ## Milestone 1 — Local infrastructure
 
-Status: mostly complete.
+Status: complete.
 
 Tasks:
 
@@ -313,9 +313,9 @@ Tasks:
 - [x] Create `.env.example`
 - [x] Create ontology files
 - [x] Create Dexter metadata files
-- [ ] Add backend Neo4j connection health check
-- [ ] Add seed script for series and episodes
-- [ ] Add first API endpoints
+- [x] Add backend Neo4j connection health check
+- [x] Add seed script for series and episodes
+- [x] Add first API endpoints
 
 Acceptance criteria:
 
@@ -330,13 +330,13 @@ Acceptance criteria:
 
 Tasks:
 
-- [ ] Create Neo4j constraints for `Series` and `Episode`
-- [ ] Seed Dexter series node
-- [ ] Seed S01E01–S01E03 episode nodes
-- [ ] Create `PART_OF` relationships
-- [ ] Create `PRECEDES` relationships
-- [ ] Add `GET /api/series`
-- [ ] Add `GET /api/series/{series_id}/episodes`
+- [x] Create Neo4j constraints for `Series` and `Episode`
+- [x] Seed Dexter series node
+- [x] Seed S01E01–S01E03 episode nodes
+- [x] Create `PART_OF` relationships
+- [x] Create `PRECEDES` relationships
+- [x] Add `GET /api/series`
+- [x] Add `GET /api/series/{series_id}/episodes`
 
 Acceptance criteria:
 
@@ -355,11 +355,11 @@ returns one series and three episodes.
 
 Tasks:
 
-- [ ] Define graph response model
-- [ ] Add `visible_from_order` to all seeded nodes and claims
+- [x] Define graph response model
+- [x] Add `visible_from_order` to all seeded nodes and claims
 - [ ] Add `GET /api/graph?series_id=series_dexter&visible_until_order=1`
-- [ ] Ensure backend filters all nodes and edges
-- [ ] Add unit tests for spoiler boundaries
+- [x] Ensure backend filters all nodes and edges
+- [x] Add unit tests for spoiler boundaries
 
 Acceptance criteria:
 
@@ -371,12 +371,12 @@ When `visible_until_order=1`, the API must not return S01E02 or S01E03 data.
 
 Tasks:
 
-- [ ] Create character seed file
-- [ ] Create source seed file
-- [ ] Create evidence seed file
-- [ ] Create claim seed file
-- [ ] Seed basic Dexter S01E01 character network
-- [ ] Add relationship claims with evidence links
+- [x] Create character seed file
+- [x] Create source seed file
+- [x] Create evidence seed file
+- [x] Create claim seed file
+- [x] Seed basic Dexter S01E01 character network
+- [x] Add relationship claims with evidence links
 
 Acceptance criteria:
 
@@ -394,15 +394,15 @@ The frontend can display a small graph containing:
 
 Tasks:
 
-- [ ] Replace Vite starter screen
-- [ ] Create main layout
-- [ ] Fetch series and episodes from backend
-- [ ] Add watch-progress selector
-- [ ] Add spoiler confirmation modal
-- [ ] Render graph with Cytoscape.js
-- [ ] Add node detail panel
-- [ ] Add edge/claim detail panel
-- [ ] Display evidence links
+- [x] Replace Vite starter screen
+- [x] Create main layout
+- [x] Fetch series and episodes from backend
+- [x] Add watch-progress selector
+- [x] Add spoiler confirmation modal
+- [x] Render graph with Cytoscape.js
+- [x] Add node detail panel
+- [x] Add edge/claim detail panel
+- [x] Display evidence links
 
 Acceptance criteria:
 
@@ -414,11 +414,11 @@ The user can select a watched episode and see only allowed graph elements.
 
 Tasks:
 
-- [ ] Add `UserNote` model
-- [ ] Add endpoint for creating user notes
-- [ ] Add endpoint for creating custom nodes
-- [ ] Add endpoint for creating custom relationships
-- [ ] Separate user-created content visually in frontend
+- [x] Add `UserNote` model
+- [x] Add endpoint for creating user notes
+- [x] Add endpoint for creating custom nodes
+- [x] Add endpoint for creating custom relationships
+- [x] Separate user-created content visually in frontend
 
 Acceptance criteria:
 
@@ -430,13 +430,13 @@ The user can add a note to a character or claim and see it in the detail panel.
 
 Tasks:
 
-- [ ] Create `Revision` model
-- [ ] Log claim creation
-- [ ] Log claim update
-- [ ] Log claim rejection
-- [ ] Log user correction
-- [ ] Add revision display panel
-- [ ] Add simple revert operation
+- [x] Create `Revision` model
+- [x] Log claim creation
+- [x] Log claim update
+- [x] Log claim rejection
+- [x] Log user correction
+- [x] Add revision display panel
+- [x] Add simple revert operation
 
 Acceptance criteria:
 
@@ -448,11 +448,11 @@ A user can edit a claim and inspect previous versions.
 
 Tasks:
 
-- [ ] Define extraction output JSON schema
-- [ ] Add `candidate` claim layer
-- [ ] Add candidate review endpoint
-- [ ] Add approve/reject/edit workflow
-- [ ] Add source connector interface
+- [x] Define extraction output JSON schema
+- [x] Add `candidate` claim layer
+- [x] Add candidate review endpoint
+- [x] Add approve/reject/edit workflow
+- [x] Add source connector interface
 
 Acceptance criteria:
 
@@ -460,15 +460,15 @@ The system can accept structured candidate claims from a future extractor withou
 
 ---
 
-## Milestone 9 — LLM chat, later phase
+## Milestone 9 — LLM chat, complete
 
 Tasks:
 
-- [ ] Add spoiler-aware retrieval tools
-- [ ] Add graph query tools for character relationships
-- [ ] Add graph query tools for event timelines
-- [ ] Add source-cited answer generation
-- [ ] Add backend guardrail preventing LLM from querying beyond user progress
+- [x] Add spoiler-aware retrieval tools
+- [x] Add graph query tools for character relationships
+- [x] Add graph query tools for event timelines
+- [x] Add source-cited answer generation
+- [x] Add backend guardrail preventing LLM from querying beyond user progress
 
 Acceptance criteria:
 

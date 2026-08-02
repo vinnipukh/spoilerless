@@ -1,615 +1,174 @@
+<!-- generated-by: gsd-doc-writer -->
 # Getting Started
 
-> **A step-by-step guide to running HD Graf Cehennemi locally and exploring the demo flow.**
->
-> **Project:** Spoiler-aware TV series knowledge graph (Dexter prototype)
-> **Tech stack:** FastAPI + React/TypeScript/Cytoscape.js + Neo4j + Docker Compose
+Run the HD Graf Cehennemi Dexter prototype locally with Neo4j, the FastAPI backend, and the React frontend.
 
----
+## Prerequisites
 
-**Wave 1 docs (prerequisite reading):**
+Install the following before cloning the repository:
 
-| Document | What it covers |
-|---|---|
-| [`README.md`](../README.md) | Project overview, features, tech stack, project structure, API overview |
-| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | System architecture, layer-by-layer breakdown, spoiler model, ontology |
-| [`CONFIGURATION.md`](./CONFIGURATION.md) | Environment variables, Docker Compose setup, backend settings, ontology |
+| Tool | Version | Purpose |
+|---|---:|---|
+| Git | Current supported release | Clone the repository |
+| Docker with Docker Compose | Compose v2 (`docker compose`) | Run the Neo4j service |
+| Python | `>=3.13` | Run the backend; declared by `pyproject.toml` |
+| [uv](https://docs.astral.sh/uv/) | Current supported release | Install and run Python dependencies |
+| Node.js | `^22.22.2` or `^24.15.0` or `>=26.0.0` | Run Vite 8 and the frontend toolchain |
+| npm | Bundled with a compatible Node.js release | Install and run frontend dependencies |
 
----
+The Node.js constraint accounts for the full installed frontend toolchain: the committed lockfile's `jsdom` 30.0.1 requires `^22.22.2 || ^24.15.0 || >=26.0.0`, which is stricter than Vite 8.1.5 and ESLint 10.8.0.
 
-## Table of Contents
-
-1. [Prerequisites](#1-prerequisites)
-2. [Clone & Configure](#2-clone--configure)
-3. [Start Neo4j](#3-start-neo4j)
-4. [Install Dependencies & Seed the Database](#4-install-dependencies--seed-the-database)
-5. [Start the Backend](#5-start-the-backend)
-6. [Start the Frontend](#6-start-the-frontend)
-7. [Demo Walkthrough](#7-demo-walkthrough)
-8. [Troubleshooting](#8-troubleshooting)
-9. [Next Steps](#9-next-steps)
-
----
-
-## 1. Prerequisites
-
-Install these tools before proceeding:
-
-| Tool | Minimum version | Purpose |
-|---|---|---|
-| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | latest stable | Runs the Neo4j database container |
-| [uv](https://docs.astral.sh/uv/) | latest | Python package manager and task runner |
-| [Node.js](https://nodejs.org/) | v18+ | Runs the frontend dev server |
-| [Git](https://git-scm.com/) | latest | Cloning the repository |
-
-**OS support:** The commands below use POSIX shell syntax and work on:
-
-- **Windows** (via Git Bash, WSL, or any MSYS2-based terminal)
-- **macOS** (Terminal, iTerm2)
-- **Linux** (any standard shell)
-
-> If you're on Windows and using PowerShell or cmd.exe, open **Git Bash** instead — the commands assume POSIX conventions (`cp`, `cd`, `&&`, etc.).
-
-### Verify installations
+Verify the tools:
 
 ```bash
+git --version
 docker --version
+docker compose version
 uv --version
 node --version
 npm --version
-git --version
 ```
 
----
+## Installation
 
-## 2. Clone & Configure
+1. Clone the repository and enter it:
 
-### 2.1 Clone the repository
+   ```bash
+   git clone https://github.com/vinnipukh/hdgrafcehennemi.git
+   cd hdgrafcehennemi
+   ```
 
-```bash
-git clone <repository-url>
-cd hdgrafcehennemi
-```
+2. Create local configuration files from the committed templates:
 
-### 2.2 Create the environment files
+   ```bash
+   cp .env.example .env
+   cp frontend/.env.example frontend/.env.local
+   ```
 
-```bash
-cp .env.example .env
-cp frontend/.env.example frontend/.env.local
-```
+3. Edit the root `.env`:
 
-### 2.3 Configure backend `.env`
+   - Make `NEO4J_PASSWORD` match the password in `docker-compose.yml`'s `NEO4J_AUTH` setting.
+   - Keep the local Neo4j URI on Bolt port `7687` and the database name `neo4j` unless you intentionally changed Compose.
+   - Set `GOOGLE_CLIENT_ID` to a Google OAuth 2.0 Web Client ID if you want to sign in.
 
-Open `.env` in your editor and update the **Neo4j password** to match the Docker Compose default:
+4. Edit `frontend/.env.local`:
 
-```env
-NEO4J_URI=neo4j://localhost:7687
-NEO4J_USERNAME=neo4j
-NEO4J_PASSWORD=hdgraf-local-password    # ← Must match docker-compose.yml
-NEO4J_DATABASE=neo4j
-```
+   - Set `VITE_GOOGLE_CLIENT_ID` to the same client ID used by the backend.
+   - Keep `VITE_API_BASE_URL=/api` as shown by the template.
 
-> **Why `hdgraf-local-password`?** The `docker-compose.yml` sets `NEO4J_AUTH: neo4j/hdgraf-local-password`. The `.env` file must match these credentials so the Python backend can connect.
+   The application can start without a Google client ID, but the login page reports that Google Sign-In is not configured. Do not commit either local environment file, and do not place secrets in `VITE_*` variables.
 
-### 2.4 Set up Google OAuth
+   <!-- VERIFY: Creating a Google OAuth 2.0 Web Client ID and registering http://localhost:5173 as an authorized JavaScript origin are external Google Cloud Console steps. -->
 
-This application **requires** a Google OAuth 2.0 client to log in.
+5. Install the Python and frontend dependencies:
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials
-2. Create an **OAuth 2.0 Client ID** of type **Web application**
-3. Add `http://localhost:5173` to **Authorized JavaScript origins**
-4. Copy the **Client ID**
+   ```bash
+   uv sync
+   cd frontend
+   npm install
+   cd ..
+   ```
 
-Add the client ID to both `.env` and `frontend/.env.local`:
+`uv` uses `pyproject.toml` and `uv.lock`; npm uses `frontend/package.json` and `frontend/package-lock.json`.
 
-```bash
-echo "GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com" >> .env
-# Then edit frontend/.env.local and set VITE_GOOGLE_CLIENT_ID to the same value
-```
+## First Run
 
-> Never commit `.env` or `.env.local`. The `.gitignore` already excludes them.
-> `GOOGLE_CLIENT_SECRET` is **not** used and must not be added.
+Run each long-lived server in its own terminal from the repository root.
 
-**Environment variable reference**
-
-|| Variable | File | Description |
-|---|---|---|---|
-|| `GOOGLE_CLIENT_ID` | `.env` | Google OAuth client ID for token verification |
-|| `VITE_GOOGLE_CLIENT_ID` | `frontend/.env.local` | Same client ID, exposed to the React app |
-|| `SESSION_COOKIE_NAME` | `.env` | HttpOnly cookie name (default: `session`) |
-|| `SESSION_TTL_SECONDS` | `.env` | Session lifetime in seconds (default: 604800 — 7 days) |
-|| `SESSION_COOKIE_SECURE` | `.env` | Set `true` if testing over HTTPS |
-|| `FRONTEND_ORIGINS` | `.env` | Comma-separated CORS origins (default: `http://localhost:5173`) |
-
-See [`CONFIGURATION.md`](./CONFIGURATION.md) for full details on every variable.
-
----
-
-## 3. Start Neo4j
-
-Bring up the Neo4j container using Docker Compose:
+### 1. Start Neo4j
 
 ```bash
 docker compose up -d
-```
-
-This starts a single container (`hdgrafcehennemi-neo4j`) running Neo4j Community.
-
-### Verify Neo4j is running
-
-```bash
 docker compose ps neo4j
 ```
 
-Expected output:
+Docker Compose defines one service named `neo4j`, using the container name `hdgrafcehennemi-neo4j`. Wait until it is healthy.
 
-```
-NAME                       IMAGE                    STATUS                    PORTS
-hdgrafcehennemi-neo4j      neo4j:2026-community     Up (healthy) ...          0.0.0.0:7474->7474/tcp, 0.0.0.0:7687->7687/tcp
-```
+| Service | Local address | Purpose |
+|---|---|---|
+| Neo4j Browser | `http://localhost:7474` | Browser UI and HTTP health check |
+| Neo4j Bolt | `neo4j://localhost:7687` | Backend database connection |
 
-You can also open the Neo4j Browser at [http://localhost:7474](http://localhost:7474) and log in with `neo4j` / `hdgraf-local-password`.
+### 2. Seed the graph
 
-> **Wait for the health check:** Docker Compose waits up to ~100 seconds (10 retries × 10s interval) for Neo4j to become healthy. The backend will also handle degraded startup if Neo4j isn't ready yet, but running the seed script requires a healthy connection.
-
-### Key ports
-
-| Port | Service |
-|---|---|
-| `7474` | Neo4j HTTP Browser |
-| `7687` | Neo4j Bolt protocol (used by the Python driver) |
-
----
-
-## 4. Install Dependencies & Seed the Database
-
-### 4.1 Install Python dependencies
+The `pyproject.toml` declares an `hdgraf-setup` entry point, but the project currently has no build-system/package setting, so `uv sync` may skip installing that executable. The directly runnable module is:
 
 ```bash
-uv sync
+uv run python -m backend.app.graph.setup
 ```
 
-This creates a virtual environment (`.venv`) and installs all dependencies from `pyproject.toml`, including:
+A successful run prints a `Dexter graph setup complete` summary. The seed operation is intended to create constraints and load the Dexter Season 1, Episodes 1–3 data from `data/dexter/`.
 
-- FastAPI + Uvicorn (backend web framework)
-- Neo4j Python driver (database connectivity)
-- Pydantic + pydantic-settings (configuration and validation)
-- google-auth (optional, for Google OAuth)
-- PyYAML (ontology file parsing)
-
-### 4.2 Seed the database
-
-```bash
-uv run hdgraf-setup
-```
-
-This command:
-
-1. Connects to Neo4j using credentials from `.env`
-2. Creates Neo4j constraints and indexes (uniqueness constraints on node IDs, range indexes on `visible_from_order`, etc.)
-3. Loads seed JSON from `data/dexter/` (series metadata, episodes, characters, claims, sources, evidence fragments)
-4. Validates all data against the ontology (node types, relationship types, claim types, statuses, confidence levels)
-5. Creates all nodes and relationships via `MERGE` (idempotent — safe to re-run)
-6. Runs a visibility integrity audit
-
-Expected output:
-
-```
-Dexter graph setup complete: <N> nodes, <M> relationships
-```
-
-> **Already seeded?** The command is idempotent. Re-running it won't duplicate data — `MERGE` operations skip existing nodes with matching IDs.
-
-### What got seeded?
-
-The seed script populates the graph with data from **Dexter Season 1, Episodes 1–3**:
-
-- **Structural nodes:** Series (`series:dexter`), Season, 3 Episode nodes (S01E01–S01E03)
-- **Narrative nodes:** Characters, locations, events, organizations, objects
-- **Knowledge nodes:** Claims with evidence fragments linked to sources
-- **Relationships:** `PART_OF`, `PRECEDES`, `OCCURRED_IN`, and claim-driven edges like `KNOWS`, `KILLS`, `FAMILY_OF`, etc.
-
-Each entity carries a `visible_from_order` integer field that the spoiler filter uses to gate visibility.
-
----
-
-## 5. Start the Backend
+### 3. Start the backend
 
 ```bash
 uv run uvicorn backend.app.main:app --reload
 ```
 
-This starts the FastAPI server with hot reload enabled.
-
-| Property | Value |
-|---|---|
-| **URL** | `http://localhost:8000` |
-| **API docs (Swagger UI)** | `http://localhost:8000/docs` |
-| **Health check** | `http://localhost:8000/health` |
-| **OpenAPI spec** | `http://localhost:8000/openapi.json` |
-
-### Verify the backend
+The backend listens on `http://localhost:8000` by default. Check it in another terminal:
 
 ```bash
-# Health check
 curl http://localhost:8000/health
 ```
 
-Expected response:
+Swagger UI is available at `http://localhost:8000/docs`. The backend deliberately starts in degraded mode if Neo4j is unavailable; in that case `/health` returns HTTP 503 with the database marked unavailable.
 
-```json
-{"status": "ok", "database": "connected", "service": "hdgrafcehennemi-backend"}
-```
-
-> **Database shows `"unavailable"`?** Neo4j may still be starting. Wait a few seconds and retry. The backend starts even without a live database (degraded startup).
-
-### API overview
-
-The backend exposes **43 route operations across `backend/app/api/*.py` plus `/health` (44 total)**. Key endpoints for the demo:
-
-| Endpoint | Purpose |
-|---|---|
-| `GET /api/series` | List all seeded series |
-| `GET /api/series/{series_id}/episodes` | List episodes for a series |
-| `GET /api/series/{series_id}/graph?visible_until_order=N` | **Spoiler-filtered graph data** — the core endpoint |
-| `POST /api/series/{series_id}/notes` | Create a user note |
-| `GET /api/auth/me` | Get current authenticated user (only if auth is configured) |
-
-Open [http://localhost:8000/docs](http://localhost:8000/docs) in your browser to explore every endpoint interactively.
-
----
-
-## 6. Start the Frontend
-
-Open a **new terminal** (keep the backend running) and:
+### 4. Start the frontend
 
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
 
-| Property | Value |
-|---|---|
-| **URL** | `http://localhost:5173` |
-| **Dev server** | Vite 8 |
+Vite serves the frontend at `http://localhost:5173` and proxies `/api` requests to `http://127.0.0.1:8000`.
 
-> **Prerequisite:** `frontend/.env.local` must exist with `VITE_GOOGLE_CLIENT_ID` set to your Google OAuth client ID (configured in step [2.4](#24-set-up-google-oauth)). Without it, the login page shows a configuration error.
+### 5. Confirm the application works
 
-### How the frontend communicates with the backend
+1. Open `http://localhost:5173`.
+2. Sign in with Google; authentication is required to reach the series, episode, and graph controls.
+3. Select the seeded Dexter series and an episode boundary.
+4. Confirm that the graph loads only content visible through the selected episode.
 
-The Vite dev server proxies all `/api` requests to the backend at `http://127.0.0.1:8000`. This means:
+## Common Setup Issues
 
-- The frontend calls `fetch('/api/series')` — no hardcoded backend URL needed
-- No CORS issues during development
-- Session cookies are set on the same origin
+### `hdgraf-setup` is not found
 
-You can verify the proxy is working by opening your browser's developer tools (Network tab) and watching API requests flow to `localhost:8000`.
-
----
-
-## 7. Demo Walkthrough
-
-Once everything is running ([http://localhost:5173](http://localhost:5173)), the login screen appears. Sign in with your Google account, then follow this flow to experience the application's core features.
-
-### 7.1 Select the series
-
-1. The app loads and presents a series selector.
-2. Click **Dexter** (the only seeded series).
-3. The episode list populates with S01E01, S01E02, and S01E03.
-
-**What's happening behind the scenes:**
-- `useSeries()` calls `GET /api/series` → returns Dexter
-- `useEpisodes()` calls `GET /api/series/series:dexter/episodes` → returns 3 episodes
-- These endpoints have **no spoiler filtering** — series and episode metadata are always public
-
-### 7.2 Set watch progress to S01E01
-
-1. In the **Episode Selector**, choose **S01E01**.
-2. No confirmation modal appears for the initial selection (the user hasn't made a forward jump yet).
-3. The graph renders with nodes and edges visible up to episode 1.
-
-**What you should see:**
-- Series and episode nodes
-- Characters introduced in S01E01 (Dexter Morgan, Debra Morgan, Harry Morgan, etc.)
-- Locations from the first episode (Miami Metro, Dexter's apartment)
-- Claims and relationships backed by evidence from S01E01
-- The graph layout uses the **cose-bilkent** algorithm for organic placement
-
-**What you should NOT see:**
-- Characters or events from S01E02 or S01E03
-- Claims with `visible_from_order > 1`
-
-**What's happening behind the scenes:**
-- `useGraph()` calls `GET /api/series/series:dexter/graph?visible_until_order=1`
-- `GraphService.fetch_graph()` runs **7 concurrent Cypher queries**:
-  1. Series metadata
-  2. All visible nodes (`visible_from_order <= 1`)
-  3. Structural edges (`PART_OF`, `PRECEDES`, `OCCURRED_IN`)
-  4. Visible claims (canonical + candidate, filtered)
-  5. User-authored relationships
-  6. Sources for claims
-  7. Evidence fragments for claims
-- The frontend's `graphToElements()` maps the response to Cytoscape elements **without any additional filtering** — the backend is the sole authority on visibility.
-
-### 7.3 Interact with the graph
-
-1. **Tap a character node** (e.g., Dexter Morgan).
-   - The node's closed neighborhood highlights (connected nodes and edges stay at full opacity).
-   - Everything else dims to 0.15–0.25 opacity.
-   - A detail panel opens on the right side.
-
-2. **Inspect the detail panel:**
-   - **Node info:** Label, type, series, visibility metadata.
-   - **Claim-backed edges:** Toggle through claims connected to this character.
-   - **Evidence:** Each claim shows its supporting evidence fragments with source metadata (source type, URL, episode, timestamp).
-   - **Confidence level:** `low`, `medium`, `high`, or `verified` — displayed alongside claim status (`canonical`, `corroborated`, etc.).
-
-3. **Hover over a truncated label** to see the full name in a tooltip.
-
-4. **Tap a structural edge** (e.g., `PART_OF` between an episode and the series) — the `StructuralEdgeCard` renders topology info.
-
-5. **Drag nodes** to rearrange the layout. The cose-bilkent algorithm automatically spaces related nodes close together.
-
-### 7.4 Advance to S01E02 (spoiler confirmation)
-
-1. Open the **Episode Selector** and select **S01E02**.
-2. A **confirmation modal** appears with a spoiler warning: **"You're about to advance your watch progress to S01E02. New nodes, claims, and relationships will become visible."**
-3. Click **Confirm**.
-4. The graph re-renders with additional nodes, edges, and claims from S01E02.
-
-**What becomes visible:**
-- Characters, events, and locations introduced in S01E02
-- Claims with `visible_from_order: 2`
-- Evidence fragments referencing S01E02
-
-**What's happening behind the scenes:**
-- `useWatchProgress.setState()` updates a `pendingChange` in sessionStorage
-- `ConfirmAdvanceModal` dispatches `confirmChange()` on user confirmation
-- `visibleUntilOrder` changes from `1` to `2`
-- The `useGraph` hook fires a new `GET /api/series/series:dexter/graph?visible_until_order=2`
-- The entire graph re-renders with the new spoiler boundary
-
-**Try the reverse:** Select S01E01 again. A similar confirmation modal asks you to confirm stepping back. The graph contracts to only show S01E01-visible data.
-
-### 7.5 Inspect claims and evidence
-
-1. Tap a claim-backed edge (displayed as a solid line between two character nodes).
-2. The detail panel shows:
-   - **Claim summary:** "Dexter knows Debra" (subject → predicate → object)
-   - **Claim type:** `explicit_fact`, `observed_event`, etc.
-   - **Status:** `canonical`, `corroborated`, `candidate`, `disputed`, `rejected`
-   - **Confidence:** `verified`, `high`, etc.
-   - **Evidence tab:** One or more evidence fragments linked to this claim
-   - **Source tab:** The original source (e.g., a transcript, episode script, summary)
-
-**Evidence fragment detail:**
-```json
-{
-  "id": "evt:dexter_and_debra_are_siblings",
-  "source_type": "episode_script",
-  "text": "Dexter: 'Debra's my sister. She's a cop. She doesn't know about me.'",
-  "url": "",
-  "episode_order": 1,
-  "timestamp": null,
-  "confidence": "high"
-}
-```
-
-### 7.6 Create a user note (optional)
-
-1. Select a character node (e.g., Dexter Morgan).
-2. In the detail panel, click **Add Note**.
-3. Type a note (e.g., "Interesting how he compartmentalizes his work and personal life.").
-4. Click **Save**.
-5. The note appears as a dashed-border node attached to the character.
-
-**What's happening behind the scenes:**
-- `POST /api/series/series:dexter/notes` with `{target_type: "Character", target_id: "character:dexter_morgan", content: "..."}`
-- The note inherits the target's `visible_from_order`
-- The note node has a **dashed border** (user-created content is visually distinct from canonical data)
-- The note's `origin` is `user`
-
-### 7.7 Advance to S01E03 (repeat)
-
-The same spoiler confirmation flow applies. With all three episodes visible, you see the complete Dexter S01 graph prototype.
-
-### 7.8 Enable the GraphRAG chat (optional)
-
-Chat is **disabled by default** (`LLM_ENABLED=false`). To turn it on you need an
-OpenAI-compatible chat-completions endpoint — OpenAI, a local vLLM server, or any
-compatible provider. Add these to the **backend** `.env` (project root):
+`uv sync` currently warns that project entry points are skipped because the repository has no build system or `tool.uv.package = true`. Use the verified module form instead:
 
 ```bash
-LLM_ENABLED=true
-LLM_BASE_URL=https://api.openai.com/v1     # or your local endpoint
-LLM_API_KEY=your-key-here                  # never commit real values
-LLM_MODEL=gpt-4.1-mini                     # any model your endpoint exposes
+uv run python -m backend.app.graph.setup
 ```
 
-Restart the backend. The remaining `LLM_*` knobs (`LLM_TIMEOUT_SECONDS`,
-`LLM_MAX_OUTPUT_TOKENS`, `LLM_TEMPERATURE`, `LLM_MAX_TOOL_ROUNDS`,
-`LLM_MAX_CONTEXT_ITEMS`, `LLM_MAX_CONTEXT_CHARACTERS`) are optional; see
-[`CONFIGURATION.md`](./CONFIGURATION.md) for defaults and bounds. With
-`LLM_ENABLED=false` (or no provider reachable), the chat panel still opens but
-turns return a clear "chat is disabled / provider unavailable" banner instead
-of crashing.
+### Python or Node.js is rejected
 
----
+- The backend requires Python `>=3.13`. Run `uv run python --version`; uv can provision a compatible interpreter when one is available for the platform.
+- Vite 8 requires Node.js `20.19.x` or `>=22.12.0`. Upgrade Node.js if `npm install` reports an `EBADENGINE` warning or Vite refuses to start.
 
-## 8. Troubleshooting
+### Neo4j is unavailable or the seed command cannot connect
 
-### Neo4j won't start
+Check the service and logs:
 
 ```bash
-# Check container logs
+docker compose ps neo4j
 docker compose logs neo4j
-
-# Common issues:
-# - Port 7474 or 7687 already in use → stop other Neo4j instances
-# - Docker not running → start Docker Desktop
-# - Image not found → try neo4j:5-community as a fallback
 ```
 
-### Backend can't connect to Neo4j
+Confirm Docker is running, ports `7474` and `7687` are free, and the root `.env` credentials match `docker-compose.yml`. Wait for the Compose health check before retrying the seed command.
 
-```
-# Error: database_unavailable
-# Check your .env matches docker-compose.yml:
-NEO4J_PASSWORD=hdgraf-local-password   # Match docker-compose.yml
-NEO4J_URI=neo4j://localhost:7687       # Bolt port, not HTTP port
-```
+If the seed integrity audit fails against an older local graph, do not ignore the error: inspect or replace the stale local Neo4j data before reseeding. Removing the bind-mounted `neo4j_data` directory deletes the local graph, so back it up first if it contains work you need.
 
-### Frontend shows blank page
+### The login page says Google Sign-In is not configured
 
-```bash
-# Check the browser's developer console for errors
-# Common issues:
-# - Backend not running → start it with uv run uvicorn ...
-# - Vite proxy misconfigured → check frontend/vite.config.ts
-# - Port conflict → ensure nothing else runs on :5173
-```
+Set the same OAuth Web Client ID in the backend's `GOOGLE_CLIENT_ID` and the frontend's `VITE_GOOGLE_CLIENT_ID`, then restart both dev servers. The local frontend origin must also be registered with the OAuth provider. Do not add a Google client secret; this application verifies browser-issued ID tokens using the client ID.
 
-### `uv run hdgraf-setup` fails
+### A local port is already in use
 
-```bash
-# Error: "Neo4j connection refused"
-# → Neo4j may still be starting. Wait and retry.
-# → Verify docker compose ps shows "healthy" status.
+The default ports are `5173` (Vite), `8000` (Uvicorn), `7474` (Neo4j HTTP), and `7687` (Neo4j Bolt). Stop the conflicting process or deliberately update every corresponding application, proxy, Compose, and environment setting; changing only one side breaks connectivity.
 
-# Error: "Ontology validation error"
-# → Check ontology/ files have ontology_version: "0.1"
+## Next Steps
 
-# Error: "Constraint already exists"
-# → The idempotent MERGE should handle this. Try re-running.
-```
-
-### Python version issues
-
-This project requires **Python 3.13+**. Verify:
-
-```bash
-python --version
-```
-
-If you have multiple Python versions, uv auto-discovers the right one from `.python-version` or `requires-python` in `pyproject.toml`.
-
-### Windows-specific notes
-
-| Issue | Fix |
-|---|---|
-| `docker compose` not found | Use `docker-compose` (with hyphen) on older Docker Desktop |
-| `uv` not found after install | Restart your terminal, or add `~/.local/bin` to PATH |
-| `npm install` fails with long paths | Enable long path support: `git config --system core.longpaths true` |
-| Line endings (CRLF) | Git for Windows defaults to `core.autocrlf=true` — files work fine |
-
----
-
-## 9. Next Steps
-
-Once you're up and running:
-
-| Goal | Resource |
-|---|---|
-| Understand the architecture | [`docs/ARCHITECTURE.md`](./ARCHITECTURE.md) |
-| Configure auth, ports, or Neo4j | [`docs/CONFIGURATION.md`](./CONFIGURATION.md) |
-| Learn the graph data model | [`ontology/node_types.yaml`](../ontology/node_types.yaml), [`relation_types.yaml`](../ontology/relation_types.yaml), [`claim_types.yaml`](../ontology/claim_types.yaml) |
-| See the planned features | [`ROADMAP.md`](../ROADMAP.md) |
-| Add seed data | Add JSON files under `data/dexter/seed/` or `data/dexter/metadata/` |
-| Run the tests | `uv run pytest` (backend) / `cd frontend && npm test` (frontend) |
-| Build for production | `cd frontend && npm run build` |
-
----
-
-## Quick Reference: All Commands
-
-```bash
-# 1. Clone and configure
-git clone <repo-url>
-cd hdgrafcehennemi
-cp .env.example .env
-cp frontend/.env.example frontend/.env.local
-# Edit .env: set NEO4J_PASSWORD=hdgraf-local-password
-# Edit .env and frontend/.env.local: set GOOGLE_CLIENT_ID matching values
-
-# 2. Start Neo4j
-docker compose up -d
-
-# 3. Install Python deps and seed data
-uv sync
-uv run hdgraf-setup
-
-# 4. Start the backend (terminal 1)
-uv run uvicorn backend.app.main:app --reload
-
-# 5. Start the frontend (terminal 2)
-cd frontend && npm install && npm run dev
-
-# 6. Open in browser
-open http://localhost:5173
-```
-
-### Demo flow checklist
-
-- [ ] Select Dexter series
-- [ ] Set watch progress to S01E01
-- [ ] Explore the graph — tap nodes, inspect claims and evidence
-- [ ] Advance to S01E02 — confirm spoiler warning
-- [ ] Inspect newly visible nodes and claims
-- [ ] Add a user note
-- [ ] Advance to S01E03
-- [ ] View the complete S01 graph with all three episodes unlocked
-
----
-
-## 10. In-App Settings: Configuring the LLM Provider via UI
-
-Section 7.8 shows how to enable chat by editing the backend `.env` file. There's also a
-**Settings page inside the running app** that lets you configure (and reconfigure) the LLM
-provider at runtime, without touching `.env` or restarting the backend.
-
-1. With the frontend running and you're logged in, click the **gear icon** in the top bar.
-2. The Settings page (`frontend/src/components/settings/SettingsPage.tsx`) opens, replacing the
-   graph view. Click the gear again (now labeled "Graph") to return.
-3. The form lets you set:
-   - **Provider** — `openai_compatible` or `gemini` (a second provider not mentioned in step 7.8;
-     if `gemini` is selected and no base URL is given, it defaults to Google's official endpoint)
-   - **API key** — masked after saving (shown as `••••` + last 4 characters); leaving it blank on
-     a later save keeps the previously stored key rather than clearing it
-   - **Model**, **base URL**, **enabled** switch
-   - **Assistant language** (English or Turkish) — controls both the system prompt language and
-     which fallback text is used when the model can't answer from the visible graph
-4. Save. The new configuration is persisted in Neo4j (`:AppSetting {key: 'llm'}`) and takes effect
-   immediately for the current and future chat turns — no backend restart needed.
-
-**Precedence to know:** a value saved here always wins over the matching `LLM_*` environment
-variable; the `.env` values are only used as the initial fallback/bootstrap. So if chat behaves
-unexpectedly after changing `.env`, check the Settings page first — a previously saved value there
-may be overriding it. See [`CONFIGURATION.md`](./CONFIGURATION.md) for the full precedence and
-storage details.
-
----
-
-## 11. Exploring the Candidate Extraction & Review Workflow (API-only, optional)
-
-The backend also exposes a **candidate claim review workflow** — the intake path a future
-NLP/extraction process would use to submit auto-extracted claims for human review before they
-become part of the canonical graph. There is currently **no dedicated frontend UI** for this flow;
-it's explored through the Swagger docs at [http://localhost:8000/docs](http://localhost:8000/docs).
-
-Endpoints (all under `/api/series/{series_id}/candidates`):
-
-| Endpoint | Purpose |
-|---|---|
-| `POST /candidates/ingest` | Submit a batch of extracted claims (subject/predicate/object + evidence + source) as `origin: candidate` |
-| `GET /candidates` | List candidate claims, optionally filtered by `visible_until_order` |
-| `GET /candidates/{claim_id}` | Get one candidate claim |
-| `PATCH /candidates/{claim_id}` | Edit mutable fields (label, predicate, claim_type, confidence_level, etc.) before approving |
-| `POST /candidates/{claim_id}/approve` | Promote `candidate` → `canonical` |
-| `POST /candidates/{claim_id}/reject` | Mark `candidate` → `rejected` |
-
-Candidate claims derive deterministic, content-hashed IDs (not UUIDs), so re-ingesting the same
-extraction batch is idempotent — safe to retry. Every approve/reject/edit call logs a `Revision`
-with before/after snapshots, so candidate review participates in the same append-only audit trail
-as user notes and ChangeSets. Approved claims flow into the normal spoiler-filtered graph read path
-just like seeded canonical claims.
+- Read the [architecture guide](./ARCHITECTURE.md) for the system layers and spoiler-safety model.
+- Read the [configuration reference](./CONFIGURATION.md) before changing authentication, database, session, or LLM settings.
+- Use the [development guide](./DEVELOPMENT.md) for contributor workflows and project conventions.
+- Use the [testing guide](./TESTING.md) to run the pytest and Vitest suites.
+- Explore the HTTP surface in the [API reference](./API.md) or the local Swagger UI at `http://localhost:8000/docs`.
