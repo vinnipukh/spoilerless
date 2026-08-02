@@ -29,8 +29,8 @@ cp .env.example .env
 ```
 
 > **Verified against the repo:** `.env.example` (project root) was read directly and matches the table
-> below. The live `.env` currently sets only `GOOGLE_CLIENT_ID` — every other variable falls back to its
-> default. `LLM_FALLBACK_EN` and `LLM_FALLBACK_TR` exist in the `Settings` class but are **not** listed in
+> below. Local secret-bearing `.env` files were intentionally not read. `LLM_FALLBACK_EN` and
+> `LLM_FALLBACK_TR` exist in the `Settings` class but are **not** listed in
 > `.env.example` (they are optional overrides). Secret values are never documented here.
 
 ### Variable Reference
@@ -47,7 +47,7 @@ cp .env.example .env
 | `SESSION_COOKIE_SECURE` | `false` | No | Sets the `Secure` flag on the session cookie. Should be `true` in any HTTPS deployment. |
 | `FRONTEND_ORIGINS` | `http://localhost:5173` | No | Comma-separated list of allowed CORS origins for the FastAPI backend. Also used by `verify_origin` in `backend/app/api/auth.py` for CSRF `Origin`/`Referer` validation on `POST /api/auth/google`; `POST /api/auth/logout` does not apply that dependency. |
 | `LLM_ENABLED` | `false` | No | Master switch for the GraphRAG chat/retrieval endpoints. When `false`, chat calls raise `LLMProviderDisabled`, mapped to HTTP 503 with code `LLM_DISABLED`. |
-| `LLM_PROVIDER` | `openai_compatible` | No | Provider implementation selector. Two implementations exist: `openai_compatible` and `gemini` (see [Runtime LLM Settings Override](#runtime-llm-settings-override-stored-in-neo4j) — the stored/runtime default is `gemini`, this env default is `openai_compatible`). |
+| `LLM_PROVIDER` | `openai_compatible` | No | Environment fallback for the active provider selector. Two implementations exist: `openai_compatible` and `gemini`. The PUT request model defaults an omitted `provider` field to `gemini`, which is then stored; that request default is distinct from this env/runtime fallback. |
 | `LLM_BASE_URL` | `""` (empty) | Effectively required for `openai_compatible` if `LLM_ENABLED=true` and no runtime override is stored; optional for Gemini | Base URL for the OpenAI-compatible `/chat/completions` endpoint, or the Gemini API base when `LLM_PROVIDER=gemini` (defaults to `https://generativelanguage.googleapis.com` if left empty for Gemini). |
 | `LLM_API_KEY` | `""` (empty) | Effectively required if `LLM_ENABLED=true` and no runtime override is stored | LLM provider API key. The full key is accessed by settings masking, chat provider resolution, and provider implementations; API responses expose only the masked key, and the full key is never logged or returned to the frontend. |
 | `LLM_MODEL` | `""` (empty) | Effectively required if `LLM_ENABLED=true` and no runtime override is stored | Model identifier passed to the provider (e.g. `gpt-4.1-mini`, `gemini-2.0-flash`). |
@@ -198,16 +198,22 @@ set at runtime through the API and is persisted in the graph — it is **not** p
     (`mask_api_key()` returns `"••••" + last 4 chars` for keys longer than four characters, one bullet per character for shorter keys, or `None` if unset).
   - `PUT /api/settings/llm` — updates the configuration (`backend/app/api/settings.py`,
     `SettingsService.update_llm`).
-- **Precedence:** For `provider`, `api_key`, `base_url`, and `model`, the stored graph value wins if
-  present; otherwise the corresponding `LLM_*` setting from `Settings` is used as the fallback
-  (`SettingsService.get_llm` in `backend/app/services/settings.py`). `enabled` follows the same rule,
-  falling back to `settings.llm_enabled`.
+- **Precedence:** For `provider`, `api_key`, `base_url`, and `model`, a non-empty stored graph value wins;
+  otherwise the corresponding `LLM_*` setting from `Settings` is used as the fallback (`get_llm()` and
+  `get_llm_provider()` use `stored.get(field) or env_value`). `enabled` is different because `false` is
+  meaningful: presence in storage wins via `stored.get("enabled", env_value)`; only an absent stored key
+  falls back to `settings.llm_enabled` (`backend/app/services/settings.py`).
 - **Supported providers:** `backend/app/domain/settings.py` declares
   `LLM_PROVIDERS = ("gemini", "openai_compatible")`. The `PUT` request body (`LLMSettingsUpdate`) defaults
   `provider` to `"gemini"` when not supplied — note this differs from the `LLM_PROVIDER` env default of
   `"openai_compatible"` described above.
 - **Gemini default base URL:** When `provider` is `gemini` and no `base_url` is stored or set via
   `LLM_BASE_URL`, the service falls back to `DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com"`.
+- **Provider protocol and activation:** Two implementations are available, but only the effective configured
+  provider is active for a chat call. `OpenAICompatibleProvider` posts to `/chat/completions`.
+  `GeminiProvider` uses Gemini's `generateContent`/`streamGenerateContent` action family; the current streaming
+  implementation posts to `/v1beta/models/{model}:streamGenerateContent?alt=sse`. It is not an
+  OpenAI-compatible chat-completions endpoint.
 - **URL scheme validation:** `LLMSettingsUpdate.base_url` is validated to require an `http`/`https`
   scheme and a hostname (`_validate_base_url` in `backend/app/domain/settings.py`) — an SSRF-via-scheme
   guard. It deliberately does **not** block private/loopback addresses, since local vLLM/Ollama endpoints
@@ -333,13 +339,13 @@ combined deployment must route `/api` traffic to the backend since Vite's dev pr
 
 ### Frontend environment variables
 
-`frontend/.env.example` (verified) declares two variables, and `frontend/.env.local` exists for local
-overrides (gitignored):
+`frontend/.env.example` (verified) declares two variables. A local `frontend/.env.local` may provide
+gitignored overrides; its secret-bearing contents were intentionally not inspected:
 
 | Variable | Required | Description |
 |---|---|---|
 | `VITE_GOOGLE_CLIENT_ID` | Yes, for sign-in | Google OAuth client ID, read via `import.meta.env.VITE_GOOGLE_CLIENT_ID` in `frontend/src/components/auth/LoginPage.tsx`. Must match the backend's `GOOGLE_CLIENT_ID`. When unset, the login page renders a "Google Sign-In is not configured" message instead of the sign-in button. |
-| `VITE_API_BASE_URL` | No | Declared in `frontend/.env.example` and `frontend/.env.local` with the value `/api`, but **not yet read by any source file** — `import.meta.env` is only consumed for `VITE_GOOGLE_CLIENT_ID`, and each API module (`frontend/src/api/series.ts`, `frontend/src/api/auth.ts`, etc.) still hardcodes the `/api` prefix. Reserved for future base-URL configuration. |
+| `VITE_API_BASE_URL` | No | Declared as `/api` in `frontend/.env.example`, but **not yet read by any source file** — `import.meta.env` is only consumed for `VITE_GOOGLE_CLIENT_ID`, and each API module (`frontend/src/api/series.ts`, `frontend/src/api/auth.ts`, etc.) still hardcodes the `/api` prefix. Reserved for future base-URL configuration. |
 
 > **Security:** Vite inlines `VITE_*` variables into the built JavaScript bundle at build time — never
 > store secrets in `frontend/.env.local`. `VITE_GOOGLE_CLIENT_ID` is a public OAuth client identifier

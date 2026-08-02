@@ -129,6 +129,19 @@ Vite serves the frontend at `http://localhost:5173` and proxies `/api` requests 
 3. Select the seeded Dexter series and an episode boundary.
 4. Confirm that the graph loads only content visible through the selected episode.
 
+## Demo Walkthrough
+
+The seeded identifiers are `series_dexter` and `dexter_s01e01` through `dexter_s01e03`.
+
+1. Select **Dexter** and set progress to **S01E01**. The initial graph contains only episode-1-visible data.
+2. Select a character or claim-backed relationship. The left inspector shows graph details, claims, evidence/source metadata, notes, and revision history where applicable.
+3. Advance to **S01E02**. Confirm the spoiler warning, then observe the newly unlocked nodes and relationships. Moving backward also asks for confirmation and contracts the visible graph.
+4. Add a note or user-created graph item from the available inspector/canvas controls. User content remains visually distinguishable and participates in revision/refresh flows.
+5. Open **Settings** with the top-bar gear to configure the optional LLM provider, model, API key, enabled switch, and English/Turkish assistant language. Settings saved here are stored in Neo4j and take precedence over matching `LLM_*` environment values.
+6. Open chat and ask about a relationship visible at the current progress. Chat is optional and reports a disabled/provider error when no effective provider is enabled; it must not retrieve beyond persisted watch progress.
+
+Candidate extraction review is currently an API workflow rather than a dedicated frontend screen. Use Swagger UI at `http://localhost:8000/docs` to inspect the ingest, list/get, edit, approve, and reject routes under `/api/series/{series_id}/candidates`. Candidate ingestion accepts structured, evidence-bearing records; it is not an automatic subtitle/script ingestion pipeline.
+
 ## Common Setup Issues
 
 ### `hdgraf-setup` is not found
@@ -164,6 +177,14 @@ Set the same OAuth Web Client ID in the backend's `GOOGLE_CLIENT_ID` and the fro
 ### A local port is already in use
 
 The default ports are `5173` (Vite), `8000` (Uvicorn), `7474` (Neo4j HTTP), and `7687` (Neo4j Bolt). Stop the conflicting process or deliberately update every corresponding application, proxy, Compose, and environment setting; changing only one side breaks connectivity.
+
+### The frontend is blank or `/api` requests fail
+
+Open browser developer tools and inspect the Console and Network tabs. Check `curl http://localhost:8000/health`, then confirm `frontend/vite.config.ts` still proxies `/api` to `http://127.0.0.1:8000`. A 503 points to Neo4j/backend health; a proxy error usually means the backend is not listening on port `8000`.
+
+### Changing `.env` does not change chat behavior
+
+Open the in-app Settings page. A value persisted in `:AppSetting {key: 'llm'}` wins over the matching environment fallback, including the `enabled` switch. Updating only `.env` does not replace an already stored value.
 
 ## Next Steps
 

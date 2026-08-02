@@ -24,7 +24,7 @@ There are no backend or frontend `Dockerfile` files. No Vercel, Netlify, Fly.io,
 - Docker Engine or Docker Desktop with Docker Compose.
 - Python `>=3.13`, as required by `pyproject.toml`.
 - [`uv`](https://docs.astral.sh/uv/) for the Python environment.
-- Node.js and npm for the frontend; the repository does not pin a Node.js version.
+- Node.js and npm for the frontend. `frontend/package.json` has no `engines` field, but the committed `jsdom` lockfile entry currently requires `^22.22.2 || ^24.15.0 || >=26.0.0`.
 
 ### Start the application
 
@@ -108,12 +108,12 @@ The repository-defined manual build sequence is:
 4. Run validation manually before deployment:
 
    ```bash
-   # From the repository root
+   # From the repository root, with Neo4j pointed at a disposable/test-only database
    uv run pytest
 
    # From frontend/
    npm run lint
-   npm test -- --run
+   NODE_ENV=test CI=1 npm run test
    ```
 
 No container image build, image registry push, release trigger, artifact upload, or deploy command exists in the repository.
@@ -134,6 +134,21 @@ The frontend's `VITE_*` values are embedded at build time. `VITE_GOOGLE_CLIENT_I
 
 No deployment-platform secret manager is configured in this repository. <!-- VERIFY: Store `NEO4J_PASSWORD`, `LLM_API_KEY`, and any other deployment secrets in the secret-management facility selected for the actual hosting platform. -->
 
+## Pre-production safety gaps
+
+Production deployment is future work. Before selecting or exposing a target, address and verify all of the following:
+
+- Replace the hard-coded Compose Neo4j credential and keep Bolt/Neo4j Browser off the public internet.
+- Terminate TLS, set `SESSION_COOKIE_SECURE=true`, and restrict `FRONTEND_ORIGINS` to exact deployed origins.
+- Provide durable Neo4j storage plus tested backup and restore procedures; local bind mounts are not a backup strategy.
+- Put backend/frontend processes behind a production process manager or containers with restart, health, and resource policies.
+- Add CI gates for focused tests, type-check/build, dependency scanning, artifact publication, and staged promotion.
+- Add authorization appropriate to the deployment. `/api/settings/llm` requires an authenticated session but no administrator role; it can change the active provider and API key.
+- Treat Neo4j backups as secret-bearing. Runtime LLM settings are stored in `:AppSetting {key: 'llm'}`, so a backup can contain the full provider key even though API responses expose only a masked value.
+- Add request/concurrency controls, audit/retention policy, centralized logs, metrics, alerting, and an incident/rollback runbook for the chosen platform.
+
+These are requirements for a future production design, not capabilities supplied by the current repository.
+
 ## Rollback
 
 There is no repository-defined production rollback command, release workflow, immutable image tag policy, or database migration rollback procedure.
@@ -148,7 +163,7 @@ For the current manual deployment model:
 
 <!-- VERIFY: Adapt the rollback commands, process manager restart, artifact selection, and backup restoration steps to the actual production platform before first deployment. -->
 
-Do not use `docker compose down -v` as a rollback command: the Compose file uses bind mounts for Neo4j data, and the repository provides no automated backup or restoration workflow.
+Do not use `docker compose down -v` as a rollback command. The Compose service uses bind mounts, so `-v` does not restore an earlier graph (and does not make a backup); a real rollback requires a separately created, revision-compatible Neo4j backup.
 
 ## Monitoring
 

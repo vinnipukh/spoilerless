@@ -61,7 +61,7 @@ The setup file registers jest-dom matchers and browser API shims needed by React
 
 ### Backend commands
 
-Run the complete configured backend suite from the repository root:
+The complete configured backend suite is broad and includes live-Neo4j mutations. Run it only when the configured database is disposable or explicitly dedicated to tests:
 
 ```bash
 uv run pytest
@@ -102,7 +102,7 @@ cd frontend
 NODE_ENV=test CI=1 npm run test
 ```
 
-This exact command was verified against the current suite. Setting `NODE_ENV=test` is important: a shell that retains `NODE_ENV=production` can load React's production behavior and cause misleading failures.
+Setting `NODE_ENV=test` is important: a shell that retains `NODE_ENV=production` can load React's production behavior and cause misleading failures. This document does not claim the current suite passes; report the output of the run you perform.
 
 Run one test file:
 
@@ -145,6 +145,35 @@ Backend integration tests are not automatically isolated from the application's 
 
 When a test changes persistent user configuration, preserve and restore the previous value rather than deleting it unconditionally. `test_settings_api.py` demonstrates the required pattern: it backs up the existing `:AppSetting {key: 'llm'}` value, performs the test, then restores that value with a fresh driver and event loop. Scratch fixtures such as those in `test_retrieval_tools.py` create records under a dedicated series ID and delete that series in teardown.
 
+Treat the default test configuration as a **shared-live-database hazard**, not as an isolated test container:
+
+- Prefer unit/contract files that do not open Neo4j, or target one live test file with `-k`, before considering the broad suite.
+- Point integration runs at a disposable Neo4j database or back up anything that must survive. The defaults in `conftest.py` are the same local host, credentials, and database commonly used by the application.
+- Let teardown complete. An interrupted run can leave sessions, progress, candidate, ChangeSet, or scratch-series records behind and make later results order/state dependent.
+- If a run was interrupted, assume the database may be dirty. Inspect and back it up before any cleanup or reseed; `backend.app.graph.setup` writes the configured graph and is not a substitute for a backup.
+- Tests that open the application with its async driver should use `with TestClient(...)` so all requests share one portal loop. Teardown that needs a different loop should open a fresh driver, as `test_settings_api.py` does.
+
+## Spoiler-safety and API contract tests
+
+For every new spoiler-sensitive read, test both sides of the boundary: visible records are present, future IDs/labels/count hints are absent from the serialized response, dangling edges are impossible, invalid/non-persisted boundaries fail, and hidden direct reads are indistinguishable from missing resources. The graph boundary patterns live in `backend/tests/test_graph_api.py`; user-content boundary behavior lives in `backend/tests/test_user_content_api.py`; retrieval/tool isolation lives in `backend/tests/test_retrieval_tools.py` and `backend/tests/test_retrieval_pipeline.py`.
+
+The HTTP surface is a closed inventory. Adding, removing, or changing a route requires synchronized edits to:
+
+- `backend/tests/test_openapi_contract.py`;
+- `backend/tests/test_frontend_contract_doc.py` (`EXPECTED_OPERATIONS`, template and count assertions);
+- `docs/frontend-api-contract.md` (one exact `(method, path)` row per operation).
+
+## Troubleshooting
+
+| Symptom | Likely cause | Action |
+|---|---|---|
+| Root-relative fixture `FileNotFoundError` | pytest was run from `backend/` | Re-run from the repository root. |
+| Many unrelated live-DB failures after an aborted run | Shared Neo4j contains partial fixture state | Stop; inspect/backup the database, then clean or reseed only with explicit data-loss awareness. Re-run a focused file before blaming source. |
+| React renders an empty container or many Testing Library lookups fail | `NODE_ENV=production` leaked into Vitest | Re-run with `NODE_ENV=test CI=1`. |
+| `toBeInTheDocument` is missing | Wrong jest-dom entry/setup | Keep `@testing-library/jest-dom/vitest` in `frontend/src/test/setup.ts`. |
+| Pointer capture, `ResizeObserver`, `matchMedia`, or `React.act` fails | Required jsdom shim is absent | Add a suite-wide shim to `frontend/src/test/setup.ts`, not per test. |
+| Cytoscape click/focus test does nothing | Stub does not preserve/register handlers or collection behavior | Follow the stateful stubs in `frontend/src/App.test.tsx` and `frontend/src/components/graph/GraphCanvas.test.tsx`. |
+
 ## Writing frontend tests
 
 - Colocate tests with source files and name them `*.test.ts` or `*.test.tsx`.
@@ -168,4 +197,4 @@ The backend configuration has no `pytest-cov` or `--cov-fail-under` setting. The
 
 ## CI integration
 
-No CI test workflow is configured. The repository has no `.github/workflows/` directory, so pushes and pull requests do not automatically run pytest or Vitest. Run both full-suite commands locally before submitting changes.
+No CI test workflow is configured. The repository has no `.github/workflows/` directory, so pushes and pull requests do not automatically run pytest or Vitest. Record local results before submitting changes; use a disposable/test-only Neo4j database for the broad backend suite.

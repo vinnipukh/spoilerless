@@ -7,6 +7,12 @@ Explore characters, events, locations, claims, and relationships through an inte
 
 > **Prototype scope:** Dexter, Season 1, Episodes 1–3.
 
+## Product direction
+
+The repository is a polished vertical prototype for a **spoiler-aware, provenance-backed narrative knowledge graph**: an Obsidian-like graph, human-authored knowledge, revision history, and GraphRAG over only the viewer-visible subgraph. Candidate review and chat, which began as roadmap goals, are now implemented; automated subtitle/script ingestion, production deployment, and broader product scope remain future work.
+
+Coding agents should use [`docs/PROJECT-SPEC.md`](./docs/PROJECT-SPEC.md) for product intent and non-negotiable invariants, and [`docs/ROADMAP.md`](./docs/ROADMAP.md) for milestone history and future research direction. Both documents distinguish implemented capability, historical prototype scope, and future requirements; implementation status must still be verified against live source and tests before acting on it.
+
 ---
 
 ## Features
@@ -240,6 +246,8 @@ Watch progress is persisted per user via `GET/POST /api/series/{series_id}/progr
 | Document | What it covers |
 |---|---|
 | [`docs/GETTING-STARTED.md`](./docs/GETTING-STARTED.md) | Step-by-step local setup and demo walkthrough |
+| [`docs/PROJECT-SPEC.md`](./docs/PROJECT-SPEC.md) | Canonical product aim, invariants, coding-agent rules, and future architecture |
+| [`docs/ROADMAP.md`](./docs/ROADMAP.md) | Canonical milestones, current gaps, backlog, and research direction |
 | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | System architecture, layer breakdown, spoiler model, ontology |
 | [`docs/CONFIGURATION.md`](./docs/CONFIGURATION.md) | Environment variables, Docker Compose, backend settings |
 | [`docs/API.md`](./docs/API.md) | Full HTTP API reference |

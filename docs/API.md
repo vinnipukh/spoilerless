@@ -165,7 +165,7 @@ Series, episodes, graph, notes, custom nodes, custom relationships, revisions, c
 }
 ```
 
-Every graph node and narrative item is filtered by `visible_from_order`. Claims also honor `valid_from_order` and `valid_until_order`. Returned edges are closed over the returned nodes: both endpoints must be present. `GraphNode` additionally supports optional `image_url` and `image_source_url` fields.
+Every graph node and narrative item is filtered by `visible_from_order`. Claims also honor `valid_from_order` and `valid_until_order`. Returned edges are closed over the returned nodes: both endpoints must be present. Canonical/candidate claim projections carry their Claim ID; structural edges and user-authored relationship Claims both carry `claim_id: null`. User-origin edges are emitted only when both endpoints survive same-series node visibility filtering, so clients must not use null `claim_id` alone to classify an edge as structural. `GraphNode` additionally supports optional `image_url` and `image_source_url` fields.
 
 ### Notes
 
@@ -216,11 +216,11 @@ Create a relationship:
 
 The supported predicates are `PARTICIPATED_IN`, `WITNESSED`, `CAUSED`, `AFFECTED`, `TARGETED`, `MENTIONED`, `KNOWS`, `FAMILY_OF`, `WORKS_WITH`, `TRUSTS`, `DISTRUSTS`, `HELPS`, `OPPOSES`, `THREATENS`, `ATTACKS`, and `KILLS`. Source and target must exist in the same series. PATCH accepts only `{"predicate":"TRUSTS"}`.
 
-The response uses `source`, `target`, and `type` rather than the request names `source_id`, `target_id`, and `predicate`.
+The response uses `source`, `target`, and `type` rather than the request names `source_id`, `target_id`, and `predicate`. In `GET /graph`, user-authored relationships are edge-only records with `claim_id: null`; both endpoints must pass the same series and visibility checks as graph nodes before the edge is emitted.
 
 ### Revisions
 
-All revision operations require `visible_until_order` as a positive query integer.
+All revision operations require `visible_until_order` as a positive query integer. Unlike graph, note, and direct custom-content reads, revision routes do **not** verify that a positive value matches a persisted Episode order; they apply it directly to revision visibility queries.
 
 - `GET /revisions` accepts optional `resource_type` and `resource_id` filters and returns newest revisions first.
 - `GET /revisions/{revision_id}` returns a visible `RevisionResponse` or an indistinguishable `404 resource_not_found`.
@@ -353,7 +353,7 @@ Propose a ChangeSet:
 
 `create_node`, `update_node`, `delete_node`, `create_relationship`, `update_relationship`, `delete_relationship`, `create_claim`, `update_claim`, `delete_claim`, `attach_evidence`, `create_note`, `update_note`, and `delete_note`.
 
-Propose validates the complete batch and persists only an `awaiting_confirmation` draft. Confirm revalidates and applies the batch transactionally. Confirming an already applied ChangeSet is idempotent. Reject performs no graph mutation. Revert supports only applied ChangeSets whose operations are entirely create-shaped; later conflicting modifications return `409`, and unsupported update/delete reversal returns `422`.
+Propose validates the complete batch and persists only an `awaiting_confirmation` draft. A requested direct mutation of a canonical/candidate Character or Claim is replaced with a `create_note` annotation; other protected labels cannot accept notes and fail validation, while user-origin targets retain the requested operation. Confirm revalidates and applies the batch transactionally. Confirming an already applied ChangeSet is idempotent. Reject performs no graph mutation. Revert supports only applied ChangeSets whose operations are entirely create-shaped; later conflicting modifications return `409`, and unsupported update/delete reversal returns `422`.
 
 ### LLM settings
 
@@ -372,7 +372,7 @@ Propose validates the complete batch and persists only an `awaiting_confirmation
 }
 ```
 
-`provider` is `gemini` or `openai_compatible`; `system_prompt_language` is `english` or `turkish`. A null or empty-string `api_key` retains the stored key; a whitespace-only string is truthy and is persisted as the new key. `enabled: null` retains the stored enabled state. Responses expose only `api_key_configured` and `api_key_masked`.
+`provider` is `gemini` or `openai_compatible`; these are available implementations, not a statement that both are active. The provider used for a chat request is the effective non-empty stored value, falling back to `LLM_PROVIDER`; disabled or incomplete configuration is rejected before use. OpenAI-compatible requests post to `/chat/completions`. Gemini uses the `generateContent`/`streamGenerateContent` action family rather than that path; the current streaming provider posts to `/v1beta/models/{model}:streamGenerateContent?alt=sse`. `system_prompt_language` is `english` or `turkish`. A null or empty-string `api_key` retains the stored key; a whitespace-only string is truthy and is persisted as the new key. `enabled: null` retains the stored enabled state. Responses expose only `api_key_configured` and `api_key_masked`.
 
 ## Error Codes
 

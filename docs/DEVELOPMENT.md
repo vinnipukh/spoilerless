@@ -108,9 +108,45 @@ All scripts in `frontend/package.json` are listed below.
 | `NODE_ENV=test CI=1 npm run test -- src/components/detail/DetailPanel.test.tsx` | Run one frontend test file. |
 | `NODE_ENV=test CI=1 npm run test -- -t "test name"` | Run frontend tests matching a name. |
 
-Set `NODE_ENV=test` explicitly in Git Bash. If the shell inherited `NODE_ENV=production`, React can load production behavior and produce misleading Vitest failures. The one-shot command above is aligned with [TESTING.md](TESTING.md) and was verified against the current suite.
+Set `NODE_ENV=test` explicitly in Git Bash. If the shell inherited `NODE_ENV=production`, React can load production behavior and produce misleading Vitest failures. See [TESTING.md](TESTING.md) for the test-environment and shared-Neo4j precautions. Do not infer that the current checkout is green from this document; record the commands and results you actually run.
 
-The current checkout builds successfully, with Vite's large-chunk warning, and the frontend tests pass. `npm run lint` is configured but is not currently clean: it reports existing React Hooks and TypeScript findings. Treat the existing output as technical debt and do not add new lint errors.
+`npm run lint` is configured but may report existing React Hooks and TypeScript findings. Establish the current baseline and do not add new findings.
+
+## Architecture and change workflows
+
+### Backend layers and rationale
+
+Keep dependencies flowing `backend/app/api/` → `backend/app/services/` → `backend/app/repository/` or `backend/app/graph/`. Shared Pydantic request/response contracts belong in `backend/app/domain/`. This keeps HTTP concerns out of graph access, makes service policy testable, and keeps spoiler filtering at the query boundary rather than in presentation code.
+
+When adding or changing an endpoint:
+
+1. Add or update the domain model under `backend/app/domain/`; preserve strict validation such as `extra="forbid"` where the surrounding contract uses it.
+2. Add parameterized Cypher to the owning repository/graph module. Never interpolate client input into Cypher.
+3. Put orchestration, authorization decisions, spoiler-boundary derivation, and conflict rules in the service layer.
+4. Add the route under `backend/app/api/` and register a new router in `backend/app/main.py`.
+5. Add focused tests. For story-sensitive reads, test visible data **and** forbidden future sentinels, hidden-versus-missing behavior, invalid boundaries, graph closure, and sanitized errors.
+6. Keep the closed API inventory synchronized. `backend/tests/test_frontend_contract_doc.py` currently locks 44 operations across 32 path templates; route changes require updates to that test, `backend/tests/test_openapi_contract.py`, and `docs/frontend-api-contract.md`.
+
+The graph and GraphRAG paths must enforce `visible_from_order <= visible_until_order` before data reaches the frontend or model. Candidate review is the explicit exception: candidate list filtering is optional and candidate detail has no watch-boundary argument. Do not generalize that exception to other endpoints.
+
+### Frontend contribution pattern
+
+For a backend-facing feature, keep these layers synchronized:
+
+1. Wire-format types in `frontend/src/types/`.
+2. Fetch/streaming logic in `frontend/src/api/`; current clients use relative `/api` paths (the declared `VITE_API_BASE_URL` is not consumed).
+3. Stateful orchestration in `frontend/src/hooks/` when behavior is reused or asynchronous.
+4. UI in the relevant `frontend/src/components/` area, with integration wiring in `frontend/src/App.tsx` only when application state must coordinate it.
+5. Colocated Vitest/Testing Library tests, plus an `App.test.tsx` integration test when props or behavior cross several component layers.
+
+Graph mutation success paths use `useGraph.refresh()` for in-place data updates; `refetch()` is reserved for error recovery because it resets loading state and remounts the graph. Create flows that need to bring a new element into view must also clear stale chat focus and pass reveal IDs to `GraphCanvas`; a bare refresh can leave the item outside the active viewport. Preserve the `NODE_ENV=test` requirement and the browser shims in `frontend/src/test/setup.ts` when adding React/Radix/graph tests.
+
+### Ontology, seed, chat, and ChangeSet changes
+
+- Ontology labels and enums come from `ontology/node_types.yaml`, `ontology/relation_types.yaml`, and `ontology/claim_types.yaml`; do not invent an ad hoc relationship label. Coordinate ontology changes with seed validation, domain/frontend enums, graph styles, and tests.
+- Seed records under `data/dexter/` need stable string IDs and correct visibility metadata. The setup module is idempotent by design, but it writes the configured Neo4j database; do not run it against irreplaceable data without a backup.
+- Retrieval tools in `backend/app/retrieval/tools.py` accept typed, allowlisted arguments and reuse the server-resolved spoiler boundary. Register tools in `backend/app/retrieval/pipeline.py`; never expose free-form Cypher to the model.
+- A new ChangeSet operation must remain a strict discriminated operation in `backend/app/domain/change_set.py`, gain propose-time validation in `backend/app/services/change_set.py`, transactional apply/revert behavior in `backend/app/graph/change_set.py`, rendering in `frontend/src/components/chat/ChangeSetCard.tsx`, and confirmation/revision/protection tests.
 
 ## Code style
 
@@ -158,6 +194,6 @@ For a pull request against `main`:
 
 - Create a focused branch from an up-to-date `main`; use a descriptive name and follow the observed `feature/` or `fix/` style when it fits.
 - Keep backend API, frontend types/clients, tests, and documentation synchronized. API inventory changes must also update the OpenAPI contract tests and `docs/frontend-api-contract.md`.
-- Run `uv run pytest`, `NODE_ENV=test CI=1 npm run test`, and `npm run build` before opening the PR. Run `npm run lint` and ensure your change adds no new findings relative to the existing baseline.
+- Run the relevant focused backend tests first. Run the broad backend suite only against a disposable or explicitly test-only Neo4j database because it is not isolated from the configured database. Also run `NODE_ENV=test CI=1 npm run test` and `npm run build`; run `npm run lint` and ensure your change adds no new findings relative to the existing baseline.
 - Push the branch and open a GitHub pull request targeting `main`. Describe the behavior change, database/configuration impact, and exact verification commands and results.
 - Because no CI workflow or review policy is configured, do not assume checks ran remotely; record local evidence and wait for repository-maintainer review before merging.

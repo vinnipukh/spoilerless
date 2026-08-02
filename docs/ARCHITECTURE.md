@@ -56,7 +56,7 @@ The system is a multi-series-capable web application composed of three deployabl
 | Database | Neo4j 2026 Community (Docker Compose) |
 | Graph driver | `neo4j` Python driver 6.2+ (async) |
 | Auth | Google Sign-In (ID token verification via `google-auth`) |
-| LLM (optional) | Any OpenAI-compatible or Gemini-compatible chat-completions endpoint |
+| LLM (optional) | OpenAI-compatible chat completions or Google Gemini REST |
 | Package management | `uv` (Python), `npm` (frontend) |
 | Orchestration | Docker Compose (Neo4j container only — backend/frontend run natively) |
 
@@ -211,12 +211,12 @@ frontend/src/
 
 #### Key Components
 
-- **`GraphCanvas.tsx`** — wraps `react-cytoscapejs`. Uses the `cose-bilkent` layout as primary (falls back to the built-in `cose` layout on failure); tapping a node highlights its closed neighborhood and dims the rest; layout re-runs when the graph data changes (i.e. on episode-boundary progression).
+- **`GraphCanvas.tsx`** — wraps `react-cytoscapejs`. It attempts to register `cytoscape-cose-bilkent` at module load and uses it only when registration succeeds; registration failure selects built-in `cose`. Tapping a node highlights its closed neighborhood and dims the rest. A changed graph normally triggers layout, but layout is deliberately skipped while external focus or a newly-created-element reveal is active so refresh does not destroy zoom/pan or race the reveal fit.
 - **`graphElements.ts`** — pure function mapping the backend `GraphResponse` to Cytoscape `ElementDefinition[]`. It performs **no** re-filtering by `visible_from_order` — the backend has already applied the spoiler filter, and the frontend trusts it completely.
 - **`graphStylesheet.ts`** — maps node types to shapes (Character → ellipse, Event/Location → round-rectangle, Organization → diamond, Episode → tag, Series → star, UserNote → dashed round-rectangle) and origin to border style (canonical = solid, candidate/user = dashed).
 - **`useWatchProgress.ts`** — watch-progress state machine with a `confirmedOrder` (the actual spoiler boundary) and a `pendingChange` (an unconfirmed jump that triggers a confirmation modal). The backend is authoritative: `sessionStorage` is used only as a loading-state cache, and on mount the hook reconciles the hydrated value against `GET /api/series/{id}/progress`, overriding it with the server record. `confirmChange()` awaits the `updateProgress()` backend write before committing local state (optimistically committing on transient network failure); hydrates from `sessionStorage` on mount so a page refresh never re-prompts.
 - **`AuthProvider.tsx`** — on mount calls `GET /api/auth/me` to silently restore a session from the cookie; any auth error resolves to an `unauthenticated` state rather than surfacing an error banner.
-- **`App.tsx` / `AppShell`** — orchestrates series selection → episode list loading → watch-progress state → graph fetching, and routes edge selection to either `StructuralEdgeCard` (topological edges) or `DetailPanel` (claim-backed edges).
+- **`App.tsx` / `AppShell`** — orchestrates series selection → episode list loading → watch-progress state → graph fetching. Edge routing is intentionally three-way: claim-backed edges and claim-less `origin: "user"` edges open `DetailPanel`; only claim-less non-user edges open `StructuralEdgeCard`. Consequently, `claim_id: null` alone is not a structural-edge discriminator.
 
 #### Vite Configuration
 
@@ -340,7 +340,7 @@ The `setup_database()` pipeline (invoked via `uv run hdgraf-setup`, registered i
 | `Ontology` | `backend/app/graph/ontology.py` | Loads and validates the versioned YAML type system; exposes `require_node_type()`, `require_relationship_type()`, `require_claim_type()`, and the user-safe type subsets |
 | `Claim` domain model | `backend/app/domain/graph.py` | The atomic knowledge-representation unit — subject/predicate/object plus type, status, confidence, and provenance |
 | `origin` enum | shared across `domain/` modules | Three-way `StrEnum` (`canonical` / `candidate` / `user`) distinguishing seed data, extracted-but-unreviewed data, and user-created data |
-| `LLMProvider` protocol | `backend/app/llm/provider.py` | Provider-agnostic interface for chat-completions backends (only an OpenAI/Gemini-compatible implementation ships today) |
+| `LLMProvider` protocol | `backend/app/llm/provider.py` | Provider-agnostic streaming interface. Two concrete implementations are available: `OpenAICompatibleProvider` posts to `/chat/completions`; `GeminiProvider` translates messages/tools to Gemini content/function parts and posts to the `streamGenerateContent` action with SSE. Gemini's REST family uses `generateContent`/`streamGenerateContent` actions, not a chat-completions path. Availability does not imply either provider is active: `get_llm_provider()` selects the effective stored-over-env provider per request and rejects disabled/incomplete configuration. |
 | `RetrievalPipeline` | `backend/app/retrieval/pipeline.py` | Orchestrates allowlisted tool calls, context assembly, and citation validation for the GraphRAG-lite chat |
 | `ChangeSetService` | `backend/app/services/change_set.py` | The typed, two-stage (propose/confirm) protocol that is the only path through which the graph can be mutated by chat-driven writes |
 | `RevisionRepository.log_revision` | `backend/app/revisions/__init__.py` (used across services and repositories) | Shared pattern for writing an append-only before/after audit record in the same transaction as any content mutation |
@@ -355,14 +355,14 @@ The `setup_database()` pipeline (invoked via `uv run hdgraf-setup`, registered i
 User selects "Dexter" series
   │
   ▼
-App.tsx sets selectedSeriesId = "series:dexter"
+App.tsx sets selectedSeriesId = "series_dexter"
   │
-  ├──► useEpisodes("series:dexter") → GET /api/series/{id}/episodes
+  ├──► useEpisodes("series_dexter") → GET /api/series/{id}/episodes
   │      → SeriesService.list_episodes() → Neo4j MATCH (Episode)-[:PART_OF]->(Series)
   │
-  └──► useGraph("series:dexter", visibleUntilOrder=1)
+  └──► useGraph("series_dexter", visibleUntilOrder=1)
          → GET /api/series/{id}/graph?visible_until_order=1
-         → GraphService.fetch_graph("series:dexter", 1)
+         → GraphService.fetch_graph("series_dexter", 1)
               (7 concurrent Cypher queries via asyncio.gather)
               1. SERIES_QUERY            → series metadata
               2. NODES_QUERY             → nodes with visible_from_order <= 1
@@ -379,12 +379,12 @@ App.tsx sets selectedSeriesId = "series:dexter"
 ### Flow 2 — User advances watch progress
 
 ```
-User selects "S01E05" in EpisodeSelector
-  → useWatchProgress.requestChange("series:dexter", 5)  (direction: forward)
-  → ConfirmAdvanceModal opens (warning: spoilers up to S01E05)
+User selects "S01E03" in EpisodeSelector
+  → useWatchProgress.requestChange("series_dexter", 3)  (direction: forward)
+  → ConfirmAdvanceModal opens (warning: spoilers up to S01E03)
       confirm → confirmChange() → POST /api/series/{id}/progress (backend write,
              server-authoritative) → sessionStorage cache updated
-             → useGraph re-fetches with visible_until_order=5 → Flow 1 repeats
+             → useGraph re-fetches with visible_until_order=3 → Flow 1 repeats
       cancel  → cancelChange() discards the pending change
 ```
 
@@ -570,8 +570,10 @@ Stage 1 — PROPOSE (POST /api/series/{series_id}/change-sets)
   ├── Pydantic validates: operation_type is one of 13 literals, extra fields
   │   forbidden, at least one operation, ontology-valid labels/types
   ├── Targets must be visible, same-series, visibility derived server-side
-  ├── Mutating canonical/candidate content is refused (a create_note
-  │   annotation is substituted instead)
+  ├── Direct mutation of canonical/candidate Character or Claim targets is
+  │   replaced by a create_note annotation. Other protected target labels
+  │   cannot be note targets and fail validation; user-origin targets retain
+  │   the requested mutation.
   └── Persists the ChangeSet draft and linking relationships — status: awaiting_confirmation; target graph content is unchanged
 
 Stage 2 — CONFIRM (POST .../confirm) | REJECT (POST .../reject)
@@ -593,7 +595,7 @@ The frontend renders a proposed ChangeSet as a preview card (per-operation summa
 1. **The LLM never receives the full unfiltered graph.** Context is assembled exclusively through the eleven allowlisted tools; `assemble_context` (`retrieval/pipeline.py`) dedupes by ID and bounds the result via `Settings.llm_max_context_items` / `Settings.llm_max_context_characters`.
 2. **Retrieval applies the persisted progress integer as its spoiler boundary, with incomplete hop coverage in some queries.** The pipeline resolves it once server-side, but `GET_EVIDENCE_QUERY` and `GET_SOURCES_QUERY` do not visibility-gate the matched `Claim`, and `GRAPH_SUMMARY_COUNTS_QUERY` counts claims without gating their subject/object endpoints. The progress update path accepts any positive integer and does not verify that it matches an `Episode.episode_order`.
 3. **The LLM never executes arbitrary Cypher.** There is no text-to-Cypher surface; every query is a server-side constant template with `$parameter` bindings.
-4. **The LLM cannot directly mutate canonical or candidate content.** ChangeSet validation refuses operations targeting `origin: canonical` or `origin: candidate`.
+4. **The LLM cannot directly mutate canonical or candidate content.** ChangeSet validation substitutes a note for protected Character/Claim mutations and rejects protected types that cannot accept notes; it never applies the requested direct mutation.
 5. **ChangeSet endpoint writes require typed proposals and explicit confirmation.** `ChangeSetCard` can confirm a supplied proposal before target content is mutated, but the model/chat pipeline currently produces no proposal (`proposed_change_set` is always `null`).
 6. **Chat history is spoiler-filtered by the same boundary as the graph.** `ChatMessage` rows carry `visible_until_order_snapshot`; history loading filters `snapshot <= current boundary`.
 7. **Lowering progress hides — never deletes — previously generated future-boundary messages.** They re-appear if progress advances again.
@@ -605,14 +607,14 @@ The frontend renders a proposed ChangeSet as a preview card (per-operation summa
 
 Lets an authenticated user configure the GraphRAG chat agent's LLM provider from the UI instead of only via `.env`. A single `(:AppSetting {key: 'llm'})` node holds the configuration as a JSON-serialized string. `SettingsService.get_llm()` resolves the *effective* configuration field-by-field: the stored graph value wins, the `LLM_*` environment settings are the fallback/bootstrap path.
 
-**API key handling (write-only secret):** `GET /api/settings/llm` never returns the full key — only `api_key_configured: bool` and a masked form. `PUT /api/settings/llm` accepts a new `api_key`; a blank/omitted value keeps the previously stored key rather than clearing it. The full key never appears in any response model or log line. Both routes require an authenticated session and operate on a single shared global configuration, not a per-user one.
+**API key handling (write-only secret):** `GET /api/settings/llm` never returns the full key — only `api_key_configured: bool` and a masked form. On `PUT`, `null` or `""` keeps the previously stored key; whitespace-only input is truthy and is currently persisted rather than treated as blank. The full key never appears in any response model or log line. Both routes require an authenticated session and operate on a single shared global configuration, not a per-user one.
 
 | Route | Method | Purpose |
 |---|---|---|
 | `/api/settings/llm` | GET | Effective LLM config, key masked |
 | `/api/settings/llm` | PUT | Update provider/key/model/base_url/enabled/system_prompt_language |
 
-`provider` is `openai_compatible` (application default) or `gemini`; `enabled: false` makes the message-generation endpoints return `503` (`LLM_DISABLED`), while chat session create/list/get/delete remain available; `system_prompt_language` (`english` default, or `turkish`) selects which system prompt variant the agent is given.
+Available provider implementations are `openai_compatible` and `gemini`; the configured active provider is resolved per request from a non-empty stored value, then `LLM_PROVIDER` (whose env default is `openai_compatible`). Separately, an omitted `provider` in the PUT request model defaults to `gemini` and is then stored. `enabled: false` makes message-generation endpoints return `503` (`LLM_DISABLED`), while chat session create/list/get/delete remain available; `system_prompt_language` (`english` default, or `turkish`) selects which system prompt variant the agent is given.
 
 ### 7.12 Candidate Extraction & Review Workflow
 
@@ -643,7 +645,7 @@ Every approve/reject/edit call logs a `Revision` with before/after snapshots in 
 
 **D-02 — Visibility boundaries on story-sensitive content.** Content nodes, content relationships, and claims carry `visible_from_order`; system/auth/session/progress/chat/ChangeSet/settings records do not universally carry it. Claims additionally carry optional `valid_from_order`/`valid_until_order` for time-bounded facts.
 
-**D-03 — Claims projected as edges.** Every visible claim becomes a `GraphEdge` carrying `claim_id`; structural edges (`PART_OF`/`PRECEDES`/`OCCURRED_IN`) carry `claim_id: null`. This gives the frontend a single unified edge representation while still letting `DetailPanel` and `StructuralEdgeCard` render claim-backed vs. topological edges differently.
+**D-03 — Claims projected as edges.** Visible canonical/candidate claims that survive the full claim/subject/object/evidence/source filters become `GraphEdge`s carrying `claim_id`. User-authored relationship Claims are emitted by a separate query as edge-only records with `claim_id: null`, but only when both endpoints satisfy the same series and visibility constraints used by node filtering. Structural edges also carry `claim_id: null`. The frontend therefore combines `claim_id` with `origin` when routing an edge.
 
 **D-04 — Seven concurrent queries for the graph read.** `GraphService.fetch_graph()` runs seven independent Cypher queries via `asyncio.gather()` rather than one giant query, minimizing latency without complex query engineering.
 
@@ -669,6 +671,13 @@ Every approve/reject/edit call logs a `Revision` with before/after snapshots in 
 - **Session cleanup** — `Neo4jSessionRepository` is already the default persistent store; the documented TODO is a periodic background task that `DETACH DELETE`s expired/revoked `(:Session)` nodes (they are currently only rejected lazily at read time).
 - **Real-time collaboration** — a future extension could add WebSocket routes and content-change notifications; neither is implemented today, and current user-content records are not bound to an `AppUser` owner ID.
 - **Ontology evolution** — the versioned ontology system supports declared additions, but unknown node, relationship, claim, status, or confidence types raise `OntologyValidationError` and fail seed validation rather than being skipped.
+
+### Normative follow-ups (planned, not implemented)
+
+- **Close retrieval-hop gaps:** every retrieval query should visibility-gate the matched Claim and every subject/object/source/evidence hop before returning rows or aggregate counts. The gaps listed in [7.10](#710-spoiler-safety-invariants) remain current implementation debt, not approved exceptions to the spoiler-safety requirement.
+- **Make ownership and CSRF explicit:** user-content, revision, and candidate mutations should gain an authenticated owner/admin policy, and all cookie-authenticated state-changing routes should enforce a server-side CSRF signal. CORS alone is not that protection.
+- **Unify candidate boundaries:** candidate list and direct-read routes should eventually resolve the same server-authoritative watch boundary as other story-sensitive reads; their optional/missing boundary behavior is a known exception today.
+- **Scope shared settings:** the global `AppSetting` should become per-user or admin-gated, with a deployment-appropriate outbound-host policy for `base_url`. The existing http(s)-scheme check does not prevent authenticated users from redirecting the shared provider to an attacker-controlled or private host.
 
 ---
 
