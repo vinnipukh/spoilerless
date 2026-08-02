@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: complete
 phase: 06-spoiler-safe-graphrag-chat-and-graph-editing-agent
 source: [06-01-SUMMARY.md ... 06-12-SUMMARY.md, 06-MANUAL-ACCEPTANCE.md]
 started: 2026-08-01T22:40:00Z
-updated: 2026-08-02T00:05:00Z
+updated: 2026-08-02T01:05:00Z
 ---
 
 ## Current Test
@@ -28,10 +28,8 @@ previous_result: "issue (major) — Got \"Something went wrong answering that. T
 
 ### 4. Stop generating button
 expected: While the answer streams, a Stop button is visible. When the answer completes (or fails), the Stop button disappears. It never stays stuck after the stream ends.
-result: issue
-reported: "button doesnt dissappear. thinking thing still shows. generation stops."
-severity: major
-previous_result: "issue (blocker) — different symptom: premature error message shown ~5s while previous turn still answering. Retested 2026-08-02: that symptom gone, but a new/related stuck-UI symptom found (Stop button + thinking indicator don't clear after generation stops)."
+result: pass
+previous_result: "issue (major) — button doesn't disappear, thinking indicator still shows after generation stops. Root cause fixed in 06-13-PLAN.md (commit 8a396e0): stop()'s aborted-catch branch now calls setStatus({status:'success'}). Retested 2026-08-02: passes."
 
 ### 5. Conversational tone
 expected: Asking "How do you feel about Dexter's future?" returns a warm, friendly interpretation grounded in watched content (visible events/relationships), with clearly marked speculation. It never returns the robotic "The watched graph does not contain enough information to answer that."
@@ -56,8 +54,8 @@ result: pass
 ## Summary
 
 total: 9
-passed: 8
-issues: 1
+passed: 9
+issues: 0
 pending: 0
 skipped: 0
 
@@ -79,8 +77,9 @@ skipped: 0
   missing: []
 - gap_id: G-06-4
   truth: "While the answer streams, a Stop button is visible; when it completes (or fails) the Stop button disappears and no stuck loading/thinking indicator remains."
-  status: failed
-  reason: "Retested 2026-08-02 — original premature-error symptom is gone, but user reports: Stop button doesn't disappear and the thinking indicator still shows after generation stops."
+  status: resolved
+  reason: "Fixed by 06-13-PLAN.md (commit 8a396e0). Retested 2026-08-02: passes."
+  resolved_by: "06-13-PLAN.md"
   severity: major
   test: 4
   root_cause: "useChatMessages.ts's stop() (lines 134-136) only calls abortControllerRef.current?.abort() and never itself updates status. The sendChatMessage .catch (lines 120-129) is the only place that could transition status, but it deliberately no-ops when controller.signal.aborted is true (to avoid a spurious error banner on user-initiated stop) — so status never leaves 'streaming'. ChatPanel's Stop-button visibility and MessageList's thinking/streaming bubble are both derived solely from that same status, so both stay stuck. The existing regression test only asserts the abort signal fired, never that status transitions afterward."
