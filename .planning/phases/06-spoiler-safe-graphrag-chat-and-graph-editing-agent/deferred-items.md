@@ -64,3 +64,30 @@ of the original count-drift failures, worsening the same untorn-down-fixture roo
 PASS on that basis; the Phase 5 pollution remains out of scope for Phase 6 to fix, per the
 same SCOPE BOUNDARY rule, but is now worse and should be cleaned up (recommended fix above)
 before Phase 5 work resumes or before running the unfiltered full suite again.
+
+## 06-13: Pre-existing `npm run lint` errors unrelated to the G-06-4 fix
+
+**Found during:** 06-13 Task 2 full frontend regression run (`npm run lint`).
+
+**Symptom:** 28 pre-existing lint errors across files this plan does not touch:
+- `react-hooks/set-state-in-effect` in an episode-selection effect (unrelated hook)
+- `@typescript-eslint/no-explicit-any` in `useRevisions.test.tsx` (6 occurrences) and one
+  other file
+- `react-hooks/refs` "Cannot access refs during render" in `useChatSessions.ts`, `useNotes.ts`,
+  and `useRevisions.ts` — a ref-mutation-during-render pattern (`fetchKeyRef.current = key`)
+  present in three sibling data-fetching hooks
+
+**Why not fixed here:** none of the flagged files are `useChatMessages.ts` or
+`useChatMessages.test.tsx` (this plan's only `files_modified`). `npm run lint` run against the
+pre-13 tree (i.e. `git stash`-equivalent check via `git diff` scope) confirms these errors exist
+independent of the G-06-4 status-transition fix. Per the SCOPE BOUNDARY rule, pre-existing
+lint errors in unrelated files are out of scope for this gap-closure plan.
+
+**Verification that this is unrelated to 06-13's change:** `npm run lint` reports zero errors
+for `useChatMessages.ts`/`useChatMessages.test.tsx` specifically; `npm run test` (173/173),
+`npx tsc -b` (clean), and `npm run build` all pass with the fix in place.
+
+**Recommended fix (future plan):** apply the same `useRef`-to-`useState`-derived-key pattern (or
+an effect-based sync) already used correctly elsewhere in the hooks that don't trip
+`react-hooks/refs`, and replace the `any` usages in `useRevisions.test.tsx` with concrete
+response-shape types.
