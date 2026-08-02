@@ -65,6 +65,8 @@ The Settings feature (`backend/app/api/settings.py`, `repository/settings.py`, `
 
 **This is not folded into `threats_open` above** because it falls outside the phase's declared, plan-authored register (per audit scope rules) — but it is a real, currently-exploitable path. Recommend a dedicated threat-modeling and remediation pass (e.g. `/gsd-secure-phase` against a new plan scoping the Settings feature, or a direct fix: scope settings per-user or admin-gate the endpoint, and allowlist/validate `base_url`) before this branch ships to any multi-user environment.
 
+**Partial fix applied (commit `d331b92`, 2026-08-02):** `LLMSettingsUpdate.base_url` now rejects non-http(s) schemes (closes the file://, gopher://, ftp://, javascript: protocol-smuggling class). This does **not** close item 1 (global non-scoped config) or the core of item 2 (an authenticated user can still point the shared provider at an external https:// host they control — DNS/IP-based SSRF and cross-user config takeover remain open). Per-user or admin-gated scoping is still required and tracked as a separate follow-up.
+
 ---
 
 ## Accepted Risks Log
