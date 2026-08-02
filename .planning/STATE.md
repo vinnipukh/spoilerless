@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 06
-status: "Phase 06 shipped — PR #5"
+status: Awaiting next milestone
 stopped_at: Completed 06-13-PLAN.md
-last_updated: "2026-08-02T10:44:13.388Z"
+last_updated: "2026-08-02T10:52:06.166Z"
 last_activity: 2026-08-02
+last_activity_desc: Milestone v1.0 completed and archived
 progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 36
   completed_plans: 36
+current_phase: 06
 current_phase_name: spoiler-safe-graphrag-chat-and-graph-editing-agent
-last_activity_desc: Phase 06 complete
 ---
 
 # HD Graf Cehennemi — Project State
@@ -191,12 +191,11 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 
 ## Current Position
 
-Phase: 06
-Plan: Not started
-Status: Phase 06 shipped — PR #5
-Last activity: 2026-08-02
+Phase: Milestone v1.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-02 — Milestone v1.0 completed and archived
 
 ## Operator Next Steps
 
-- Complete /gsd-plan-phase 05.1
-- After 05.1 ships: Start the next milestone with /gsd-new-milestone
+- Start the next milestone with /gsd-new-milestone
