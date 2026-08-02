@@ -3,7 +3,7 @@ import { AuthProvider } from './providers/AuthProvider'
 import { useAuth } from './providers/useAuth'
 import { LoginPage } from './components/auth/LoginPage'
 import { AppShell } from './components/layout/AppShell'
-import { Button } from './components/ui/button'
+import { HeaderNavAction } from './components/layout/HeaderNavAction'
 import { SeriesSelect } from './components/episode/SeriesSelect'
 import { EpisodeSelector } from './components/episode/EpisodeSelector'
 import { ConfirmAdvanceModal } from './components/episode/ConfirmAdvanceModal'
@@ -258,17 +258,13 @@ function AuthenticatedApp() {
             disabled={!selectedSeriesId}
           />
           <ChatLauncher active={chatOpen} onClick={handleChatLauncherClick} />
-          <Button
-            variant="ghost"
-            size="sm"
+          <HeaderNavAction
+            icon={<SettingsIcon />}
+            label={view === 'settings' ? 'Graph' : 'Settings'}
+            ariaLabel={view === 'settings' ? 'Back to graph' : 'Settings'}
+            active={view === 'settings'}
             onClick={() => setView((current) => (current === 'settings' ? 'graph' : 'settings'))}
-            type="button"
-            aria-label={view === 'settings' ? 'Back to graph' : 'Settings'}
-            aria-pressed={view === 'settings'}
-          >
-            <SettingsIcon />
-            <span className="hidden md:inline">{view === 'settings' ? 'Graph' : 'Settings'}</span>
-          </Button>
+          />
         </>
       }
     >

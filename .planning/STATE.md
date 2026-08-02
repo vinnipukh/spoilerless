@@ -102,6 +102,7 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 | 2026-07-30 | Phase 4 frontend plan 04-04 (revision types/API/hook) + 04-05 (History tab/revert UI) | Wave 3 complete | Types, API client, hook, tests (6/6) + History tab UI integrated into DetailPanel, component tests (7/7), production build clean |
 | 2026-07-30 | Fix + button overlap with GraphLegend | left-4 → left-65 | Moved Create Custom Node button to right of legend trigger |
 | 2026-07-30 | Fix CreateRelationshipDialog select colors (white-on-white) | DaisyUI → Tailwind tokens | Replaced non-functional `select select-bordered` with `bg-background text-foreground border-input color-scheme:dark` on 3 native selects |
+| 2026-08-02 | Unify Chat and Settings header navigation controls | This task's atomic commit | Shared `HeaderNavAction` component: identical height/padding/radius/typography/icon size/gap + shared hover/focus/pressed behavior; active uses `bg-accent`, inactive transparent; ChatLauncher thin wrapper; tests 176/176, lint clean on touched files, production build pass |
 
 ---
 
