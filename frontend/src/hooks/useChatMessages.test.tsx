@@ -119,6 +119,7 @@ describe('useChatMessages', () => {
     })
 
     expect(capturedSignal?.aborted).toBe(true)
+    expect(result.current.status).toBe('success')
   })
 
   it('transitions to error when the initial session-detail fetch fails', async () => {

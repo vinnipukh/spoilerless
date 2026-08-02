@@ -120,8 +120,15 @@ export function useChatMessages(seriesId: string | null, sessionId: string | nul
       ).catch((error) => {
         // An AbortError from `stop()` is expected — the caller already
         // decided to cancel, so it must not surface as an error state (and,
-        // by being caught here, never becomes an unhandled rejection).
-        if (controller.signal.aborted) return
+        // by being caught here, never becomes an unhandled rejection). It
+        // must still transition `status` off 'streaming' — otherwise the
+        // Stop button and Thinking/Streaming bubble (both driven solely by
+        // `status` in ChatPanel.tsx/MessageList.tsx) stay stuck forever even
+        // though the fetch has genuinely been aborted (G-06-4).
+        if (controller.signal.aborted) {
+          setStatus({ status: 'success' })
+          return
+        }
         setStatus({
           status: 'error',
           error: error instanceof ApiError ? error : new ApiError({ code: 'unknown_error', message: 'Request failed.' }),
