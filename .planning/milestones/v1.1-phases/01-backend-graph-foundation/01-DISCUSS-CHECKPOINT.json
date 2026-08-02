@@ -1,0 +1,179 @@
+{
+  "phase": "01",
+  "phase_name": "Backend Graph Foundation",
+  "timestamp": "2026-07-29T09:03:39+03:00",
+  "areas_completed": [
+    "Backend boundary contract",
+    "Deterministic seed and ontology contract",
+    "Invalid graph-request behavior",
+    "Runtime acceptance evidence"
+  ],
+  "areas_remaining": [],
+  "decisions": {
+    "Backend boundary contract": [
+      {
+        "question": "How should GET /api/series/{series_id}/graph receive the spoiler boundary in Phase 1?",
+        "answer": "Use a required, validated visible_until_order query parameter; do not persist server-side watch progress in Phase 1.",
+        "options_presented": [
+          "Validated visible_until_order query parameter",
+          "Server-side persisted progress",
+          "Persisted default with optional query override"
+        ]
+      },
+      {
+        "question": "How should evidence-backed narrative relationships be stored?",
+        "answer": "Store narrative facts as Claim nodes and derive narrative API edges from visible claims; keep structural topology as native Neo4j relationships.",
+        "options_presented": [
+          "Claim nodes derive narrative API edges",
+          "Native narrative relationships plus linked Claim nodes",
+          "Native relationships only with claim/evidence IDs as properties"
+        ]
+      },
+      {
+        "question": "How should the graph API expose provenance needed by the Cytoscape detail panel?",
+        "answer": "Return spoiler-filtered claims, sources, and evidence as top-level graph-response collections alongside nodes and edges.",
+        "options_presented": [
+          "Include claims, sources, and evidence in the graph response",
+          "Use separate claim/evidence detail endpoints",
+          "Embed claim and evidence objects inside each edge"
+        ]
+      },
+      {
+        "question": "What should FastAPI do when Neo4j is unavailable?",
+        "answer": "Start in degraded mode and return HTTP 503 from /health when Neo4j connectivity fails; avoid import-time connection side effects.",
+        "options_presented": [
+          "Start degraded; /health returns 503",
+          "Fail FastAPI startup",
+          "Start degraded; /health always returns 200"
+        ]
+      }
+    ],
+    "Deterministic seed and ontology contract": [
+      {
+        "question": "How strictly should Phase 1 enforce ontology v0.1?",
+        "answer": "Treat ontology YAML as the authoritative allowlist, validate seeded values against it, and explicitly document/version ontology changes.",
+        "options_presented": [
+          "Ontology YAML is the authoritative allowlist",
+          "Ontology YAML is documentation only",
+          "Freeze only node types"
+        ]
+      },
+      {
+        "question": "What stable-ID convention should all seeded graph-visible records use?",
+        "answer": "Use readable deterministic namespaced string IDs for all seeded graph-visible records.",
+        "options_presented": [
+          "Readable deterministic namespaced IDs",
+          "Deterministic hash IDs",
+          "Random UUIDs persisted in fixtures"
+        ]
+      },
+      {
+        "question": "How should rerunning the seed command reconcile existing graph data?",
+        "answer": "Use a non-destructive seed-owned upsert: MERGE by stable ID, converge seed-owned properties/relationships to fixtures, and preserve user-origin content.",
+        "options_presented": [
+          "Seed-owned upsert without destructive reset",
+          "Create-only seed",
+          "Reset all Prototype v0 graph data"
+        ]
+      },
+      {
+        "question": "What content should seeded EvidenceFragment records contain?",
+        "answer": "Use a short curated excerpt or faithful paraphrase with a precise episode locator, source/retrieval metadata, and content hash where available; exclude long transcript dumps and anything beyond S01E03.",
+        "options_presented": [
+          "Short excerpt or faithful paraphrase plus precise episode locator",
+          "Exact dialogue excerpts only",
+          "Locator and source metadata only"
+        ]
+      }
+    ],
+    "Invalid graph-request behavior": [
+      {
+        "question": "How should visible_until_order be validated?",
+        "answer": "Require visible_until_order to match a persisted Episode.episode_order for the requested series; do not clamp values.",
+        "options_presented": [
+          "Require a persisted episode_order for that series",
+          "Accept any integer from 1 through the maximum",
+          "Clamp to the nearest valid order"
+        ]
+      },
+      {
+        "question": "Which status codes should distinguish unknown series from an invalid spoiler boundary?",
+        "answer": "Return 404 for an unknown series and 422 for a missing, malformed, or non-persisted spoiler boundary.",
+        "options_presented": [
+          "404 unknown series; 422 invalid boundary",
+          "404 for both",
+          "400 for every validation failure"
+        ]
+      },
+      {
+        "question": "How should database outages surface from metadata and graph endpoints?",
+        "answer": "Map Neo4j availability failures from all database-backed endpoints to sanitized HTTP 503 responses without leaking driver details, credentials, URIs, or Cypher.",
+        "options_presented": [
+          "Return sanitized 503",
+          "Return generic 500",
+          "Let driver exceptions propagate"
+        ]
+      },
+      {
+        "question": "What error response contract should Phase 1 expose?",
+        "answer": "Return a stable machine-readable detail.code plus a safe detail.message; keep presentation/localized copy outside the backend contract.",
+        "options_presented": [
+          "Stable error code plus safe message",
+          "FastAPI string detail only",
+          "HTTP status only"
+        ]
+      }
+    ],
+    "Runtime acceptance evidence": [
+      {
+        "question": "What automated test balance should Phase 1 require?",
+        "answer": "Use fast isolated API/repository tests plus focused live-Neo4j integration tests.",
+        "options_presented": [
+          "Fast isolated tests plus focused live-Neo4j integration tests",
+          "Live-Neo4j integration tests only",
+          "Mocked/unit tests only"
+        ]
+      },
+      {
+        "question": "How should idempotency be proven?",
+        "answer": "Run the seed command twice against the same test database and assert exact stable IDs, per-type node/relationship counts, uniqueness, preserved properties, and unchanged graph-response content.",
+        "options_presented": [
+          "Double-seed plus exact graph invariants",
+          "Double-seed and compare total node count only",
+          "Treat MERGE usage as sufficient proof"
+        ]
+      },
+      {
+        "question": "How exhaustive should automated spoiler-leak verification be?",
+        "answer": "Test boundaries 1, 2, and 3 with future-only sentinel values and assert over the complete serialized JSON, including IDs, labels, edges, claims, evidence, locators, and count signals.",
+        "options_presented": [
+          "Boundary 1–3 tests with future-only sentinel assertions over full JSON",
+          "Check only node visible_from_order values",
+          "Test only S01E01 against one future node ID"
+        ]
+      },
+      {
+        "question": "How should the runnable local stack be accepted?",
+        "answer": "Provide one repeatable smoke command that checks Neo4j Browser, Swagger/OpenAPI, React, /health, metadata endpoints, and graph boundaries after seeding, in addition to automated tests.",
+        "options_presented": [
+          "One repeatable smoke command plus automated tests",
+          "Separate manual browser/curl steps only",
+          "Automated tests only"
+        ]
+      }
+    ]
+  },
+  "deferred_ideas": [
+    "Server-side persisted watch progress",
+    "Authentication, GraphQL, vector search, GraphRAG, scraping, PDF parsing, and LLM integration"
+  ],
+  "canonical_refs": [
+    "ROADMAP.md",
+    ".planning/PROJECT.md",
+    ".planning/REQUIREMENTS.md",
+    ".planning/ROADMAP.md",
+    "ontology/node_types.yaml",
+    "ontology/relation_types.yaml",
+    "ontology/claim_types.yaml"
+  ]
+}

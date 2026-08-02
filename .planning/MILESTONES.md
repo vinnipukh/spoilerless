@@ -1,8 +1,8 @@
 # Milestones
 
-## v1.0 MVP (Shipped: 2026-08-02)
+## v1.1 MVP (Shipped: 2026-08-02)
 
-**Phases completed:** 8 phases, 35 plans, 47 tasks
+**Phases completed:** 8 phases, 35 plans, 47 tasks (supersedes v1.0 below — adds Phase 6: Spoiler-Safe GraphRAG Chat and Graph-Editing Agent)
 
 **Key accomplishments:**
 

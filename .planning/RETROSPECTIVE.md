@@ -2,7 +2,7 @@
 
 *A living document updated after each milestone. Lessons feed forward into future planning.*
 
-## Milestone: v1.0 — MVP
+## Milestone: v1.1 — MVP (supersedes v1.0, adds Phase 6 GraphRAG chat)
 
 **Shipped:** 2026-08-02
 **Phases:** 8 (1, 2, 3, 4, 5, 6, plus inserted 03.1 and 05.1) | **Plans:** 35 | **Sessions:** multiple across 2026-07-28 → 2026-08-02
@@ -49,13 +49,13 @@
 
 | Milestone | Sessions | Phases | Key Change |
 |-----------|----------|--------|------------|
-| v1.0 | multiple | 8 | Established backend-authoritative spoiler filtering as the load-bearing invariant; closed with a phase 6 gap-closure loop (UAT → diagnose → plan → execute → re-verify) and a security audit that caught an unplanned, unreviewed feature. |
+| v1.1 | multiple | 8 | Established backend-authoritative spoiler filtering as the load-bearing invariant; closed with a phase 6 gap-closure loop (UAT → diagnose → plan → execute → re-verify) and a security audit that caught an unplanned, unreviewed feature. |
 
 ### Cumulative Quality
 
 | Milestone | Tests | Coverage | Zero-Dep Additions |
 |-----------|-------|----------|--------------------|
-| v1.0 | 345 backend + 173 frontend | Not tracked as %, but 342/345 backend and 173/173 frontend passing at ship (3 pre-existing-debt failures) | 0 new production dependencies beyond `httpx` for phase 6 |
+| v1.1 | 345 backend + 173 frontend | Not tracked as %, but 342/345 backend and 173/173 frontend passing at ship (3 pre-existing-debt failures) | 0 new production dependencies beyond `httpx` for phase 6 |
 
 ### Top Lessons (Verified Across Milestones)
 

@@ -1,12 +1,12 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
+milestone: v1.1
+milestone_name: MVP
 status: Awaiting next milestone
 stopped_at: Completed 06-13-PLAN.md
 last_updated: "2026-08-02T10:52:06.166Z"
 last_activity: 2026-08-02
-last_activity_desc: Milestone v1.0 completed and archived
+last_activity_desc: Milestone v1.1 completed and archived (supersedes v1.0)
 progress:
   total_phases: 8
   completed_phases: 7
@@ -191,10 +191,10 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 
 ## Current Position
 
-Phase: Milestone v1.0 complete
+Phase: Milestone v1.1 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-08-02 — Milestone v1.0 completed and archived
+Last activity: 2026-08-02 — Milestone v1.1 completed and archived (supersedes v1.0)
 
 ## Operator Next Steps
 
