@@ -140,7 +140,7 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         "/api/series/{series_id}/change-sets/{change_set_id}/reject",
         "/api/series/{series_id}/change-sets/{change_set_id}/revert",
         # Authentication
-        "/api/auth/google", "/api/auth/me", "/api/auth/logout",
+        "/api/auth/google", "/api/auth/dev", "/api/auth/me", "/api/auth/logout",
         # Settings (LLM provider configuration)
         "/api/settings/llm",
     }
@@ -189,13 +189,14 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         ("post", "/api/series/{series_id}/change-sets/{change_set_id}/reject"),
         ("post", "/api/series/{series_id}/change-sets/{change_set_id}/revert"),
         ("post", "/api/auth/google"),
+        ("post", "/api/auth/dev"),
         ("get", "/api/auth/me"),
         ("post", "/api/auth/logout"),
         # Settings (LLM provider configuration)
         ("get", "/api/settings/llm"),
         ("put", "/api/settings/llm"),
     }
-    assert len(schema["paths"]) == 32
+    assert len(schema["paths"]) == 33
     for path, item in schema["paths"].items():
         for method, operation in item.items():
             if method not in {"get", "post", "patch", "delete"}:

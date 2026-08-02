@@ -129,6 +129,28 @@ class AuthService:
 
         return user, raw_token
 
+    async def authenticate_dev(
+        self, google_sub: str, email: str, display_name: str, session_ttl: int
+    ) -> tuple[dict[str, Any], str]:
+        """Create a session for a development identity, skipping Google.
+
+        Used only by the ``AUTH_DEV_CODE``-gated dev login route. The caller
+        is responsible for checking the dev code before calling this — the
+        method itself performs no authorization.
+        """
+        user = await self._user_repo.upsert(
+            google_sub=google_sub,
+            email=email,
+            display_name=display_name,
+            avatar_url="",
+        )
+
+        raw_token = await self._session_repo.create(
+            user_id=user["id"], ttl_seconds=session_ttl
+        )
+
+        return user, raw_token
+
     async def get_current_user(
         self, raw_token: str | None, session_ttl: int
     ) -> dict[str, Any] | None:

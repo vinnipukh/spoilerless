@@ -620,6 +620,76 @@ class TestCSRFOriginValidation:
 
 
 # ===================================================================
+# POST /api/auth/dev — development code login (Google bypass)
+# ===================================================================
+
+
+class TestDevLogin:
+    def test_successful_dev_login_sets_session_cookie(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _set_env(
+            monkeypatch,
+            AUTH_DEV_CODE="dev-secret-123",
+            SESSION_TTL_SECONDS=3600,
+            SESSION_COOKIE_NAME="session",
+            FRONTEND_ORIGINS="*",
+        )
+
+        response = client.post(
+            "/api/auth/dev",
+            json={"code": "dev-secret-123"},
+        )
+
+        assert response.status_code == 200
+        user = response.json()["user"]
+        assert user["email"] == "dev@localhost"
+        assert user["display_name"] == "Dev User"
+        assert "google_sub" not in user
+
+        set_cookie = response.headers.get("set-cookie")
+        assert set_cookie is not None
+        assert "session=" in set_cookie
+
+        # The created session is a real session — /me resolves it.
+        me = client.get("/api/auth/me", headers={"Cookie": set_cookie.split(";")[0]})
+        assert me.status_code == 200
+        assert me.json()["user"]["email"] == "dev@localhost"
+
+    def test_wrong_code_rejected(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        _set_env(
+            monkeypatch,
+            AUTH_DEV_CODE="dev-secret-123",
+            SESSION_TTL_SECONDS=3600,
+            FRONTEND_ORIGINS="*",
+        )
+
+        response = client.post(
+            "/api/auth/dev",
+            json={"code": "wrong-code"},
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == "AUTH_DEV_LOGIN_INVALID_CODE"
+
+    def test_disabled_without_dev_code(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        _set_env(
+            monkeypatch,
+            AUTH_DEV_CODE="",
+            SESSION_TTL_SECONDS=3600,
+            FRONTEND_ORIGINS="*",
+        )
+
+        response = client.post(
+            "/api/auth/dev",
+            json={"code": "anything"},
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == "AUTH_DEV_LOGIN_DISABLED"
+
+
+# ===================================================================
 # Auth error codes are stable
 # ===================================================================
 
@@ -634,6 +704,8 @@ class TestAuthErrorCodes:
             AUTH_SESSION_INVALID,
             AUTH_ORIGIN_NOT_ALLOWED,
             AUTH_DISABLED,
+            AUTH_DEV_LOGIN_DISABLED,
+            AUTH_DEV_LOGIN_INVALID_CODE,
         )
         assert AUTH_INVALID_GOOGLE_CREDENTIAL == "AUTH_INVALID_GOOGLE_CREDENTIAL"
         assert AUTH_UNAUTHENTICATED == "AUTH_UNAUTHENTICATED"
@@ -641,6 +713,8 @@ class TestAuthErrorCodes:
         assert AUTH_SESSION_INVALID == "AUTH_SESSION_INVALID"
         assert AUTH_ORIGIN_NOT_ALLOWED == "AUTH_ORIGIN_NOT_ALLOWED"
         assert AUTH_DISABLED == "AUTH_DISABLED"
+        assert AUTH_DEV_LOGIN_DISABLED == "AUTH_DEV_LOGIN_DISABLED"
+        assert AUTH_DEV_LOGIN_INVALID_CODE == "AUTH_DEV_LOGIN_INVALID_CODE"
 
 
 # ===================================================================

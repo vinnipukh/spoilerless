@@ -61,6 +61,7 @@ _SAFE_ERRORS: tuple[type[BaseException], ...] = (
 
 _ERROR_SPECS: dict[int, tuple[str, str, str]] = {
     401: ("unauthenticated", "Authentication required.", "Authentication is required for this resource."),
+    403: ("forbidden", "Forbidden.", "The request is forbidden."),
     404: ("resource_not_found", "Resource not found.", "The resource was not found."),
     409: (
         "resource_conflict",

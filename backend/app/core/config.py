@@ -27,6 +27,14 @@ class Settings(BaseSettings):
         default=False,
         description="Set the Secure flag on the session cookie.",
     )
+    auth_dev_code: str = Field(
+        default="",
+        description=(
+            "Development-only sign-in code for POST /api/auth/dev (bypasses "
+            "Google OAuth). Empty disables the dev login endpoint entirely. "
+            "Never set in production."
+        ),
+    )
     frontend_origins: str = Field(
         default="http://localhost:5173",
         description="Comma-separated list of allowed CORS frontend origins.",
