@@ -138,7 +138,10 @@ WHERE node.series_id = $series_id
   AND any(label IN labels(node) WHERE label IN $allowed_labels)
   AND node.visible_from_order IS NOT NULL
   AND node.visible_from_order <= $visible_until_order
-  AND toLower(coalesce(node.label, '')) CONTAINS toLower($search_term)
+  AND (
+    toLower(coalesce(node.label, '')) CONTAINS toLower($search_term)
+    OR any(alias IN coalesce(node.aliases, []) WHERE toLower(alias) CONTAINS toLower($search_term))
+  )
 RETURN node.id AS id,
        [label IN labels(node) WHERE label IN $allowed_labels][0] AS type,
        node.label AS label,
@@ -469,12 +472,23 @@ async def search_entities(
     series_id: str,
     visible_until_order: int,
 ) -> list[dict[str, Any]]:
-    """Return visible entities whose label contains *query*, bounded by *limit*.
+    """Return visible entities whose label — or any alias — contains *query*.
 
     The type allowlist is intersected with the server-owned narrative labels —
     a bogus type from the model simply narrows the result to nothing (fail
     closed).  An empty/whitespace query returns an empty list rather than
     dumping the visible graph.  Order is deterministic (visible_from_order, id).
+
+    D-15 indistinguishability (SEARCH-01): a hidden entity — by name, alias,
+    or exact ID — behaves exactly like a nonexistent one.  There is
+    deliberately NO timing alternation, NO distinct error code, and NO
+    log/response difference for hidden vs. missing ids: a hidden id flows
+    through the same empty-result path as an unknown id.  The query-level
+    ``visible_from_order IS NOT NULL AND <= boundary`` predicate on the
+    matched node gates both the label and the alias channel, so a hidden
+    node's aliases can never surface it, and ``LIMIT``/``ORDER BY`` keep the
+    result set deterministic and bounded (autocomplete-style lookups reuse
+    this same boundary-filtered primitive).
     """
     if not query or not query.strip():
         return []

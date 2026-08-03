@@ -719,6 +719,15 @@ class RetrievalPipeline:
     @staticmethod
     def _accumulate(retrieved: dict[str, Any], result: Any) -> None:
         """Merge one tool result into the turn's retrieved-context accumulator."""
+        if isinstance(result, list):
+            # search_entities returns a list of entity rows
+            # (id/type/label/visible_from_order/origin) — the same shape as
+            # node rows — so they merge into the entities bucket for context
+            # assembly (07-05, D-15). Every row is already boundary-filtered
+            # by SEARCH_ENTITIES_QUERY; the assemble_context boundary drop
+            # re-checks them defensively, so a hidden entity can never reach
+            # the provider call through the search channel.
+            result = {"nodes": result}
         if not isinstance(result, dict):
             return
         seen_nodes = {row["id"] for row in retrieved["nodes"]}
