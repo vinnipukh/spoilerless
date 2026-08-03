@@ -292,7 +292,7 @@ class ChatService:
                 message=assistant_message,
                 citations=citations,
                 graph_focus=graph_focus,
-                proposed_change_set=None,
+                proposed_change_set=final_done.proposed_change_set,
             )
             yield {"type": "done", "envelope": envelope.model_dump(mode="json")}
         finally:

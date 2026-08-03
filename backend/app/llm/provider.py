@@ -43,6 +43,11 @@ class LLMEvent(BaseModel):
     # the public Citation objects server-side.
     citations: list[dict[str, Any]] | None = None
     graph_focus: dict[str, Any] | None = None
+    # The persisted ChangeSet draft produced by the allowlisted
+    # ``propose_changeset`` tool this turn (server-validated at the
+    # effective boundary, D-13); the service layer places it on the
+    # done-envelope's ``proposed_change_set``.
+    proposed_change_set: dict[str, Any] | None = None
 
     @classmethod
     def text_delta(cls, text: str) -> "LLMEvent":
@@ -58,9 +63,14 @@ class LLMEvent(BaseModel):
         content: str,
         citations: list[dict[str, Any]] | None = None,
         graph_focus: dict[str, Any] | None = None,
+        proposed_change_set: dict[str, Any] | None = None,
     ) -> "LLMEvent":
         return cls(
-            kind="done", content=content, citations=citations, graph_focus=graph_focus
+            kind="done",
+            content=content,
+            citations=citations,
+            graph_focus=graph_focus,
+            proposed_change_set=proposed_change_set,
         )
 
 

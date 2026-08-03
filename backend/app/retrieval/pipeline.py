@@ -53,6 +53,8 @@ from backend.app.llm.fallbacks import (
     detect_language,
     INSUFFICIENT_EVIDENCE_FALLBACK_EN,
 )
+from backend.app.domain.change_set import ChangeSetCreateRequest, ChangeSetOperation
+from backend.app.services.change_set import ChangeSetService
 
 # Answer used when the model cited only IDs that were never retrieved this
 # turn: the response is ungrounded, so it is replaced with an explicit
@@ -345,6 +347,30 @@ class GetUserNotesInput(BaseModel):
     )
 
 
+class ProposeChangesetInput(BaseModel):
+    """Input schema for the ``propose_changeset`` tool (12th allowlisted tool).
+
+    Mirrors the ChangeSet operation union exactly — the SAME closed
+    operation models the API validates (``domain/change_set.py``) — plus a
+    human-readable summary. No visibility field is accepted: the server
+    derives ``visible_until_order_snapshot`` / ``visible_from_order`` from
+    the current effective view boundary, never from the model (D-13).
+    """
+
+    summary: str = Field(
+        min_length=1,
+        max_length=500,
+        description="Human-readable summary of the proposed graph edit.",
+    )
+    operations: list[ChangeSetOperation] = Field(
+        min_length=1,
+        description=(
+            "The graph operations to propose (create/update/delete node, "
+            "relationship, claim, or note)."
+        ),
+    )
+
+
 TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
@@ -440,6 +466,19 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "parameters": GetUserNotesInput.model_json_schema(),
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_changeset",
+            "description": (
+                "Propose a graph edit (create/update/delete node, "
+                "relationship, claim, or note) for the user to review and "
+                "confirm — nothing is written until the user confirms. "
+                "Returns the persisted draft proposal for the UI to render."
+            ),
+            "parameters": ProposeChangesetInput.model_json_schema(),
+        },
+    },
 ]
 
 _TOOL_EXECUTORS: dict[str, Any] = {
@@ -468,6 +507,7 @@ _TOOL_INPUT_MODELS: dict[str, type[BaseModel]] = {
     "get_sources": GetSourcesInput,
     "get_current_visible_graph_summary": GetGraphSummaryInput,
     "get_user_notes": GetUserNotesInput,
+    "propose_changeset": ProposeChangesetInput,
 }
 
 
@@ -556,7 +596,9 @@ class RetrievalPipeline:
         ``prompt_language`` selects which system prompt the agent receives
         (Settings "Assistant language": ``english`` | ``turkish``).
         """
-        del chat_session_id  # unused this plan — reserved for audit linkage
+        # chat_session_id is threaded into tool execution for the
+        # ``propose_changeset`` tool (the persisted ChangeSet draft links to
+        # the originating chat session); persistence stays in the service layer.
         settings = get_settings()
         try:
             boundary = await self._progress.resolve(user_id, series_id)
@@ -581,6 +623,7 @@ class RetrievalPipeline:
             {"role": "user", "content": question}
         ]
         executed: set[tuple[str, str]] = set()
+        proposed_change_set: dict[str, Any] | None = None
 
         def _call_args(name: str, arguments: dict[str, Any]) -> tuple[str, str]:
             return (name, json.dumps(arguments, sort_keys=True))
@@ -620,6 +663,7 @@ class RetrievalPipeline:
                     settings=settings,
                     question=question,
                     prompt_language=prompt_language,
+                    proposed_change_set=proposed_change_set,
                 ):
                     yield event
                 return
@@ -629,9 +673,15 @@ class RetrievalPipeline:
                     series_id=series_id,
                     boundary=boundary,
                     user_id=user_id,
+                    chat_session_id=chat_session_id,
                     retrieved=retrieved,
                 )
                 executed.add(_call_args(call.tool_name or "", call.arguments or {}))
+                if (
+                    isinstance(result, dict)
+                    and result.get("proposed_change_set") is not None
+                ):
+                    proposed_change_set = result["proposed_change_set"]
                 messages.append(
                     {
                         "role": "assistant",
@@ -669,6 +719,7 @@ class RetrievalPipeline:
             settings=settings,
             question=question,
             prompt_language=prompt_language,
+            proposed_change_set=proposed_change_set,
         ):
             yield event
 
@@ -679,16 +730,27 @@ class RetrievalPipeline:
         series_id: str,
         boundary: int | None,
         user_id: str,
+        chat_session_id: str,
         retrieved: dict[str, Any],
     ) -> dict[str, Any]:
         """Execute one allowlisted tool call with the server-resolved boundary.
 
         The model's JSON arguments are validated against the tool's input
         schema; ``visible_until_order`` (and the requesting ``user_id``) are
-        NEVER sourced from those arguments.
+        NEVER sourced from those arguments. ``propose_changeset`` is the one
+        state-changing tool: it persists a ChangeSet *draft* (nothing is
+        applied until the user confirms), stamped at the effective boundary
+        server-side (D-13).
         """
         name = call.tool_name or ""
         arguments = call.arguments or {}
+        if name == "propose_changeset":
+            return await self._propose_changeset(
+                arguments,
+                user_id=user_id,
+                series_id=series_id,
+                chat_session_id=chat_session_id,
+            )
         executor = _TOOL_EXECUTORS.get(name)
         input_model = _TOOL_INPUT_MODELS.get(name)
         if executor is None or input_model is None:
@@ -715,6 +777,42 @@ class RetrievalPipeline:
 
         self._accumulate(retrieved, result)
         return result
+
+    async def _propose_changeset(
+        self,
+        arguments: dict[str, Any],
+        *,
+        user_id: str,
+        series_id: str,
+        chat_session_id: str,
+    ) -> dict[str, Any]:
+        """Persist a ChangeSet draft via the service at the effective boundary.
+
+        The operation payload mirrors the API's closed ChangeSet op union
+        (``domain/change_set.py``); visibility is always derived server-side
+        from the current effective view — never accepted from the model
+        (D-13). Validation/session errors surface as a model-visible error
+        string so the turn can continue, exactly like the read-only tools;
+        nothing is applied until the user confirms the proposal.
+        """
+        try:
+            parsed = ProposeChangesetInput.model_validate(arguments)
+        except ValidationError:
+            return {"error": "invalid arguments for propose_changeset"}
+        try:
+            proposed = await ChangeSetService(self._database).propose(
+                user_id,
+                series_id,
+                ChangeSetCreateRequest(
+                    series_id=series_id,
+                    chat_session_id=chat_session_id,
+                    summary=parsed.summary,
+                    operations=parsed.operations,
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001 — tool errors stay turn-continuable
+            return {"error": f"propose_changeset failed: {exc}"}
+        return {"proposed_change_set": proposed.model_dump(mode="json")}
 
     @staticmethod
     def _accumulate(retrieved: dict[str, Any], result: Any) -> None:
@@ -770,6 +868,7 @@ class RetrievalPipeline:
         settings: Any,
         question: str,
         prompt_language: str,
+        proposed_change_set: dict[str, Any] | None = None,
     ) -> AsyncIterator[LLMEvent]:
         """Assemble the delimited context, make the final answer call, validate."""
         context = assemble_context(
@@ -877,4 +976,5 @@ class RetrievalPipeline:
             content,
             citations=citations,
             graph_focus={"node_ids": node_ids, "edge_ids": edge_ids},
+            proposed_change_set=proposed_change_set,
         )

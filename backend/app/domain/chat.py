@@ -15,6 +15,7 @@ from typing import Any
 
 from pydantic import Field
 
+from backend.app.domain.change_set import ChangeSetResponse
 from backend.app.domain.user_content import Identifier, StrictModel
 
 
@@ -70,7 +71,7 @@ class MessageResponseEnvelope(StrictModel):
     message: ChatMessageResponse
     citations: list[Citation] = Field(default_factory=list)
     graph_focus: GraphFocus = Field(default_factory=GraphFocus)
-    proposed_change_set: None = None
+    proposed_change_set: ChangeSetResponse | None = None
 
 
 class ChatSessionCreateRequest(StrictModel):
