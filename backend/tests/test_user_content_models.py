@@ -296,6 +296,7 @@ def test_model_graph_closure_still_rejects_user_dangling_edges() -> None:
         GraphResponse(
             series=SeriesResponse(id="series:dexter", title="Dexter", slug="dexter"),
             visible_until_order=1,
+            effective_view_order=1,
             nodes=[
                 GraphNode(
                     id="user-node:one",
