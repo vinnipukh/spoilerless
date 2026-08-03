@@ -86,7 +86,9 @@ def test_episode_3_then_episode_1_regression_hides_not_deletes(
         series_id = SERIES_ID
 
         # Step 1: progress to 3.
-        await progress_repo.upsert(user_id, series_id, 3)
+        await progress_repo.upsert(
+            user_id, series_id, watched_through_order=3, view_as_of_order=3
+        )
 
         session = await chat_repo.create_session(
             user_id, series_id, "Episode 3 regression session"
@@ -127,7 +129,9 @@ def test_episode_3_then_episode_1_regression_hides_not_deletes(
         )
 
         # Step 4: lower progress to 1.
-        await progress_repo.upsert(user_id, series_id, 1)
+        await progress_repo.upsert(
+            user_id, series_id, watched_through_order=1, view_as_of_order=1
+        )
 
         # Step 5: reopen the session (GET-shaped read) at the new boundary —
         # the Episode-3 message is absent from the response.
