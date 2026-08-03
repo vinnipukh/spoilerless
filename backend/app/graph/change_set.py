@@ -119,7 +119,8 @@ RETURN {_CHANGE_SET_FIELDS}
 CURRENT_PROGRESS_QUERY = """\
 MATCH (:AppUser {id: $user_id})-[:HAS_PROGRESS]->
       (p:UserSeriesProgress {series_id: $series_id})
-RETURN p.visible_until_order AS visible_until_order
+RETURN p.view_as_of_order AS view_as_of_order,
+       p.watched_through_order AS watched_through_order
 """
 
 MARK_CHANGE_SET_FAILED_QUERY = f"""\

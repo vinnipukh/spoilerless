@@ -525,10 +525,22 @@ async def _read_change_set_row(
 
 
 async def _read_current_progress(tx: Any, user_id: str, series_id: str) -> int | None:
+    """Read the CURRENT EFFECTIVE boundary (D-13, D-05).
+
+    ``effective = min(view_as_of_order, watched_through_order)`` — a
+    ChangeSet proposed at a later boundary must never apply while the user
+    views an earlier episode (EDIT-02 fail-closed).  The persisted
+    ``visible_until_order`` echo tracks ``watched_through_order``, so it
+    cannot be used here: with view=1/watched=3 it would report 3 and let a
+    snapshot-3 ChangeSet apply at view 1.
+    """
     record = await (
         await tx.run(CURRENT_PROGRESS_QUERY, user_id=user_id, series_id=series_id)
     ).single()
-    return None if record is None else record.data()["visible_until_order"]
+    if record is None:
+        return None
+    data = record.data()
+    return min(data["view_as_of_order"], data["watched_through_order"])
 
 
 async def _require_visible(
