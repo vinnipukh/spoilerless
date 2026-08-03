@@ -25,10 +25,11 @@
 <details>
 <summary>🔄 v1.2 Spoiler-Safety Hardening (Phase 7) — IN PLANNING</summary>
 
-- [ ] Phase 7: Spoiler-Safety Hardening (0/8 plans) — planning started 2026-08-02
+- [ ] Phase 7: Spoiler-Safety Hardening (8/8 plans planned) — planned 2026-08-02
 
-**Phase 7: Spoiler-Safety Hardening**
-Goal: Separate watched progress from the temporary view boundary, centralize the `visible_from_order` policy (fail-closed), and close indirect leak channels — episode metadata, search/autocomplete, counts, media, chat/GraphRAG, and graph edits — on the existing stack.
+#### Phase 7: Spoiler-Safety Hardening
+
+**Goal:** Separate watched progress from the temporary view boundary, centralize the `visible_from_order` policy (fail-closed), and close indirect leak channels — episode metadata, search/autocomplete, counts, media, chat/GraphRAG, and graph edits — on the existing stack.
 Requirements: PROG-01–04, VIS-01–05, META-01–03, SEARCH-01–02, MEDIA-01–02, CHAT-01–03, EDIT-01–02, DOCS-01–02
 Success criteria:
 1. User can view an earlier already-watched episode without lowering progress; graph and chat show only boundary-safe data; returning restores eligible content
@@ -53,7 +54,7 @@ Plans: 07-01 audit + threat model + domain design · 07-02 progress migration + 
 | 5. Future-Extraction Preparation | v1.0/v1.1 | 4/4 | Complete | 2026-07-30 |
 | 05.1 Candidate review frontend UI | v1.0/v1.1 | — | Complete | 2026-07-30 |
 | 6. Spoiler-safe GraphRAG chat and graph-editing agent | v1.1 | 13/13 | Complete | 2026-08-02 |
-| 7. Spoiler-Safety Hardening | v1.2 | 0/8 | In planning | — |
+| 7. Spoiler-Safety Hardening | v1.2 | 8/8 | Planned | 2026-08-02 |
 
 Full phase details archived at `.planning/milestones/v1.1-ROADMAP.md` and `.planning/milestones/v1.1-phases/` (supersedes the earlier `.planning/milestones/v1.0-ROADMAP.md` archive, which predates Phase 6).
 

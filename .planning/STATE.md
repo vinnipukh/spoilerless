@@ -2,9 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Spoiler-Safety Hardening
-status: planning
-last_updated: "2026-08-03T08:23:34.215Z"
+current_phase_name: defining requirements
+status: executing
+stopped_at: Completed 06-13-PLAN.md
+last_updated: "2026-08-03T09:00:52.623Z"
 last_activity: 2026-08-03
+last_activity_desc: Milestone v1.2 started
 progress:
   total_phases: 0
   completed_phases: 0
@@ -191,7 +194,7 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 
 Phase: Not started (defining requirements)
 Plan: —
-Status: Defining requirements
+Status: Ready to execute
 Last activity: 2026-08-03 — Milestone v1.2 started
 
 ## Operator Next Steps
