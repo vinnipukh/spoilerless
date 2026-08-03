@@ -78,12 +78,20 @@ def database() -> Iterator[Neo4jDatabase]:
     yield db
 
     # Clean up test-created progress nodes (fresh driver + loop — the app
-    # driver's connections live in TestClient's portal loop).
+    # driver's connections live in TestClient's portal loop). NEVER delete
+    # all rows: the shared live DB also holds the user's real progress
+    # (runbook: data-loss class). Only orphaned rows — progress whose
+    # AppUser does not exist in Neo4j (unit tests use the in-memory
+    # FakeUserRepo, so their rows never have a real :AppUser) — are deleted.
     async def _cleanup() -> None:
         clean = Neo4jDatabase()
         clean.open()
         try:
-            await clean.execute_query("MATCH (n:UserSeriesProgress) DETACH DELETE n")
+            await clean.execute_query(
+                "MATCH (p:UserSeriesProgress) "
+                "WHERE NOT EXISTS { MATCH (:AppUser {id: p.user_id}) } "
+                "DETACH DELETE p"
+            )
         finally:
             await clean.close()
 

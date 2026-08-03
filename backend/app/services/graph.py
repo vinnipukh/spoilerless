@@ -53,6 +53,7 @@ class GraphService:
         visible_until_order: int,
         node_labels: list[str],
         user_relationship_types: list[str],
+        effective_view_order: int | None = None,
     ) -> GraphResponse:
         """Fetch and project the full graph for a validated series and boundary."""
         parameters: dict[str, Any] = {
@@ -100,6 +101,9 @@ class GraphService:
         return GraphResponse(
             series=SeriesResponse.model_validate(series_rows[0]),
             visible_until_order=visible_until_order,
+            effective_view_order=(
+                effective_view_order if effective_view_order is not None else visible_until_order
+            ),
             nodes=[GraphNode.model_validate(row) for row in nodes_rows],
             edges=[GraphEdge.model_validate(row) for row in structural_rows]
             + projected_edges

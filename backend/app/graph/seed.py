@@ -222,11 +222,20 @@ async def audit_visibility_integrity(database: Neo4jDatabase, series_id: str) ->
     This replaces the Enterprise-only property-existence constraint with a
     run-time integrity gate that fires once during setup — before any
     spoiler-sensitive read could silently leak or hide data.
+
+    ``UserSeriesProgress`` and ``ChatSession`` nodes are excluded: they are
+    per-user state, not story content — progress carries the D-05 split
+    boundary fields (``watched_through_order``/``view_as_of_order``/
+    ``visible_until_order``) and chat sessions carry a
+    ``visible_until_order_snapshot``, neither of which is a story reveal-point.
+    Including them would fail the gate on every real user's rows (07-02).
     """
     records = await database.execute_query(
         """
         MATCH (node {series_id: $series_id})
         WHERE node.visible_from_order IS NULL
+          AND NOT node:UserSeriesProgress
+          AND NOT node:ChatSession
         RETURN labels(node) AS labels, node.id AS id
         ORDER BY id
         """,

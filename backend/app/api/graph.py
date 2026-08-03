@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from backend.app.api.deps import OptionalUserDependency
 from backend.app.domain.graph import (
     GraphResponse,
 )
@@ -13,6 +14,8 @@ from backend.app.domain.user_content import VisibleUntilOrder
 from backend.app.graph.database import Neo4jDatabase, get_database
 from backend.app.graph.ontology import load_ontology
 from backend.app.services.graph import GraphService
+from backend.app.services.progress import ProgressService
+from backend.app.spoiler.policy import effective_view_order
 
 router = APIRouter(prefix="/api/series", tags=["graph"])
 DatabaseDependency = Annotated[Neo4jDatabase, Depends(get_database)]
@@ -32,7 +35,12 @@ def get_graph_service(database: DatabaseDependency) -> GraphService:
     return GraphService(database)
 
 
+def get_progress_service(database: DatabaseDependency) -> ProgressService:
+    return ProgressService(database)
+
+
 GraphServiceDependency = Annotated[GraphService, Depends(get_graph_service)]
+ProgressServiceDependency = Annotated[ProgressService, Depends(get_progress_service)]
 
 
 def _error(status_code: int, code: str, message: str) -> HTTPException:
@@ -51,14 +59,20 @@ def _error(status_code: int, code: str, message: str) -> HTTPException:
 async def get_graph(
     series_id: str,
     service: GraphServiceDependency,
+    progress_service: ProgressServiceDependency,
+    user: OptionalUserDependency,
     visible_until_order: VisibleUntilOrder,
 ) -> GraphResponse:
     series = await service.get_series_meta(series_id)
     if series is None:
         raise _error(404, "series_not_found", "Series not found.")
 
-    boundary = visible_until_order
-    boundary_episode = await service.resolve_boundary(series_id, boundary)
+    # The REQUESTED order must still identify a persisted episode (a client may
+    # request any persisted order), but the FILTERING boundary is the effective
+    # one: when the caller has a session and a persisted split progress record,
+    # effective = min(requested, view_as_of_order, watched_through_order) —
+    # a request above the selected view never raises the boundary (D-05).
+    boundary_episode = await service.resolve_boundary(series_id, visible_until_order)
     if boundary_episode is None:
         raise _error(
             422,
@@ -66,9 +80,19 @@ async def get_graph(
             "visible_until_order must identify a persisted episode order.",
         )
 
+    effective = visible_until_order
+    if user is not None:
+        record = await progress_service.get(user["id"], series_id)
+        if record is not None:
+            requested_view = min(visible_until_order, record.view_as_of_order)
+            effective = effective_view_order(
+                requested_view, record.watched_through_order
+            )
+
     return await service.fetch_graph(
         series_id,
-        boundary,
+        effective,
         node_labels=VISIBLE_NODE_LABELS,
         user_relationship_types=USER_RELATIONSHIP_TYPES,
+        effective_view_order=effective,
     )

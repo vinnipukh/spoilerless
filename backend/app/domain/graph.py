@@ -73,6 +73,7 @@ class GraphEvidence(BaseModel):
 class GraphResponse(BaseModel):
     series: SeriesResponse
     visible_until_order: int = Field(ge=1)
+    effective_view_order: int = Field(ge=1)
     nodes: list[GraphNode]
     edges: list[GraphEdge]
     claims: list[GraphClaim]

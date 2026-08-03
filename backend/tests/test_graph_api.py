@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import importlib
 import json
+import secrets
+import time
 from collections.abc import Iterator
 
 import pytest
@@ -112,6 +115,7 @@ def test_graph_model_rejects_dangling_edge() -> None:
             {
                 "series": {"id": "series_dexter", "title": "Dexter", "slug": "dexter"},
                 "visible_until_order": 1,
+                "effective_view_order": 1,
                 "nodes": [
                     {
                         "id": "node:one",
@@ -143,6 +147,7 @@ def test_graph_node_image_fields_are_optional_and_default_null() -> None:
         {
             "series": {"id": "series_dexter", "title": "Dexter", "slug": "dexter"},
             "visible_until_order": 1,
+            "effective_view_order": 1,
             "nodes": [
                 {
                     "id": "node:one",
@@ -168,6 +173,7 @@ def test_graph_node_accepts_explicit_image_fields() -> None:
         {
             "series": {"id": "series_dexter", "title": "Dexter", "slug": "dexter"},
             "visible_until_order": 1,
+            "effective_view_order": 1,
             "nodes": [
                 {
                     "id": "node:one",
@@ -443,3 +449,122 @@ def test_user_relationship_projection_is_edge_only_closed_and_fail_closed(
         }.isdisjoint(non_edge_ids)
     finally:
         asyncio.run(_clean_user_projection_fixture())
+
+
+# ===================================================================
+# D-05 fail-closed boundary: a request above the persisted view never
+# raises the effective boundary (07-02 Task 3)
+# ===================================================================
+
+ABOVE_VIEW_USER_ID = "user:07-02-above-view"
+ABOVE_VIEW_SUB = "07-02-above-view-sub"
+
+ABOVE_VIEW_CLEANUP_QUERY = """
+MATCH (s:Session {token_hash: $token_hash})
+DETACH DELETE s
+"""
+
+ABOVE_VIEW_USER_CLEANUP_QUERY = """
+MATCH (u:AppUser {id: $uid})
+DETACH DELETE u
+"""
+
+ABOVE_VIEW_SETUP_QUERY = """
+MERGE (u:AppUser {id: $uid})
+SET u.google_sub = $sub, u.email = $email, u.display_name = 'Above View Test'
+MERGE (s:Series {id: 'series_dexter'})
+MERGE (u)-[:HAS_PROGRESS]->(p:UserSeriesProgress {user_id: $uid, series_id: 'series_dexter'})
+SET p.id = $pid, p.created_at = $now, p.updated_at = $now,
+    p.watched_through_order = 3, p.view_as_of_order = 1, p.visible_until_order = 1
+WITH u
+CREATE (sess:Session {
+    id: $session_id,
+    token_hash: $token_hash,
+    created_at: $now,
+    expires_at: $now + $ttl,
+    last_seen_at: $now,
+    revoked_at: NULL
+})
+CREATE (u)-[:HAS_SESSION]->(sess)
+"""
+
+
+async def _prepare_above_view_fixture() -> str:
+    """Create a user with watched=3 / view=1 progress plus a live session.
+
+    Returns the raw session token (hash of which is stored on the Session node,
+    mirroring Neo4jSessionRepository.create). A fresh random token is used per
+    run so the Session token_hash uniqueness constraint can never collide with
+    a leftover node from an interrupted run.
+    """
+    raw = f"07-02-above-view-{secrets.token_hex(8)}"
+    database = Neo4jDatabase()
+    database.open()
+    try:
+        await database.execute_query(ABOVE_VIEW_USER_CLEANUP_QUERY, uid=ABOVE_VIEW_USER_ID)
+        await database.execute_query(
+            ABOVE_VIEW_SETUP_QUERY,
+            uid=ABOVE_VIEW_USER_ID,
+            sub=ABOVE_VIEW_SUB,
+            email="above-view@test.local",
+            pid=f"progress:{ABOVE_VIEW_USER_ID}",
+            session_id=f"session:{ABOVE_VIEW_USER_ID}:test",
+            token_hash=hashlib.sha256(raw.encode()).hexdigest(),
+            now=time.time(),
+            ttl=float(3600),
+        )
+    finally:
+        await database.close()
+    return raw
+
+
+async def _clean_above_view_fixture(raw_token: str) -> None:
+    database = Neo4jDatabase()
+    database.open()
+    try:
+        await database.execute_query(
+            ABOVE_VIEW_CLEANUP_QUERY,
+            token_hash=hashlib.sha256(raw_token.encode()).hexdigest(),
+        )
+        await database.execute_query(
+            "MATCH (p:UserSeriesProgress {user_id: $uid}) DETACH DELETE p",
+            uid=ABOVE_VIEW_USER_ID,
+        )
+        await database.execute_query(
+            ABOVE_VIEW_USER_CLEANUP_QUERY, uid=ABOVE_VIEW_USER_ID
+        )
+    finally:
+        await database.close()
+
+
+def test_graph_request_above_persisted_view_is_fail_closed(live_client: TestClient) -> None:
+    """D-05: view=1, watched=3, request=3 -> effective 1, never 3 (07-02)."""
+    raw = asyncio.run(_prepare_above_view_fixture())
+    try:
+        # Authenticated: the request above the selected view is clamped to it.
+        response = live_client.get(
+            "/api/series/series_dexter/graph",
+            params={"visible_until_order": 3},
+            headers={"Cookie": f"session={raw}"},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["effective_view_order"] == 1
+        assert payload["visible_until_order"] == 1
+        node_ids = {node["id"] for node in payload["nodes"]}
+        # Paul Bennett is visible_from_order 2 — must NOT appear at effective 1.
+        assert "dexter:character:paul_bennett" not in node_ids
+
+        # Anonymous caller keeps the backward-compatible behavior (no persisted
+        # record to clamp against): request 3 resolves to effective 3.
+        anon = live_client.get(
+            "/api/series/series_dexter/graph",
+            params={"visible_until_order": 3},
+        )
+        assert anon.status_code == 200
+        anon_payload = anon.json()
+        assert anon_payload["effective_view_order"] == 3
+        anon_ids = {node["id"] for node in anon_payload["nodes"]}
+        assert "dexter:character:paul_bennett" in anon_ids
+    finally:
+        asyncio.run(_clean_above_view_fixture(raw))

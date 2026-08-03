@@ -64,4 +64,25 @@ async def require_current_user(
     return user
 
 
+async def get_optional_current_user(
+    request: Request,
+    service: AuthServiceDependency,
+) -> dict[str, Any] | None:
+    """Resolve the authenticated user from the session cookie, or None.
+
+    Same resolution as :func:`require_current_user` but never raises — used by
+    read routes that must stay anonymous-capable (e.g. the graph API) while
+    clamping the effective boundary to the authenticated user's persisted
+    progress when a session is present (D-05).
+    """
+    settings = get_settings()
+    raw_token = request.cookies.get(settings.session_cookie_name)
+    return await service.get_current_user(
+        raw_token, session_ttl=settings.session_ttl_seconds
+    )
+
+
+OptionalUserDependency = Annotated[dict[str, Any] | None, Depends(get_optional_current_user)]
+
+
 CurrentUserDependency = Annotated[dict[str, Any], Depends(require_current_user)]
