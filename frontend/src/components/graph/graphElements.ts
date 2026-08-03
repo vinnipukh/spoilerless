@@ -11,6 +11,13 @@
 // re-derive a hidden degree/count client-side (e.g. from a totals field) —
 // hidden counts are absent from the API by contract, so any frontend
 // computation must consume only the filtered node/edge lists above.
+//
+// D-16 media rule (07-06): image PRESENCE must never drive layout/sizing — a
+// node with a portrait and one without are positioned and sized identically,
+// so an above-boundary image (masked to null by the backend) can never be
+// inferred from layout. The `imageUrl` data key below feeds ONLY the
+// background-image selector in graphStylesheet.ts; it never affects node
+// dimensions, degree, or position.
 
 import type { ElementDefinition } from 'cytoscape'
 import type { GraphResponse } from '../../types/graph'

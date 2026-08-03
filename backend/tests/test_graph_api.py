@@ -7,6 +7,7 @@ import json
 import secrets
 import time
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
@@ -669,3 +670,49 @@ def test_graph_hidden_character_image_urls_never_serialized(
     )
     assert harry["image_url"] is not None
     assert harry["image_source_url"] is not None
+
+
+# ===================================================================
+# D-14 seed curation rule — no above-order-1 resource pre-links a
+# future portrait in seed data (07-06 Task 3)
+# ===================================================================
+
+class TestSeedImageCuration:
+    """D-14/D-16: seed data must never pre-link a future character's portrait.
+
+    Curation rule: any seeded resource whose visible_from_order > 1 must have
+    image_url null in the seed data — a future character's image must not be
+    inferable from seed presence. The rule is enforced here (the plan's
+    regression lock) so a future seed edit cannot silently re-add a portrait
+    for an unrevealed character.
+    """
+
+    def test_no_seed_image_for_resources_visible_above_order_one(self) -> None:
+        seed_path = (
+            Path(__file__).resolve().parents[2]
+            / "data" / "dexter" / "seed" / "characters.json"
+        )
+        with seed_path.open("r", encoding="utf-8") as stream:
+            characters = json.load(stream)
+        assert characters, "seed characters.json must not be empty"
+
+        above_order_one = [
+            character for character in characters if character["visible_from_order"] > 1
+        ]
+        assert above_order_one, "expected at least one above-order-1 character"
+
+        for character in above_order_one:
+            assert character.get("image_url") is None, (
+                f"{character['id']} is visible from order "
+                f"{character['visible_from_order']} but carries image_url"
+            )
+            assert character.get("image_source_url") is None, (
+                f"{character['id']} is visible from order "
+                f"{character['visible_from_order']} but carries image_source_url"
+            )
+
+        # Sanity: order-1 characters may carry curated portraits (D-14 keeps
+        # the existing safe images for already-revealed characters).
+        order_one = [character for character in characters if character["visible_from_order"] == 1]
+        assert order_one
+        assert any(character.get("image_url") for character in order_one)
