@@ -22,7 +22,11 @@ function canFetch(seriesId: string | null, sessionId: string | null): boolean {
 
 const EMPTY_GRAPH_FOCUS: GraphFocus = { node_ids: [], edge_ids: [] }
 
-export function useChatMessages(seriesId: string | null, sessionId: string | null) {
+export function useChatMessages(
+  seriesId: string | null,
+  sessionId: string | null,
+  visibleUntilOrder?: number | null,
+) {
   const [status, setStatus] = useState<Status>(() =>
     canFetch(seriesId, sessionId) ? { status: 'loading' } : { status: 'idle' },
   )
@@ -31,7 +35,11 @@ export function useChatMessages(seriesId: string | null, sessionId: string | nul
   const [graphFocus, setGraphFocus] = useState<GraphFocus>(EMPTY_GRAPH_FOCUS)
   const [proposedChangeSet, setProposedChangeSet] = useState<ChangeSet | null>(null)
 
-  const key = `${seriesId ?? ''}:${sessionId ?? ''}`
+  // The backend get_session_detail filters messages by the CURRENT effective
+  // boundary (CHAT-02): include the view in the key so a view-only change
+  // re-fetches — above-boundary messages disappear on earlier-view and
+  // reappear on return, without destroying the session (D-12).
+  const key = `${seriesId ?? ''}:${sessionId ?? ''}:${visibleUntilOrder ?? ''}`
   const [prevKey, setPrevKey] = useState(key)
   if (prevKey !== key) {
     setPrevKey(key)
@@ -65,7 +73,7 @@ export function useChatMessages(seriesId: string | null, sessionId: string | nul
     return () => {
       cancelled = true
     }
-  }, [seriesId, sessionId])
+  }, [seriesId, sessionId, visibleUntilOrder])
 
   const sendChatMessage = useCallback(
     (content: string) => {

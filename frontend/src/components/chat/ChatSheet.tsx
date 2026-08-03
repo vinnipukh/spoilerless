@@ -11,6 +11,7 @@ type Props = {
   seriesId: string | null
   seriesTitle: string
   currentEpisodeCode: string | null
+  viewAsOfOrder?: number | null
   onShowInGraph?: (citation: Citation) => void
   onOpenDetail?: (citation: Citation) => void
   onChangeSetApplied?: (changeSet: ChangeSet) => void
@@ -46,6 +47,7 @@ export function ChatSheet({
   seriesId,
   seriesTitle,
   currentEpisodeCode,
+  viewAsOfOrder,
   onShowInGraph,
   onOpenDetail,
   onChangeSetApplied,
@@ -145,6 +147,7 @@ export function ChatSheet({
             seriesId={seriesId}
             seriesTitle={seriesTitle}
             currentEpisodeCode={currentEpisodeCode}
+            viewAsOfOrder={viewAsOfOrder}
             onShowInGraph={onShowInGraph}
             onOpenDetail={onOpenDetail}
             onApplied={onChangeSetApplied}

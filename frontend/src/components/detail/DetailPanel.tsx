@@ -91,7 +91,7 @@ function CharacterPortrait({
   // never appear as user-visible text).
   return (
     <a
-      href={node.image_source_url}
+      href={node.image_source_url ?? undefined}
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Image source"

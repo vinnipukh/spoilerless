@@ -15,6 +15,10 @@ type Props = {
   seriesId: string | null
   seriesTitle: string
   currentEpisodeCode: string | null
+  // The effective view boundary (view_as_of_order) — re-fetches the session
+  // message list when it changes so above-boundary messages hide/return
+  // (CHAT-02, D-12).
+  viewAsOfOrder?: number | null
   onShowInGraph?: (citation: Citation) => void
   onOpenDetail?: (citation: Citation) => void
   // Confirm-success callback threaded from App.tsx (06-11) — fires when a
@@ -54,6 +58,7 @@ export function ChatPanel({
   seriesId,
   seriesTitle,
   currentEpisodeCode,
+  viewAsOfOrder,
   onShowInGraph,
   onOpenDetail,
   onApplied,
@@ -82,7 +87,7 @@ export function ChatPanel({
     }
   }
 
-  const chatMessages = useChatMessages(seriesId, activeSessionId)
+  const chatMessages = useChatMessages(seriesId, activeSessionId, viewAsOfOrder)
 
   const [draft, setDraft] = useState('')
   const [pendingContent, setPendingContent] = useState<string | null>(null)

@@ -323,6 +323,7 @@ function AuthenticatedApp() {
             onClose={() => setChatOpen(false)}
             seriesId={watchProgress.seriesId}
             seriesTitle={graphState.data.series.title}
+            viewAsOfOrder={watchProgress.viewAsOfOrder}
             currentEpisodeCode={
               episodes.find((episode) => episode.episode_order === watchProgress.confirmedOrder)?.code ?? null
             }
