@@ -8,6 +8,20 @@ A spoiler-safe narrative knowledge graph for TV series with a grounded conversat
 
 Users can safely explore a TV-series knowledge graph — and now chat about it — without ever seeing information beyond their selected watch progress, because filtering occurs in the backend before data reaches the frontend, the LLM, or any tool call. No raw Cypher ever reaches the model, and no graph write happens without explicit human confirmation.
 
+## Current Milestone: v1.2 Spoiler-Safety Hardening
+
+**Goal:** Harden spoiler safety by separating watched progress from the temporary view boundary, centralizing the visibility policy, and closing indirect leak channels (metadata, search, counts, media, chat, graph edits) without changing the stack or rebuilding working features.
+
+**Target features:**
+- Watched progress (`watched_through_order`) separated from temporary view boundary (`view_as_of_order`); effective boundary = `min(view, watched)`, enforced server-side
+- Central visibility-policy service — `visible_from_order` stays canonical, missing visibility fails closed (no `coalesce(..., 1)` defaults)
+- Episode metadata gating (spoiler title → generic label, synopsis/runtime/image masked at the backend) with publication-order semantics across seasons
+- Relationship-level + provenance-chain (Claim → EvidenceFragment → Source) visibility; user Notes hidden below their creation boundary
+- Search/autocomplete/count leak protection: hidden entities behave like nonexistent, counts are "seen so far" only
+- Spoiler-safe media handling: hidden images never returned, neutral fallback + safe alt text
+- GraphRAG/chat-history/citations/graph-focus and ChangeSets operate on the effective boundary; boundary snapshot persisted per assistant response
+- Documented spoiler-leak threat model and regression matrix
+
 ## Current State (v1.1 shipped 2026-08-02, supersedes v1.0)
 
 - Neo4j + FastAPI backend, Google OAuth authentication, real health checks, idempotent seed setup.
@@ -75,5 +89,22 @@ Users can safely explore a TV-series knowledge graph — and now chat about it �
 | Two-stage ChangeSet propose/confirm, never auto-apply | A human must gate every graph write the assistant suggests | ✓ Good |
 | Global (non-per-user) LLM Settings, built without a threat model | Fastest path to a working Settings UI given no role infrastructure existed | ⚠️ Revisit — flagged by security audit as an unregistered SSRF/cross-user-takeover surface; partial fix (scheme validation) landed, full scoping deferred |
 
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
 ---
-*Last updated: 2026-08-02 after v1.1 milestone*
+*Last updated: 2026-08-02 — v1.2 Spoiler-Safety Hardening milestone started*

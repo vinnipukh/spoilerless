@@ -1,19 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: MVP
-status: Awaiting next milestone
-stopped_at: Completed 06-13-PLAN.md
-last_updated: "2026-08-02T10:52:06.166Z"
-last_activity: 2026-08-02
-last_activity_desc: Milestone v1.1 completed and archived (supersedes v1.0)
+milestone: v1.2
+milestone_name: Spoiler-Safety Hardening
+status: planning
+last_updated: "2026-08-03T08:23:34.215Z"
+last_activity: 2026-08-03
 progress:
-  total_phases: 8
-  completed_phases: 7
-  total_plans: 36
-  completed_plans: 36
-current_phase: 06
-current_phase_name: spoiler-safe-graphrag-chat-and-graph-editing-agent
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # HD Graf Cehennemi — Project State
@@ -192,10 +189,10 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 
 ## Current Position
 
-Phase: Milestone v1.1 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-08-02 — Milestone v1.1 completed and archived (supersedes v1.0)
+Status: Defining requirements
+Last activity: 2026-08-03 — Milestone v1.2 started
 
 ## Operator Next Steps
 
