@@ -46,7 +46,8 @@ RETURN node.id AS id,
 
 CLAIMS_FOR_FRONTIER_QUERY = """\
 MATCH (claim:Claim {series_id: $series_id})
-WHERE claim.visible_from_order <= $visible_until_order
+WHERE claim.visible_from_order IS NOT NULL
+  AND claim.visible_from_order <= $visible_until_order
   AND claim.origin IN ['canonical', 'candidate']
   AND claim.claim_type <> 'user_authored'
   AND (claim.subject_id IN $frontier OR claim.object_id IN $frontier)
@@ -54,7 +55,9 @@ WHERE claim.visible_from_order <= $visible_until_order
   AND (claim.valid_until_order IS NULL OR claim.valid_until_order >= $visible_until_order)
 MATCH (subject {id: claim.subject_id, series_id: $series_id})
 MATCH (object {id: claim.object_id, series_id: $series_id})
-WHERE subject.visible_from_order <= $visible_until_order
+WHERE subject.visible_from_order IS NOT NULL
+  AND subject.visible_from_order <= $visible_until_order
+  AND object.visible_from_order IS NOT NULL
   AND object.visible_from_order <= $visible_until_order
 RETURN claim.id AS id,
        claim.label AS label,
@@ -89,7 +92,9 @@ ORDER BY node.visible_from_order, node.id
 EVIDENCE_FOR_CLAIMS_QUERY = """\
 MATCH (claim:Claim {series_id: $series_id})-[supported:SUPPORTED_BY]->(evidence:EvidenceFragment)
 WHERE claim.id IN $claim_ids
+  AND supported.visible_from_order IS NOT NULL
   AND supported.visible_from_order <= $visible_until_order
+  AND evidence.visible_from_order IS NOT NULL
   AND evidence.visible_from_order <= $visible_until_order
 RETURN evidence.id AS id,
        evidence.label AS label,
@@ -106,7 +111,9 @@ ORDER BY evidence.visible_from_order, evidence.id
 SOURCES_FOR_CLAIMS_QUERY = """\
 MATCH (claim:Claim {series_id: $series_id})-[ref:REFERS_TO]->(source:Source)
 WHERE claim.id IN $claim_ids
+  AND ref.visible_from_order IS NOT NULL
   AND ref.visible_from_order <= $visible_until_order
+  AND source.visible_from_order IS NOT NULL
   AND source.visible_from_order <= $visible_until_order
 RETURN source.id AS id,
        source.label AS label,
@@ -158,7 +165,8 @@ LIMIT $limit
 # (the shared forms are used by get_neighborhood, which bounds per level).
 GET_CLAIMS_QUERY = """\
 MATCH (claim:Claim {series_id: $series_id})
-WHERE claim.visible_from_order <= $visible_until_order
+WHERE claim.visible_from_order IS NOT NULL
+  AND claim.visible_from_order <= $visible_until_order
   AND claim.origin IN ['canonical', 'candidate']
   AND claim.claim_type <> 'user_authored'
   AND (claim.subject_id IN $entity_ids OR claim.object_id IN $entity_ids)
@@ -166,7 +174,9 @@ WHERE claim.visible_from_order <= $visible_until_order
   AND (claim.valid_until_order IS NULL OR claim.valid_until_order >= $visible_until_order)
 MATCH (subject {id: claim.subject_id, series_id: $series_id})
 MATCH (object {id: claim.object_id, series_id: $series_id})
-WHERE subject.visible_from_order <= $visible_until_order
+WHERE subject.visible_from_order IS NOT NULL
+  AND subject.visible_from_order <= $visible_until_order
+  AND object.visible_from_order IS NOT NULL
   AND object.visible_from_order <= $visible_until_order
 RETURN claim.id AS id,
        claim.label AS label,
@@ -187,7 +197,9 @@ LIMIT $limit
 GET_EVIDENCE_QUERY = """\
 MATCH (claim:Claim {series_id: $series_id})-[supported:SUPPORTED_BY]->(evidence:EvidenceFragment)
 WHERE claim.id IN $claim_ids
+  AND supported.visible_from_order IS NOT NULL
   AND supported.visible_from_order <= $visible_until_order
+  AND evidence.visible_from_order IS NOT NULL
   AND evidence.visible_from_order <= $visible_until_order
 RETURN evidence.id AS id,
        evidence.label AS label,
@@ -205,7 +217,9 @@ LIMIT $limit
 GET_SOURCES_QUERY = """\
 MATCH (claim:Claim {series_id: $series_id})-[ref:REFERS_TO]->(source:Source)
 WHERE claim.id IN $claim_ids
+  AND ref.visible_from_order IS NOT NULL
   AND ref.visible_from_order <= $visible_until_order
+  AND source.visible_from_order IS NOT NULL
   AND source.visible_from_order <= $visible_until_order
 RETURN source.id AS id,
        source.label AS label,
@@ -226,18 +240,21 @@ WHERE node.series_id = $series_id
   AND node.visible_from_order IS NOT NULL
   AND node.visible_from_order <= $visible_until_order
 WITH count(node) AS entities
-MATCH (claim:Claim {series_id: $series_id})
-WHERE claim.visible_from_order <= $visible_until_order
+OPTIONAL MATCH (claim:Claim {series_id: $series_id})
+WHERE claim.visible_from_order IS NOT NULL
+  AND claim.visible_from_order <= $visible_until_order
   AND claim.origin IN ['canonical', 'candidate']
   AND claim.claim_type <> 'user_authored'
   AND (claim.valid_from_order IS NULL OR claim.valid_from_order <= $visible_until_order)
   AND (claim.valid_until_order IS NULL OR claim.valid_until_order >= $visible_until_order)
 WITH entities, count(claim) AS claims
-MATCH (evidence:EvidenceFragment {series_id: $series_id})
-WHERE evidence.visible_from_order <= $visible_until_order
+OPTIONAL MATCH (evidence:EvidenceFragment {series_id: $series_id})
+WHERE evidence.visible_from_order IS NOT NULL
+  AND evidence.visible_from_order <= $visible_until_order
 WITH entities, claims, count(evidence) AS evidence
-MATCH (source:Source {series_id: $series_id})
-WHERE source.visible_from_order <= $visible_until_order
+OPTIONAL MATCH (source:Source {series_id: $series_id})
+WHERE source.visible_from_order IS NOT NULL
+  AND source.visible_from_order <= $visible_until_order
 RETURN entities, claims, evidence, count(source) AS sources
 """
 
@@ -258,14 +275,17 @@ LIMIT $limit
 
 ALL_VISIBLE_CLAIMS_QUERY = """\
 MATCH (claim:Claim {series_id: $series_id})
-WHERE claim.visible_from_order <= $visible_until_order
+WHERE claim.visible_from_order IS NOT NULL
+  AND claim.visible_from_order <= $visible_until_order
   AND claim.origin IN ['canonical', 'candidate']
   AND claim.claim_type <> 'user_authored'
   AND (claim.valid_from_order IS NULL OR claim.valid_from_order <= $visible_until_order)
   AND (claim.valid_until_order IS NULL OR claim.valid_until_order >= $visible_until_order)
 MATCH (subject {id: claim.subject_id, series_id: $series_id})
 MATCH (object {id: claim.object_id, series_id: $series_id})
-WHERE subject.visible_from_order <= $visible_until_order
+WHERE subject.visible_from_order IS NOT NULL
+  AND subject.visible_from_order <= $visible_until_order
+  AND object.visible_from_order IS NOT NULL
   AND object.visible_from_order <= $visible_until_order
 RETURN claim.id AS id,
        claim.label AS label,
@@ -290,6 +310,7 @@ WHERE note.user_id = $user_id
   AND note.target_id IN $entity_or_claim_ids
   AND note.visible_from_order IS NOT NULL
   AND note.visible_from_order <= $visible_until_order
+  AND attachment.visible_from_order IS NOT NULL
   AND attachment.visible_from_order <= $visible_until_order
   AND target.visible_from_order IS NOT NULL
   AND target.visible_from_order <= $visible_until_order
@@ -406,7 +427,7 @@ async def get_neighborhood(
     )
     edges = [
         {
-            "id": f"{claim['id']}:edge",
+            "id": claim["id"] + ":edge",
             "source": claim["subject_id"],
             "target": claim["object_id"],
             "type": claim["predicate"],

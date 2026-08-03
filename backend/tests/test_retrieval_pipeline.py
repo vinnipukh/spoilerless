@@ -42,14 +42,15 @@ CLAIM_C1 = {
     "visible_from_order": 1,
     "origin": "canonical",
 }
-NODE_N1 = {"id": "dexter:character:dexter_morgan", "label": "Dexter Morgan", "type": "Character"}
-NODE_N2 = {"id": "dexter:character:debra_morgan", "label": "Debra Morgan", "type": "Character"}
-EVIDENCE_E1 = {"id": "dexter:evidence:s01e01:01", "label": "S01E01", "text": "Debra calls Dexter her brother."}
+NODE_N1 = {"id": "dexter:character:dexter_morgan", "label": "Dexter Morgan", "type": "Character", "visible_from_order": 1}
+NODE_N2 = {"id": "dexter:character:debra_morgan", "label": "Debra Morgan", "type": "Character", "visible_from_order": 1}
+EVIDENCE_E1 = {"id": "dexter:evidence:s01e01:01", "label": "S01E01", "text": "Debra calls Dexter her brother.", "visible_from_order": 1}
 SOURCE_S1 = {
     "id": "dexter:source:s01e01",
     "label": "S01E01",
     "source_type": "episode_notes",
     "locator": "S01E01",
+    "visible_from_order": 1,
 }
 
 
@@ -477,3 +478,30 @@ async def test_tool_rounds_stop_exactly_at_ceiling_and_final_answer_produced(
     done_events = [event for event in events if event.kind == "done"]
     assert len(done_events) == 1
     assert done_events[0].content == "final answer produced after the round ceiling"
+
+
+def test_assemble_context_drops_above_boundary_or_missing_visibility_items() -> None:
+    """07-04 defense-in-depth (D-03 fail-closed): assemble_context never
+    renders an item whose visible_from_order is missing or above the
+    boundary, even if the queries upstream were bypassed."""
+    context = assemble_context(
+        nodes=[NODE_N1, {"id": "hidden:node", "label": "Hidden", "type": "Character", "visible_from_order": 99}],
+        claims=[
+            CLAIM_C1,
+            {"id": "hidden:claim", "label": "Hidden", "visible_from_order": 99},
+            {"id": "null:claim", "label": "Hidden", "visible_from_order": None},
+        ],
+        evidence=[EVIDENCE_E1, {"id": "hidden:evidence", "label": "S01E02", "text": "leak", "visible_from_order": 99}],
+        sources=[SOURCE_S1, {"id": "hidden:source", "label": "S01E03", "locator": "S01E03", "visible_from_order": 99}],
+        notes=[{"id": "note:1", "content": "safe", "visible_from_order": 1}, {"id": "note:hidden", "content": "leak", "visible_from_order": 99}],
+        history=[],
+        series={"id": "series_dexter", "title": "Dexter"},
+        boundary=1,
+        max_items=40,
+        max_characters=12000,
+    )
+    assert "Dexter Morgan" in context
+    assert "Debra calls Dexter her brother." in context
+    assert "Hidden" not in context
+    assert "leak" not in context
+    assert "safe" in context

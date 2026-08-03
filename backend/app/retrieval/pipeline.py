@@ -137,6 +137,24 @@ def _note_line(item: dict[str, Any]) -> str:
     return f"- {content or item.get('id')}"
 
 
+def _visible_at(items: list[dict[str, Any]], boundary: int | None) -> list[dict[str, Any]]:
+    """Defense-in-depth boundary filter (D-03 fail-closed, 07-04).
+
+    The retrieval queries already gate on ``visible_from_order``; this is a
+    second drop for assembled context so a missing or above-boundary
+    ``visible_from_order`` can never reach the provider call.  When no
+    boundary is supplied (callers that already filtered) every item passes.
+    """
+
+    if boundary is None:
+        return items
+    return [
+        item
+        for item in items
+        if item.get("visible_from_order") is not None and item["visible_from_order"] <= boundary
+    ]
+
+
 def _dedupe_by_id(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Stable deduplication by ``id`` — the same resource retrieved by two
     different tool calls appears exactly once (RAG-05)."""
@@ -191,12 +209,12 @@ def assemble_context(
     """
 
     item_sections: list[tuple[str, list[dict[str, Any]], Any]] = [
-        ("entities", _by_distance(_dedupe_by_id(nodes)), _entity_line),
-        ("relationships", _by_distance(_dedupe_by_id(edges or [])), _edge_line),
-        ("claims", _by_distance(_dedupe_by_id(claims)), _claim_line),
-        ("evidence", _by_distance(_dedupe_by_id(evidence)), _evidence_line),
-        ("sources", _by_distance(_dedupe_by_id(sources)), _source_line),
-        ("notes", _dedupe_by_id(notes), _note_line),
+        ("entities", _by_distance(_dedupe_by_id(_visible_at(nodes, boundary))), _entity_line),
+        ("relationships", _by_distance(_dedupe_by_id(_visible_at(edges or [], boundary))), _edge_line),
+        ("claims", _by_distance(_dedupe_by_id(_visible_at(claims, boundary))), _claim_line),
+        ("evidence", _by_distance(_dedupe_by_id(_visible_at(evidence, boundary))), _evidence_line),
+        ("sources", _by_distance(_dedupe_by_id(_visible_at(sources, boundary))), _source_line),
+        ("notes", _dedupe_by_id(_visible_at(notes, boundary)), _note_line),
     ]
     remaining = max_items
     sections: list[str] = []

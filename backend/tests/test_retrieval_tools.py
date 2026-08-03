@@ -910,3 +910,101 @@ async def test_get_neighborhood_hidden_entity_fails_closed(
     assert result["claims"] == []
     assert result["evidence"] == []
     assert result["sources"] == []
+
+
+# ===================================================================
+# 07-04 VIS-03 / D-20: relationship-level gating + static Cypher scan
+# ===================================================================
+
+def test_story_sensitive_query_constants_are_boundary_gated() -> None:
+    """Static scan (D-20): every story-sensitive query constant selects only
+    non-null, boundary-satisfied rows and carries a boundary parameter —
+    no story data can be selected by a missing/null visibility value, and no
+    runtime value is ever interpolated (constants are plain strings)."""
+    from backend.app.spoiler import filter as filter_module
+
+    constants = [
+        "BOUNDARY_QUERY",
+        "NODES_QUERY",
+        "STRUCTURAL_EDGES_QUERY",
+        "VISIBLE_CLAIMS_QUERY",
+        "VISIBLE_USER_RELATIONSHIPS_QUERY",
+        "CLAIMS_FOR_FRONTIER_QUERY",
+        "GET_CLAIMS_QUERY",
+        "GRAPH_SUMMARY_COUNTS_QUERY",
+        "ALL_VISIBLE_CLAIMS_QUERY",
+        "ALL_VISIBLE_NODES_QUERY",
+        "NODES_BY_IDS_QUERY",
+        "EVIDENCE_FOR_CLAIMS_QUERY",
+        "SOURCES_FOR_CLAIMS_QUERY",
+        "GET_EVIDENCE_QUERY",
+        "GET_SOURCES_QUERY",
+        "USER_NOTES_QUERY",
+    ]
+    checked = 0
+    for module in (tools_module, filter_module):
+        for name in constants:
+            query = getattr(module, name, None)
+            if query is None:
+                continue
+            checked += 1
+            assert "visible_from_order IS NOT NULL" in query, f"{module.__name__}.{name}"
+            assert (
+                "$visible_until_order" in query or "$effective_view_order" in query
+            ), f"{module.__name__}.{name}"
+    assert checked >= 12
+
+
+async def test_null_visible_from_order_claim_relationship_hidden_with_visible_endpoints(
+    database: Neo4jDatabase,
+    scratch_series: str,
+) -> None:
+    """VIS-03: a claim relationship whose own visibility is null is never
+    returned even when both endpoint nodes are visible (fail closed)."""
+    await _create_chain(database, node_ids=["n_a", "n_b"], claim_ids=["claim_ab"])
+    await database.execute_query(
+        "MATCH (c:Claim {id: 'claim_ab'}) SET c.visible_from_order = NULL",
+    )
+    claims = await get_claims(
+        database, entity_ids=["n_a"], series_id=SCRATCH_SERIES, visible_until_order=3
+    )
+    assert "claim_ab" not in _ids(claims)
+
+
+async def test_satisfied_claim_relationship_hidden_when_endpoint_hidden(
+    database: Neo4jDatabase,
+    scratch_series: str,
+) -> None:
+    """VIS-03: a satisfied relationship is still hidden when an endpoint node
+    is hidden (independent endpoint gating)."""
+    await _create_chain(database, node_ids=["n_c", "n_d"], claim_ids=["claim_cd"])
+    await database.execute_query(
+        "MATCH (n:Character {id: 'n_d'}) SET n.visible_from_order = 99",
+    )
+    claims = await get_claims(
+        database, entity_ids=["n_c"], series_id=SCRATCH_SERIES, visible_until_order=3
+    )
+    assert "claim_cd" not in _ids(claims)
+
+
+async def test_hidden_claims_do_not_change_graph_summary_counts(
+    database: Neo4jDatabase,
+    scratch_series: str,
+) -> None:
+    """D-16: hidden relationships do not influence count projections."""
+    await _create_chain(
+        database,
+        node_ids=["n_e", "n_f", "n_g"],
+        claim_ids=["claim_ef_visible", "claim_ef_hidden"],
+    )
+    await database.execute_query(
+        "MATCH (c:Claim {id: 'claim_ef_hidden'}) SET c.visible_from_order = 99",
+    )
+    low = await get_current_visible_graph_summary(
+        database, focus_entity_ids=["n_e"], series_id=SCRATCH_SERIES, visible_until_order=3
+    )
+    high = await get_current_visible_graph_summary(
+        database, focus_entity_ids=["n_e"], series_id=SCRATCH_SERIES, visible_until_order=99
+    )
+    assert low["counts"]["claims"] == 1
+    assert high["counts"]["claims"] == 2
