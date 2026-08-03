@@ -42,9 +42,30 @@ function initialsFor(label: string): string {
 // Falls back to an initials avatar both when image_url is null AND when the
 // external image fails to load (broken link, 404, blocked) — never renders
 // an empty broken-image box.
-function CharacterPortrait({ node }: { node: GraphNode }) {
+//
+// D-14/MEDIA-02: the two fallback paths (missing vs failed) render the
+// IDENTICAL placeholder (same testid, same classes, no error text, no retry
+// affordance) so a failed image request can never imply a hidden future
+// character exists. The alt text is always the safe visible label, never a
+// filename or URL.
+function CharacterPortrait({
+  node,
+  visibleUntilOrder,
+}: {
+  node: GraphNode
+  visibleUntilOrder: number | null
+}) {
   const [failed, setFailed] = useState(false)
-  const showImage = Boolean(node.image_url) && !failed
+  const showImage = Boolean(node?.image_url) && !failed
+
+  // D-14 defensive guard: the image source link renders only when the
+  // resource is visible at the current boundary. The backend already nulls
+  // image_source_url above the boundary; this makes a future regression
+  // unable to surface a URL as text. A null/unknown boundary fails closed —
+  // no link.
+  const isVisibleAtBoundary =
+    visibleUntilOrder != null && node.visible_from_order <= visibleUntilOrder
+  const showSourceLink = Boolean(node.image_source_url) && isVisibleAtBoundary
 
   const avatar = showImage ? (
     <img
@@ -56,19 +77,24 @@ function CharacterPortrait({ node }: { node: GraphNode }) {
       loading="lazy"
     />
   ) : (
-    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+    <div
+      data-testid="character-avatar"
+      className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground"
+    >
       {initialsFor(node.label)}
     </div>
   )
 
-  if (!node.image_source_url) return avatar
+  if (!showSourceLink) return avatar
 
+  // Generic accessible link label — never the URL (D-14: URLs and filenames
+  // never appear as user-visible text).
   return (
     <a
       href={node.image_source_url}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label={`Open ${node.label} on Fandom`}
+      aria-label="Image source"
     >
       {avatar}
     </a>
@@ -563,7 +589,11 @@ export function DetailPanel({
         <SheetHeader>
           <div className="flex min-w-0 items-center gap-3">
             {selectedNode?.type === 'Character' && (
-              <CharacterPortrait key={selectedNode.id} node={selectedNode} />
+              <CharacterPortrait
+                key={selectedNode.id}
+                node={selectedNode}
+                visibleUntilOrder={visibleUntilOrder}
+              />
             )}
             <SheetTitle className="truncate">{selected ? title : 'Details'}</SheetTitle>
           </div>

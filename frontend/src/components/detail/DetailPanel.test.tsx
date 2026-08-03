@@ -120,10 +120,13 @@ describe('DetailPanel', () => {
     expect(portrait).toBeInTheDocument()
     expect(portrait.tagName).toBe('IMG')
 
-    const link = screen.getByRole('link', { name: 'Open Dexter Morgan on Fandom' })
+    // The source link's accessible label is the generic "Image source" —
+    // never the URL, never a filename (D-14).
+    const link = screen.getByRole('link', { name: 'Image source' })
     expect(link).toHaveAttribute('href', 'https://dexter.fandom.com/wiki/Dexter_Morgan')
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(screen.queryByText(/dexter\.fandom\.com|wikia\.nocookie/)).not.toBeInTheDocument()
   })
 
   it('shows an initials fallback avatar for a Character with no image_url, with no <img>', async () => {
@@ -146,6 +149,73 @@ describe('DetailPanel', () => {
 
     expect(await screen.findByText('DM')).toBeInTheDocument()
     expect(screen.queryByAltText('Dexter Morgan')).not.toBeInTheDocument()
+  })
+
+  it('renders the identical initials placeholder for null and failed images (D-14)', async () => {
+    // Missing image: image_url null -> initials placeholder.
+    const nullSelected: SelectedElement = { kind: 'node', id: 'char_debra_morgan', label: 'Debra Morgan', nodeType: 'Character' }
+    const { unmount } = render(<DetailPanel selected={nullSelected} {...defaultProps} />)
+    const nullPlaceholder = await screen.findByTestId('character-avatar')
+    expect(nullPlaceholder).toBeInTheDocument()
+    const nullDom = nullPlaceholder.outerHTML
+    unmount()
+
+    // Failed image: same node portrait errors out -> must render the SAME
+    // placeholder DOM (identical testid + classes), no distinct error UI,
+    // no retry affordance, no presence inference.
+    const failSelected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
+    render(<DetailPanel selected={failSelected} {...defaultProps} />)
+    const portrait = await screen.findByAltText('Dexter Morgan')
+    portrait.dispatchEvent(new Event('error'))
+
+    const failedPlaceholder = await screen.findByTestId('character-avatar')
+    expect(failedPlaceholder.outerHTML).toBe(nullDom)
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
+    expect(screen.queryByText(/failed|error|retry|try again/i)).not.toBeInTheDocument()
+  })
+
+  it('uses the safe visible label as alt text, never a filename or URL (D-14)', async () => {
+    const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
+    render(<DetailPanel selected={selected} {...defaultProps} />)
+
+    const portrait = await screen.findByAltText('Dexter Morgan')
+    const alt = portrait.getAttribute('alt')
+    expect(alt).toBe('Dexter Morgan')
+    expect(alt).not.toMatch(/https?:\/\//)
+    expect(alt).not.toMatch(/\.(png|jpe?g|webp|gif|svg)/i)
+    // No filename or URL rendered as user-visible text anywhere.
+    expect(screen.queryByText(/wikia\.nocookie\.net|dexter\.fandom\.com|\.png|\.jpe?g/i)).not.toBeInTheDocument()
+  })
+
+  it('never renders the image source link for a node hidden at the current boundary (D-14 defensive guard)', async () => {
+    // The backend nulls image_source_url above the boundary; this proves the
+    // frontend ALSO guards against a non-null value defensively — a regression
+    // must never surface a URL as text or as a link.
+    const graphWithHiddenImage = {
+      ...graphResponseS01E01,
+      nodes: graphResponseS01E01.nodes.map((n) =>
+        n.id === 'char_dexter_morgan'
+          ? { ...n, visible_from_order: 2, image_url: null, image_source_url: 'https://dexter.fandom.com/wiki/Dexter_Morgan' }
+          : n,
+      ),
+    }
+    const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
+    // defaultProps visibleUntilOrder is 1; the node is visible_from_order 2.
+    render(<DetailPanel selected={selected} {...defaultProps} graph={graphWithHiddenImage} />)
+
+    expect(await screen.findByTestId('character-avatar')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Image source' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/dexter\.fandom\.com/)).not.toBeInTheDocument()
+  })
+
+  it('renders the image source link only when the boundary is known (D-14 fail closed)', async () => {
+    const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
+    // An unknown/null boundary must fail closed — no source link, even though
+    // the backend would have returned a valid URL for this visible node.
+    render(<DetailPanel selected={selected} {...defaultProps} visibleUntilOrder={null} />)
+
+    expect(await screen.findByAltText('Dexter Morgan')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Image source' })).not.toBeInTheDocument()
   })
 
   it('shows no portrait or avatar for non-Character selections', async () => {
