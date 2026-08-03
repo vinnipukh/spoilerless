@@ -1008,3 +1008,180 @@ async def test_hidden_claims_do_not_change_graph_summary_counts(
     )
     assert low["counts"]["claims"] == 1
     assert high["counts"]["claims"] == 2
+
+
+# ===================================================================
+# 07-05 D-15 / SEARCH-01: search/autocomplete leak regression tests
+# ===================================================================
+
+async def _create_alias_node(
+    database: Neo4jDatabase,
+    *,
+    node_id: str,
+    label: str,
+    aliases: list[str],
+    visible_from_order: int,
+    series_id: str = SCRATCH_SERIES,
+) -> None:
+    """Create a Character node carrying alias names (list property).
+
+    Aliases are the D-15 autocomplete surface: a searchable name that is
+    NOT the node's display label. The hardened search query matches them,
+    but only for nodes that are themselves visible at the boundary.
+    """
+    await database.execute_query(
+        """
+        CREATE (node:Character {id: $id, series_id: $series_id,
+                label: $label, aliases: $aliases,
+                visible_from_order: $visible_from_order,
+                origin: 'canonical'})
+        """,
+        id=node_id,
+        series_id=series_id,
+        label=label,
+        aliases=aliases,
+        visible_from_order=visible_from_order,
+    )
+
+
+@pytest.mark.asyncio
+async def test_search_entities_mixed_query_returns_only_visible_matches(
+    database: Neo4jDatabase,
+) -> None:
+    """A query matching both visible and hidden entities returns only the
+    visible ones — hidden names never surface alongside visible results
+    (D-15)."""
+    mixed = await search_entities(
+        database,
+        query="morgan",
+        allowed_entity_types=["Character"],
+        limit=10,
+        series_id=SERIES_ID,
+        visible_until_order=1,
+    )
+    # Dexter Morgan (1) and Debra Morgan (1) are visible; Harry Morgan (3)
+    # is hidden at boundary 1 and must not appear in the mixed result set.
+    assert _ids(mixed) == {DEBRA, DEXTER}
+    assert HARRY not in _ids(mixed)
+
+    revealed = await search_entities(
+        database,
+        query="morgan",
+        allowed_entity_types=["Character"],
+        limit=10,
+        series_id=SERIES_ID,
+        visible_until_order=3,
+    )
+    assert _ids(revealed) == {DEBRA, DEXTER, HARRY}
+
+
+@pytest.mark.asyncio
+async def test_search_entities_fuzzy_partial_match_cannot_reveal_hidden_entity(
+    database: Neo4jDatabase,
+) -> None:
+    """A partial (fuzzy/substring) query that would match a hidden entity's
+    name returns nothing for that entity — fuzzy matching never reveals a
+    future entity (D-15)."""
+    partial = await search_entities(
+        database,
+        query="morga",
+        allowed_entity_types=["Character"],
+        limit=10,
+        series_id=SERIES_ID,
+        visible_until_order=1,
+    )
+    # "morga" prefix-matches Dexter/Debra Morgan (visible) and Harry Morgan
+    # (hidden at boundary 1) — only the visible ones may appear.
+    assert _ids(partial) == {DEBRA, DEXTER}
+    assert HARRY not in _ids(partial)
+
+    # A fragment that exists ONLY inside the hidden entity's name matches
+    # nothing at boundary 1 — byte-identical to a nonexistent name.
+    only_hidden = await search_entities(
+        database,
+        query="arry",
+        allowed_entity_types=["Character"],
+        limit=10,
+        series_id=SERIES_ID,
+        visible_until_order=1,
+    )
+    missing = await search_entities(
+        database,
+        query="zzzz-no-such-name",
+        allowed_entity_types=["Character"],
+        limit=10,
+        series_id=SERIES_ID,
+        visible_until_order=1,
+    )
+    assert only_hidden == []
+    assert only_hidden == missing  # hidden == nonexistent (D-15)
+
+
+@pytest.mark.asyncio
+async def test_search_entities_alias_matching_never_surfaces_hidden_entity(
+    database: Neo4jDatabase, scratch_series: str
+) -> None:
+    """Aliases are searchable names, but a hidden entity's aliases behave
+    exactly like nonexistent ones — matching an alias of a hidden node must
+    never surface the node (D-15)."""
+    await _create_alias_node(
+        database,
+        node_id="scratch:alias:hidden",
+        label="Scratch Hidden",
+        aliases=["Ice Truck Killer", "The Ice Truck Killer"],
+        visible_from_order=99,
+    )
+    at_one = await search_entities(
+        database,
+        query="ice truck",
+        allowed_entity_types=["Character"],
+        limit=10,
+        series_id=SCRATCH_SERIES,
+        visible_until_order=1,
+    )
+    missing = await search_entities(
+        database,
+        query="zzzz-no-such-name",
+        allowed_entity_types=["Character"],
+        limit=10,
+        series_id=SCRATCH_SERIES,
+        visible_until_order=1,
+    )
+    assert at_one == []
+    assert at_one == missing  # hidden alias == nonexistent name
+
+    # At the reveal order the same alias query surfaces the node — the alias
+    # channel is real, only gated by node visibility.
+    revealed = await search_entities(
+        database,
+        query="ice truck",
+        allowed_entity_types=["Character"],
+        limit=10,
+        series_id=SCRATCH_SERIES,
+        visible_until_order=99,
+    )
+    assert _ids(revealed) == {"scratch:alias:hidden"}
+
+
+@pytest.mark.asyncio
+async def test_search_entities_alias_matching_surfaces_visible_entity(
+    database: Neo4jDatabase, scratch_series: str
+) -> None:
+    """A visible entity is findable through its alias — the alias channel is
+    not dead, and it never bypasses node-level visibility (D-15)."""
+    await _create_alias_node(
+        database,
+        node_id="scratch:alias:visible",
+        label="Scratch Visible",
+        aliases=["Bay Harbor Butcher"],
+        visible_from_order=1,
+    )
+    found = await search_entities(
+        database,
+        query="bay harbor",
+        allowed_entity_types=["Character"],
+        limit=10,
+        series_id=SCRATCH_SERIES,
+        visible_until_order=1,
+    )
+    assert _ids(found) == {"scratch:alias:visible"}

@@ -91,6 +91,7 @@ class _StubDatabase:
         evidence_rows: list[dict[str, Any]] | None = None,
         source_rows: list[dict[str, Any]] | None = None,
         series_rows: list[dict[str, Any]] | None = None,
+        search_rows: list[dict[str, Any]] | None = None,
     ) -> None:
         self._rows = {
             # Routed by distinctive Cypher fragments of the actual query
@@ -104,6 +105,7 @@ class _StubDatabase:
             "REFERS_TO": source_rows or [],
             "episode.id IN $episode_ids": [],
             "series:Series": series_rows or [],
+            "toLower(coalesce(node.label": search_rows or [],
         }
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
@@ -505,3 +507,65 @@ def test_assemble_context_drops_above_boundary_or_missing_visibility_items() -> 
     assert "Hidden" not in context
     assert "leak" not in context
     assert "safe" in context
+
+
+# ---------------------------------------------------------------------------
+# 07-05 D-15: search results assembled into context contain no hidden entity
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_pipeline_search_context_contains_no_hidden_entity() -> None:
+    """07-05 D-15: context assembled from search results contains no hidden
+    entity line.
+
+    ``search_entities`` returns only boundary-visible rows; the assembled
+    context additionally drops any row whose ``visible_from_order`` is
+    missing or above the boundary (defense in depth), so a hidden entity can
+    never reach the provider call through the search channel.
+    """
+    database = _StubDatabase(
+        search_rows=[
+            {
+                "id": "dexter:character:dexter_morgan",
+                "type": "Character",
+                "label": "Dexter Morgan",
+                "visible_from_order": 1,
+                "origin": "canonical",
+            },
+            {
+                "id": "dexter:character:harry_morgan",
+                "type": "Character",
+                "label": "Harry Morgan",
+                "visible_from_order": 3,
+                "origin": "canonical",
+            },
+        ]
+    )
+    provider = _CallScriptedProvider(
+        [
+            [LLMEvent.tool_call("search_entities", {"query": "morgan"})],
+            [LLMEvent.done("search answered")],
+        ]
+    )
+    pipeline = RetrievalPipeline(
+        database=database, progress_service=_StubProgressService(boundary=1)
+    )
+    events = [
+        event
+        async for event in pipeline.answer(
+            user_id="user:test",
+            series_id="series_dexter",
+            chat_session_id="chat-session:test",
+            question="Who is in the visible graph?",
+            history=[],
+            provider=provider,
+        )
+    ]
+    context = _final_context(provider)
+    # The visible search hit is assembled into the entities section…
+    assert "Dexter Morgan" in context
+    # …and the hidden search hit (visible_from_order 3 > boundary 1) is not.
+    assert "Harry Morgan" not in context
+    done_events = [event for event in events if event.kind == "done"]
+    assert done_events[0].content == "search answered"
