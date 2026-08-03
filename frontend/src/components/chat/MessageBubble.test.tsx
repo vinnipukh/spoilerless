@@ -45,6 +45,9 @@ describe('MessageBubble', () => {
     expect(bubble).toHaveClass('whitespace-pre-wrap')
     expect(bubble).toHaveClass('break-words')
     expect(bubble.className).toContain('max-w-[85%]')
+    // 07-02 chat-box fix: a proportional minimum keeps short bubbles (e.g.
+    // "hi") scaling with the chat panel width instead of hugging content.
+    expect(bubble.className).toContain('min-w-[35%]')
   })
 
   it('shows the full timestamp via a native title tooltip', () => {

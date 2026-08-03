@@ -43,7 +43,7 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
           </div>
         )}
         <div
-          className={`max-w-[85%] rounded-lg px-4 py-2 text-sm whitespace-pre-wrap break-words ${
+          className={`min-w-[35%] max-w-[85%] rounded-lg px-4 py-2 text-sm whitespace-pre-wrap break-words ${
             isUser ? 'bg-elevated' : 'bg-card'
           } text-foreground`}
         >
@@ -67,7 +67,7 @@ export function StreamingMessageBubble({ text }: { text: string }) {
         >
           <Sparkles className="h-4 w-4" />
         </div>
-        <div className="max-w-[85%] rounded-lg bg-card px-4 py-2 text-sm whitespace-pre-wrap break-words text-foreground">
+        <div className="min-w-[35%] max-w-[85%] rounded-lg bg-card px-4 py-2 text-sm whitespace-pre-wrap break-words text-foreground">
           {text}
           <span
             className={`ml-0.5 inline-block h-3 w-1.5 align-middle bg-muted-foreground/70 ${
@@ -121,7 +121,7 @@ export function FailedMessageBubble({
   onRetry: () => void
 }) {
   return (
-    <div className="max-w-[85%] rounded-lg border-l-4 border-destructive bg-card px-4 py-2 text-sm text-foreground">
+    <div className="min-w-[35%] max-w-[85%] rounded-lg border-l-4 border-destructive bg-card px-4 py-2 text-sm text-foreground">
       <p>
         {retryable
           ? "Couldn't get a response. Retry?"
