@@ -18,7 +18,12 @@ from backend.app.domain.progress import (
     ProgressUpdateRequest,
     UserSeriesProgressResponse,
 )
-from backend.app.services.progress import ProgressService
+from backend.app.services.progress import (
+    ProgressNotFoundError,
+    ProgressSeriesNotFoundError,
+    ProgressService,
+)
+from backend.app.spoiler.policy import InvalidVisibilityOrder
 
 router = APIRouter(prefix="/api/series/{series_id}", tags=["progress"])
 
@@ -61,6 +66,7 @@ async def get_progress(
     summary="Create or update the authenticated user's watch progress",
     responses={
         401: error_responses(401)[401],
+        404: error_responses(404)[404],
         422: error_responses(422)[422],
     },
 )
@@ -70,7 +76,24 @@ async def update_progress(
     user: CurrentUserDependency,
     service: ProgressServiceDependency,
 ) -> UserSeriesProgressResponse:
-    """Upsert the progress record (idempotent for equal values) and return it."""
-    return await service.upsert(
-        user["id"], series_id, payload.visible_until_order
-    )
+    """Upsert the progress record (idempotent for equal values) and return it.
+
+    The server validates every order against the series' persisted episode
+    orders (D-06/D-09) and rejects cross-series targets; a view-only change
+    (``view_as_of_order`` without a boundary field) never lowers watched
+    progress (PROG-01).
+    """
+    try:
+        return await service.upsert(
+            user["id"],
+            series_id,
+            watched_through_order=payload.watched_through_order,
+            view_as_of_order=payload.view_as_of_order,
+            visible_until_order=payload.visible_until_order,
+        )
+    except ProgressSeriesNotFoundError:
+        raise http_error(404, "resource_not_found", "Resource not found.")
+    except ProgressNotFoundError:
+        raise http_error(404, "resource_not_found", "Resource not found.")
+    except InvalidVisibilityOrder as exc:
+        raise http_error(422, "invalid_visible_until_order", str(exc))

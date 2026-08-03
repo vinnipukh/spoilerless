@@ -183,7 +183,9 @@ class ChatService:
         try:
             return await self._progress.resolve(user_id, series_id)
         except ProgressNotFoundError:
-            await self._progress.upsert(user_id, series_id, 1)
+            await self._progress.upsert(
+                user_id, series_id, watched_through_order=1, view_as_of_order=1
+            )
             return 1
 
     async def get_session_detail(

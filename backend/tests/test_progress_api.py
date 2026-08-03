@@ -386,8 +386,12 @@ def test_concurrent_upserts_for_same_user_series_resolve_without_torn_state(
 
     async def _run() -> Any:
         await asyncio.gather(
-            repo.upsert(user_id, series_id, 1),
-            repo.upsert(user_id, series_id, 3),
+            repo.upsert(
+                user_id, series_id, watched_through_order=1, view_as_of_order=1
+            ),
+            repo.upsert(
+                user_id, series_id, watched_through_order=3, view_as_of_order=3
+            ),
         )
         return await repo.get(user_id, series_id)
 
@@ -395,6 +399,8 @@ def test_concurrent_upserts_for_same_user_series_resolve_without_torn_state(
         final = asyncio.run(_run())
         assert final is not None
         assert final.visible_until_order in (1, 3)
+        assert final.watched_through_order in (1, 3)
+        assert final.effective_view_order == final.watched_through_order
         assert final.user_id == user_id
         assert final.series_id == series_id
     finally:
@@ -414,3 +420,207 @@ def test_concurrent_upserts_for_same_user_series_resolve_without_torn_state(
                 await clean.close()
 
         asyncio.run(_cleanup())
+
+
+# ---------------------------------------------------------------------------
+# D-05 split fields + D-21 API contract (07-02)
+# ---------------------------------------------------------------------------
+
+
+def test_post_watched_through_order_writes_split_fields_and_effective(
+    client: TestClient, authed_user: dict[str, Any]
+) -> None:
+    """Confirming N persists watched_through_order AND view_as_of_order=N and
+    the response exposes effective_view_order == N (D-05, D-21)."""
+    response = client.post(
+        "/api/series/series_dexter/progress", json={"watched_through_order": 2}
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["watched_through_order"] == 2
+    assert body["view_as_of_order"] == 2
+    assert body["effective_view_order"] == 2
+    # visible_until_order stays echoed for backward compatibility (D-21).
+    assert body["visible_until_order"] == 2
+
+    got = client.get("/api/series/series_dexter/progress").json()
+    assert got["watched_through_order"] == 2
+    assert got["view_as_of_order"] == 2
+    assert got["effective_view_order"] == 2
+
+
+def test_legacy_visible_until_order_is_an_alias_for_watched_through_order(
+    client: TestClient, authed_user: dict[str, Any]
+) -> None:
+    """POST with the legacy visible_until_order=2 behaves identically to
+    watched_through_order=2 (PROG-04 backward compatibility)."""
+    legacy = client.post(
+        "/api/series/series_dexter/progress", json={"visible_until_order": 2}
+    )
+    modern = client.post(
+        "/api/series/series_dexter/progress", json={"watched_through_order": 2}
+    )
+    assert legacy.status_code == modern.status_code == 200
+    for body in (legacy.json(), modern.json()):
+        assert body["watched_through_order"] == 2
+        assert body["view_as_of_order"] == 2
+        assert body["effective_view_order"] == 2
+        assert body["visible_until_order"] == 2
+
+
+def test_earlier_selection_changes_only_view_as_of_order_never_watched(
+    client: TestClient, authed_user: dict[str, Any]
+) -> None:
+    """PROG-01: selecting an earlier already-watched episode changes only
+    view_as_of_order and never lowers watched_through_order."""
+    assert (
+        client.post(
+            "/api/series/series_dexter/progress", json={"watched_through_order": 2}
+        ).status_code
+        == 200
+    )
+    confirmed = client.post(
+        "/api/series/series_dexter/progress",
+        json={"watched_through_order": 3, "view_as_of_order": 3},
+    )
+    assert confirmed.status_code == 200
+    assert confirmed.json()["effective_view_order"] == 3
+
+    # View-only move back to 1: watched stays 3, effective becomes 1.
+    moved = client.post(
+        "/api/series/series_dexter/progress", json={"view_as_of_order": 1}
+    )
+    assert moved.status_code == 200, moved.text
+    body = moved.json()
+    assert body["watched_through_order"] == 3
+    assert body["view_as_of_order"] == 1
+    assert body["effective_view_order"] == 1
+
+    # The persisted record agrees on a fresh read.
+    got = client.get("/api/series/series_dexter/progress").json()
+    assert got["watched_through_order"] == 3
+    assert got["view_as_of_order"] == 1
+    assert got["effective_view_order"] == 1
+
+
+def test_non_persisted_watched_through_order_is_rejected(
+    client: TestClient, authed_user: dict[str, Any]
+) -> None:
+    """D-06: the frontend cannot submit arbitrary hidden orders — the order
+    must be a persisted episode order of the series."""
+    for bad_order in (4, 99):
+        response = client.post(
+            "/api/series/series_dexter/progress",
+            json={"watched_through_order": bad_order},
+        )
+        assert response.status_code == 422, response.text
+        assert response.json()["detail"]["code"] == "invalid_visible_until_order"
+
+
+def test_view_as_of_order_above_watched_through_order_is_rejected(
+    client: TestClient, authed_user: dict[str, Any]
+) -> None:
+    """D-05 invariant 1 <= view_as_of_order <= watched_through_order."""
+    response = client.post(
+        "/api/series/series_dexter/progress",
+        json={"watched_through_order": 2, "view_as_of_order": 3},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "invalid_visible_until_order"
+
+
+def test_cross_series_progress_update_is_rejected(
+    client: TestClient, authed_user: dict[str, Any]
+) -> None:
+    """Updating progress against a series that does not exist is rejected with
+    the generic not-found envelope (indistinguishable from any missing
+    resource)."""
+    response = client.post(
+        "/api/series/series_does_not_exist_at_all/progress",
+        json={"watched_through_order": 1},
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "resource_not_found"
+
+
+def test_view_only_change_without_existing_record_is_generic_404(
+    client: TestClient, authed_user: dict[str, Any]
+) -> None:
+    """A view-only change for a user with no persisted record has nothing to
+    move — generic not-found, never an invented boundary."""
+    response = client.post(
+        "/api/series/series_dexter/progress", json={"view_as_of_order": 1}
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "resource_not_found"
+
+
+def test_progress_update_rejects_both_boundary_fields_together(
+    client: TestClient, authed_user: dict[str, Any]
+) -> None:
+    response = client.post(
+        "/api/series/series_dexter/progress",
+        json={"watched_through_order": 2, "visible_until_order": 2},
+    )
+    assert response.status_code == 422
+
+
+LEGACY_PROGRESS_SEED_QUERY = """\
+MERGE (u:AppUser {id: $uid})
+MERGE (s:Series {id: $sid})
+MERGE (u)-[:HAS_PROGRESS]->(p:UserSeriesProgress {user_id: $uid, series_id: $sid})
+ON CREATE SET p.id = $pid, p.created_at = datetime()
+SET p.visible_until_order = $legacy, p.updated_at = datetime()
+MERGE (p)-[:FOR_SERIES]->(s)
+"""
+
+
+def test_migration_backfills_split_fields_and_is_idempotent() -> None:
+    """D-07: the migration seeds watched_through_order and view_as_of_order
+    from the existing visible_until_order on records missing the new
+    properties; running it twice changes nothing (idempotent, no deletes).
+
+    A dedicated driver + ONE event loop for the whole test: the driver's
+    pooled connections must never cross event loops (runbook rule), so every
+    DB touch — seed, migrate, read, cleanup — happens inside one ``_run``.
+    """
+    user_id = f"user:migration-{uuid4()}"
+    series_id = "series_dexter"
+
+    async def _run() -> None:
+        db = Neo4jDatabase()
+        db.open()
+        try:
+            repo = ProgressRepository(db)
+            await db.execute_query(
+                LEGACY_PROGRESS_SEED_QUERY,
+                uid=user_id,
+                sid=series_id,
+                pid=f"progress:legacy-{uuid4()}",
+                legacy=2,
+            )
+
+            await repo.ensure_migrated()
+            first = await repo.get(user_id, series_id)
+            assert first is not None
+            assert first.watched_through_order == 2
+            assert first.view_as_of_order == 2
+            assert first.effective_view_order == 2
+            assert first.visible_until_order == 2
+
+            # Second run: identical state, no duplicate rows, no drift.
+            await repo.ensure_migrated()
+            second = await repo.get(user_id, series_id)
+            assert second is not None
+            assert second.model_dump() == first.model_dump()
+        finally:
+            await db.execute_query(
+                "MATCH (p:UserSeriesProgress {user_id: $uid}) DETACH DELETE p",
+                uid=user_id,
+            )
+            await db.execute_query(
+                "MATCH (u:AppUser {id: $uid}) DETACH DELETE u", uid=user_id
+            )
+            await db.close()
+
+    asyncio.run(_run())
