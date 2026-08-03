@@ -9,6 +9,7 @@ hidden resources behave exactly like missing ones (fail closed).
 from __future__ import annotations
 
 import inspect
+import json
 from collections.abc import AsyncIterator
 
 import pytest
@@ -1185,3 +1186,62 @@ async def test_search_entities_alias_matching_surfaces_visible_entity(
         visible_until_order=1,
     )
     assert _ids(found) == {"scratch:alias:visible"}
+
+
+# ===================================================================
+# 07-05 D-16 / SEARCH-02: aggregate/count leak regression tests
+# ===================================================================
+
+@pytest.mark.asyncio
+async def test_graph_summary_counts_exclude_claims_with_hidden_endpoints(
+    database: Neo4jDatabase, scratch_series: str
+) -> None:
+    """D-16: a claim whose own visibility is satisfied is still not counted
+    when an endpoint node is hidden (relationship-level gating D-10) — counts
+    aggregate only resources fully visible at the boundary."""
+    await _create_chain(
+        database,
+        node_ids=["n_a", "n_b", "n_h", "n_x"],
+        claim_ids=["claim_ab", "claim_ah", "claim_bh"],
+    )
+    # n_h is hidden at any realistic boundary; claim_bh is hidden by its own
+    # visibility. claim_ah has satisfied visibility but a hidden endpoint.
+    await database.execute_query(
+        "MATCH (n:Character {id: 'n_h'}) SET n.visible_from_order = 99",
+    )
+    await database.execute_query(
+        "MATCH (c:Claim {id: 'claim_bh'}) SET c.visible_from_order = 99",
+    )
+    low = await get_current_visible_graph_summary(
+        database, focus_entity_ids=["n_a"], series_id=SCRATCH_SERIES, visible_until_order=1
+    )
+    high = await get_current_visible_graph_summary(
+        database, focus_entity_ids=["n_a"], series_id=SCRATCH_SERIES, visible_until_order=99
+    )
+    # At boundary 1 only claim_ab is fully visible: claim_ah's endpoint n_h is
+    # hidden and claim_bh's own visibility is unsatisfied.
+    assert low["counts"]["claims"] == 1
+    assert low["counts"]["entities"] == 3  # n_a, n_b, n_x — n_h hidden
+    # At boundary 99 every node and claim is visible.
+    assert high["counts"]["claims"] == 3
+    assert high["counts"]["entities"] == 4
+
+
+@pytest.mark.asyncio
+async def test_graph_summary_counts_never_expose_total_future_or_last_appearance(
+    database: Neo4jDatabase,
+) -> None:
+    """D-16: the summary response carries only the visible counts — no
+    total-future count, no last_appearance_order, no final status signal."""
+    summary = await get_current_visible_graph_summary(
+        database,
+        focus_entity_ids=[DEXTER],
+        series_id=SERIES_ID,
+        visible_until_order=1,
+    )
+    assert set(summary["counts"]) == {"entities", "claims", "evidence", "sources"}
+    serialized = json.dumps(summary, sort_keys=True)
+    assert "last_appearance" not in serialized
+    assert "total" not in serialized.lower()
+    assert "dead" not in serialized.lower()
+    assert "alive" not in serialized.lower()

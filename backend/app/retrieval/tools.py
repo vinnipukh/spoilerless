@@ -250,6 +250,16 @@ WHERE claim.visible_from_order IS NOT NULL
   AND claim.claim_type <> 'user_authored'
   AND (claim.valid_from_order IS NULL OR claim.valid_from_order <= $visible_until_order)
   AND (claim.valid_until_order IS NULL OR claim.valid_until_order >= $visible_until_order)
+  AND EXISTS {
+    MATCH (subject {id: claim.subject_id, series_id: $series_id})
+    WHERE subject.visible_from_order IS NOT NULL
+      AND subject.visible_from_order <= $visible_until_order
+  }
+  AND EXISTS {
+    MATCH (object {id: claim.object_id, series_id: $series_id})
+    WHERE object.visible_from_order IS NOT NULL
+      AND object.visible_from_order <= $visible_until_order
+  }
 WITH entities, count(claim) AS claims
 OPTIONAL MATCH (evidence:EvidenceFragment {series_id: $series_id})
 WHERE evidence.visible_from_order IS NOT NULL
