@@ -5,6 +5,12 @@
 // any node or edge by visible_from_order — the backend has already applied
 // the spoiler-safe filter (Phase 1, verified). Re-filtering here would be a
 // second, redundant (and drift-prone) visibility authority.
+//
+// D-16 layout rule (07-05): node sizing/degree/label styling must derive ONLY
+// from GraphResponse fields the backend already boundary-filtered. Never
+// re-derive a hidden degree/count client-side (e.g. from a totals field) —
+// hidden counts are absent from the API by contract, so any frontend
+// computation must consume only the filtered node/edge lists above.
 
 import type { ElementDefinition } from 'cytoscape'
 import type { GraphResponse } from '../../types/graph'

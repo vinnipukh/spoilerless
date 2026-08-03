@@ -568,3 +568,29 @@ def test_graph_request_above_persisted_view_is_fail_closed(live_client: TestClie
         assert "dexter:character:paul_bennett" in anon_ids
     finally:
         asyncio.run(_clean_above_view_fixture(raw))
+
+
+def test_boundary_one_responses_carry_no_future_signals(live_client: TestClient) -> None:
+    """07-05 SEARCH-02/D-16 sweep: serialized boundary-1 responses contain no
+    hidden-count, future-title, last-appearance, or life-status signal at the
+    key level — absence is contractual, not just unrendered."""
+    graph = live_client.get("/api/series/series_dexter/graph?visible_until_order=1")
+    assert graph.status_code == 200
+    graph_payload = graph.json()
+    graph_text = json.dumps(graph_payload).lower()
+    for forbidden in ("last_appearance", "total", "dead", "alive", "spoiler", "hidden_count"):
+        assert forbidden not in graph_text, forbidden
+
+    episodes = live_client.get("/api/series/series_dexter/episodes?visible_until_order=1")
+    assert episodes.status_code == 200
+    for episode in episodes.json():
+        if episode["episode_order"] > 1:
+            # Masked display_title per D-08 generic label; never the raw title.
+            expected = (
+                f"S{episode['season_number']:02d}E{episode['episode_number']:02d}"
+                f" — Episode {episode['episode_number']}"
+            )
+            assert episode["display_title"] == expected, episode
+            assert episode["is_unlocked"] is False
+    episodes_text = json.dumps(episodes.json()).lower()
+    assert "last_appearance" not in episodes_text
