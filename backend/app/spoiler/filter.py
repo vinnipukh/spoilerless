@@ -24,7 +24,11 @@ RETURN episode.id AS id,
        episode.episode_order AS episode_order,
        episode.code AS code,
        episode.title AS title,
-       episode.visible_from_order AS visible_from_order
+       episode.visible_from_order AS visible_from_order,
+       episode.title_is_spoiler AS title_is_spoiler,
+       episode.title_visible_from_order AS title_visible_from_order,
+       episode.synopsis_visible_from_order AS synopsis_visible_from_order,
+       episode.image_visible_from_order AS image_visible_from_order
 ORDER BY episode.episode_order
 """
 

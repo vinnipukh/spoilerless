@@ -7,7 +7,11 @@
     "episode_order": 1,
     "code": "S01E01",
     "title": "Dexter",
-    "visible_from_order": 1
+    "visible_from_order": 1,
+    "title_is_spoiler": false,
+    "title_visible_from_order": 1,
+    "synopsis_visible_from_order": null,
+    "image_visible_from_order": null
   },
   {
     "id": "dexter_s01e02",
@@ -17,7 +21,11 @@
     "episode_order": 2,
     "code": "S01E02",
     "title": "Crocodile",
-    "visible_from_order": 2
+    "visible_from_order": 2,
+    "title_is_spoiler": true,
+    "title_visible_from_order": 2,
+    "synopsis_visible_from_order": null,
+    "image_visible_from_order": null
   },
   {
     "id": "dexter_s01e03",
@@ -27,6 +35,10 @@
     "episode_order": 3,
     "code": "S01E03",
     "title": "Popping Cherry",
-    "visible_from_order": 3
+    "visible_from_order": 3,
+    "title_is_spoiler": true,
+    "title_visible_from_order": 3,
+    "synopsis_visible_from_order": null,
+    "image_visible_from_order": null
   }
 ]
