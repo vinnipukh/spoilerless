@@ -23,7 +23,7 @@
 </details>
 
 <details>
-<summary>🔄 v1.2 Spoiler-Safety Hardening (Phase 7) — IN PLANNING</summary>
+<summary>🔄 v1.2 Spoiler-Safety Hardening (Phase 7) — PLANNED 2026-08-02</summary>
 
 - [ ] Phase 7: Spoiler-Safety Hardening (8/8 plans planned) — planned 2026-08-02
 
