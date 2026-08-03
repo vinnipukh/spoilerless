@@ -23,6 +23,7 @@ from backend.app.spoiler.filter import (
     VISIBLE_CLAIMS_QUERY,
     VISIBLE_USER_RELATIONSHIPS_QUERY,
 )
+from backend.app.spoiler.policy import filter_public_metadata
 
 
 class GraphService:
@@ -60,6 +61,9 @@ class GraphService:
             "series_id": series_id,
             "visible_until_order": visible_until_order,
         }
+        effective = (
+            effective_view_order if effective_view_order is not None else visible_until_order
+        )
         (
             series_rows,
             nodes_rows,
@@ -98,13 +102,23 @@ class GraphService:
             for claim in claims
         ]
 
+        # D-14 (MEDIA-01): run every node row through the public-metadata
+        # projection so image_url/image_source_url (and any other
+        # spoiler-sensitive field) are dropped for records above the EFFECTIVE
+        # boundary before serialization. NODES_QUERY already filters by the
+        # effective boundary, so this is defense-in-depth (D-03 fail-closed):
+        # a row that ever slips past the query can never serialize a future
+        # portrait URL. Masking is backend-side, never CSS (D-08/D-14).
+        nodes = [
+            GraphNode.model_validate(filter_public_metadata(row, effective))
+            for row in nodes_rows
+        ]
+
         return GraphResponse(
             series=SeriesResponse.model_validate(series_rows[0]),
             visible_until_order=visible_until_order,
-            effective_view_order=(
-                effective_view_order if effective_view_order is not None else visible_until_order
-            ),
-            nodes=[GraphNode.model_validate(row) for row in nodes_rows],
+            effective_view_order=effective,
+            nodes=nodes,
             edges=[GraphEdge.model_validate(row) for row in structural_rows]
             + projected_edges
             + [GraphEdge.model_validate(row) for row in user_edge_rows],

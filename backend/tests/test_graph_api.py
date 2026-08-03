@@ -18,6 +18,7 @@ from backend.app.core.errors import install_database_error_handlers
 from backend.app.domain.graph import GraphResponse
 from backend.app.graph.database import Neo4jDatabase, get_database
 from backend.app.graph.seed import setup_database
+from backend.app.spoiler.policy import filter_public_metadata
 
 
 class UnavailableDatabase:
@@ -594,3 +595,77 @@ def test_boundary_one_responses_carry_no_future_signals(live_client: TestClient)
             assert episode["is_unlocked"] is False
     episodes_text = json.dumps(episodes.json()).lower()
     assert "last_appearance" not in episodes_text
+
+
+# ===================================================================
+# D-14 / MEDIA-01 media safety — image fields above the effective
+# boundary are dropped before serialization (07-06 Task 1)
+# ===================================================================
+
+def test_filter_public_metadata_drops_image_fields_above_boundary() -> None:
+    """D-14/MEDIA-01: filter_public_metadata drops image_url/image_source_url
+    for a record above the effective boundary and preserves them at/below it.
+
+    fetch_graph passes every node row through this projection
+    (defense-in-depth on top of the boundary-filtered NODES_QUERY), so this
+    unit test is the deterministic proof that an above-boundary portrait can
+    never serialize — even if the DB row carries it.
+    """
+    record = {
+        "id": "dexter:character:paul_bennett",
+        "label": "Paul Bennett",
+        "visible_from_order": 2,
+        "origin": "canonical",
+        "image_url": (
+            "https://static.wikia.nocookie.net/dexter/images/8/80/"
+            "Paul_Bennett_7.PNG/revision/latest?cb=20190309143221"
+        ),
+        "image_source_url": "https://dexter.fandom.com/wiki/Paul_Bennett",
+    }
+
+    hidden = filter_public_metadata(record, effective_view_order=1)
+    assert "image_url" not in hidden
+    assert "image_source_url" not in hidden
+    # Only spoiler-sensitive media fields are dropped — the safe label stays.
+    assert hidden["label"] == "Paul Bennett"
+    assert hidden["id"] == record["id"]
+
+    revealed = filter_public_metadata(record, effective_view_order=2)
+    assert revealed["image_url"] == record["image_url"]
+    assert revealed["image_source_url"] == record["image_source_url"]
+
+
+def test_graph_hidden_character_image_urls_never_serialized(
+    live_client: TestClient,
+) -> None:
+    """D-14/MEDIA-01: a hidden character's image URL or filename never appears
+    anywhere in the serialized graph response — not as a field value, not as
+    text. Hidden nodes are absent by query; revealed nodes keep their portrait.
+    """
+    # Boundary 1: Paul (vfo 2), Rudy (vfo 3) and Harry (vfo 3) are all hidden —
+    # none of their image filenames/URLs may appear anywhere in the payload.
+    one = live_client.get("/api/series/series_dexter/graph?visible_until_order=1")
+    assert one.status_code == 200
+    one_text = json.dumps(one.json(), sort_keys=True)
+    for hidden_fragment in ("Paul_Bennett_7.PNG", "Brianmoser1.png", "HarryFace.jpg"):
+        assert hidden_fragment not in one_text, hidden_fragment
+
+    # Boundary 2: Paul is revealed (portrait present), Rudy and Harry still hidden.
+    two = live_client.get("/api/series/series_dexter/graph?visible_until_order=2")
+    assert two.status_code == 200
+    two_text = json.dumps(two.json(), sort_keys=True)
+    assert "Paul_Bennett_7.PNG" in two_text
+    for hidden_fragment in ("Brianmoser1.png", "HarryFace.jpg"):
+        assert hidden_fragment not in two_text, hidden_fragment
+
+    # Boundary 3: everything is revealed — Harry's portrait is returned again.
+    three = live_client.get("/api/series/series_dexter/graph?visible_until_order=3")
+    assert three.status_code == 200
+    three_payload = three.json()
+    harry = next(
+        node
+        for node in three_payload["nodes"]
+        if node["id"] == "dexter:character:harry_morgan"
+    )
+    assert harry["image_url"] is not None
+    assert harry["image_source_url"] is not None
