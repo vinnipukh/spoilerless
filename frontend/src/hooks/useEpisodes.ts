@@ -9,7 +9,7 @@ type State =
   | { status: 'error'; error: ApiError }
   | { status: 'success'; data: EpisodeResponse[] }
 
-export function useEpisodes(seriesId: string | null) {
+export function useEpisodes(seriesId: string | null, visibleUntilOrder?: number | null) {
   const [state, setState] = useState<State>(() => (seriesId ? { status: 'loading' } : { status: 'idle' }))
 
   // react-hooks/set-state-in-effect forbids an unconditional synchronous
@@ -28,7 +28,9 @@ export function useEpisodes(seriesId: string | null) {
   useEffect(() => {
     if (!seriesId) return
     let cancelled = false
-    getEpisodes(seriesId)
+    // The effective view order is sent so the backend masks spoiler-sensitive
+    // titles server-side (META-01 — masking is never client CSS).
+    getEpisodes(seriesId, visibleUntilOrder ?? undefined)
       .then((data) => {
         if (!cancelled) setState({ status: 'success', data })
       })
@@ -43,7 +45,9 @@ export function useEpisodes(seriesId: string | null) {
     return () => {
       cancelled = true
     }
-  }, [seriesId])
+    // Refetch when the view boundary changes so masked titles stay current
+    // (META-01) — seriesId change resets via the render-time key above.
+  }, [seriesId, visibleUntilOrder])
 
   return state
 }

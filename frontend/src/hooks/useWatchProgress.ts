@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react'
 import { getProgress, updateProgress } from '../api/progress'
 
 // D-01/D-02/D-03: sessionStorage-backed watch-progress state, now also
-// backend-authoritative (RAG-01, 06-10-PLAN.md).
+// backend-authoritative (RAG-01, 06-10-PLAN.md). Since the D-05 split
+// (07-02) the model separates the highest contiguous confirmed order
+// (`watchedThroughOrder`) from the temporary spoiler boundary
+// (`viewAsOfOrder`); `confirmedOrder` is kept as the alias of the CURRENT
+// VIEW (effective) so all existing consumers (graph boundary, badge,
+// selector value) stay semantically correct without renames.
 //
 // Hydration on mount reads directly into the initial state via a lazy
 // useState initializer — this never goes through requestChange/confirmChange,
@@ -14,9 +19,16 @@ import { getProgress, updateProgress } from '../api/progress'
 // placeholder / optimistic cache, never the source of truth once a backend
 // response has arrived. A mount-time effect fetches the authoritative
 // getProgress() record for whatever seriesId sessionStorage hydrated (if
-// any) and overrides confirmedOrder from it; confirmChange() awaits
+// any) and overrides the split fields from it; confirmChange() awaits
 // updateProgress() before committing local state, preferring the backend's
-// own echoed value when the write succeeds.
+// own echoed values when the write succeeds.
+//
+// PROG-01 / D-06 (07-03): selecting an already-watched episode is a
+// VIEW-ONLY change — it updates viewAsOfOrder locally (and persists it with
+// a view-only POST) WITHOUT opening the unlock confirmation and never lowers
+// watchedThroughOrder. Only selecting ABOVE watchedThroughOrder goes through
+// the pendingChange/confirmChange modal flow, whose copy states Episodes
+// 1 through N will be considered watched.
 
 const STORAGE_KEY = 'hdgraf.watchProgress'
 
@@ -35,7 +47,10 @@ export type PendingChange = {
 
 type State = {
   seriesId: string | null
-  confirmedOrder: number | null
+  // Highest contiguous confirmed-watched order (D-05).
+  watchedThroughOrder: number | null
+  // Temporary spoiler boundary — what the graph/chat currently show.
+  viewAsOfOrder: number | null
   pendingChange: PendingChange | null
 }
 
@@ -58,6 +73,9 @@ function readStored(): Stored | null {
   }
 }
 
+// The stored shape stays {seriesId, visibleUntilOrder} (visibleUntilOrder =
+// the effective view) — backward compatible with the pre-split format; the
+// D-07 migration initializes watched = view = the stored value.
 function writeStored(seriesId: string, visibleUntilOrder: number) {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ seriesId, visibleUntilOrder }))
 }
@@ -66,7 +84,8 @@ function initialState(): State {
   const stored = readStored()
   return {
     seriesId: stored?.seriesId ?? null,
-    confirmedOrder: stored?.visibleUntilOrder ?? null,
+    watchedThroughOrder: stored?.visibleUntilOrder ?? null,
+    viewAsOfOrder: stored?.visibleUntilOrder ?? null,
     pendingChange: null,
   }
 }
@@ -76,7 +95,7 @@ export function useWatchProgress() {
 
   // Mount-time hydration reconciliation: if sessionStorage remembered a
   // seriesId, fetch the backend's authoritative progress record for it and
-  // override confirmedOrder from that response — even if it disagrees with
+  // override the split fields from that response — even if it disagrees with
   // whatever sessionStorage held (that value was only ever a loading-state
   // placeholder). Intentionally mount-only (the seriesId captured here is
   // read once, from the initial render's closure) — confirmChange's own
@@ -89,11 +108,12 @@ export function useWatchProgress() {
     getProgress(seriesId)
       .then((progress) => {
         if (cancelled) return
-        writeStored(progress.series_id, progress.visible_until_order)
+        writeStored(progress.series_id, progress.effective_view_order)
         setState((prev) => ({
           ...prev,
           seriesId: progress.series_id,
-          confirmedOrder: progress.visible_until_order,
+          watchedThroughOrder: progress.watched_through_order,
+          viewAsOfOrder: progress.view_as_of_order,
         }))
       })
       .catch(() => {
@@ -109,9 +129,23 @@ export function useWatchProgress() {
   }, [])
 
   function requestChange(seriesId: string, nextOrder: number) {
-    const currentOrder = state.seriesId === seriesId ? state.confirmedOrder : null
-    const baseline = currentOrder ?? 0
-    if (nextOrder === baseline) return
+    const currentView = state.seriesId === seriesId ? state.viewAsOfOrder : null
+    if (nextOrder === currentView) return
+    const watched = state.seriesId === seriesId ? state.watchedThroughOrder : null
+
+    // Already-watched selection = view-only change (PROG-01, D-06): update
+    // the temporary boundary immediately, persist with a view-only POST, and
+    // never open the unlock confirmation. Never lowers watchedThroughOrder.
+    if (watched != null && nextOrder <= watched) {
+      setState((prev) => ({ ...prev, viewAsOfOrder: nextOrder }))
+      updateProgress(seriesId, nextOrder, { viewAsOfOrder: nextOrder }).catch(() => {
+        // View-only persistence failed (network error) — the local boundary
+        // stays; the next forward confirm re-syncs from the backend.
+      })
+      return
+    }
+
+    const baseline = currentView ?? 0
     const direction: WatchProgressDirection = nextOrder > baseline ? 'forward' : 'backward'
     setState((prev) => ({ ...prev, pendingChange: { seriesId, nextOrder, direction } }))
   }
@@ -121,25 +155,40 @@ export function useWatchProgress() {
     if (!pending) return
     const { seriesId, nextOrder } = pending
 
-    // Await the backend write before committing local state (RAG-01) —
-    // requestChange/confirmChange/cancelChange's own signatures/behavior
-    // stay exactly as ConfirmAdvanceModal already expects. A failed backend
-    // write (network error, transient 5xx) still commits the optimistic
-    // local/sessionStorage value rather than leaving the modal's "Confirm"
-    // action hung or reverted — ConfirmAdvanceModal's existing UX contract
-    // (confirm always closes the modal and applies the change) must not
-    // change because of this addition.
+    // Forward confirm marks Episodes 1..N watched AND views them (D-06):
+    // watched_through_order = view_as_of_order = N. Await the backend write
+    // before committing local state (RAG-01). A failed backend write still
+    // commits the optimistic local/sessionStorage value — ConfirmAdvanceModal's
+    // existing UX contract (confirm always closes the modal and applies the
+    // change) must not change.
     try {
-      const progress = await updateProgress(seriesId, nextOrder)
-      writeStored(progress.series_id, progress.visible_until_order)
+      const progress = await updateProgress(seriesId, nextOrder, {
+        watchedThroughOrder: nextOrder,
+        viewAsOfOrder: nextOrder,
+      })
+      writeStored(progress.series_id, progress.effective_view_order)
       setState((prev) =>
         prev.pendingChange
-          ? { seriesId: progress.series_id, confirmedOrder: progress.visible_until_order, pendingChange: null }
+          ? {
+              seriesId: progress.series_id,
+              watchedThroughOrder: progress.watched_through_order,
+              viewAsOfOrder: progress.view_as_of_order,
+              pendingChange: null,
+            }
           : prev,
       )
     } catch {
       writeStored(seriesId, nextOrder)
-      setState((prev) => (prev.pendingChange ? { seriesId, confirmedOrder: nextOrder, pendingChange: null } : prev))
+      setState((prev) =>
+        prev.pendingChange
+          ? {
+              seriesId,
+              watchedThroughOrder: nextOrder,
+              viewAsOfOrder: nextOrder,
+              pendingChange: null,
+            }
+          : prev,
+      )
     }
   }
 
@@ -149,7 +198,11 @@ export function useWatchProgress() {
 
   return {
     seriesId: state.seriesId,
-    confirmedOrder: state.confirmedOrder,
+    // Current view (effective boundary) — kept under the legacy name so App
+    // wiring (graph boundary, episode badge, selector value) stays correct.
+    confirmedOrder: state.viewAsOfOrder,
+    watchedThroughOrder: state.watchedThroughOrder,
+    viewAsOfOrder: state.viewAsOfOrder,
     pendingChange: state.pendingChange,
     requestChange,
     confirmChange,

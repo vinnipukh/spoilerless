@@ -51,7 +51,7 @@ function AuthenticatedApp() {
   const seriesState = useSeries()
   const watchProgress = useWatchProgress()
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(watchProgress.seriesId)
-  const episodesState = useEpisodes(selectedSeriesId)
+  const episodesState = useEpisodes(selectedSeriesId, watchProgress.viewAsOfOrder)
   const graphState = useGraph(watchProgress.seriesId, watchProgress.confirmedOrder)
   const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null)
 
@@ -241,7 +241,7 @@ function AuthenticatedApp() {
   const episodeSelectorValue = watchProgress.pendingChange
     ? watchProgress.pendingChange.nextOrder
     : selectedSeriesId === watchProgress.seriesId
-      ? watchProgress.confirmedOrder
+      ? watchProgress.viewAsOfOrder
       : null
 
   return (
@@ -254,6 +254,7 @@ function AuthenticatedApp() {
           <EpisodeSelector
             episodes={episodes}
             value={episodeSelectorValue}
+            watchedThroughOrder={watchProgress.watchedThroughOrder}
             onSelect={handleEpisodeSelect}
             disabled={!selectedSeriesId}
           />
@@ -277,6 +278,7 @@ function AuthenticatedApp() {
           open
           direction={watchProgress.pendingChange.direction}
           episodeCode={pendingEpisode?.code ?? `order ${watchProgress.pendingChange.nextOrder}`}
+          episodeOrder={watchProgress.pendingChange.nextOrder}
           onConfirm={handleConfirm}
           onCancel={handleCancel}
         />

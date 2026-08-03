@@ -4,12 +4,13 @@ import userEvent from '@testing-library/user-event'
 import { ConfirmAdvanceModal } from './ConfirmAdvanceModal'
 
 describe('ConfirmAdvanceModal', () => {
-  it('renders the locked forward-direction copy when direction is "forward"', () => {
+  it('renders the forward-direction copy with the Episodes 1 through N unlock wording', () => {
     render(
       <ConfirmAdvanceModal
         open
         direction="forward"
         episodeCode="S01E02"
+        episodeOrder={2}
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -18,7 +19,7 @@ describe('ConfirmAdvanceModal', () => {
     expect(screen.getByText('Unlock S01E02?')).toBeInTheDocument()
     expect(
       screen.getByText(
-        "You're about to see new characters, events, and relationships from S01E02. This can't be undone. Continue?",
+        "Unlocking S01E02 means Episodes 1 through 2 will be considered watched. This can't be undone. Continue?",
       ),
     ).toBeInTheDocument()
   })

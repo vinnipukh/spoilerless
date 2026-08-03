@@ -156,7 +156,7 @@ function fetchStub(input: RequestInfo | URL): Promise<Response> {
   }
   // App endpoints
   if (url === '/api/series') return Promise.resolve(jsonResponse(seriesFixture))
-  if (url === '/api/series/series_dexter/episodes') return Promise.resolve(jsonResponse(episodesFixture))
+  if (url.startsWith('/api/series/series_dexter/episodes')) return Promise.resolve(jsonResponse(episodesFixture))
   if (url.startsWith('/api/series/series_dexter/graph')) {
     // 06-10: routed by boundary order — most tests only ever confirm order 1
     // (graphResponseS01E01), but the progress-decrease-clears-stale-focus
@@ -463,8 +463,9 @@ describe('App', () => {
 
     async function decreaseProgressToS01E01(user: ReturnType<typeof userEvent.setup>) {
       await user.click(await screen.findByRole('combobox', { name: 'Watch progress' }))
+      // 07-03 view-only model (PROG-01): selecting an already-watched episode
+      // moves only the view boundary — no unlock confirmation modal appears.
       await user.click(await screen.findByRole('option', { name: /S01E01/ }))
-      await user.click(await screen.findByRole('button', { name: 'Yes, unlock episode' }))
     }
 
     it('clears an active graph focus that references a node hidden by the new (lower) boundary', async () => {

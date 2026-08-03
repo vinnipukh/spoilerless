@@ -15,4 +15,10 @@ export type EpisodeResponse = {
   code: string
   title: string
   visible_from_order: number
+  // D-21 additive display fields (07-03): the backend always returns the
+  // already-masked value in `display_title` when a boundary is applied; the
+  // legacy `title` field keeps the raw title for backward compatibility.
+  display_title?: string | null
+  is_unlocked?: boolean | null
+  is_current_view?: boolean | null
 }

@@ -13,19 +13,24 @@ type Props = {
   open: boolean
   direction: WatchProgressDirection
   episodeCode: string
+  // The numeric episode order being unlocked — the forward copy states
+  // "Episodes 1 through N will be considered watched" (D-06).
+  episodeOrder?: number
   onConfirm: () => void
   onCancel: () => void
 }
 
-// Forward-direction copy is locked (02-UI-SPEC.md Copywriting Contract).
+// Forward-direction copy is locked (02-UI-SPEC.md Copywriting Contract,
+// D-06): unlocking Episode N marks Episodes 1 through N as watched.
 // Backward-direction copy is a Claude's-discretion addition (CONTEXT.md
-// backward-copy variant) documented alongside the UI-SPEC table, since D-03
-// extends confirmation to backward moves and the locked copy is forward-only.
-export function ConfirmAdvanceModal({ open, direction, episodeCode, onConfirm, onCancel }: Props) {
+// backward-copy variant) — note the 07-03 view-only model means backward
+// selections no longer open this modal (PROG-01); the branch is retained
+// for direct-render compatibility.
+export function ConfirmAdvanceModal({ open, direction, episodeCode, episodeOrder, onConfirm, onCancel }: Props) {
   const title = direction === 'forward' ? `Unlock ${episodeCode}?` : `Rewatch ${episodeCode}?`
   const body =
     direction === 'forward'
-      ? `You're about to see new characters, events, and relationships from ${episodeCode}. This can't be undone. Continue?`
+      ? `Unlocking ${episodeCode} means Episodes 1 through ${episodeOrder ?? episodeCode} will be considered watched. This can't be undone. Continue?`
       : `You're about to move your watch progress back to ${episodeCode}. Continue?`
 
   return (

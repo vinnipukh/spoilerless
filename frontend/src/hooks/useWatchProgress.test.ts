@@ -19,6 +19,9 @@ function progressRecord(seriesId: string, visibleUntilOrder: number) {
     user_id: 'user_1',
     series_id: seriesId,
     visible_until_order: visibleUntilOrder,
+    watched_through_order: visibleUntilOrder,
+    view_as_of_order: visibleUntilOrder,
+    effective_view_order: visibleUntilOrder,
     updated_at: '2026-01-01T00:00:00Z',
   }
 }
@@ -149,8 +152,13 @@ describe('useWatchProgress', () => {
       await result.current.confirmChange()
     })
 
-    expect(mockedUpdateProgress).toHaveBeenCalledWith('series_dexter', 3)
+    expect(mockedUpdateProgress).toHaveBeenCalledWith('series_dexter', 3, {
+      watchedThroughOrder: 3,
+      viewAsOfOrder: 3,
+    })
     expect(result.current.confirmedOrder).toBe(3)
+    expect(result.current.watchedThroughOrder).toBe(3)
+    expect(result.current.viewAsOfOrder).toBe(3)
     expect(result.current.seriesId).toBe('series_dexter')
     expect(result.current.pendingChange).toBeNull()
     expect(JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? '{}')).toEqual({
@@ -173,6 +181,42 @@ describe('useWatchProgress', () => {
 
     expect(result.current.pendingChange).toBeNull()
     expect(mockedUpdateProgress).not.toHaveBeenCalled()
+  })
+
+  it('selecting an already-watched episode is a view-only change: no modal, watched progress unchanged, view-only POST (PROG-01)', () => {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 3 }))
+
+    const { result } = renderHook(() => useWatchProgress())
+    expect(result.current.watchedThroughOrder).toBe(3)
+    expect(result.current.viewAsOfOrder).toBe(3)
+
+    act(() => {
+      result.current.requestChange('series_dexter', 1)
+    })
+
+    // View moved down, watched untouched, no confirmation flow.
+    expect(result.current.viewAsOfOrder).toBe(1)
+    expect(result.current.confirmedOrder).toBe(1)
+    expect(result.current.watchedThroughOrder).toBe(3)
+    expect(result.current.pendingChange).toBeNull()
+    expect(mockedUpdateProgress).toHaveBeenCalledWith('series_dexter', 1, { viewAsOfOrder: 1 })
+  })
+
+  it('selecting above watchedThroughOrder still opens the unlock confirmation (D-06)', () => {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 3 }))
+
+    const { result } = renderHook(() => useWatchProgress())
+
+    act(() => {
+      result.current.requestChange('series_dexter', 4)
+    })
+
+    expect(result.current.pendingChange).toEqual({
+      seriesId: 'series_dexter',
+      nextOrder: 4,
+      direction: 'forward',
+    })
+    expect(result.current.viewAsOfOrder).toBe(3) // unchanged until confirm
   })
 
   it('on initial mount, prefers the backend getProgress() value over a conflicting sessionStorage value', async () => {
