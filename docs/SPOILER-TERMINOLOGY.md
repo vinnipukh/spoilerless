@@ -99,3 +99,68 @@ Spoiler visibility follows **release/publication order**, never fictional chrono
 | No coalesce-default on story-sensitive reveal points | `coalesce(visible_from_order, 1)` is forbidden in visibility rules (D-03). |
 | No string-based order comparison | Episode-code strings and season-number strings are never compared for visibility (D-09). |
 | No `last_appearance_order`, no final status before reveal | Forbidden for characters (D-16); see deferred design. |
+
+## 6. Central visibility-policy service contract (D-04)
+
+Module: `backend/app/spoiler/policy.py` — the **single owner of `visible_from_order` semantics**
+and of the D-05 effective-boundary formula. Every repository, service, retrieval tool, and API
+route that decides visibility delegates to this module; the rule is never reimplemented per query.
+Follows the existing package layout (`backend/app/spoiler/`, alongside `filter.py`) with **no new
+framework** (D-01). Implemented in **07-02**; the signatures below are the contract the 07-02
+executor implements without reinterpretation. No competing reveal-point names are introduced
+anywhere in `backend/app` or `frontend/src` (D-02).
+
+```python
+# backend/app/spoiler/policy.py — contract (07-02 implements)
+
+def validate_visibility_order(order: int) -> int:
+    """Return `order` unchanged, or raise on `order < 1` or a non-persisted order
+    (an order that is not a real episode's global publication order in this series)."""
+
+def is_visible(record, effective_view_order: int) -> bool:
+    """D-03 rule: True iff record.visible_from_order IS NOT NULL
+    AND record.visible_from_order <= effective_view_order.
+    FAILS CLOSED: a record with null visible_from_order returns False."""
+
+def effective_view_order(view_as_of_order: int, watched_through_order: int) -> int:
+    """D-05: enforce the invariant 1 <= view_as_of_order <= watched_through_order
+    (raise ValueError on violation), then return min(view_as_of_order, watched_through_order).
+    The min rule and the invariant are enforced HERE, inside this function."""
+
+def require_visible_resource(record, effective_view_order: int) -> None:
+    """Raise a resource-hidden error (mapped to the API layer's generic hidden/404
+    envelope, per D-15) when is_visible(record, effective_view_order) is False."""
+
+def filter_public_metadata(record, effective_view_order: int) -> dict:
+    """Return the record's public projection, dropping spoiler-sensitive fields
+    (title, synopsis, image, runtime, counts, locator, ...) above the boundary.
+    Missing guard = fail closed: never emit a field you could not prove safe."""
+
+def mask_episode_metadata(episode, effective_view_order: int) -> dict:
+    """Produce the D-21 display shape:
+    {id, code, display_title, is_unlocked, is_current_view}
+    - display_title: generic label ('S01E05 — Episode 5') when the real title is
+      spoiler-sensitive above the boundary (D-08); code/season numbers stay visible.
+    - is_unlocked: episode_order <= watched_through_order.
+    - is_current_view: episode_order == effective_view_order (view boundary)."""
+
+def assert_visibility_invariants(record) -> None:
+    """Validate a record's own invariants (visible_from_order is a positive int or
+    None; watched/view fields satisfy D-05) and raise on violation."""
+```
+
+Semantics notes for the implementer:
+
+- **`effective_view_order`** is the only place the D-05 min rule lives. Callers pass
+  `view_as_of_order` and `watched_through_order` (persisted values); the function enforces
+  `1 <= view_as_of_order <= watched_through_order` (raise) and returns the min. Boundary
+  resolution at the API layer must be `min(requested, persisted_view_as_of_order,
+  persisted_watched_through_order)` — the persisted view is always inside the min; omitting it is
+  fail-open and rejected.
+- **`is_visible`** fails closed: null `visible_from_order` → `False`. It never applies
+  `coalesce(visible_from_order, 1)` (D-03).
+- **`mask_episode_metadata`** output matches the D-21 API contract
+  (`{series_id, watched_through_order, view_as_of_order, effective_view_order, episodes:[...]}`)
+  and keeps masked episodes selectable for the unlock flow (D-22).
+- `filter_public_metadata` drops spoiler-sensitive fields rather than returning them masked —
+  hidden fields are absent from responses (D-16), not replaced with placeholders.
