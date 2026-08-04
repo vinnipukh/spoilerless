@@ -66,7 +66,7 @@ Plans: 07-01 audit + threat model + domain design · 07-02 progress migration + 
   4. Neo4j runs on AuraDB Free (no exposed local Compose recipe in the deploy path) through a least-privilege app DB role; Upstash Redis caches and invalidates graph query responses; the backend is live on Render and the frontend on Vercel, reaching each other through configured CORS; every secret is a platform environment variable, none in the repo
   5. A GitHub Actions workflow runs backend `pytest` + frontend build/lint on every PR; an external uptime check on `GET /health` can alert on failure; the backend logs exceptions instead of dropping them; `docs/DEPLOYMENT.md` documents the real hosted target and rollback procedure
 
-**Plans**: 7/8 plans executed
+**Plans**: 7/8 plans executed (08-07 nearly complete — Tasks 1-2 done, Task 3 at checkpoint)
 
 Plans:
 
@@ -76,7 +76,7 @@ Plans:
 - [x] 08-04-PLAN.md — Cookie/CORS/CSRF hardening: fail-closed verify_origin, logout CSRF coverage, settings-driven SameSite
 - [x] 08-05-PLAN.md — Redis foundation + rate limiting: multi-worker-safe 429 on login/chat-send/content-write (completed 2026-08-04: a672d17, 1f8a3e9)
 - [x] 08-06-PLAN.md — Graph query response cache: Redis cache-aside keyed by (series_id, boundary, user_id), invalidated on write (completed 2026-08-04: 913f211, 7fae2a4, 22bb957)
-- [~] 08-07-PLAN.md — Ops: GitHub Actions CI gate (committed 3516c2c), structured exception logging (pending), external uptime check (pending)
+- [ ] 08-07-PLAN.md — Ops: GitHub Actions CI gate, structured exception logging, external uptime check (Tasks 1-2 complete, Task 3 at checkpoint)
 - [x] 08-08-PLAN.md — docs/DEPLOYMENT.md rewrite for the real hosted target and rollback procedure (completed 2026-08-04: 8bdf633)
 
 **UI hint**: yes

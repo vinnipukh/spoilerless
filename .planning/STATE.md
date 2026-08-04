@@ -5,16 +5,16 @@ milestone_name: Production Deployment & Access Hardening
 current_phase: 8
 current_phase_name: production-deployment-automated-ci-cd
 status: executing
-stopped_at: "None — Plan 08-08 (DEPLOYMENT.md rewrite) complete (8bdf633); Phase 8 is fully planned (6 executed of 8, 2 pending: 08-07 partial)."
-last_updated: "2026-08-04T21:30:00.000Z"
+stopped_at: "None — Plan 08-07 Tasks 1-2 (CI + exception logging) complete (3516c2c, 7eeebd6); Task 3 (UptimeRobot) at checkpoint."
+last_updated: "2026-08-04T22:00:00.000Z"
 last_activity: 2026-08-04
-last_activity_desc: Plan 08-08 (DEPLOYMENT.md rewrite) completed — docs/DEPLOYMENT.md now describes real production stack (Vercel + Render + AuraDB Free + Upstash Redis, spoilerless.net)
+last_activity_desc: Plan 08-07 Tasks 1-2 completed — GitHub Actions CI workflow landed + structured exception logging + redacting middleware; Task 3 (external uptime monitor) at human-action checkpoint
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 8
   completed_plans: 7
-  percent: 63
+  percent: 88
 ---
 
 # HD Graf Cehennemi — Project State
@@ -40,7 +40,7 @@ Progress: [███░░░░░░░] 38% (v1.3); 7 phases complete across 
 **Velocity:**
 
 - Total plans completed (all milestones to date): 42 (v1.0/v1.1: 27, v1.2: 8, v1.3: 7)
-- v1.3: 7 plans completed (08-01 tracer, 08-02 BYOK, 08-03 admin role, 08-04 CSRF, 08-05 rate limiter, 08-06 graph cache, 08-08 DEPLOYMENT.md rewrite), 1 partial (08-07 CI committed, logging/uptime pending)
+- v1.3: 7 plans completed (08-01 tracer, 08-02 BYOK, 08-03 admin role, 08-04 CSRF, 08-05 rate limiter, 08-06 graph cache, 08-08 DEPLOYMENT.md rewrite), 08-07 nearly complete (Tasks 1-2 done: CI + exception logging + middleware; Task 3 UptimeRobot at checkpoint)
 
 **By Phase:**
 
@@ -93,11 +93,11 @@ Items acknowledged and carried forward, not in v1.3 scope:
 
 ## Session Continuity
 
-Last session: 2026-08-04 21:30 UTC
-Stopped at: Plan 08-08 (DEPLOYMENT.md rewrite) complete — commit 8bdf633; Phase 8 execution complete (08-01..08-08); 08-07 partial (CI committed, logging/uptime pending)
+Last session: 2026-08-04 22:00 UTC
+Stopped at: Plan 08-07 Tasks 1-2 complete — commits 3516c2c (CI) + 25479f6 (RED) + 7eeebd6 (GREEN); Task 3 (UptimeRobot external monitor) at checkpoint:human-action
 Resume file: None
 
 ## Operator Next Steps
 
-- 08-07 Task 2 (structured exception logging + redacting request middleware) and Task 3 (UptimeRobot monitor on /health) remain as open Phase 8 items.
+- 08-07 Task 3: Create a free UptimeRobot account, add an HTTP(s) monitor for https://api.spoilerless.net/health (5-minute interval), and configure an email alert contact. See 08-07-SUMMARY.md for details.
 - Resume with Phase 9 planning (feature expansion + full audit remediation, per `.planning/REQUIREMENTS.md`).
