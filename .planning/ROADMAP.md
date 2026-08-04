@@ -97,11 +97,30 @@ Plans:
   5. All 10 new features are live and usable: node search/jump, timeline view, newly-revealed highlight on episode advance, series dashboard, note/claim export, shortest-path relationship finder, full-text note/claim search, command palette, shareable read-only snapshot link, and a mobile-usable graph/detail panel
   6. FEAT-11 (Obsidian-style second-brain touches, small scope): node backlinks panel (reverse relationships + mentions), hover preview card on graph nodes, quick-switcher jump (⌘K fuzzy search), graph filters by node type/edge type, per-node properties (aliases, created/updated, source), and version-history surfaced via the existing Revision system — spoiler boundary preserved throughout; no free-form canvas or personal-layer rewrite in this phase
 
-**Plans**: TBD — carries Phase 8 blocked/undone items (below)
+**Plans**: 1/18 plans executed
+
+- [x] 09-01-PLAN.md
+- [ ] 09-02-PLAN.md
+- [ ] 09-03-PLAN.md
+- [ ] 09-04-PLAN.md
+- [ ] 09-05-PLAN.md
+- [ ] 09-06-PLAN.md
+- [ ] 09-07-PLAN.md
+- [ ] 09-08-PLAN.md
+- [ ] 09-09-PLAN.md
+- [ ] 09-10-PLAN.md
+- [ ] 09-11-PLAN.md
+- [ ] 09-12-PLAN.md
+- [ ] 09-13-PLAN.md
+- [ ] 09-14-PLAN.md
+- [ ] 09-15-PLAN.md
+- [ ] 09-16-PLAN.md
+- [ ] 09-17-PLAN.md
+- [ ] 09-18-PLAN.md
 
 **Phase 8 carry-over (blocked / undone — must land in Phase 9):**
 
-- [ ] **09-01**: External uptime monitor (08-07 Task 3, `checkpoint:human-action`) — UptimeRobot account + HTTPS monitor for `https://api.spoilerless.net/health` (5-min) + email alert contact; verify alert fires (OPS-02)
+- [x] **09-01**: External uptime monitor (08-07 Task 3, `checkpoint:human-action`) — UptimeRobot account + HTTPS monitor for `https://api.spoilerless.net/health` (5-min) + email alert contact; verify alert fires (OPS-02)
 - [ ] **09-02**: CI smoke fixes → main (08-07 UAT #4, `fixed-pending-ci-rerun`) — merge/re-verify `ci-smoke-test` branch (React-Compiler-era rules scoped to warnings, typed `catch(err)` handlers, seed-idempotency cleanup, graph-image D-14 curation); confirm GitHub Actions green on main (OPS-01)
 - [ ] **09-03**: Admin role live verification (08-UAT #6, skipped) — configure `ADMIN_EMAILS`; verify candidate approve/reject/edit + ChangeSet confirm admin-gated, non-admin 403 (AUTH-03)
 - [ ] **09-04**: `REDIS_URL` on Render (08-05/08-06 runtime gate) — set Upstash `rediss://`; verify live 429 rate-limit + graph-cache invalidation (SEC-03, INFRA-02)
@@ -139,7 +158,7 @@ Plans:
 | 6. Spoiler-safe GraphRAG chat and graph-editing agent | v1.1 | 13/13 | Complete | 2026-08-02 |
 | 7. Spoiler-Safety Hardening | v1.2 | 8/8 | Complete | 2026-08-03 |
 | 8. Production Deployment & Automated CI/CD | v1.3 | 8/8 | Complete    | 2026-08-04 |
-| 9. Feature Expansion & Full Audit Remediation | v1.3 | 0/TBD | Not started | - |
+| 9. Feature Expansion & Full Audit Remediation | v1.3 | 1/18 | In Progress|  |
 | 10. Polish & Finishing Touches | v1.3 | 0/TBD | Not started | - |
 
 Full phase details archived at `.planning/milestones/v1.1-ROADMAP.md` / `.planning/milestones/v1.1-phases/` and `.planning/milestones/v1.2-ROADMAP.md` / `.planning/milestones/v1.2-phases/` (v1.2 archive supersedes the earlier v1.1 archive, which predates Phase 7).
