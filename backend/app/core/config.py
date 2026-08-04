@@ -44,6 +44,14 @@ class Settings(BaseSettings):
             "in) — never leave empty in production."
         ),
     )
+    admin_emails: str = Field(
+        default="",
+        description=(
+            "Comma-separated allowlist of email addresses granted the admin "
+            "role at login. Empty means no admin exists yet — set this to "
+            "grant the first admin."
+        ),
+    )
 
     # LLM provider (GraphRAG chat) — backend-only, never exposed to clients.
     llm_enabled: bool = Field(

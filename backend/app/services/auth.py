@@ -115,6 +115,7 @@ class AuthService:
         client_id: str,
         session_ttl: int,
         allowed_emails: frozenset[str] | None = None,
+        admin_emails: frozenset[str] | None = None,
     ) -> tuple[dict[str, Any], str]:
         """Verify Google token, upsert user, create session.
 
@@ -125,6 +126,13 @@ class AuthService:
         (case-insensitive). Checked after verification so the rejection is
         based on a Google-attested email, not client-supplied input. Raises
         ``EmailNotAllowedError`` for a verified-but-unlisted email.
+
+        ``admin_emails``, when non-empty, determines the user's ``role``
+        (case-insensitive membership). Like ``allowed_emails``, it is
+        checked after Google verification succeeds, so role assignment is
+        driven by Google-attested identity plus a server-controlled env
+        var — never client input. An empty set grants ``"user"`` to every
+        login (no implicit admin).
         """
         info = await self._verifier.verify(credential, client_id)
 
@@ -136,11 +144,14 @@ class AuthService:
         if allowed_emails and email.lower() not in allowed_emails:
             raise EmailNotAllowedError(email)
 
+        role = "admin" if email.lower() in (admin_emails or frozenset()) else "user"
+
         user = await self._user_repo.upsert(
             google_sub=google_sub,
             email=email,
             display_name=display_name,
             avatar_url=avatar_url,
+            role=role,
         )
 
         raw_token = await self._session_repo.create(

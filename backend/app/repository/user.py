@@ -45,16 +45,18 @@ ON CREATE SET
     u.email = $email,
     u.display_name = $display_name,
     u.avatar_url = $avatar_url,
+    u.role = $role,
     u.created_at = $created_at,
     u.updated_at = $updated_at
 ON MATCH SET
     u.email = $email,
     u.display_name = $display_name,
     u.avatar_url = $avatar_url,
+    u.role = $role,
     u.updated_at = $updated_at
 RETURN u.id AS id, u.google_sub AS google_sub,
        u.email AS email, u.display_name AS display_name,
-       u.avatar_url AS avatar_url,
+       u.avatar_url AS avatar_url, u.role AS role,
        u.created_at AS created_at, u.updated_at AS updated_at
 """
 
@@ -63,6 +65,7 @@ MATCH (u:AppUser {id: $id})
 RETURN u.id AS id, u.google_sub AS google_sub,
        u.email AS email, u.display_name AS display_name,
        u.avatar_url AS avatar_url,
+       coalesce(u.role, 'user') AS role,
        u.created_at AS created_at, u.updated_at AS updated_at
 """
 
@@ -79,8 +82,15 @@ class UserRepository:
         email: str,
         display_name: str,
         avatar_url: str,
+        role: str,
     ) -> dict[str, Any]:
         """Create a new user or update an existing one by *google_sub*.
+
+        ``role`` is always the caller-supplied value (derived server-side
+        from ADMIN_EMAILS at login) — never read from any request body —
+        and is re-synced on every login via ``ON MATCH SET u.role = $role``,
+        so removing an email from ADMIN_EMAILS demotes the user on their
+        next sign-in.
 
         Returns the full user record as a flat dict.
         """
@@ -92,6 +102,7 @@ class UserRepository:
             email=email,
             display_name=display_name,
             avatar_url=avatar_url,
+            role=role,
             created_at=now,
             updated_at=now,
         )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -32,6 +33,15 @@ class UserPublic(BaseModel):
     email: str = Field(description="Verified email from the Google ID token.")
     display_name: str = Field(description="Display name from the Google profile.")
     avatar_url: str = Field(default="", description="Profile image URL.")
+    role: Literal["admin", "user"] = Field(
+        default="user",
+        description=(
+            "Application role derived server-side from the ADMIN_EMAILS "
+            "allowlist at login — never client-supplied. The default keeps "
+            "any pre-migration record that lacks the field from failing "
+            "validation."
+        ),
+    )
     created_at: datetime = Field(description="When the user record was created.")
     updated_at: datetime = Field(description="When the user record was last updated.")
 

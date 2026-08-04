@@ -63,6 +63,16 @@ def _allowed_emails() -> frozenset[str]:
     )
 
 
+def _admin_emails() -> frozenset[str]:
+    """Parse the configured admin email allowlist, lowercased. Empty means no admin exists."""
+    settings = get_settings()
+    return frozenset(
+        e.strip().lower()
+        for e in settings.admin_emails.split(",")
+        if e.strip()
+    )
+
+
 async def verify_origin(request: Request) -> None:
     """Verify ``Origin`` (preferred) or ``Referer`` matches a configured
     frontend origin to protect state-changing requests against CSRF.
@@ -180,6 +190,7 @@ async def google_auth(
             client_id=settings.google_client_id,
             session_ttl=settings.session_ttl_seconds,
             allowed_emails=_allowed_emails(),
+            admin_emails=_admin_emails(),
         )
     except EmailNotAllowedError as exc:
         logger.warning("google_auth: email_not_allowed (%s)", exc.email)
