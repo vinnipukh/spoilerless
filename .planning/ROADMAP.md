@@ -47,7 +47,7 @@ Plans: 07-01 audit + threat model + domain design · 07-02 progress migration + 
 
 **Milestone Goal:** Move HD Graf Cehennemi from a local-only prototype to a real, zero-cost hosted deployment (Vercel + Render + Neo4j AuraDB Free + Upstash Redis) with automated CI/CD, every finding in `docs/PROBLEMS.md`'s 45-item audit resolved, 10 new features, and a final polish pass.
 
-- [ ] Phase 8: Production Deployment & Automated CI/CD (TBD plans) — pending planning
+- [ ] Phase 8: Production Deployment & Automated CI/CD (8 plans) — planned, ready to execute
 - [ ] Phase 9: Feature Expansion & Full Audit Remediation (TBD plans) — pending planning
 - [ ] Phase 10: Polish & Finishing Touches (TBD plans) — pending planning
 
@@ -63,7 +63,17 @@ Plans: 07-01 audit + threat model + domain design · 07-02 progress migration + 
   3. In production, the session cookie is `Secure` (default `true`) with correct `SameSite` handling across the cross-origin deployment, `FRONTEND_ORIGINS` is the exact deployed origin, CSRF Origin/Referer checking covers logout and no longer auto-allows a missing Origin, and login/chat-send/content-write requests return `429` once a multi-worker-safe per-user/IP rate limit is exceeded
   4. Neo4j runs on AuraDB Free (no exposed local Compose recipe in the deploy path) through a least-privilege app DB role; Upstash Redis caches and invalidates graph query responses; the backend is live on Render and the frontend on Vercel, reaching each other through configured CORS; every secret is a platform environment variable, none in the repo
   5. A GitHub Actions workflow runs backend `pytest` + frontend build/lint on every PR; an external uptime check on `GET /health` can alert on failure; the backend logs exceptions instead of dropping them; `docs/DEPLOYMENT.md` documents the real hosted target and rollback procedure
-**Plans**: TBD
+**Plans**: 8 plans across 6 waves
+
+Plans:
+- [ ] 08-01-PLAN.md — Tracer: production deploy skeleton (Render + Vercel + AuraDB + spoilerless.net custom domain, one real Google login end-to-end)
+- [ ] 08-02-PLAN.md — BYOK LLM chat: browser-held key/base_url/model, per-request headers, backend passthrough
+- [ ] 08-03-PLAN.md — Admin role: candidate review, ChangeSet confirm, and /api/settings/llm gated to admin
+- [ ] 08-04-PLAN.md — Cookie/CORS/CSRF hardening: fail-closed verify_origin, logout CSRF coverage, settings-driven SameSite
+- [ ] 08-05-PLAN.md — Redis foundation + rate limiting: multi-worker-safe 429 on login/chat-send/content-write
+- [ ] 08-06-PLAN.md — Graph query response cache: Redis cache-aside keyed by (series_id, boundary, user_id), invalidated on write
+- [ ] 08-07-PLAN.md — Ops: GitHub Actions CI gate, structured exception logging, external uptime check
+- [ ] 08-08-PLAN.md — docs/DEPLOYMENT.md rewrite for the real hosted target and rollback procedure
 **UI hint**: yes
 
 #### Phase 9: Feature Expansion & Full Audit Remediation
@@ -104,7 +114,7 @@ Plans: 07-01 audit + threat model + domain design · 07-02 progress migration + 
 | 05.1 Candidate review frontend UI | v1.0/v1.1 | — | Complete | 2026-07-30 |
 | 6. Spoiler-safe GraphRAG chat and graph-editing agent | v1.1 | 13/13 | Complete | 2026-08-02 |
 | 7. Spoiler-Safety Hardening | v1.2 | 8/8 | Complete | 2026-08-03 |
-| 8. Production Deployment & Automated CI/CD | v1.3 | 0/TBD | Not started | - |
+| 8. Production Deployment & Automated CI/CD | v1.3 | 0/8 | Not started | - |
 | 9. Feature Expansion & Full Audit Remediation | v1.3 | 0/TBD | Not started | - |
 | 10. Polish & Finishing Touches | v1.3 | 0/TBD | Not started | - |
 
