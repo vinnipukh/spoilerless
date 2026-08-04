@@ -8,11 +8,27 @@ A spoiler-safe narrative knowledge graph for TV series with a grounded conversat
 
 Users can safely explore a TV-series knowledge graph — and now chat about it — without ever seeing information beyond their selected watch progress, because filtering occurs in the backend before data reaches the frontend, the LLM, or any tool call. No raw Cypher ever reaches the model, and no graph write happens without explicit human confirmation.
 
-## Current Milestone: v1.2 Spoiler-Safety Hardening
+## Current Milestone: v1.3 Production Deployment & Access Hardening
+
+**Goal:** Move HD Graf Cehennemi from a local-only prototype to a real, zero-cost hosted deployment (Vercel + Render + Neo4j AuraDB Free + Upstash Redis) with production-grade access control, secrets hygiene, and just enough CI/monitoring to operate it safely.
+
+**Target features:**
+- Email allowlist for sign-in; `/api/auth/dev` backdoor removed (landed this session, ahead of formal planning)
+- Admin/role concept — gates candidate review, ChangeSet approval, and `/api/settings/llm`; resolves the previously-deferred SSRF/cross-user-takeover concern on Settings
+- BYOK LLM chat: user supplies their own provider API key client-side; backend passthrough per request, never persisted or logged server-side
+- Production cookie/CORS/CSRF hardening: `SESSION_COOKIE_SECURE`, exact `FRONTEND_ORIGINS`, cross-domain `SameSite` handling
+- Rate limiting on login, chat, and write endpoints
+- Neo4j migrated from local Docker to Neo4j AuraDB Free — durable managed storage + backup, closing `docs/DEPLOYMENT.md`'s storage/backup gap
+- Upstash Redis introduced for graph-query response caching (new stack addition, explicitly scoped for this milestone)
+- Hosting: Vercel (frontend) + Render free web service (backend), Neo4j AuraDB Free, Upstash Redis free tier — all at $0
+- Minimal CI gate (backend pytest + frontend build/lint on PR)
+- Basic uptime/health monitoring against `GET /health`
+
+## Previous Milestone: v1.2 Spoiler-Safety Hardening (complete 2026-08-03)
 
 **Goal:** Harden spoiler safety by separating watched progress from the temporary view boundary, centralizing the visibility policy, and closing indirect leak channels (metadata, search, counts, media, chat, graph edits) without changing the stack or rebuilding working features.
 
-**Target features:**
+**Delivered:**
 - Watched progress (`watched_through_order`) separated from temporary view boundary (`view_as_of_order`); effective boundary = `min(view, watched)`, enforced server-side
 - Central visibility-policy service — `visible_from_order` stays canonical, missing visibility fails closed (no `coalesce(..., 1)` defaults)
 - Episode metadata gating (spoiler title → generic label, synopsis/runtime/image masked at the backend) with publication-order semantics across seasons
@@ -60,8 +76,10 @@ Users can safely explore a TV-series knowledge graph — and now chat about it �
 ### Out of Scope
 
 - Automated ingestion/extraction from OpenSubtitles, scripts/PDFs, podcasts, Fandom/IMDb/news, or other external sites — still no live source retrieval, only the fixture-driven candidate contract
-- Multi-user roles/admin concepts — no role infrastructure exists yet; this is why the Settings-scoping fix above is deferred rather than trivial
-- Production deployment, public hosting, mobile/social features — prototype phase per `docs/DEPLOYMENT.md`
+- Mobile/social features
+- Full CI/CD (staged promotion, dependency scanning, artifact publication) and full observability (centralized logs, metrics, alerting) — v1.3 adds only a minimal PR gate and basic `/health` uptime monitoring; the rest stays deferred
+
+**No longer out of scope as of v1.3:** multi-user roles/admin concepts, and production deployment/public hosting — both are v1.3 target features (see Current Milestone above).
 
 ## Constraints
 
@@ -107,4 +125,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-02 — v1.2 Spoiler-Safety Hardening milestone started*
+*Last updated: 2026-08-04 — v1.3 Production Deployment & Access Hardening milestone started*

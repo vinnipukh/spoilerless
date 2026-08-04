@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Spoiler-Safety Hardening
-current_phase: 7
-status: completed
-stopped_at: Completed 06-13-PLAN.md
-last_updated: "2026-08-03T15:03:26.087Z"
-last_activity: 2026-08-03
-last_activity_desc: Phase 7 marked complete
+milestone: v1.3
+milestone_name: Production Deployment & Access Hardening
+status: planning
+last_updated: "2026-08-04T07:20:16.157Z"
+last_activity: 2026-08-04
 progress:
-  total_phases: 1
-  completed_phases: 1
-  total_plans: 8
-  completed_plans: 8
-  percent: 100
-current_phase_name: Spoiler-Safety Hardening
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # HD Graf Cehennemi — Project State
@@ -193,10 +189,10 @@ Phase 03.1 is complete and UAT-verified (16/16 pass). The cinematic visual overh
 
 ## Current Position
 
-Phase: 7 — COMPLETE
-Plan: 1 of 8
-Status: Phase 7 complete
-Last activity: 2026-08-03 — Phase 7 marked complete
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-08-04 — Milestone v1.3 started
 
 ## Operator Next Steps
 
