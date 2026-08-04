@@ -224,9 +224,9 @@ describe('BYOK header attachment (D-06)', () => {
     await sendMessage('series_dexter', 'session_1', 'Hi')
 
     const [, options] = vi.mocked(globalThis.fetch).mock.calls[0]
-    expect(options.headers).not.toHaveProperty('X-LLM-Api-Key')
-    expect(options.headers).not.toHaveProperty('X-LLM-Base-URL')
-    expect(options.headers).not.toHaveProperty('X-LLM-Model')
+    expect(options?.headers).not.toHaveProperty('X-LLM-Api-Key')
+    expect(options?.headers).not.toHaveProperty('X-LLM-Base-URL')
+    expect(options?.headers).not.toHaveProperty('X-LLM-Model')
   })
 
   it('streamMessage omits X-LLM-* headers when no key is stored', async () => {
@@ -235,7 +235,7 @@ describe('BYOK header attachment (D-06)', () => {
     await streamMessage('series_dexter', 'session_1', 'Hi', { onDone: vi.fn() })
 
     const [, options] = vi.mocked(globalThis.fetch).mock.calls[0]
-    expect(options.headers).toEqual({ 'Content-Type': 'application/json' })
+    expect(options?.headers).toEqual({ 'Content-Type': 'application/json' })
   })
 
   it('treats a whitespace-only stored key as absent (no X-LLM-* headers)', async () => {
@@ -245,7 +245,7 @@ describe('BYOK header attachment (D-06)', () => {
     await sendMessage('series_dexter', 'session_1', 'Hi')
 
     const [, options] = vi.mocked(globalThis.fetch).mock.calls[0]
-    expect(options.headers).not.toHaveProperty('X-LLM-Api-Key')
+    expect(options?.headers).not.toHaveProperty('X-LLM-Api-Key')
   })
 
   it('omits blank base_url/model headers but keeps the key header', async () => {
