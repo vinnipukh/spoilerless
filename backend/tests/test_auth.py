@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from backend.app.api.auth import (
     AUTH_INVALID_GOOGLE_CREDENTIAL,
@@ -42,12 +43,16 @@ class FakeUserRepo:
         email: str,
         display_name: str,
         avatar_url: str,
+        role: str = "user",
     ) -> dict[str, Any]:
         existing = self._store.get(google_sub)
         if existing:
             existing["email"] = email
             existing["display_name"] = display_name
             existing["avatar_url"] = avatar_url
+            # Role re-syncs to the caller-supplied value on every login,
+            # mirroring the real repository's ON MATCH SET u.role = $role.
+            existing["role"] = role
             return dict(existing)
         self._id_counter += 1
         record = {
@@ -56,6 +61,7 @@ class FakeUserRepo:
             "email": email,
             "display_name": display_name,
             "avatar_url": avatar_url,
+            "role": role,
             "created_at": "2025-01-01T00:00:00+00:00",
             "updated_at": "2025-01-01T00:00:00+00:00",
         }
@@ -687,6 +693,204 @@ class TestEmailAllowlist:
         )
 
         assert response.status_code == 200
+
+
+# ===================================================================
+# POST /api/auth/google — admin role derived from ADMIN_EMAILS (AUTH-03, D-03)
+# ===================================================================
+
+
+class TestAdminRole:
+    """Role is derived server-side from ADMIN_EMAILS membership at login.
+
+    No request body can set or override ``role``: it is computed only after
+    Google verification succeeds, from a server-controlled env var, and
+    re-synced on every login (so removing an email from ADMIN_EMAILS demotes
+    that user on their next sign-in — no self-service grant path exists).
+    """
+
+    def test_login_with_admin_email_grants_admin_role_on_first_login(
+        self,
+        client: TestClient,
+        fake_verifier: FakeGoogleVerifier,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        fake_verifier.set_claims(email="admin@example.com")
+        _set_env(
+            monkeypatch,
+            GOOGLE_CLIENT_ID="test-client-id",
+            SESSION_TTL_SECONDS=3600,
+            FRONTEND_ORIGINS="*",
+            ADMIN_EMAILS="admin@example.com,user@example.com",
+        )
+
+        response = client.post(
+            "/api/auth/google", json={"credential": "valid-token"}
+        )
+
+        assert response.status_code == 200
+        assert response.json()["user"]["role"] == "admin"
+
+    def test_admin_role_persists_and_re_syncs_on_relogin(
+        self,
+        client: TestClient,
+        fake_verifier: FakeGoogleVerifier,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        fake_verifier.set_claims(email="admin@example.com")
+        _set_env(
+            monkeypatch,
+            GOOGLE_CLIENT_ID="test-client-id",
+            SESSION_TTL_SECONDS=3600,
+            FRONTEND_ORIGINS="*",
+            ADMIN_EMAILS="admin@example.com",
+        )
+
+        first = client.post("/api/auth/google", json={"credential": "valid-token"})
+        second = client.post("/api/auth/google", json={"credential": "valid-token"})
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        # Same user record, role re-synced to admin on every login.
+        assert first.json()["user"]["id"] == second.json()["user"]["id"]
+        assert first.json()["user"]["role"] == "admin"
+        assert second.json()["user"]["role"] == "admin"
+
+    def test_me_returns_admin_role(
+        self,
+        client: TestClient,
+        fake_verifier: FakeGoogleVerifier,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        fake_verifier.set_claims(email="admin@example.com")
+        _set_env(
+            monkeypatch,
+            GOOGLE_CLIENT_ID="test-client-id",
+            SESSION_TTL_SECONDS=3600,
+            SESSION_COOKIE_NAME="session",
+            FRONTEND_ORIGINS="*",
+            ADMIN_EMAILS="admin@example.com",
+        )
+
+        auth_resp = client.post("/api/auth/google", json={"credential": "valid-token"})
+        cookie = auth_resp.cookies.get("session")
+
+        response = client.get("/api/auth/me", cookies={"session": cookie})
+
+        assert response.status_code == 200
+        assert response.json()["user"]["role"] == "admin"
+
+    def test_login_with_email_absent_from_admin_emails_grants_user_role(
+        self,
+        client: TestClient,
+        fake_verifier: FakeGoogleVerifier,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        fake_verifier.set_claims(email="regular@example.com")
+        _set_env(
+            monkeypatch,
+            GOOGLE_CLIENT_ID="test-client-id",
+            SESSION_TTL_SECONDS=3600,
+            FRONTEND_ORIGINS="*",
+            ADMIN_EMAILS="admin@example.com",
+        )
+
+        response = client.post(
+            "/api/auth/google", json={"credential": "valid-token"}
+        )
+
+        assert response.status_code == 200
+        assert response.json()["user"]["role"] == "user"
+
+    def test_admin_demoted_when_email_removed_from_admin_emails(
+        self,
+        client: TestClient,
+        fake_verifier: FakeGoogleVerifier,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        fake_verifier.set_claims(email="admin@example.com")
+        _set_env(
+            monkeypatch,
+            GOOGLE_CLIENT_ID="test-client-id",
+            SESSION_TTL_SECONDS=3600,
+            FRONTEND_ORIGINS="*",
+            ADMIN_EMAILS="admin@example.com",
+        )
+        first = client.post("/api/auth/google", json={"credential": "valid-token"})
+        assert first.status_code == 200
+        assert first.json()["user"]["role"] == "admin"
+
+        # Operator removes the email from ADMIN_EMAILS; the next login
+        # re-syncs the persisted role back to "user" (nothing prevents
+        # demotion when membership is revoked).
+        _set_env(
+            monkeypatch,
+            GOOGLE_CLIENT_ID="test-client-id",
+            SESSION_TTL_SECONDS=3600,
+            FRONTEND_ORIGINS="*",
+            ADMIN_EMAILS="",
+        )
+        second = client.post("/api/auth/google", json={"credential": "valid-token"})
+
+        assert second.status_code == 200
+        assert second.json()["user"]["id"] == first.json()["user"]["id"]
+        assert second.json()["user"]["role"] == "user"
+
+    def test_empty_admin_emails_means_no_implicit_admin(
+        self,
+        client: TestClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _set_env(
+            monkeypatch,
+            GOOGLE_CLIENT_ID="test-client-id",
+            SESSION_TTL_SECONDS=3600,
+            FRONTEND_ORIGINS="*",
+            ADMIN_EMAILS="",
+        )
+
+        response = client.post(
+            "/api/auth/google", json={"credential": "valid-token"}
+        )
+
+        assert response.status_code == 200
+        assert response.json()["user"]["role"] == "user"
+
+    def test_user_public_model_validates_and_exposes_role(self) -> None:
+        user = UserPublic.model_validate(
+            {
+                "id": "user:1",
+                "email": "admin@example.com",
+                "display_name": "Admin",
+                "avatar_url": "",
+                "created_at": "2025-01-01T00:00:00+00:00",
+                "updated_at": "2025-01-01T00:00:00+00:00",
+                "role": "admin",
+            }
+        )
+        assert user.role == "admin"
+        assert user.model_dump()["role"] == "admin"
+
+    def test_user_public_defaults_role_to_user(self) -> None:
+        # A pre-migration record that somehow lacks the role property must
+        # still validate (default "user").
+        user = UserPublic.model_validate(
+            {
+                "id": "user:1",
+                "email": "user@example.com",
+                "display_name": "User",
+                "avatar_url": "",
+                "created_at": "2025-01-01T00:00:00+00:00",
+                "updated_at": "2025-01-01T00:00:00+00:00",
+            }
+        )
+        assert user.role == "user"
+
+    def test_google_auth_request_rejects_client_supplied_role(self) -> None:
+        # extra="forbid": no request body field can carry a role value —
+        # role is never client-input (T-08-03-03).
+        with pytest.raises(ValidationError):
+            GoogleAuthRequest(credential="valid-token", role="admin")
 
 
 # ===================================================================
