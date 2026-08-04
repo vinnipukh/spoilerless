@@ -1,14 +1,26 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    neo4j_uri: str
-    neo4j_username: str
-    neo4j_password: str
-    neo4j_database: str = "neo4j"
+    # Accept either the aura_* names used in local .env files or the NEO4J_*
+    # names used in deployed environments (Render/Aura credential file). The
+    # aura_* alias wins when both are present.
+    neo4j_uri: str = Field(
+        validation_alias=AliasChoices("aura_uri", "neo4j_uri")
+    )
+    neo4j_username: str = Field(
+        validation_alias=AliasChoices("aura_username", "neo4j_username")
+    )
+    neo4j_password: str = Field(
+        validation_alias=AliasChoices("aura_password", "neo4j_password")
+    )
+    neo4j_database: str = Field(
+        default="neo4j",
+        validation_alias=AliasChoices("aura_database", "neo4j_database"),
+    )
 
     # Authentication
     google_client_id: str = Field(

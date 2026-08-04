@@ -325,6 +325,16 @@ async def seed_graph(database: Neo4jDatabase, data: dict[str, Any]) -> None:
         """,
         episodes=data["episodes"],
     )
+    # Remove stale OCCURRED_IN edges left behind when an event's location_id
+    # changes (MERGE only adds; the old edge would otherwise dangle and be
+    # rendered as a second, wrong location for the event).
+    await database.execute_query(
+        """
+        MATCH (event:Event)-[rel:OCCURRED_IN]->(location:Location)
+        WHERE event.location_id IS NOT NULL AND location.id <> event.location_id
+        DELETE rel
+        """
+    )
     await database.execute_query(
         """
         UNWIND $events AS row
@@ -374,6 +384,9 @@ async def setup_database(database: Neo4jDatabase) -> dict[str, int]:
         """
         MATCH (node)
         WHERE node.series_id = $series_id
+          AND NOT node:UserSeriesProgress
+          AND NOT node:ChatSession
+          AND NOT node:ChatMessage
         WITH count(node) AS nodes
         MATCH ()-[relationship]->()
         WHERE relationship.series_id = $series_id

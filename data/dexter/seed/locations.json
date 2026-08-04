@@ -72,14 +72,6 @@
   "origin": "canonical"
  },
  {
-  "id": "dexter:location:dexter_marina",
-  "node_type": "Location",
-  "series_id": "series_dexter",
-  "label": "Dexter's Marina",
-  "visible_from_order": 1,
-  "origin": "canonical"
- },
- {
   "id": "dexter:location:dexter_apartment",
   "node_type": "Location",
   "series_id": "series_dexter",
@@ -180,14 +172,6 @@
   "node_type": "Location",
   "series_id": "series_dexter",
   "label": "Road of the Refrigerated-Truck Encounter",
-  "visible_from_order": 1,
-  "origin": "canonical"
- },
- {
-  "id": "dexter:location:neighbor_house",
-  "node_type": "Location",
-  "series_id": "series_dexter",
-  "label": "Neighbor's House",
   "visible_from_order": 1,
   "origin": "canonical"
  }

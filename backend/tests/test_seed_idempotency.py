@@ -39,6 +39,9 @@ async def _snapshot(database: Neo4jDatabase) -> dict:
         """
         MATCH (node)
         WHERE node.series_id = $series_id
+          AND NOT node:UserSeriesProgress
+          AND NOT node:ChatSession
+          AND NOT node:ChatMessage
         RETURN labels(node)[0] AS label, collect(node.id) AS ids, count(node) AS count
         ORDER BY label
         """,
@@ -113,15 +116,15 @@ async def test_seed_is_idempotent_and_complete(live_database: Neo4jDatabase) -> 
     second_counts = await setup_database(live_database)
     second = await _snapshot(live_database)
 
-    assert first_counts == second_counts == {"nodes": 265, "relationships": 254}
+    assert first_counts == second_counts == {"nodes": 290, "relationships": 308}
     assert first == second
     assert {row["label"]: row["count"] for row in first["nodes"]} == {
         "Character": 32,
-        "Claim": 105,
+        "Claim": 132,
         "Episode": 3,
         "Event": 39,
         "EvidenceFragment": 36,
-        "Location": 24,
+        "Location": 22,
         "Object": 17,
         "Organization": 5,
         "Series": 1,
@@ -349,6 +352,9 @@ async def test_constraints_visibility_and_provenance(live_database: Neo4jDatabas
         """
         MATCH (node)
         WHERE node.series_id = $series_id AND node.visible_from_order IS NULL
+          AND NOT node:UserSeriesProgress
+          AND NOT node:ChatSession
+          AND NOT node:ChatMessage
         RETURN count(node) AS count
         """,
         series_id=SERIES_ID,
@@ -443,14 +449,14 @@ async def test_setup_preserves_user_layer_and_deleted_resources_stay_deleted(
     try:
         await setup_database(live_database)
         canonical_before = await _layer_snapshot(live_database, "canonical")
-        assert sum(len(layer) for layer in canonical_before.values()) == 495
+        assert sum(len(layer) for layer in canonical_before.values()) == 573
 
         await live_database.execute_query(USER_LAYER_CREATE_QUERY)
         user_before = await _layer_snapshot(live_database, "user")
         first_report = await setup_database(live_database)
         second_report = await setup_database(live_database)
 
-        assert first_report == second_report == {"nodes": 272, "relationships": 255}
+        assert first_report == second_report == {"nodes": 297, "relationships": 309}
         assert await _layer_snapshot(live_database, "canonical") == canonical_before
         assert await _layer_snapshot(live_database, "user") == user_before
 
