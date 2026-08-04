@@ -32,6 +32,7 @@ from backend.app.services.chat import (
     ChatService,
 )
 from backend.app.services.progress import ProgressNotFoundError
+from backend.app.services.rate_limit import chat_send_rate_limiter
 
 router = APIRouter(prefix="/api/series/{series_id}/chat", tags=["chat"])
 
@@ -155,6 +156,7 @@ async def post_message(
     user: CurrentUserDependency,
     service: ChatServiceDependency,
     provider: LLMProviderDependency,
+    _rate_limit: Annotated[None, Depends(chat_send_rate_limiter)],
 ) -> MessageResponseEnvelope:
     try:
         return await service.answer(
@@ -187,6 +189,7 @@ async def stream_message(
     user: CurrentUserDependency,
     service: ChatServiceDependency,
     provider: LLMProviderDependency,
+    _rate_limit: Annotated[None, Depends(chat_send_rate_limiter)],
 ) -> StreamingResponse:
     """Stream text deltas, then a final ``event: done`` with the envelope."""
     # Resolve session ownership and progress existence up-front so a

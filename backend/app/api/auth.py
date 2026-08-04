@@ -26,6 +26,7 @@ from backend.app.services.auth import (
     GoogleTransportError,
     GoogleVerificationError,
 )
+from backend.app.services.rate_limit import login_rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +169,7 @@ async def google_auth(
     response: Response,
     service: AuthServiceDependency,
     _csrf: Annotated[None, Depends(verify_origin)],
+    _rate_limit: Annotated[None, Depends(login_rate_limiter)],
 ) -> UserResponse:
     """Authenticate via a Google ID token.
 

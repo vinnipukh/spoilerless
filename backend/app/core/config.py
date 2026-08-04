@@ -61,6 +61,18 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Rate limiting / cache (Upstash Redis). Empty disables both — see
+    # services/rate_limit.py and cache/redis_client.py.
+    redis_url: str = Field(
+        default="",
+        description=(
+            "Upstash Redis connection string (rediss://...), used for "
+            "rate-limit counters and the graph query response cache. "
+            "Empty disables both — see services/rate_limit.py and "
+            "cache/redis_client.py."
+        ),
+    )
+
     # LLM provider (GraphRAG chat) — backend-only, never exposed to clients.
     llm_enabled: bool = Field(
         default=False,

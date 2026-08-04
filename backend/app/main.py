@@ -25,6 +25,7 @@ from backend.app.core.errors import install_database_error_handlers
 from backend.app.graph.database import Neo4jDatabase
 from backend.app.llm.provider import install_llm_error_handlers
 from backend.app.repository.session import Neo4jSessionRepository
+from backend.app.services.rate_limit import init_rate_limiter
 
 SERVICE_NAME = "hdgrafcehennemi-backend"
 
@@ -44,6 +45,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     database.open()
     app.state.neo4j = database
     app.state.session_repo = Neo4jSessionRepository(database)
+    if settings.redis_url:
+        # Redis-backed rate limiting (08-05). Guarded on a non-empty
+        # redis_url so local dev without Upstash runs unthrottled instead of
+        # crashing startup; RateLimiter dependencies no-op until then.
+        await init_rate_limiter()
     try:
         try:
             await database.verify_connection()

@@ -21,6 +21,7 @@ from backend.app.repository.user_content import (
     UserContentRepository,
     UserContentValidationError,
 )
+from backend.app.services.rate_limit import content_write_rate_limiter
 
 router = APIRouter(prefix="/api/series", tags=["user-content"])
 DatabaseDependency = Annotated[Neo4jDatabase, Depends(get_database)]
@@ -47,7 +48,10 @@ def _conflict(exc: UserContentConflict) -> Exception:
     "/{series_id}/notes", response_model=NoteResponse, status_code=201,
     summary="Create a spoiler-safe user note", responses=error_responses(404, 409, 422, 503),
 )
-async def create_note(series_id: str, payload: NoteCreate, database: DatabaseDependency) -> NoteResponse:
+async def create_note(
+    series_id: str, payload: NoteCreate, database: DatabaseDependency,
+    _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
+) -> NoteResponse:
     try:
         row = await _repository(database).create_note(series_id, payload)
     except UserContentValidationError as exc:
@@ -96,7 +100,8 @@ async def get_note(
     summary="Update note content", responses=error_responses(404, 409, 422, 503),
 )
 async def update_note(
-    series_id: str, note_id: str, payload: NoteUpdate, database: DatabaseDependency
+    series_id: str, note_id: str, payload: NoteUpdate, database: DatabaseDependency,
+    _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
 ) -> NoteResponse:
     try:
         row = await _repository(database).update_note(series_id, note_id, payload)
@@ -111,7 +116,10 @@ async def update_note(
     "/{series_id}/notes/{note_id}", status_code=204,
     summary="Hard-delete a user note", responses={**error_responses(404, 409, 422, 503), 204: {"description": "Note deleted."}},
 )
-async def delete_note(series_id: str, note_id: str, database: DatabaseDependency) -> Response:
+async def delete_note(
+    series_id: str, note_id: str, database: DatabaseDependency,
+    _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
+) -> Response:
     try:
         await _repository(database).delete_note(series_id, note_id)
     except UserContentValidationError as exc:
@@ -123,7 +131,10 @@ async def delete_note(series_id: str, note_id: str, database: DatabaseDependency
 
 @router.post("/{series_id}/custom-nodes", response_model=CustomNodeResponse, status_code=201,
              summary="Create a user-owned custom node", responses=error_responses(404, 409, 422, 503))
-async def create_custom_node(series_id: str, payload: CustomNodeCreate, database: DatabaseDependency) -> CustomNodeResponse:
+async def create_custom_node(
+    series_id: str, payload: CustomNodeCreate, database: DatabaseDependency,
+    _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
+) -> CustomNodeResponse:
     try:
         return CustomNodeResponse.model_validate(await _repository(database).create_custom_node(series_id, payload))
     except UserContentValidationError as exc: raise _invalid(exc) from exc
@@ -142,7 +153,10 @@ async def get_custom_node(series_id: str, node_id: str, visible_until_order: Bou
 
 @router.patch("/{series_id}/custom-nodes/{node_id}", response_model=CustomNodeResponse,
               summary="Update a custom node label", responses=error_responses(404, 409, 422, 503))
-async def update_custom_node(series_id: str, node_id: str, payload: CustomNodeUpdate, database: DatabaseDependency) -> CustomNodeResponse:
+async def update_custom_node(
+    series_id: str, node_id: str, payload: CustomNodeUpdate, database: DatabaseDependency,
+    _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
+) -> CustomNodeResponse:
     try:
         return CustomNodeResponse.model_validate(await _repository(database).update_custom_node(series_id, node_id, payload))
     except UserContentValidationError as exc: raise _invalid(exc) from exc
@@ -152,7 +166,10 @@ async def update_custom_node(series_id: str, node_id: str, payload: CustomNodeUp
 
 @router.delete("/{series_id}/custom-nodes/{node_id}", status_code=204,
                summary="Hard-delete a custom node", responses={**error_responses(404, 409, 422, 503), 204: {"description": "Node deleted."}})
-async def delete_custom_node(series_id: str, node_id: str, database: DatabaseDependency) -> Response:
+async def delete_custom_node(
+    series_id: str, node_id: str, database: DatabaseDependency,
+    _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
+) -> Response:
     try:
         await _repository(database).delete_custom_node(series_id, node_id)
     except UserContentValidationError as exc: raise _invalid(exc) from exc
@@ -163,7 +180,10 @@ async def delete_custom_node(series_id: str, node_id: str, database: DatabaseDep
 
 @router.post("/{series_id}/custom-relationships", response_model=CustomRelationshipResponse, status_code=201,
              summary="Create a user-authored relationship", responses=error_responses(404, 409, 422, 503))
-async def create_custom_relationship(series_id: str, payload: CustomRelationshipCreate, database: DatabaseDependency) -> CustomRelationshipResponse:
+async def create_custom_relationship(
+    series_id: str, payload: CustomRelationshipCreate, database: DatabaseDependency,
+    _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
+) -> CustomRelationshipResponse:
     try:
         return CustomRelationshipResponse.model_validate(await _repository(database).create_custom_relationship(series_id, payload))
     except UserContentValidationError as exc: raise _invalid(exc) from exc
@@ -182,7 +202,10 @@ async def get_custom_relationship(series_id: str, relationship_id: str, visible_
 
 @router.patch("/{series_id}/custom-relationships/{relationship_id}", response_model=CustomRelationshipResponse,
               summary="Update a custom relationship predicate", responses=error_responses(404, 409, 422, 503))
-async def update_custom_relationship(series_id: str, relationship_id: str, payload: CustomRelationshipUpdate, database: DatabaseDependency) -> CustomRelationshipResponse:
+async def update_custom_relationship(
+    series_id: str, relationship_id: str, payload: CustomRelationshipUpdate, database: DatabaseDependency,
+    _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
+) -> CustomRelationshipResponse:
     try:
         return CustomRelationshipResponse.model_validate(await _repository(database).update_custom_relationship(series_id, relationship_id, payload))
     except UserContentValidationError as exc: raise _invalid(exc) from exc
@@ -192,7 +215,10 @@ async def update_custom_relationship(series_id: str, relationship_id: str, paylo
 
 @router.delete("/{series_id}/custom-relationships/{relationship_id}", status_code=204,
                summary="Hard-delete a custom relationship", responses={**error_responses(404, 409, 422, 503), 204: {"description": "Relationship deleted."}})
-async def delete_custom_relationship(series_id: str, relationship_id: str, database: DatabaseDependency) -> Response:
+async def delete_custom_relationship(
+    series_id: str, relationship_id: str, database: DatabaseDependency,
+    _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
+) -> Response:
     try:
         await _repository(database).delete_custom_relationship(series_id, relationship_id)
     except UserContentValidationError as exc: raise _invalid(exc) from exc

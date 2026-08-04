@@ -61,6 +61,10 @@ async def require_current_user(
     )
     if user is None:
         raise http_error(401, AUTH_UNAUTHENTICATED, "Authentication required.")
+    # Stamp the resolved user on the request so rate-limit identifiers and
+    # other per-request dependencies can key on the authenticated user id
+    # (services/rate_limit.py::rate_limit_identifier) instead of the IP.
+    request.state.user = user
     return user
 
 
