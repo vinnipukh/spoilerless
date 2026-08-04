@@ -65,7 +65,9 @@ class GraphEvidence(BaseModel):
     source_id: str
     text: str
     locator: str
-    content_hash: str
+    content_hash: str | None = Field(
+        default=None, description="Optional content hash for deduplication."
+    )
     visible_from_order: int = Field(ge=1)
     origin: Origin
 
