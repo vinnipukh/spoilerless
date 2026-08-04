@@ -179,8 +179,8 @@ function CreateCustomNodeDialog({
       setNodeType('Character')
       onOpenChange(false)
       onSuccess(created)
-    } catch (err: any) {
-      setError(err?.message ?? 'Failed to create node.')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create node.')
     } finally {
       setSaving(false)
     }
