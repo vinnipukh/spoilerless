@@ -30,7 +30,12 @@ class FakeUserRepo:
         self._store: dict[str, dict[str, Any]] = {}
 
     async def upsert(
-        self, google_sub: str, email: str, display_name: str, avatar_url: str
+        self,
+        google_sub: str,
+        email: str,
+        display_name: str,
+        avatar_url: str,
+        role: str = "user",
     ) -> dict[str, Any]:
         record = {
             "id": f"user:{uuid4()}",
@@ -38,6 +43,7 @@ class FakeUserRepo:
             "email": email,
             "display_name": display_name,
             "avatar_url": avatar_url,
+            "role": role,
             "created_at": "2026-01-01T00:00:00+00:00",
             "updated_at": "2026-01-01T00:00:00+00:00",
         }
@@ -148,13 +154,18 @@ def _authed(
     client: TestClient,
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
+    role: str = "admin",
 ) -> None:
+    # The /api/settings/llm endpoint is admin-only since 08-03 (AUTH-04), so
+    # the roundtrip tests act as an admin operator; the 403 tests below pass
+    # role="user" explicitly.
     user = asyncio.run(
         fake_user_repo.upsert(
             google_sub=f"sub-{uuid4()}",
             email="user@example.com",
             display_name="Test User",
             avatar_url="",
+            role=role,
         )
     )
     raw_token = asyncio.run(session_repo.create(user["id"], ttl_seconds=3600))
@@ -309,3 +320,28 @@ def test_update_llm_settings_accepts_local_http_base_url(
     )
     assert response.status_code == 200, response.text
     assert response.json()["base_url"] == "http://127.0.0.1:11434/v1"
+
+
+def test_get_and_update_llm_settings_require_admin_role(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    """GET and PUT /api/settings/llm are admin-only (AUTH-04, T-08-03-04)."""
+    _authed(client, fake_user_repo, session_repo, role="user")
+
+    get_response = client.get("/api/settings/llm")
+    assert get_response.status_code == 403, get_response.text
+    assert get_response.json()["detail"]["code"] == "forbidden"
+
+    put_response = client.put(
+        "/api/settings/llm",
+        json={
+            "provider": "gemini",
+            "api_key": "AIzaSyTestKey1234567890",
+            "model": "gemini-2.5-flash",
+            "enabled": True,
+        },
+    )
+    assert put_response.status_code == 403, put_response.text
+    assert put_response.json()["detail"]["code"] == "forbidden"

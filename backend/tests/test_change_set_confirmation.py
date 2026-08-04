@@ -60,7 +60,12 @@ class FakeUserRepo:
         self._store: dict[str, dict[str, Any]] = {}
 
     async def upsert(
-        self, google_sub: str, email: str, display_name: str, avatar_url: str
+        self,
+        google_sub: str,
+        email: str,
+        display_name: str,
+        avatar_url: str,
+        role: str = "user",
     ) -> dict[str, Any]:
         record = {
             "id": f"user:{uuid4()}",
@@ -68,6 +73,7 @@ class FakeUserRepo:
             "email": email,
             "display_name": display_name,
             "avatar_url": avatar_url,
+            "role": role,
             "created_at": "2026-01-01T00:00:00+00:00",
             "updated_at": "2026-01-01T00:00:00+00:00",
         }
@@ -169,6 +175,7 @@ def _authed(
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
     progress: int = 1,
+    role: str = "user",
 ) -> dict[str, Any]:
     user = asyncio.run(
         fake_user_repo.upsert(
@@ -176,6 +183,7 @@ def _authed(
             email="user@example.com",
             display_name="Test User",
             avatar_url="",
+            role=role,
         )
     )
     raw_token = asyncio.run(session_repo.create(user["id"], ttl_seconds=3600))
@@ -267,7 +275,7 @@ def test_confirming_an_already_applied_change_set_is_a_safe_idempotent_replay(
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
 ) -> None:
-    _authed(client, fake_user_repo, session_repo, progress=1)
+    _authed(client, fake_user_repo, session_repo, progress=1, role="admin")
     session = _create_chat_session(client)
     label = f"Idempotent replay {uuid4()}"
 
@@ -298,7 +306,7 @@ def test_confirm_rejects_stale_change_set_after_progress_is_lowered(
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
 ) -> None:
-    _authed(client, fake_user_repo, session_repo, progress=3)
+    _authed(client, fake_user_repo, session_repo, progress=3, role="admin")
     session = _create_chat_session(client)
     label = f"Stale after lowered progress {uuid4()}"
 
@@ -325,7 +333,7 @@ def test_confirm_succeeds_when_progress_is_unchanged_since_propose(
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
 ) -> None:
-    _authed(client, fake_user_repo, session_repo, progress=3)
+    _authed(client, fake_user_repo, session_repo, progress=3, role="admin")
     session = _create_chat_session(client)
     label = f"Unchanged progress succeeds {uuid4()}"
 
@@ -348,7 +356,7 @@ def test_reject_makes_no_mutation_and_a_subsequent_confirm_fails(
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
 ) -> None:
-    _authed(client, fake_user_repo, session_repo, progress=1)
+    _authed(client, fake_user_repo, session_repo, progress=1, role="admin")
     session = _create_chat_session(client)
     label = f"Rejected, never applied {uuid4()}"
 
@@ -370,13 +378,44 @@ def test_confirm_and_reject_are_generic_404_for_unowned_or_missing_change_set(
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
 ) -> None:
-    _authed(client, fake_user_repo, session_repo, progress=1)
+    _authed(client, fake_user_repo, session_repo, progress=1, role="admin")
 
     missing_confirm = _confirm(client, "change-set:does-not-exist")
     missing_reject = _reject(client, "change-set:does-not-exist")
 
     assert missing_confirm.status_code == 404
     assert missing_reject.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Admin gating of confirm (AUTH-03, T-08-03-02) — only the confirm/apply
+# action is gated; propose/reject/revert stay reachable by any authenticated
+# user per the plan's scoped reading of AUTH-03.
+# ---------------------------------------------------------------------------
+
+
+def test_confirm_requires_admin_role_403_for_non_admin(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    _authed(client, fake_user_repo, session_repo, progress=1, role="user")
+    session = _create_chat_session(client)
+
+    proposed = _propose(client, session["id"], [_create_node_op()])
+    assert proposed.status_code == 201, proposed.text
+    change_set_id = proposed.json()["id"]
+
+    response = _confirm(client, change_set_id)
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"]["code"] == "forbidden"
+
+    # The gate rejected the request before any mutation — the ChangeSet is
+    # exactly where propose left it, and reject remains reachable for the
+    # same non-admin user.
+    assert asyncio.run(_change_set_status(change_set_id)) == "awaiting_confirmation"
+    rejected = _reject(client, change_set_id)
+    assert rejected.status_code == 200, rejected.text
 
 
 # ---------------------------------------------------------------------------
