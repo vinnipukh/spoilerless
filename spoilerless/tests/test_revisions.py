@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.tests.test_user_content_api import (
+from spoilerless.tests.test_user_content_api import (
     assert_hidden_matches_missing,
     direct_database_snapshot,
     live_client,
@@ -613,7 +613,7 @@ class TestExistingTestsStillPass:
     ) -> None:
         """Re-run key user-content behaviour to prove revision logging
         did not break anything."""
-        from backend.tests.test_user_content_api import (
+        from spoilerless.tests.test_user_content_api import (
             test_note_character_lifecycle_and_spoiler_boundary,
             test_custom_node_crud_all_five_types_and_visibility,
             test_custom_content_canonical_isolation_and_hidden_missing_equivalence,
