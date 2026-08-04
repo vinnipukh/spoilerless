@@ -285,6 +285,7 @@ name = "hdgrafcehennemi"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "certifi" },
     { name = "fastapi" },
     { name = "google-auth", extra = ["requests"] },
     { name = "neo4j" },
@@ -303,6 +304,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "certifi", specifier = ">=2026.7.22" },
     { name = "fastapi", specifier = ">=0.140.7" },
     { name = "google-auth", extras = ["requests"], specifier = ">=2.56.0" },
     { name = "neo4j", specifier = ">=6.2.0" },

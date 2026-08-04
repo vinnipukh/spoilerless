@@ -3,6 +3,7 @@ name = "hdgrafcehennemi"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
+    "certifi>=2026.7.22",
     "fastapi>=0.140.7",
     "google-auth[requests]>=2.56.0",
     "neo4j>=6.2.0",

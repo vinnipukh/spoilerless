@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Awaitable, Callable, TypeVar
 
+import certifi
 from fastapi import Depends, Request
-from neo4j import AsyncDriver, AsyncGraphDatabase
+from neo4j import AsyncDriver, AsyncGraphDatabase, TrustCustomCAs
 
 from backend.app.core.config import Settings, get_settings
 
@@ -21,15 +22,34 @@ class Neo4jDatabase:
 
     def open(self) -> None:
         if self._driver is None:
+            uri = self._settings.neo4j_uri
+            kwargs: dict[str, Any] = {
+                "max_connection_pool_size": 50,
+                "connection_timeout": 30.0,
+                "liveness_check_timeout": 60.0,
+            }
+            if uri.startswith(("neo4j+s://", "bolt+s://")):
+                # Full-TLS schemes (neo4j+s) reject explicit encryption
+                # config in driver 6.x (ConfigurationError). Normalize to
+                # the plain scheme with explicit encrypted=True plus
+                # certifi's trust store so CA verification is deterministic:
+                # the Windows OS store on this machine lacks the SSL.com
+                # root Aura's chain uses (verified 2026-08-04:
+                # SSLCertVerificationError "self-signed certificate in
+                # certificate chain"), while certifi verifies the same
+                # chain fine (and is complete on Linux/Render).
+                uri = uri.replace("neo4j+s://", "neo4j://").replace(
+                    "bolt+s://", "bolt://"
+                )
+                kwargs["encrypted"] = True
+                kwargs["trusted_certificates"] = TrustCustomCAs(certifi.where())
             self._driver = AsyncGraphDatabase.driver(
-                self._settings.neo4j_uri,
+                uri,
                 auth=(
                     self._settings.neo4j_username,
                     self._settings.neo4j_password,
                 ),
-                max_connection_pool_size=50,
-                connection_timeout=30.0,
-                liveness_check_timeout=60.0,
+                **kwargs,
             )
 
     async def verify_connection(self) -> None:
