@@ -14,7 +14,7 @@ and episode metadata gates).
 
 - The value is a positive integer: the global publication order (see §4) at which the resource
   becomes visible.
-- **Rejected competing names** — never introduce any of these anywhere in `backend/app` or
+- **Rejected competing names** — never introduce any of these anywhere in `spoilerless/app` or
   `frontend/src`:
   - `safe_at_order`
   - `revealed_at_order`
@@ -42,9 +42,9 @@ visible_from_order IS NOT NULL AND visible_from_order <= effective_view_order
   would make a missing reveal point visible from order 1 — the opposite of fail-closed. It may
   appear only in queries over provably non-story data, and never in the visibility rule itself.
 - The rule is enforced at the query level today (`<= $visible_until_order` in
-  `backend/app/spoiler/filter.py`, `backend/app/retrieval/tools.py`,
-  `backend/app/repository/user_content.py`, etc.) and will be centralized in the
-  `backend/app/spoiler/policy.py` service (see the "Central visibility-policy service contract"
+  `spoilerless/app/spoiler/filter.py`, `spoilerless/app/retrieval/tools.py`,
+  `spoilerless/app/repository/user_content.py`, etc.) and will be centralized in the
+  `spoilerless/app/spoiler/policy.py` service (see the "Central visibility-policy service contract"
   section) in 07-02.
 - Effective boundary: `effective_view_order` (see §3). When no boundary is available, fail closed
   (return nothing hidden-ineligible), never default to "visible".
@@ -102,16 +102,16 @@ Spoiler visibility follows **release/publication order**, never fictional chrono
 
 ## 6. Central visibility-policy service contract (D-04)
 
-Module: `backend/app/spoiler/policy.py` — the **single owner of `visible_from_order` semantics**
+Module: `spoilerless/app/spoiler/policy.py` — the **single owner of `visible_from_order` semantics**
 and of the D-05 effective-boundary formula. Every repository, service, retrieval tool, and API
 route that decides visibility delegates to this module; the rule is never reimplemented per query.
-Follows the existing package layout (`backend/app/spoiler/`, alongside `filter.py`) with **no new
+Follows the existing package layout (`spoilerless/app/spoiler/`, alongside `filter.py`) with **no new
 framework** (D-01). Implemented in **07-02**; the signatures below are the contract the 07-02
 executor implements without reinterpretation. No competing reveal-point names are introduced
-anywhere in `backend/app` or `frontend/src` (D-02).
+anywhere in `spoilerless/app` or `frontend/src` (D-02).
 
 ```python
-# backend/app/spoiler/policy.py — contract (07-02 implements)
+# spoilerless/app/spoiler/policy.py — contract (07-02 implements)
 
 def validate_visibility_order(order: int) -> int:
     """Return `order` unchanged, or raise on `order < 1` or a non-persisted order

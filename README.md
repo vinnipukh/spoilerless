@@ -17,9 +17,9 @@ Explore characters, events, locations, claims, and relationships through an inte
 
 | Location | Holds | Notes |
 |---|---|---|
-| `.env` (repo root) | Backend settings (`NEO4J_*`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`, `ADMIN_EMAILS`, `REDIS_URL`, `LLM_*`) | Read by `backend/app/core/config.py` via pydantic-settings. **Never committed.** Points at the shared AuraDB by default. |
+| `.env` (repo root) | Backend settings (`NEO4J_*`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`, `ADMIN_EMAILS`, `REDIS_URL`, `LLM_*`) | Read by `spoilerless/app/core/config.py` via pydantic-settings. **Never committed.** Points at the shared AuraDB by default. |
 | `frontend/.env.local` | `VITE_GOOGLE_CLIENT_ID` only | Read by Vite for local dev. `VITE_API_BASE_URL` stays commented (the dev proxy handles `/api`). **Never committed.** |
-| `scripts/env-local.sh` | Local-Docker Neo4j credentials (`localhost:7687`) | `source scripts/env-local.sh` before running the backend/tests against the local Docker Neo4j — **never** edit `.env` to switch databases. |
+| `scripts/env-local.sh` | Local-Docker Neo4j credentials (`localhost:7687`) | `source scripts/env-local.sh` before running the spoilerless/tests against the local Docker Neo4j — **never** edit `.env` to switch databases. |
 | `docker-compose.yml` | Local Neo4j Community container (`hdgrafcehennemi-neo4j`, auth `neo4j` / `hdgraf-local-password`) | Only for local testing; production uses AuraDB. |
 
 ### Platform environment variables
@@ -58,7 +58,7 @@ Build settings: Framework Preset **Vite**, Root Directory **`frontend/`**, Build
 3. `cp .env.example .env` → fill in real values (AuraDB creds, Google Client ID, emails, Redis URL)
 4. `cp frontend/.env.example frontend/.env.local` → set `VITE_GOOGLE_CLIENT_ID`
 5. Optional local DB: `docker compose up -d neo4j`, then use `source scripts/env-local.sh` before local runs
-6. Backend: `uv run uvicorn backend.app.main:app --reload` · Frontend: `cd frontend && npm run dev`
+6. Backend: `uv run uvicorn spoilerless.app.main:app --reload` · Frontend: `cd frontend && npm run dev`
 
 Full platform-specific procedures, rollback, and monitoring: [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md).
 
@@ -183,7 +183,7 @@ Neo4j Browser will be available at `http://localhost:7474`.
 
 ```bash
 uv sync
-uv run --project backend python -m backend.app.graph.setup
+uv run --project spoilerless python -m spoilerless.app.graph.setup
 ```
 
 The setup module creates Neo4j constraints and seeds the Dexter series, episodes, characters, locations, events, claims, sources, and evidence fragments. Although `pyproject.toml` declares an `hdgraf-setup` script, the current project packaging configuration does not install that executable through `uv sync`.
@@ -191,7 +191,7 @@ The setup module creates Neo4j constraints and seeds the Dexter series, episodes
 ### 5. Start the backend
 
 ```bash
-uv run uvicorn backend.app.main:app --reload
+uv run uvicorn spoilerless.app.main:app --reload
 ```
 
 API documentation (Swagger UI) opens at `http://localhost:8000/docs`.

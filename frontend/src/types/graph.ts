@@ -1,4 +1,4 @@
-// Mirrors backend/app/domain/graph.py field-for-field.
+// Mirrors spoilerless/app/domain/graph.py field-for-field.
 //
 // NOTE: `origin` is typed as `string`, not a union, because the wire value in
 // this project is literally `'canonical'` (never `'curated'`) — see

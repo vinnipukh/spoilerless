@@ -1,4 +1,4 @@
-// Mirrors backend/app/domain/revision.py RevisionAction + RevisionResponse
+// Mirrors spoilerless/app/domain/revision.py RevisionAction + RevisionResponse
 
 export type RevisionAction = 'Created' | 'Updated' | 'Deleted' | 'Reverted'
 

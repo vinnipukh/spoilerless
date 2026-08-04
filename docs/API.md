@@ -1,7 +1,7 @@
 <!-- generated-by: gsd-doc-writer -->
 # HD Graf Cehennemi HTTP API
 
-The backend is a FastAPI application defined by `backend.app.main:app`. Its generated OpenAPI document is the authoritative machine-readable contract.
+The backend is a FastAPI application defined by `spoilerless.app.main:app`. Its generated OpenAPI document is the authoritative machine-readable contract.
 
 - OpenAPI JSON: `/openapi.json`
 - Swagger UI: `/docs`
@@ -80,7 +80,7 @@ Series, episodes, graph, notes, custom nodes, custom relationships, revisions, c
 
 ### Which endpoints require the admin role?
 
-`RequireAdminDependency` (`backend/app/api/deps.py`) first resolves the session via `CurrentUserDependency`, then rejects with `403 forbidden` unless the resolved `AppUser.role` is `"admin"`. `role` is derived server-side from `ADMIN_EMAILS` membership at Google sign-in and is never accepted from a request body. Admin-gated routes:
+`RequireAdminDependency` (`spoilerless/app/api/deps.py`) first resolves the session via `CurrentUserDependency`, then rejects with `403 forbidden` unless the resolved `AppUser.role` is `"admin"`. `role` is derived server-side from `ADMIN_EMAILS` membership at Google sign-in and is never accepted from a request body. Admin-gated routes:
 
 - `PATCH /api/series/{series_id}/candidates/{claim_id}` (edit)
 - `POST /api/series/{series_id}/candidates/{claim_id}/approve`
@@ -442,7 +442,7 @@ An SSE response that has already sent HTTP headers cannot change its status; it 
 
 ## Rate Limits
 
-There is no general, catch-all HTTP request-rate limiter. Three route groups carry an explicit Redis-backed limiter (`backend/app/services/rate_limit.py`), enforced with `pyrate-limiter`'s atomic `RedisBucket` against the shared Redis instance — correct across multiple backend workers:
+There is no general, catch-all HTTP request-rate limiter. Three route groups carry an explicit Redis-backed limiter (`spoilerless/app/services/rate_limit.py`), enforced with `pyrate-limiter`'s atomic `RedisBucket` against the shared Redis instance — correct across multiple backend workers:
 
 | Route group | Routes | Limit | Key |
 |---|---|---|---|

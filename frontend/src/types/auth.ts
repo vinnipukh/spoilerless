@@ -1,4 +1,4 @@
-// Mirrors backend/app/domain/auth.py field-for-field.
+// Mirrors spoilerless/app/domain/auth.py field-for-field.
 // google_sub is intentionally excluded from the public response model.
 
 export type User = {

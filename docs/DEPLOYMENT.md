@@ -26,14 +26,14 @@ Redirect Rule.
 
 | File | Platform | Purpose |
 |---|---|---|
-| `render.yaml` | Render | Blueprint: `uv sync --frozen` → `uv run uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT`, free plan, `autoDeploy: true` |
+| `render.yaml` | Render | Blueprint: `uv sync --frozen` → `uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT`, free plan, `autoDeploy: true` |
 | `frontend/vercel.json` | Vercel | SPA catch-all rewrite (`/(.*)` → `/index.html`) for client-side routing. No `/api` proxy — the frontend calls the Render backend directly via `VITE_API_BASE_URL`. |
 | `.github/workflows/ci.yml` | GitHub Actions | Pull-request gate: backend `pytest` + frontend `build`/`lint` (see Build Pipeline) |
 
 ### Database — Neo4j AuraDB Free
 
 The backend connects to AuraDB via `Neo4jDatabase.open()` in
-`backend/app/graph/database.py`, with the following Aura-specific config:
+`spoilerless/app/graph/database.py`, with the following Aura-specific config:
 
 - **TLS**: the `neo4j+s://` scheme is normalised to `neo4j://` +
   `encrypted=True` + `TrustCustomCAs(certifi.where())`, because the
@@ -50,7 +50,7 @@ The backend connects to AuraDB via `Neo4jDatabase.open()` in
   the path to true custom RBAC.
 
 The seed data (Dexter S01E01-03 fixture graph) is migrated via the
-existing idempotent `hdgraf-setup` script (`backend.app.graph.setup`)
+existing idempotent `hdgraf-setup` script (`spoilerless.app.graph.setup`)
 run against the Aura instance. Docker Compose Neo4j is **no longer part
 of any production deployment path** — it exists only for local
 development (see Local Deployment below).
@@ -59,13 +59,13 @@ development (see Local Deployment below).
 
 `REDIS_URL` (Upstash `rediss://` TLS connection string, set on Render)
 gates two features that share one Redis client
-(`backend/app/cache/redis_client.py`):
+(`spoilerless/app/cache/redis_client.py`):
 
-- **Rate limiting** (`backend/app/services/rate_limit.py`): login,
+- **Rate limiting** (`spoilerless/app/services/rate_limit.py`): login,
   chat-send, and content-write endpoints return `429` in the standard
   error envelope once per-user/IP thresholds are exceeded. Empty
   `REDIS_URL` disables all rate limiting — the app boots unthrottled.
-- **Graph query response cache** (`backend/app/cache/graph_cache.py`):
+- **Graph query response cache** (`spoilerless/app/cache/graph_cache.py`):
   `GET /api/series/{series_id}/graph` reads cache-aside, keyed by
   `(series_id, effective_boundary, user_id)` with a 300s TTL, and
   invalidated on every content-changing write (candidate
@@ -121,7 +121,7 @@ in any production deployment path.
 4. Start the FastAPI backend:
 
    ```bash
-   uv run uvicorn backend.app.main:app --reload
+   uv run uvicorn spoilerless.app.main:app --reload
    ```
 
 5. In another terminal, install frontend dependencies and start Vite:

@@ -21,7 +21,7 @@ Future invariants (when cast support is actually required):
 - Cast ordering (billing order) must not be exposed before its reveal point; any ordering shown to
   a viewer is derived from resources visible at the effective boundary.
 - The `episodes_seen_so_far` field must be computed by the central visibility policy
-  (`backend/app/spoiler/policy.py`, 07-02), not by ad-hoc queries, so the boundary rule is
+  (`spoilerless/app/spoiler/policy.py`, 07-02), not by ad-hoc queries, so the boundary rule is
   applied once.
 - No actor data may be scraped or imported externally (D-01 rejects actor scraping).
 
@@ -100,7 +100,7 @@ Future invariants (when cast support is actually required):
 1. No placeholder tables, no placeholder UI, no stubbed endpoints (D-18).
 2. Every story-sensitive resource uses `visible_from_order` (D-02) and the fail-closed rule (D-03).
 3. All boundary math goes through the central visibility policy service
-   (`backend/app/spoiler/policy.py`, specified in `docs/SPOILER-TERMINOLOGY.md`, implemented in
+   (`spoilerless/app/spoiler/policy.py`, specified in `docs/SPOILER-TERMINOLOGY.md`, implemented in
    07-02).
 4. Any future implementation must be a new plan in the GSD flow; nothing in this document grants
    permission to build these features inline.

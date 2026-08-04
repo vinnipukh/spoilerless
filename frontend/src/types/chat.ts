@@ -1,4 +1,4 @@
-// Mirrors backend/app/domain/chat.py field-for-field. The public response
+// Mirrors spoilerless/app/domain/chat.py field-for-field. The public response
 // shape is `{message, citations, graph_focus, proposed_change_set}` exactly
 // as documented in 06-CONTEXT.md's "Suggested public response shape" and
 // implemented by MessageResponseEnvelope — no field is renamed or dropped.

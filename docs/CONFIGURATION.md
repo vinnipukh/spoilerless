@@ -22,7 +22,7 @@
 ## Environment Variables
 
 The backend reads configuration from the current working directory's `.env` file, as configured by
-`backend/app/core/config.py`. When starting it from the project root, copy `.env.example` to `.env` and fill in values:
+`spoilerless/app/core/config.py`. When starting it from the project root, copy `.env.example` to `.env` and fill in values:
 
 ```bash
 cp .env.example .env
@@ -45,12 +45,12 @@ cp .env.example .env
 | `GOOGLE_CLIENT_ID` | `""` (empty) | No — but sign-in fails without it | Google OAuth 2.0 Web Client ID used to verify Google ID tokens. When unset, `POST /api/auth/google` returns `401 AUTH_DISABLED`. |
 | `SESSION_COOKIE_NAME` | `session` | No | Name of the HttpOnly session cookie. |
 | `SESSION_TTL_SECONDS` | `604800` (7 days) | No — but sign-in fails if `<= 0` | Session time-to-live in seconds. `POST /api/auth/google` returns `401 AUTH_DISABLED` if this is explicitly set to a non-positive value; when unset, the default applies. |
-| `SESSION_COOKIE_SAMESITE` | `lax` | No — not in `.env.example` | `SameSite` policy applied to the session cookie by `_make_cookie`/`_delete_cookie` in `backend/app/api/auth.py`. `lax` is correct for the same-site custom-domain layout; use `strict` or `none` (with `SESSION_COOKIE_SECURE=true`) deliberately per environment. |
+| `SESSION_COOKIE_SAMESITE` | `lax` | No — not in `.env.example` | `SameSite` policy applied to the session cookie by `_make_cookie`/`_delete_cookie` in `spoilerless/app/api/auth.py`. `lax` is correct for the same-site custom-domain layout; use `strict` or `none` (with `SESSION_COOKIE_SECURE=true`) deliberately per environment. |
 | `SESSION_COOKIE_SECURE` | `true` | No | Sets the `Secure` flag on the session cookie. Defaults to `true` (Render/Vercel are HTTPS-only); local HTTP dev must explicitly set `SESSION_COOKIE_SECURE=false`. |
-| `FRONTEND_ORIGINS` | `http://localhost:5173` | No | Comma-separated list of allowed CORS origins for the FastAPI backend. Also used by `verify_origin` in `backend/app/api/auth.py` for CSRF `Origin`/`Referer` validation on `POST /api/auth/google`; `POST /api/auth/logout` does not apply that dependency. |
+| `FRONTEND_ORIGINS` | `http://localhost:5173` | No | Comma-separated list of allowed CORS origins for the FastAPI backend. Also used by `verify_origin` in `spoilerless/app/api/auth.py` for CSRF `Origin`/`Referer` validation on `POST /api/auth/google`; `POST /api/auth/logout` does not apply that dependency. |
 | `ALLOWED_EMAILS` | `""` (empty) | No — not in `.env.example` | Comma-separated, case-insensitive allowlist of emails permitted to sign in. Empty disables the allowlist (any verified Google account may sign in) — never leave empty in production. A verified-but-unlisted email raises `EmailNotAllowedError`, returned as `403 AUTH_EMAIL_NOT_ALLOWED`. |
-| `ADMIN_EMAILS` | `""` (empty) | No — not in `.env.example` | Comma-separated, case-insensitive allowlist of emails granted the `admin` application role at login (`backend/app/services/auth.py`). Empty means no admin exists yet. Role is re-derived from this variable on every login, so removing an email demotes that user on their next sign-in. |
-| `REDIS_URL` | `""` (empty) | No | Upstash-style `rediss://` Redis connection string used for rate-limit counters (`backend/app/services/rate_limit.py`) and the graph query response cache (`backend/app/cache/graph_cache.py`). Empty disables both features — rate limiting becomes a no-op and caching always falls through to Neo4j. See [Rate Limiting & Redis Cache](#rate-limiting--redis-cache). |
+| `ADMIN_EMAILS` | `""` (empty) | No — not in `.env.example` | Comma-separated, case-insensitive allowlist of emails granted the `admin` application role at login (`spoilerless/app/services/auth.py`). Empty means no admin exists yet. Role is re-derived from this variable on every login, so removing an email demotes that user on their next sign-in. |
+| `REDIS_URL` | `""` (empty) | No | Upstash-style `rediss://` Redis connection string used for rate-limit counters (`spoilerless/app/services/rate_limit.py`) and the graph query response cache (`spoilerless/app/cache/graph_cache.py`). Empty disables both features — rate limiting becomes a no-op and caching always falls through to Neo4j. See [Rate Limiting & Redis Cache](#rate-limiting--redis-cache). |
 | `LLM_ENABLED` | `false` | No | Master switch for the GraphRAG chat/retrieval endpoints. When `false`, chat calls raise `LLMProviderDisabled`, mapped to HTTP 503 with code `LLM_DISABLED`. |
 | `LLM_PROVIDER` | `openai_compatible` | No | Environment fallback for the active provider selector. Two implementations exist: `openai_compatible` and `gemini`. The PUT request model defaults an omitted `provider` field to `gemini`, which is then stored; that request default is distinct from this env/runtime fallback. |
 | `LLM_BASE_URL` | `""` (empty) | Effectively required for `openai_compatible` if `LLM_ENABLED=true` and no runtime override is stored; optional for Gemini | Base URL for the OpenAI-compatible `/chat/completions` endpoint, or the Gemini API base when `LLM_PROVIDER=gemini` (defaults to `https://generativelanguage.googleapis.com` if left empty for Gemini). |
@@ -62,8 +62,8 @@ cp .env.example .env
 | `LLM_MAX_TOOL_ROUNDS` | `4` | No | Maximum bounded tool-calling rounds per chat turn. |
 | `LLM_MAX_CONTEXT_ITEMS` | `40` | No | Maximum number of retrieved context items assembled per turn. |
 | `LLM_MAX_CONTEXT_CHARACTERS` | `12000` | No | Maximum total character budget for the assembled context per turn. |
-| `LLM_FALLBACK_EN` | `None` (unset) | No | Optional override for the localized "insufficient evidence" fallback response in English (not listed in `.env.example`). Falls back to `INSUFFICIENT_EVIDENCE_FALLBACK_EN` in `backend/app/llm/fallbacks.py` when unset or blank. |
-| `LLM_FALLBACK_TR` | `None` (unset) | No | Optional override for the localized "insufficient evidence" fallback response in Turkish (not listed in `.env.example`). Falls back to `INSUFFICIENT_EVIDENCE_FALLBACK_TR` in `backend/app/llm/fallbacks.py` when unset or blank. |
+| `LLM_FALLBACK_EN` | `None` (unset) | No | Optional override for the localized "insufficient evidence" fallback response in English (not listed in `.env.example`). Falls back to `INSUFFICIENT_EVIDENCE_FALLBACK_EN` in `spoilerless/app/llm/fallbacks.py` when unset or blank. |
+| `LLM_FALLBACK_TR` | `None` (unset) | No | Optional override for the localized "insufficient evidence" fallback response in Turkish (not listed in `.env.example`). Falls back to `INSUFFICIENT_EVIDENCE_FALLBACK_TR` in `spoilerless/app/llm/fallbacks.py` when unset or blank. |
 
 > **Note:** There is currently no `ENVIRONMENT` (development/production) or `SECRET_KEY` variable in the
 > codebase. Session tokens are opaque, cryptographically random strings (`secrets.token_urlsafe(48)`)
@@ -79,7 +79,7 @@ cp .env.example .env
 
 ## Backend Configuration (Pydantic Settings)
 
-The `Settings` class in `backend/app/core/config.py` uses **pydantic-settings** (`BaseSettings`) to load
+The `Settings` class in `spoilerless/app/core/config.py` uses **pydantic-settings** (`BaseSettings`) to load
 configuration from `.env` (or the process environment). Every field reads from its uppercase environment
 variable name (e.g. `neo4j_uri` ← `NEO4J_URI`).
 
@@ -135,7 +135,7 @@ class Settings(BaseSettings):
 
 ### Database connection
 
-`Neo4jDatabase` (`backend/app/graph/database.py`):
+`Neo4jDatabase` (`spoilerless/app/graph/database.py`):
 
 1. Creates an `AsyncGraphDatabase.driver(...)` using `neo4j_uri` and `(neo4j_username, neo4j_password)`.
 2. Exposes `execute_query()` and `execute_write()`, both scoped to the configured `neo4j_database`.
@@ -144,7 +144,7 @@ class Settings(BaseSettings):
 
 ### CORS
 
-`backend/app/main.py` parses `FRONTEND_ORIGINS` and configures `CORSMiddleware`:
+`spoilerless/app/main.py` parses `FRONTEND_ORIGINS` and configures `CORSMiddleware`:
 
 ```python
 _allowed_origins = [
@@ -159,7 +159,7 @@ honored on cross-origin requests from any listed origin.
 
 ### CSRF protection
 
-The same `FRONTEND_ORIGINS` value also drives `verify_origin()` in `backend/app/api/auth.py`, a FastAPI
+The same `FRONTEND_ORIGINS` value also drives `verify_origin()` in `spoilerless/app/api/auth.py`, a FastAPI
 dependency applied to `POST /api/auth/google` but not `POST /api/auth/logout`. It compares the request's `Origin` (or, if absent,
 `Referer`) header against the configured origin list and rejects mismatches with `403 AUTH_ORIGIN_NOT_ALLOWED`.
 A request with neither header is also rejected (fail-closed). Setting `FRONTEND_ORIGINS=*` disables this
@@ -169,14 +169,14 @@ navigations).
 
 ### Session cookie SameSite policy
 
-`_make_cookie()` / `_delete_cookie()` in `backend/app/api/auth.py` set the session cookie's `SameSite`
+`_make_cookie()` / `_delete_cookie()` in `spoilerless/app/api/auth.py` set the session cookie's `SameSite`
 attribute from `SESSION_COOKIE_SAMESITE` (default `lax`) rather than a hardcoded value, so it can be tuned
 per deployment (`strict` or `none` — the latter requires `SESSION_COOKIE_SECURE=true`).
 
 ### Authentication allowlist and admin role
 
 Two optional comma-separated, case-insensitive email lists gate and classify sign-in
-(`backend/app/services/auth.py`, `backend/app/api/auth.py`):
+(`spoilerless/app/services/auth.py`, `spoilerless/app/api/auth.py`):
 
 - **`ALLOWED_EMAILS`** — when non-empty, restricts sign-in to the listed emails. A verified-but-unlisted
   Google account is rejected with `403 AUTH_EMAIL_NOT_ALLOWED` (`EmailNotAllowedError`). Empty means any
@@ -184,7 +184,7 @@ Two optional comma-separated, case-insensitive email lists gate and classify sig
 - **`ADMIN_EMAILS`** — when the signed-in email (lowercased) is a member, the user's `role` is set to
   `"admin"`; otherwise `"user"`. Role is re-derived from this variable **on every login** — removing an
   email demotes that user's `role` the next time they sign in, it is never read from client input or
-  persisted independent of login. `RequireAdminDependency` (`backend/app/api/deps.py`) enforces
+  persisted independent of login. `RequireAdminDependency` (`spoilerless/app/api/deps.py`) enforces
   `role == "admin"` on admin-only routes (for example `GET`/`PUT /api/settings/llm`), rejecting with
   `403 forbidden` otherwise.
 
@@ -194,13 +194,13 @@ plus a server-controlled env var — never by unverified client input.
 ### Rate limiting & Redis cache
 
 Two independent features share the single `REDIS_URL` setting and the one shared `redis.asyncio` client in
-`backend/app/cache/redis_client.py` (`get_redis()`, `lru_cache`-decorated). Both are guarded on a non-empty
+`spoilerless/app/cache/redis_client.py` (`get_redis()`, `lru_cache`-decorated). Both are guarded on a non-empty
 `REDIS_URL` and degrade to a no-op (not a crash) when it is unset — local development without Redis runs
 unthrottled and always queries Neo4j directly:
 
-- **Rate limiting** (`backend/app/services/rate_limit.py`) — `RateLimiter` dependencies backed by
+- **Rate limiting** (`spoilerless/app/services/rate_limit.py`) — `RateLimiter` dependencies backed by
   `pyrate-limiter`'s Redis `RedisBucket` (one ZSET per window, atomic across multiple backend workers). Bound
-  once at FastAPI startup by `init_rate_limiter()` (`backend/app/main.py`'s `lifespan()`) when `REDIS_URL` is
+  once at FastAPI startup by `init_rate_limiter()` (`spoilerless/app/main.py`'s `lifespan()`) when `REDIS_URL` is
   set. Configured windows:
 
   | Route group | Limit | Window | Key |
@@ -210,7 +210,7 @@ unthrottled and always queries Neo4j directly:
   | Content write | 30 requests | 60s | per user, falling back to IP |
 
   A request over the limit is rejected with `429 too_many_requests`.
-- **Graph query response cache** (`backend/app/cache/graph_cache.py`) — cache-aside layer for
+- **Graph query response cache** (`spoilerless/app/cache/graph_cache.py`) — cache-aside layer for
   `GET /api/series/{series_id}/graph`. Cache key is `graph:{series_id}:{effective_boundary}:{user_id or 'anon'}`
   with a `300`-second TTL (`DEFAULT_GRAPH_TTL_SECONDS`); any Redis error or unset `REDIS_URL` falls through
   to querying Neo4j directly rather than surfacing a request failure.
@@ -257,14 +257,14 @@ configuration is done by maintaining a separate `.env` per deployment:
 In addition to the `LLM_*` environment variables above, the effective LLM provider configuration can be
 set at runtime through the API and is persisted in the graph — it is **not** purely `.env`-driven.
 
-- **Storage:** `SettingsRepository` (`backend/app/repository/settings.py`) persists a single
+- **Storage:** `SettingsRepository` (`spoilerless/app/repository/settings.py`) persists a single
   `:AppSetting {key: 'llm'}` node in Neo4j via `MERGE`, storing the payload as a JSON string property.
 - **Endpoints (admin role required):**
   - `GET /api/settings/llm` — returns stored values with environment fallbacks, but not provider-construction defaults (for example, Gemini's default base URL is still returned as `null` when no URL is configured); the API key is masked
     (`mask_api_key()` returns `"••••" + last 4 chars` for keys longer than four characters, one bullet per character for shorter keys, or `None` if unset).
-  - `PUT /api/settings/llm` — updates the configuration (`backend/app/api/settings.py`,
+  - `PUT /api/settings/llm` — updates the configuration (`spoilerless/app/api/settings.py`,
     `SettingsService.update_llm`).
-  - Both routes depend on `RequireAdminDependency` (`backend/app/api/deps.py`), so only a session whose
+  - Both routes depend on `RequireAdminDependency` (`spoilerless/app/api/deps.py`), so only a session whose
     `role == "admin"` (see [Authentication allowlist and admin role](#authentication-allowlist-and-admin-role))
     may view or change the shared LLM provider configuration; any other authenticated user gets
     `403 forbidden`.
@@ -272,8 +272,8 @@ set at runtime through the API and is persisted in the graph — it is **not** p
   otherwise the corresponding `LLM_*` setting from `Settings` is used as the fallback (`get_llm()` and
   `get_llm_provider()` use `stored.get(field) or env_value`). `enabled` is different because `false` is
   meaningful: presence in storage wins via `stored.get("enabled", env_value)`; only an absent stored key
-  falls back to `settings.llm_enabled` (`backend/app/services/settings.py`).
-- **Supported providers:** `backend/app/domain/settings.py` declares
+  falls back to `settings.llm_enabled` (`spoilerless/app/services/settings.py`).
+- **Supported providers:** `spoilerless/app/domain/settings.py` declares
   `LLM_PROVIDERS = ("gemini", "openai_compatible", "vllm", "ollama")`. `vllm` and `ollama` are scaffolding
   only — accepted, validated, and stored, but with no dedicated provider class yet; both route through
   `OpenAICompatibleProvider` since they speak the same OpenAI-compatible `/chat/completions` wire shape.
@@ -288,18 +288,18 @@ set at runtime through the API and is persisted in the graph — it is **not** p
   streaming implementation posts to `/v1beta/models/{model}:streamGenerateContent?alt=sse`. It is not an
   OpenAI-compatible chat-completions endpoint.
 - **URL scheme validation:** `LLMSettingsUpdate.base_url` is validated to require an `http`/`https`
-  scheme and a hostname (`_validate_base_url` in `backend/app/domain/settings.py`) — an SSRF-via-scheme
+  scheme and a hostname (`_validate_base_url` in `spoilerless/app/domain/settings.py`) — an SSRF-via-scheme
   guard. It deliberately does **not** block private/loopback addresses, since local vLLM/Ollama endpoints
   (`http://127.0.0.1:...`) are a supported deployment target.
-- **System prompt:** The assistant prompt is user-owned in `backend/app/llm/system_prompt.py`, versioned
+- **System prompt:** The assistant prompt is user-owned in `spoilerless/app/llm/system_prompt.py`, versioned
   via `SYSTEM_PROMPT_VERSION = "v1"`, with two localized variants: `SYSTEM_PROMPT_ENG` (English) and
   `SYSTEM_PROMPT_TR` (Turkish).
 - **Assistant language:** `system_prompt_language` (`"english"` or `"turkish"`, default `"english"`) is
   also stored/updated through this endpoint. It controls both which system prompt variant is sent to the
-  LLM (`backend/app/services/chat.py` reads the stored value per turn) and which localized fallback text
-  is used for a turn — see `_fallback_for()` in `backend/app/retrieval/pipeline.py`, which selects `"tr"`
+  LLM (`spoilerless/app/services/chat.py` reads the stored value per turn) and which localized fallback text
+  is used for a turn — see `_fallback_for()` in `spoilerless/app/retrieval/pipeline.py`, which selects `"tr"`
   when `system_prompt_language == "turkish"` and otherwise `"en"` (this is a direct selection, not
-  automatic detection of the user's message language — `detect_language()` in `backend/app/llm/fallbacks.py`
+  automatic detection of the user's message language — `detect_language()` in `spoilerless/app/llm/fallbacks.py`
   exists but is not used by `_fallback_for`).
 - **Secret write semantics:** `PUT /api/settings/llm` accepts `api_key: str | None`; sending `None` or an
   empty string preserves the previously stored key rather than clearing it, since `GET` never returns the
@@ -309,12 +309,12 @@ set at runtime through the API and is persisted in the graph — it is **not** p
 
 ## Session Storage
 
-Two `SessionRepository` implementations exist in `backend/app/repository/session.py`:
+Two `SessionRepository` implementations exist in `spoilerless/app/repository/session.py`:
 
 | Implementation | Storage | Used when |
 |---|---|---|
 | `InMemorySessionRepository` | In-process Python dict | `AuthService`'s constructor default when no `session_repo` is explicitly passed (used directly by some tests). |
-| `Neo4jSessionRepository` | `(:Session)` nodes in Neo4j, linked via `(:AppUser)-[:HAS_SESSION]->(:Session)` | The actual FastAPI app — `backend/app/main.py`'s `lifespan()` sets `app.state.session_repo = Neo4jSessionRepository(database)` at startup, and `get_auth_service()` (`backend/app/api/deps.py`) always injects it. |
+| `Neo4jSessionRepository` | `(:Session)` nodes in Neo4j, linked via `(:AppUser)-[:HAS_SESSION]->(:Session)` | The actual FastAPI app — `spoilerless/app/main.py`'s `lifespan()` sets `app.state.session_repo = Neo4jSessionRepository(database)` at startup, and `get_auth_service()` (`spoilerless/app/api/deps.py`) always injects it. |
 
 Only the raw session token's SHA-256 hash is ever persisted (`token_hash`); the raw token returned to the
 browser as the cookie value is never stored. Session lookups reject expired (`expires_at <= now`) or
@@ -474,7 +474,7 @@ resolve: {
 ## Ontology Configuration
 
 The ontology is defined in three YAML files under `ontology/`, loaded at runtime by
-`backend/app/graph/ontology.py::load_ontology()`.
+`spoilerless/app/graph/ontology.py::load_ontology()`.
 
 ### File structure
 
@@ -485,7 +485,7 @@ ontology/
 └── claim_types.yaml       # Claim types, statuses, and confidence levels
 ```
 
-All three files must declare `ontology_version: "0.1"` (matching `ONTOLOGY_VERSION` in `backend/app/graph/ontology.py`) or
+All three files must declare `ontology_version: "0.1"` (matching `ONTOLOGY_VERSION` in `spoilerless/app/graph/ontology.py`) or
 `load_ontology()` raises `OntologyValidationError`.
 
 ### `ontology/node_types.yaml`
@@ -607,7 +607,7 @@ confidence_levels:
    `require_claim_status()`, and `require_confidence_level()`, each raising `OntologyValidationError` for
    an undeclared value.
 
-Seed data validation (`backend/app/graph/setup.py`) calls these `require_*()` methods before any data is
+Seed data validation (`spoilerless/app/graph/setup.py`) calls these `require_*()` methods before any data is
 written to Neo4j.
 
 ---
@@ -635,7 +635,7 @@ uv sync
 uv run hdgraf-setup
 
 # 4. Start the backend
-uv run uvicorn backend.app.main:app --reload
+uv run uvicorn spoilerless.app.main:app --reload
 
 # 5. Start the frontend (separate terminal)
 cd frontend && npm install && npm run dev
@@ -655,9 +655,9 @@ NEO4J_DATABASE=neo4j
 ### 3. Adding a new ontology type
 
 1. Edit the appropriate YAML file in `ontology/`.
-2. Add any required indexes in `backend/app/graph/seed.py` (`create_constraints()`).
+2. Add any required indexes in `spoilerless/app/graph/seed.py` (`create_constraints()`).
 3. Add seed data if needed under `data/dexter/seed/` or `data/dexter/metadata/`.
-4. If the new label/type is used by seed data, update the relevant `NODE_LABELS` or `RELATIONSHIP_TYPES` tuple in `backend/app/graph/seed.py`; these tuples cover seeded types, not every ontology declaration.
+4. If the new label/type is used by seed data, update the relevant `NODE_LABELS` or `RELATIONSHIP_TYPES` tuple in `spoilerless/app/graph/seed.py`; these tuples cover seeded types, not every ontology declaration.
 5. Restart the backend so modules that loaded an ontology at import time see the change. `load_ontology()` itself is uncached and independently called by several modules.
 
 ### 4. Setting up authentication (required to sign in)

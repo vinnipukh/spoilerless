@@ -1,4 +1,4 @@
-// Mirrors backend/app/domain/user_content.py field-for-field
+// Mirrors spoilerless/app/domain/user_content.py field-for-field
 
 export type NoteResponse = {
   id: string

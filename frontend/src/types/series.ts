@@ -1,4 +1,4 @@
-// Mirrors backend/app/domain/series.py field-for-field.
+// Mirrors spoilerless/app/domain/series.py field-for-field.
 
 export type SeriesResponse = {
   id: string

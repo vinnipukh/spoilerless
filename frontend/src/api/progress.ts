@@ -1,6 +1,6 @@
 import { apiFetch } from './client'
 
-// Mirrors backend/app/domain/progress.py's UserSeriesProgressResponse
+// Mirrors spoilerless/app/domain/progress.py's UserSeriesProgressResponse
 // field-for-field. Since the D-05 split (07-02) the record carries the
 // watched/view split plus the policy-computed effective boundary;
 // `visible_until_order` remains as the backward-compatible echo of the

@@ -83,38 +83,38 @@ The system is a multi-series-capable web application composed of three deployabl
 ┌─────────────────────────────────────────────────────────────────┐
 │                Backend (FastAPI + Uvicorn, :8000)                 │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │ API Layer — backend/app/api/                               │  │
+│  │ API Layer — spoilerless/app/api/                               │  │
 │  │ series · graph · user_content · auth · revisions ·         │  │
 │  │ candidates · progress · chat · change_set · settings       │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                          │                                        │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │ Service Layer — backend/app/services/                      │  │
+│  │ Service Layer — spoilerless/app/services/                      │  │
 │  │ SeriesService · GraphService · AuthService ·                │  │
 │  │ ProgressService · ChatService · ChangeSetService ·          │  │
 │  │ SettingsService                                             │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                          │                                        │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │ Repository Layer — backend/app/repository/                 │  │
+│  │ Repository Layer — spoilerless/app/repository/                 │  │
 │  │ UserRepository · SessionRepository (Neo4j) ·                │  │
 │  │ UserContentRepository · ChangeSetRepository ·               │  │
 │  │ ChatRepository · ProgressRepository · SettingsRepository    │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                          │                                        │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │ Graph / Spoiler Layer — backend/app/graph/, spoiler/        │  │
+│  │ Graph / Spoiler Layer — spoilerless/app/graph/, spoiler/        │  │
 │  │ Neo4jDatabase · ontology.py · seed.py · setup.py ·           │  │
 │  │ filter.py (parameterized, visibility-gated Cypher)          │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                   │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │ GraphRAG-lite (optional) — backend/app/retrieval/, llm/     │  │
+│  │ GraphRAG-lite (optional) — spoilerless/app/retrieval/, llm/     │  │
 │  │ RetrievalPipeline · 11 allowlisted tools · LLMProvider      │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                          │                                        │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │ Cache / Rate-Limit Layer (optional) — backend/app/cache/,   │  │
+│  │ Cache / Rate-Limit Layer (optional) — spoilerless/app/cache/,   │  │
 │  │ services/rate_limit.py — one shared redis.asyncio client;    │  │
 │  │ cache-aside for GET .../graph, RedisBucket rate limiters on  │  │
 │  │ login/chat-send/content-write; no-op when REDIS_URL is empty │  │
@@ -141,7 +141,7 @@ Database Layer    ← Neo4j driver, connection management
 Spoiler Filter    ← parameterized Cypher with built-in visibility gating
 ```
 
-**Intended dependency flow:** API → service → repository → database, while domain models (`backend/app/domain/`) are imported across layers. The current code has explicit route-level deviations: `candidates.py` and `revisions.py` contain direct transaction/data-access logic, `user_content.py` constructs and calls `UserContentRepository` in handlers, and chat session handlers reach `ChatRepository` through `ChatService` while `chat.py` imports repository exceptions directly.
+**Intended dependency flow:** API → service → repository → database, while domain models (`spoilerless/app/domain/`) are imported across layers. The current code has explicit route-level deviations: `candidates.py` and `revisions.py` contain direct transaction/data-access logic, `user_content.py` constructs and calls `UserContentRepository` in handlers, and chat session handlers reach `ChatRepository` through `ChatService` while `chat.py` imports repository exceptions directly.
 
 ---
 
@@ -172,14 +172,14 @@ hdgrafcehennemi/
 │       │                    #   service)
 │       ├── spoiler/        # Isolated, dependency-free spoiler-filter Cypher constants
 │       └── main.py         # FastAPI app assembly, router registration, CORS, lifespan
-│   └── tests/               # pytest suite (backend/tests/, see pyproject.toml testpaths)
+│   └── tests/               # pytest suite (spoilerless/tests/, see pyproject.toml testpaths)
 ├── frontend/
 │   └── src/
 │       ├── api/            # Typed fetch clients, one file per backend resource
 │       ├── components/     # React components grouped by feature (graph, chat, auth, ...)
 │       ├── hooks/           # Data-fetching and state hooks
 │       ├── providers/       # React context providers (auth)
-│       └── types/           # TypeScript types mirroring backend/app/domain/*.py
+│       └── types/           # TypeScript types mirroring spoilerless/app/domain/*.py
 ├── data/dexter/             # Seed data for the Dexter S01E01–03 prototype
 │   ├── metadata/            # Series and episode metadata
 │   └── seed/                # Characters, claims, events, evidence, locations, sources
@@ -223,7 +223,7 @@ frontend/src/
 │                         # useNotes, useRevisions, useChatSessions, useChatMessages
 ├── providers/            # AuthContext, AuthProvider, useAuth
 └── types/                # graph.ts, series.ts, revision.ts, settings.ts — mirror
-                           # backend/app/domain/*.py
+                           # spoilerless/app/domain/*.py
 ```
 
 #### Key Components
@@ -243,7 +243,7 @@ The dev server proxies `/api` requests to `http://127.0.0.1:8000`, avoiding CORS
 
 ### 4.2 API Layer (FastAPI)
 
-**Location:** `backend/app/api/`
+**Location:** `spoilerless/app/api/`
 
 Ten route modules registering **44 HTTP operations** (including `GET /health` in `main.py`) across roughly 32 unique path templates.
 
@@ -269,19 +269,19 @@ Route modules consistently use FastAPI `APIRouter`s and Pydantic request/respons
 
 #### Rate Limiting and Admin Gating
 
-Three route groups carry an optional `RateLimiter` dependency (`backend/app/services/rate_limit.py`; see [7.14](#714-redis-backed-rate-limiting-and-graph-response-cache)): `POST /api/auth/google` (10/5min per IP), chat message send (20/min per user), and every `user_content.py` write route (30/min per user, falling back to IP). A separate, unrelated gate — `RequireAdminDependency` (see [7.13](#713-role-based-access-control-admin-role)) — requires the `admin` role on `candidates.py`'s approve/reject/edit routes, `change_set.py`'s confirm route, and both `settings.py` routes; propose/reject/revert on ChangeSets and ingest/list/get on candidates are intentionally not admin-gated.
+Three route groups carry an optional `RateLimiter` dependency (`spoilerless/app/services/rate_limit.py`; see [7.14](#714-redis-backed-rate-limiting-and-graph-response-cache)): `POST /api/auth/google` (10/5min per IP), chat message send (20/min per user), and every `user_content.py` write route (30/min per user, falling back to IP). A separate, unrelated gate — `RequireAdminDependency` (see [7.13](#713-role-based-access-control-admin-role)) — requires the `admin` role on `candidates.py`'s approve/reject/edit routes, `change_set.py`'s confirm route, and both `settings.py` routes; propose/reject/revert on ChangeSets and ingest/list/get on candidates are intentionally not admin-gated.
 
 #### Graph Route — The Critical Read Path
 
-`GET /api/series/{series_id}/graph?visible_until_order=N` is the most architecturally significant endpoint. It validates the series exists, resolves the boundary against a persisted episode order, checks the Redis cache-aside layer (`backend/app/cache/graph_cache.py`) keyed on `graph:{series_id}:{effective_boundary}:{user_id or 'anon'}`, and on a miss delegates to `GraphService.fetch_graph()` (which runs seven Cypher queries concurrently) before writing the result back to the cache with a 300-second TTL. It returns a closed-form `GraphResponse` containing every visible node, edge, claim, source, and evidence fragment. Caching is disabled (`get_cached_graph`/`set_cached_graph` are no-ops) whenever `REDIS_URL` is empty or Redis errors — the route always falls through to Neo4j rather than failing the request.
+`GET /api/series/{series_id}/graph?visible_until_order=N` is the most architecturally significant endpoint. It validates the series exists, resolves the boundary against a persisted episode order, checks the Redis cache-aside layer (`spoilerless/app/cache/graph_cache.py`) keyed on `graph:{series_id}:{effective_boundary}:{user_id or 'anon'}`, and on a miss delegates to `GraphService.fetch_graph()` (which runs seven Cypher queries concurrently) before writing the result back to the cache with a 300-second TTL. It returns a closed-form `GraphResponse` containing every visible node, edge, claim, source, and evidence fragment. Caching is disabled (`get_cached_graph`/`set_cached_graph` are no-ops) whenever `REDIS_URL` is empty or Redis errors — the route always falls through to Neo4j rather than failing the request.
 
-The locked operation inventory (method/path templates and response schemas) is maintained separately in [`docs/frontend-api-contract.md`](./frontend-api-contract.md); the OpenAPI spec generated by `backend.app.main:app` is authoritative.
+The locked operation inventory (method/path templates and response schemas) is maintained separately in [`docs/frontend-api-contract.md`](./frontend-api-contract.md); the OpenAPI spec generated by `spoilerless.app.main:app` is authoritative.
 
 ---
 
 ### 4.3 Service Layer
 
-**Location:** `backend/app/services/`
+**Location:** `spoilerless/app/services/`
 
 - **`GraphService`** (`graph.py`) — orchestrates the spoiler-safe graph read. `fetch_graph()` runs 7 Cypher queries concurrently via `asyncio.gather()`: series metadata, visible nodes, structural edges, visible claims, visible user-authored relationships, sources, and evidence. Each visible claim is projected into a `GraphEdge` (subject → object, typed by predicate, carrying `claim_id`).
 - **`SeriesService`** (`series.py`) — thin wrapper: lists series, gets one series, lists episodes. No spoiler filtering — episode metadata is not spoilery.
@@ -291,13 +291,13 @@ The locked operation inventory (method/path templates and response schemas) is m
 - **`ChangeSetService`** (`change_set.py`) — Stage 1 **propose** validates a typed operation list against the ontology and the resolved boundary, then persists an `awaiting_confirmation` ChangeSet draft and its linking relationships without mutating target graph content. Stage 2 **confirm/apply** applies the validated operations in a single Neo4j transaction, prevents replay by returning the stored result when the ChangeSet status is already `applied`, and logs a `Revision` in the same transaction; the random `idempotency_key` is generated only after mutation and is not checked for replay detection. Stage 3 **revert** restores pre-apply state for create-shaped ChangeSets.
 - **`SettingsService`** (`settings.py`) — resolves the effective LLM configuration (stored graph value wins, `LLM_*` env settings are the fallback) and masks the API key on read.
 
-`backend/app/services/rate_limit.py` is not a class-per-feature service in this same sense — it defines the `RateLimiter` FastAPI dependency and the three module-level route-group instances described in [7.14](#714-redis-backed-rate-limiting-and-graph-response-cache).
+`spoilerless/app/services/rate_limit.py` is not a class-per-feature service in this same sense — it defines the `RateLimiter` FastAPI dependency and the three module-level route-group instances described in [7.14](#714-redis-backed-rate-limiting-and-graph-response-cache).
 
 ---
 
 ### 4.4 Repository & Database Layer
 
-**Location:** `backend/app/repository/`, `backend/app/graph/`
+**Location:** `spoilerless/app/repository/`, `spoilerless/app/graph/`
 
 - **`Neo4jDatabase`** (`graph/database.py`) — lazy-initialized async Neo4j driver with no import-time side effects; `open()`/`close()` lifecycle managed by the FastAPI `lifespan` context; `execute_query()` for retryable read/write Cypher returning `list[dict]`; `execute_write()` for managed-transaction writes; `verify_connection()` for the health check.
 - **`UserRepository`** (`repository/user.py`) — `upsert()` (MERGE on `google_sub`), `get_by_id()`. Users are stored as `(:AppUser)` nodes.
@@ -309,7 +309,7 @@ The locked operation inventory (method/path templates and response schemas) is m
 
 ### 4.5 Neo4j Graph Database
 
-**Location:** Docker Compose, `backend/app/graph/seed.py`
+**Location:** Docker Compose, `spoilerless/app/graph/seed.py`
 
 #### Container
 
@@ -358,18 +358,18 @@ The `setup_database()` pipeline (invoked via `uv run hdgraf-setup`, registered i
 
 | Abstraction | Location | Purpose |
 |---|---|---|
-| `visible_from_order` filtering | `backend/app/spoiler/filter.py` | The universal Cypher `WHERE` predicate applied to every story-sensitive entity; the system's single most important invariant |
-| `Neo4jDatabase` | `backend/app/graph/database.py` | Central async driver abstraction; all Cypher execution flows through `execute_query()`/`execute_write()` |
-| `Ontology` | `backend/app/graph/ontology.py` | Loads and validates the versioned YAML type system; exposes `require_node_type()`, `require_relationship_type()`, `require_claim_type()`, and the user-safe type subsets |
-| `Claim` domain model | `backend/app/domain/graph.py` | The atomic knowledge-representation unit — subject/predicate/object plus type, status, confidence, and provenance |
+| `visible_from_order` filtering | `spoilerless/app/spoiler/filter.py` | The universal Cypher `WHERE` predicate applied to every story-sensitive entity; the system's single most important invariant |
+| `Neo4jDatabase` | `spoilerless/app/graph/database.py` | Central async driver abstraction; all Cypher execution flows through `execute_query()`/`execute_write()` |
+| `Ontology` | `spoilerless/app/graph/ontology.py` | Loads and validates the versioned YAML type system; exposes `require_node_type()`, `require_relationship_type()`, `require_claim_type()`, and the user-safe type subsets |
+| `Claim` domain model | `spoilerless/app/domain/graph.py` | The atomic knowledge-representation unit — subject/predicate/object plus type, status, confidence, and provenance |
 | `origin` enum | shared across `domain/` modules | Three-way `StrEnum` (`canonical` / `candidate` / `user`) distinguishing seed data, extracted-but-unreviewed data, and user-created data |
-| `LLMProvider` protocol | `backend/app/llm/provider.py` | Provider-agnostic streaming interface. Two concrete implementations are available: `OpenAICompatibleProvider` posts to `/chat/completions`; `GeminiProvider` translates messages/tools to Gemini content/function parts and posts to the `streamGenerateContent` action with SSE. Gemini's REST family uses `generateContent`/`streamGenerateContent` actions, not a chat-completions path. Availability does not imply either provider is active: `get_llm_provider()` selects the effective stored-over-env provider per request and rejects disabled/incomplete configuration. |
-| `RetrievalPipeline` | `backend/app/retrieval/pipeline.py` | Orchestrates allowlisted tool calls, context assembly, and citation validation for the GraphRAG-lite chat |
-| `ChangeSetService` | `backend/app/services/change_set.py` | The typed, two-stage (propose/confirm) protocol that is the only path through which the graph can be mutated by chat-driven writes |
-| `RevisionRepository.log_revision` | `backend/app/revisions/__init__.py` (used across services and repositories) | Shared pattern for writing an append-only before/after audit record in the same transaction as any content mutation |
-| `require_admin` / `RequireAdminDependency` | `backend/app/api/deps.py` | FastAPI dependency gate requiring `role == "admin"` (derived server-side from `ADMIN_EMAILS` at login); rejects with `403 forbidden` otherwise |
-| `get_redis()` | `backend/app/cache/redis_client.py` | The single shared, `lru_cache`-decorated `redis.asyncio` client; every Redis-backed feature imports it rather than constructing its own connection |
-| `RateLimiter` | `backend/app/services/rate_limit.py` | FastAPI dependency enforcing a per-window request count via a Redis-backed `pyrate-limiter` bucket; a no-op until `init_rate_limiter()` binds it (or when `REDIS_URL` is empty) |
+| `LLMProvider` protocol | `spoilerless/app/llm/provider.py` | Provider-agnostic streaming interface. Two concrete implementations are available: `OpenAICompatibleProvider` posts to `/chat/completions`; `GeminiProvider` translates messages/tools to Gemini content/function parts and posts to the `streamGenerateContent` action with SSE. Gemini's REST family uses `generateContent`/`streamGenerateContent` actions, not a chat-completions path. Availability does not imply either provider is active: `get_llm_provider()` selects the effective stored-over-env provider per request and rejects disabled/incomplete configuration. |
+| `RetrievalPipeline` | `spoilerless/app/retrieval/pipeline.py` | Orchestrates allowlisted tool calls, context assembly, and citation validation for the GraphRAG-lite chat |
+| `ChangeSetService` | `spoilerless/app/services/change_set.py` | The typed, two-stage (propose/confirm) protocol that is the only path through which the graph can be mutated by chat-driven writes |
+| `RevisionRepository.log_revision` | `spoilerless/app/revisions/__init__.py` (used across services and repositories) | Shared pattern for writing an append-only before/after audit record in the same transaction as any content mutation |
+| `require_admin` / `RequireAdminDependency` | `spoilerless/app/api/deps.py` | FastAPI dependency gate requiring `role == "admin"` (derived server-side from `ADMIN_EMAILS` at login); rejects with `403 forbidden` otherwise |
+| `get_redis()` | `spoilerless/app/cache/redis_client.py` | The single shared, `lru_cache`-decorated `redis.asyncio` client; every Redis-backed feature imports it rather than constructing its own connection |
+| `RateLimiter` | `spoilerless/app/services/rate_limit.py` | FastAPI dependency enforcing a per-window request count via a Redis-backed `pyrate-limiter` bucket; a no-op until `init_rate_limiter()` binds it (or when `REDIS_URL` is empty) |
 
 ---
 
@@ -449,7 +449,7 @@ AND (claim.valid_from_order IS NULL OR claim.valid_from_order <= $visible_until_
 AND (claim.valid_until_order IS NULL OR claim.valid_until_order >= $visible_until_order)
 ```
 
-`backend/app/spoiler/filter.py` holds the core graph-read spoiler queries as raw, parameterized Python string constants. Additional visibility-gated Cypher lives in `graph/candidates.py`, `graph/change_set.py`, `graph/chat.py`, `retrieval/tools.py`, `repository/user_content.py`, and `api/revisions.py`.
+`spoilerless/app/spoiler/filter.py` holds the core graph-read spoiler queries as raw, parameterized Python string constants. Additional visibility-gated Cypher lives in `graph/candidates.py`, `graph/change_set.py`, `graph/chat.py`, `retrieval/tools.py`, `repository/user_content.py`, and `api/revisions.py`.
 
 ### 7.2 The Claim Model
 
@@ -472,7 +472,7 @@ Every automatic claim requires at least one `EvidenceFragment` (`SUPPORTED_BY`) 
 
 ### 7.3 Ontology System
 
-**Location:** `ontology/` — `node_types.yaml`, `relation_types.yaml`, `claim_types.yaml`, each carrying an `ontology_version: "0.1"` declaration. `backend/app/graph/ontology.py`'s `load_ontology()` reads all three files, validates the version, and produces an immutable `Ontology` dataclass with `require_node_type()`, `require_relationship_type()`, `require_claim_type()`, and `user_safe_node_types`/`user_safe_relationship_types` (the subset of types end users are allowed to create). A version mismatch raises on load.
+**Location:** `ontology/` — `node_types.yaml`, `relation_types.yaml`, `claim_types.yaml`, each carrying an `ontology_version: "0.1"` declaration. `spoilerless/app/graph/ontology.py`'s `load_ontology()` reads all three files, validates the version, and produces an immutable `Ontology` dataclass with `require_node_type()`, `require_relationship_type()`, `require_claim_type()`, and `user_safe_node_types`/`user_safe_relationship_types` (the subset of types end users are allowed to create). A version mismatch raises on load.
 
 ### 7.4 Origin System
 
@@ -491,7 +491,7 @@ Every automatic claim requires at least one `EvidenceFragment` (`SUPPORTED_BY`) 
 
 ### 7.6 Error Handling
 
-**Location:** `backend/app/core/errors.py`. A structured error envelope used by the API endpoints, except `/health`'s `503` response, which returns the `HealthResponse` fields `status`, `database`, and `service`:
+**Location:** `spoilerless/app/core/errors.py`. A structured error envelope used by the API endpoints, except `/health`'s `503` response, which returns the `HealthResponse` fields `status`, `database`, and `service`:
 
 ```json
 { "detail": { "code": "series_not_found", "message": "Series not found." } }
@@ -517,7 +517,7 @@ Every automatic claim requires at least one `EvidenceFragment` (`SUPPORTED_BY`) 
 
 ### 7.7 Revision History
 
-**Location:** `backend/app/revisions/`. `Revision` is an append-only Neo4j `(:Revision)` node model: no revision is ever deleted or mutated in place. Every user-content mutation (note/custom-node/custom-relationship create, update, delete) auto-creates a `Revision` capturing before/after JSON snapshots in the **same Neo4j transaction** as the mutation. Reverting restores the captured state by creating a new `Reverted` revision, so history is never destroyed.
+**Location:** `spoilerless/app/revisions/`. `Revision` is an append-only Neo4j `(:Revision)` node model: no revision is ever deleted or mutated in place. Every user-content mutation (note/custom-node/custom-relationship create, update, delete) auto-creates a `Revision` capturing before/after JSON snapshots in the **same Neo4j transaction** as the mutation. Reverting restores the captured state by creating a new `Reverted` revision, so history is never destroyed.
 
 | Route | Method | Purpose |
 |---|---|---|
@@ -531,7 +531,7 @@ ChangeSet applies extend this same invariant: confirming a ChangeSet logs a sing
 
 ### 7.8 GraphRAG-Lite Chat Pipeline
 
-**Location:** `backend/app/retrieval/` (`pipeline.py`, `tools.py`), `backend/app/llm/` (`provider.py`, `system_prompt.py`), `backend/app/services/chat.py`. Disabled by default (`LLM_ENABLED=false`); enabled by configuring an OpenAI-compatible or Gemini-compatible provider via environment variables or the Settings UI (see [7.11](#711-settings-system-user-configurable-llm-provider)).
+**Location:** `spoilerless/app/retrieval/` (`pipeline.py`, `tools.py`), `spoilerless/app/llm/` (`provider.py`, `system_prompt.py`), `spoilerless/app/services/chat.py`. Disabled by default (`LLM_ENABLED=false`); enabled by configuring an OpenAI-compatible or Gemini-compatible provider via environment variables or the Settings UI (see [7.11](#711-settings-system-user-configurable-llm-provider)).
 
 The chat feature is **GraphRAG-lite**: the LLM answers questions by calling a small allowlisted set of retrieval tools against the spoiler-filtered graph, and any citations it supplies are validated against what was actually retrieved. A non-empty model answer with no citations can pass unchanged; fallback replacement occurs when supplied citations are all stripped or the content is empty. The model never receives the raw graph — only the filtered, bounded context the pipeline assembles.
 
@@ -539,17 +539,17 @@ The chat feature is **GraphRAG-lite**: the LLM answers questions by calling a sm
 Browser (ChatPanel, mounted by the independent right-side ChatSheet)
   │ 1. User submits a question → POST .../messages/stream (SSE, credentials: include)
   ▼
-FastAPI router: backend/app/api/chat.py
+FastAPI router: spoilerless/app/api/chat.py
   │ 2. require_current_user resolves AppUser from the session cookie
   ▼
-ChatService (backend/app/services/chat.py)
+ChatService (spoilerless/app/services/chat.py)
   │ 3. ProgressService.resolve(user_id, series_id) → visible_until_order
   │ 4. ChatRepository loads recent, currently-visible ChatMessages for context
   ▼
-RetrievalPipeline (backend/app/retrieval/pipeline.py)
+RetrievalPipeline (spoilerless/app/retrieval/pipeline.py)
   │ 5. LLMProvider.stream_chat(system_prompt, history, tools=ALLOWLISTED_TOOLS)
   ▼
-Retrieval Tools (backend/app/retrieval/tools.py)
+Retrieval Tools (spoilerless/app/retrieval/tools.py)
   │ 6. The pipeline passes the boundary resolved in step 3 to each tool (never
   │    from model output); tools run parameterized visibility-gated Cypher
   ▼
@@ -557,7 +557,7 @@ Neo4j
   │ 7. Filtered rows → context normalization (dedupe, bound size) → back to the
   │    LLMProvider for the final answer, this time without tools
   ▼
-Citation Validator (backend/app/retrieval/pipeline.py)
+Citation Validator (spoilerless/app/retrieval/pipeline.py)
   │ 8. Every cited claim_id/evidence_id/source_id is checked against the actual
   │    retrieved context set — anything not present is stripped
   ▼
@@ -572,7 +572,7 @@ Browser: MessageBubble renders streamed text; CitationChip "Show in graph" sets
 
 #### Allowlisted retrieval tools
 
-The pipeline exposes exactly **eleven** retrieval tools defined in `backend/app/retrieval/tools.py` — nothing more, and the model can never execute raw Cypher:
+The pipeline exposes exactly **eleven** retrieval tools defined in `spoilerless/app/retrieval/tools.py` — nothing more, and the model can never execute raw Cypher:
 
 1. `search_entities` — keyword search over visible entities
 2. `get_entity` — fetch one visible entity by ID
@@ -590,7 +590,7 @@ Each tool takes only allowlisted, typed parameters (never a free-text Cypher str
 
 ### 7.9 ChangeSet Two-Stage Mutation Flow
 
-**Location:** `backend/app/api/change_set.py`, `backend/app/services/change_set.py`, `backend/app/repository/change_set.py`. The LLM **cannot write to the graph directly**. Typed staged ChangeSet endpoints exist for separately submitted proposals, but the current chat/retrieval pipeline does not create or return them and always emits `proposed_change_set: null`:
+**Location:** `spoilerless/app/api/change_set.py`, `spoilerless/app/services/change_set.py`, `spoilerless/app/repository/change_set.py`. The LLM **cannot write to the graph directly**. Typed staged ChangeSet endpoints exist for separately submitted proposals, but the current chat/retrieval pipeline does not create or return them and always emits `proposed_change_set: null`:
 
 ```
 Stage 1 — PROPOSE (POST /api/series/{series_id}/change-sets, not admin-gated)
@@ -635,7 +635,7 @@ Only Stage 2's confirm step is admin-gated — the reasoning is that confirming 
 
 ### 7.11 Settings System (User-Configurable LLM Provider)
 
-**Location:** `backend/app/api/settings.py`, `backend/app/services/settings.py`, `backend/app/repository/settings.py`, `backend/app/domain/settings.py`; `frontend/src/components/settings/SettingsPage.tsx`.
+**Location:** `spoilerless/app/api/settings.py`, `spoilerless/app/services/settings.py`, `spoilerless/app/repository/settings.py`, `spoilerless/app/domain/settings.py`; `frontend/src/components/settings/SettingsPage.tsx`.
 
 Lets an authenticated user configure the GraphRAG chat agent's LLM provider from the UI instead of only via `.env`. A single `(:AppSetting {key: 'llm'})` node holds the configuration as a JSON-serialized string. `SettingsService.get_llm()` resolves the *effective* configuration field-by-field: the stored graph value wins, the `LLM_*` environment settings are the fallback/bootstrap path.
 
@@ -650,7 +650,7 @@ Available provider implementations are `openai_compatible` and `gemini`; the con
 
 ### 7.12 Candidate Extraction & Review Workflow
 
-**Location:** `backend/app/api/candidates.py`, `backend/app/graph/candidates.py`, `backend/app/domain/extraction.py`. This is the intake path for a future auto-extraction pipeline — the ingest side is implemented ahead of any actual extractor.
+**Location:** `spoilerless/app/api/candidates.py`, `spoilerless/app/graph/candidates.py`, `spoilerless/app/domain/extraction.py`. This is the intake path for a future auto-extraction pipeline — the ingest side is implemented ahead of any actual extractor.
 
 `ExtractionBatchEnvelope` wraps a list of `ExtractionClaim` entries, the payload shape an NLP/extraction process would submit via `POST /api/series/{series_id}/candidates/ingest`. Each claim carries subject/predicate/object, evidence text + locator, source type + locator, and episode context.
 
@@ -671,7 +671,7 @@ POST .../candidates/{id}/reject   → status: candidate → rejected (admin-only
 
 ### 7.13 Role-Based Access Control (Admin Role)
 
-**Location:** `backend/app/api/deps.py` (`require_admin`, `RequireAdminDependency`), `backend/app/services/auth.py` (role derivation at login), `backend/app/repository/user.py` (`role` persisted on the `(:AppUser)` node), `backend/app/domain/auth.py` (`UserPublic.role: Literal["admin", "user"]`).
+**Location:** `spoilerless/app/api/deps.py` (`require_admin`, `RequireAdminDependency`), `spoilerless/app/services/auth.py` (role derivation at login), `spoilerless/app/repository/user.py` (`role` persisted on the `(:AppUser)` node), `spoilerless/app/domain/auth.py` (`UserPublic.role: Literal["admin", "user"]`).
 
 `role` is a two-value field — `"admin"` or `"user"` — assigned server-side at every login from `ADMIN_EMAILS` membership (a comma-separated, case-insensitive env allowlist), never accepted from the client or derived from any request body. `UserRepository.upsert()` re-syncs `role` on every login (`ON MATCH SET u.role = $role`), so removing an email from `ADMIN_EMAILS` demotes that user's role the next time they sign in — no database migration needed. Pre-migration `AppUser` records without a stored `role` default to `"user"` via `coalesce(u.role, 'user')` in `GET_USER_BY_ID_QUERY` and the `UserPublic` model's `default="user"`.
 
@@ -681,7 +681,7 @@ Ordinary user-content, revision, progress, chat, and ChangeSet-propose/reject/re
 
 ### 7.14 Redis-Backed Rate Limiting and Graph Response Cache
 
-**Location:** `backend/app/cache/redis_client.py`, `backend/app/cache/graph_cache.py`, `backend/app/services/rate_limit.py`. Both features share the one `redis.asyncio` client returned by `get_redis()` (`lru_cache`-decorated, mirroring `core/config.py::get_settings()`) and are gated on a single setting, `REDIS_URL` (an Upstash-style `rediss://` TLS connection string). An empty `REDIS_URL` disables both features as a no-op — local development without Redis runs unthrottled and always queries Neo4j directly — rather than crashing startup or failing requests.
+**Location:** `spoilerless/app/cache/redis_client.py`, `spoilerless/app/cache/graph_cache.py`, `spoilerless/app/services/rate_limit.py`. Both features share the one `redis.asyncio` client returned by `get_redis()` (`lru_cache`-decorated, mirroring `core/config.py::get_settings()`) and are gated on a single setting, `REDIS_URL` (an Upstash-style `rediss://` TLS connection string). An empty `REDIS_URL` disables both features as a no-op — local development without Redis runs unthrottled and always queries Neo4j directly — rather than crashing startup or failing requests.
 
 **Rate limiting** (`services/rate_limit.py`) — a `RateLimiter` FastAPI dependency class backed by `pyrate-limiter`'s `RedisBucket` (one atomic Redis-Lua-scripted ZSET per window, correct across multiple concurrently-running backend workers/instances). Three module-level instances gate three route groups:
 
@@ -725,8 +725,8 @@ Ordinary user-content, revision, progress, chat, and ChangeSet-propose/reject/re
 
 ## 9. Future Extensibility Points
 
-- **Additional retrieval tools** — new allowlisted functions in `backend/app/retrieval/tools.py`, each following the fail-closed visibility pattern.
-- **Additional LLM providers** — new implementations of the `LLMProvider` protocol in `backend/app/llm/provider.py` (`gemini` and `openai_compatible` ship today).
+- **Additional retrieval tools** — new allowlisted functions in `spoilerless/app/retrieval/tools.py`, each following the fail-closed visibility pattern.
+- **Additional LLM providers** — new implementations of the `LLMProvider` protocol in `spoilerless/app/llm/provider.py` (`gemini` and `openai_compatible` ship today).
 - **Richer grounding** — e.g. multi-hop path explanations surfaced through the existing citation model.
 - **Auto-extraction pipeline** — NLP-driven claim/relationship extraction feeding the existing candidate-review workflow ([7.12](#712-candidate-extraction--review-workflow)), reusing the `confidence_level` enum and `candidate → corroborated → canonical` status progression.
 - **Multi-series support** — most story-content queries are parameterized by `series_id`, while global nodes such as `AppUser`, `Session`, and `AppSetting` are not series-scoped. The seed loader currently hardcodes `data/dexter/metadata`, `data/dexter/seed`, and fixed filenames, so adding a series requires generalizing or changing the seed-loading code as well as adding data (and updating the ontology if new types are needed).
@@ -749,9 +749,9 @@ Ordinary user-content, revision, progress, chat, and ChangeSet-propose/reject/re
 
 | Concept | Backend Path | Frontend Path |
 |---|---|---|
-| API routes | `backend/app/api/` | `frontend/src/api/` |
-| Domain models | `backend/app/domain/` | `frontend/src/types/` |
-| Tests | `backend/tests/` | `frontend/src/**/*.test.tsx` |
+| API routes | `spoilerless/app/api/` | `frontend/src/api/` |
+| Domain models | `spoilerless/app/domain/` | `frontend/src/types/` |
+| Tests | `spoilerless/tests/` | `frontend/src/**/*.test.tsx` |
 | Ontology | `ontology/` | — |
 | Seed data | `data/dexter/` | — |
 

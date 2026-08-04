@@ -33,7 +33,7 @@ const DELETE_OPERATION_TYPES: ReadonlySet<ChangeSetOperation['operation_type']> 
   'delete_note',
 ])
 
-// Backend `_override_note_content()` (backend/app/services/change_set.py)
+// Backend `_override_note_content()` (spoilerless/app/services/change_set.py)
 // always emits this exact phrase when a direct canonical/candidate edit is
 // transparently substituted with a create_note override proposal (06-05,
 // RAG-13) — this is the only structural signal the frontend has for "this
@@ -113,7 +113,7 @@ type FieldChange = { field: string; after: string }
 
 // Before/After rows are only rendered for update-type operations. The
 // backend's `ChangeSetOperation` payload never carries a "before" snapshot
-// value (confirmed against backend/app/domain/change_set.py) — only the
+// value (confirmed against spoilerless/app/domain/change_set.py) — only the
 // proposed *new* value is ever present — so "Before" is honestly rendered as
 // "Not shown" rather than fabricating a prior value this card was never
 // given.

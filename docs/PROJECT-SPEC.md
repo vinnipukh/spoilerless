@@ -151,7 +151,7 @@ Agents must not invent predicates dynamically. If no relationship fits, record a
 The current setup command is:
 
 ```bash
-uv run --project backend python -m backend.app.graph.setup
+uv run --project spoilerless python -m spoilerless.app.graph.setup
 ```
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for contributor commands and [ARCHITECTURE.md](ARCHITECTURE.md) for current storage/query details.
@@ -237,7 +237,7 @@ Every new spoiler-sensitive endpoint needs tests. See [TESTING.md](TESTING.md) f
 
 ## 9. Future automated knowledge-graph ingestion architecture
 
-This section is **future direction**. The implemented `backend/app/domain/extraction.py` contracts and candidate review routes prepare an interface; there is no running extractor or source parser.
+This section is **future direction**. The implemented `spoilerless/app/domain/extraction.py` contracts and candidate review routes prepare an interface; there is no running extractor or source parser.
 
 ### 9.1 Authority and pipeline
 
@@ -271,7 +271,7 @@ The current API implements candidate ingest, list/get, edit, approve, and reject
 
 ### 9.6 Possible future service boundary
 
-If scope is approved, a small `backend/app/ingestion/` package may separate schemas, extractor, entity linker, claim builder, review repository, and orchestration pipeline. This is illustrative, not a mandate to create empty modules. The pipeline should validate before linking, build candidates with inherited visibility/provenance, save to review storage, and remain reprocessable without duplicates.
+If scope is approved, a small `spoilerless/app/ingestion/` package may separate schemas, extractor, entity linker, claim builder, review repository, and orchestration pipeline. This is illustrative, not a mandate to create empty modules. The pipeline should validate before linking, build candidates with inherited visibility/provenance, save to review storage, and remain reprocessable without duplicates.
 
 ### 9.7 Deliberately rejected shortcuts
 

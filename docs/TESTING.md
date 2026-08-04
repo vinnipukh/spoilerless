@@ -1,7 +1,7 @@
 <!-- generated-by: gsd-doc-writer -->
 # Testing
 
-HD Graf Cehennemi has a Python backend suite under `backend/tests/` and a colocated React/TypeScript frontend suite under `frontend/src/`.
+HD Graf Cehennemi has a Python backend suite under `spoilerless/tests/` and a colocated React/TypeScript frontend suite under `frontend/src/`.
 
 ## Test frameworks and setup
 
@@ -13,7 +13,7 @@ The backend uses:
 - `pytest-asyncio>=1.4.0`
 - `httpx>=0.28.1` and FastAPI's `TestClient` for HTTP tests
 - `asyncio_mode = "auto"`
-- `backend/tests` as the configured pytest test path
+- `spoilerless/tests` as the configured pytest test path
 
 These settings are defined in the root `pyproject.toml`. Python `>=3.13` is required.
 
@@ -29,7 +29,7 @@ Many backend files are unit or contract tests, but integration tests connect to 
 docker compose up -d
 ```
 
-`backend/tests/conftest.py` supplies these defaults unless the environment already overrides them:
+`spoilerless/tests/conftest.py` supplies these defaults unless the environment already overrides them:
 
 ```text
 NEO4J_URI=bolt://127.0.0.1:7687
@@ -70,19 +70,19 @@ uv run pytest
 Run one test file:
 
 ```bash
-uv run pytest backend/tests/test_openapi_contract.py
+uv run pytest spoilerless/tests/test_openapi_contract.py
 ```
 
 Run a subset selected by name:
 
 ```bash
-uv run pytest backend/tests/test_graph_api.py -k "graph_error_shapes"
+uv run pytest spoilerless/tests/test_graph_api.py -k "graph_error_shapes"
 ```
 
 Run a single test function without using a `::` node selector:
 
 ```bash
-uv run pytest backend/tests/test_openapi_contract.py -k "test_validation_error_uses_stable_sanitized_envelope"
+uv run pytest spoilerless/tests/test_openapi_contract.py -k "test_validation_error_uses_stable_sanitized_envelope"
 ```
 
 Useful pytest options can be appended to any command:
@@ -137,7 +137,7 @@ The package defines only the `test` script (`vitest`); there are no separate `te
 - Keep spoiler-boundary assertions fail-closed: assert that hidden content is absent, not only that visible content is present.
 - Add API inventory changes to both contract tests and `docs/frontend-api-contract.md`; `test_openapi_contract.py` and `test_frontend_contract_doc.py` enforce the API surface.
 
-`backend/tests/conftest.py` contains shared path and Neo4j environment setup, plus an autouse `_disable_rate_limiter` fixture that patches `RateLimiter.__call__` to a no-op so rate-limited routes are testable without a live Redis. Most other fixtures and helper functions are local to the test file that owns them. Examples include live database/client fixtures, in-memory authentication repositories, HTTP transport stubs, SSE parsers, and fixture-payload builders.
+`spoilerless/tests/conftest.py` contains shared path and Neo4j environment setup, plus an autouse `_disable_rate_limiter` fixture that patches `RateLimiter.__call__` to a no-op so rate-limited routes are testable without a live Redis. Most other fixtures and helper functions are local to the test file that owns them. Examples include live database/client fixtures, in-memory authentication repositories, HTTP transport stubs, SSE parsers, and fixture-payload builders.
 
 ### Live Neo4j safety
 
@@ -152,17 +152,17 @@ Treat the default test configuration as a **shared-live-database hazard**, not a
 - Prefer unit/contract files that do not open Neo4j, or target one live test file with `-k`, before considering the broad suite.
 - Point integration runs at a disposable Neo4j database or back up anything that must survive. The defaults in `conftest.py` are the same local host, credentials, and database commonly used by the application.
 - Let teardown complete. An interrupted run can leave sessions, progress, candidate, ChangeSet, or scratch-series records behind and make later results order/state dependent.
-- If a run was interrupted, assume the database may be dirty. Inspect and back it up before any cleanup or reseed; `backend.app.graph.setup` writes the configured graph and is not a substitute for a backup.
+- If a run was interrupted, assume the database may be dirty. Inspect and back it up before any cleanup or reseed; `spoilerless.app.graph.setup` writes the configured graph and is not a substitute for a backup.
 - Tests that open the application with its async driver should use `with TestClient(...)` so all requests share one portal loop. Teardown that needs a different loop should open a fresh driver, as `test_settings_api.py` does.
 
 ## Spoiler-safety and API contract tests
 
-For every new spoiler-sensitive read, test both sides of the boundary: visible records are present, future IDs/labels/count hints are absent from the serialized response, dangling edges are impossible, invalid/non-persisted boundaries fail, and hidden direct reads are indistinguishable from missing resources. The graph boundary patterns live in `backend/tests/test_graph_api.py`; user-content boundary behavior lives in `backend/tests/test_user_content_api.py`; retrieval/tool isolation lives in `backend/tests/test_retrieval_tools.py` and `backend/tests/test_retrieval_pipeline.py`.
+For every new spoiler-sensitive read, test both sides of the boundary: visible records are present, future IDs/labels/count hints are absent from the serialized response, dangling edges are impossible, invalid/non-persisted boundaries fail, and hidden direct reads are indistinguishable from missing resources. The graph boundary patterns live in `spoilerless/tests/test_graph_api.py`; user-content boundary behavior lives in `spoilerless/tests/test_user_content_api.py`; retrieval/tool isolation lives in `spoilerless/tests/test_retrieval_tools.py` and `spoilerless/tests/test_retrieval_pipeline.py`.
 
 The HTTP surface is a closed inventory. Adding, removing, or changing a route requires synchronized edits to:
 
-- `backend/tests/test_openapi_contract.py`;
-- `backend/tests/test_frontend_contract_doc.py` (`EXPECTED_OPERATIONS`, template and count assertions);
+- `spoilerless/tests/test_openapi_contract.py`;
+- `spoilerless/tests/test_frontend_contract_doc.py` (`EXPECTED_OPERATIONS`, template and count assertions);
 - `docs/frontend-api-contract.md` (one exact `(method, path)` row per operation).
 
 ## Troubleshooting

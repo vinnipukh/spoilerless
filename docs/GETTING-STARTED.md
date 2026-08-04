@@ -102,7 +102,7 @@ Docker Compose defines one service named `neo4j`, using the container name `hdgr
 The `pyproject.toml` declares an `hdgraf-setup` entry point, but the project currently has no build-system/package setting, so `uv sync` may skip installing that executable. The directly runnable module is:
 
 ```bash
-uv run python -m backend.app.graph.setup
+uv run python -m spoilerless.app.graph.setup
 ```
 
 A successful run prints a `Dexter graph setup complete` summary. The seed operation is intended to create constraints and load the Dexter Season 1, Episodes 1–3 data from `data/dexter/`.
@@ -110,7 +110,7 @@ A successful run prints a `Dexter graph setup complete` summary. The seed operat
 ### 3. Start the backend
 
 ```bash
-uv run uvicorn backend.app.main:app --reload
+uv run uvicorn spoilerless.app.main:app --reload
 ```
 
 The backend listens on `http://localhost:8000` by default. Check it in another terminal:
@@ -157,7 +157,7 @@ Candidate extraction review is currently an API workflow rather than a dedicated
 `uv sync` currently warns that project entry points are skipped because the repository has no build system or `tool.uv.package = true`. Use the verified module form instead:
 
 ```bash
-uv run python -m backend.app.graph.setup
+uv run python -m spoilerless.app.graph.setup
 ```
 
 ### Python or Node.js is rejected

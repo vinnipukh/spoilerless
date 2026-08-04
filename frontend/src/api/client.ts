@@ -1,4 +1,4 @@
-// Shared fetch client mirroring backend/app/core/errors.py's
+// Shared fetch client mirroring spoilerless/app/core/errors.py's
 // `{detail: {code, message}}` error envelope (404 series_not_found, 422
 // invalid_visible_until_order, 503 database_unavailable/database_error).
 //

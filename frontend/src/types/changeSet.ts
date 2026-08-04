@@ -1,4 +1,4 @@
-// Mirrors backend/app/domain/change_set.py field-for-field.
+// Mirrors spoilerless/app/domain/change_set.py field-for-field.
 //
 // `ChangeSetOperation` is a discriminated union on `operation_type`, matching
 // the backend's closed 13-type Pydantic discriminated union exactly — no
