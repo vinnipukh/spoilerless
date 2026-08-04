@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
+import time
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict
 from typing import Literal
 
@@ -28,6 +30,40 @@ from backend.app.repository.session import Neo4jSessionRepository
 from backend.app.services.rate_limit import init_rate_limiter
 
 SERVICE_NAME = "hdgrafcehennemi-backend"
+
+log = logging.getLogger(__name__)
+
+# Header names that MUST NOT appear in request logs.
+_DENIED_HEADER_PREFIXES = ("x-llm-",)
+_DENIED_HEADER_NAMES = {"cookie", "set-cookie", "authorization"}
+
+
+async def _request_logging_middleware(request: Request, call_next) -> Response:
+    """Log one INFO line per request: method, path, status, duration (ms).
+
+    Never logs the full header dict, any ``X-LLM-*`` / ``Cookie`` /
+    ``Set-Cookie`` / ``Authorization`` header value, or the request body.
+    """
+    start = time.perf_counter()
+    response = await call_next(request)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+
+    # Build a safe subset of headers to log (allowlist, small fixed set).
+    safe_headers: dict[str, str] = {}
+    for name in ("user-agent", "content-type", "accept"):
+        value = request.headers.get(name)
+        if value:
+            safe_headers[name] = value
+
+    log.info(
+        "%s %s %d %.0fms %s",
+        request.method,
+        request.url.path,
+        response.status_code,
+        elapsed_ms,
+        safe_headers,
+    )
+    return response
 
 
 class HealthResponse(BaseModel):
@@ -92,6 +128,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.middleware("http")(_request_logging_middleware)
 install_database_error_handlers(app)
 install_llm_error_handlers(app)
 

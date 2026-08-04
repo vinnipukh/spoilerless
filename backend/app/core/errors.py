@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from copy import deepcopy
 from typing import Any
 
@@ -14,6 +15,8 @@ from neo4j.exceptions import (
     ServiceUnavailable,
 )
 from pydantic import BaseModel, ConfigDict, Field
+
+logger = logging.getLogger(__name__)
 
 
 class ErrorDetail(BaseModel):
@@ -144,8 +147,9 @@ def install_error_handlers(app: FastAPI) -> None:
     """Install sanitized validation and Neo4j handlers on a FastAPI application."""
 
     async def constraint_handler(
-        _request: Request, _exc: ConstraintError
+        _request: Request, exc: ConstraintError
     ) -> JSONResponse:
+        logger.error("constraint_error", exc_info=exc)
         return JSONResponse(
             status_code=409,
             content=_envelope(
@@ -155,11 +159,13 @@ def install_error_handlers(app: FastAPI) -> None:
         )
 
     async def database_handler(_request: Request, exc: Exception) -> JSONResponse:
+        logger.error("database_error", exc_info=exc)
         return database_error_response(exc)
 
     async def validation_handler(
-        _request: Request, _exc: RequestValidationError
+        _request: Request, exc: RequestValidationError
     ) -> JSONResponse:
+        logger.error("validation_error", exc_info=exc)
         return request_validation_error_response()
 
     app.add_exception_handler(RequestValidationError, validation_handler)

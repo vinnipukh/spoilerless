@@ -198,13 +198,12 @@ class TestRequestLoggingMiddleware:
         assert resp.status_code == 200
 
         # Find log records produced by the request-logging middleware.
-        # Until the middleware exists, this assertion fails (RED).
+        # Use getMessage() because the log uses printf-style formatting.
         request_logs = [
             r for r in caplog.records
             if r.levelno == logging.INFO
-            and hasattr(r, "msg")
-            and "GET" in str(r.msg)
-            and "/health" in str(r.msg)
+            and "GET" in r.getMessage()
+            and "/health" in r.getMessage()
         ]
         assert request_logs, (
             "Expected a request-logging INFO record with method=GET path=/health, "
