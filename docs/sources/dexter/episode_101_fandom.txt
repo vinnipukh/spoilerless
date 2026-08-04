@@ -1,0 +1,305 @@
+SOURCE SNAPSHOT — PROVENANCE / DOCUMENTATION ONLY
+=================================================
+Title:      Episode 101: Dexter
+Work:       Dexter (Showtime), Season 1, Episode 1 ("Dexter")
+Publisher:  Dexter Wiki / Fandom
+URL:        https://dexter.fandom.com/wiki/Episode_101:_Dexter
+License:    Fandom content is CC-BY-SA.
+Imported:   2026-08-04 (one-time snapshot; user-supplied page text)
+
+USAGE POLICY
+------------
+This file is a static provenance snapshot. It MUST NOT be parsed dynamically on
+every application request. Seeding draws ONLY from the narrative sections below:
+  - Episode metadata
+  - Cast (only when a person is narratively present in the Episode 1 Summary)
+  - Synopsis
+  - Summary
+  - Short paraphrased Episode-1 quotes (supporting context only)
+
+The following sections are retained for provenance completeness but are EXCLUDED
+as narrative graph sources because they contain later-season / out-of-boundary
+information: Notes, Trivia, Errors, Reception, Related Pages, Gallery captions
+(except to corroborate an already-described Episode 1 scene).
+
+Spoiler boundary: everything seeded from this snapshot is visible_from_order = 1
+(safe immediately after watching Episode 1). The bloodless-body killer remains
+UNIDENTIFIED (labelled "Ice Truck Killer" / unknown). No civilian identity,
+alias, family link, or later-season fact is attached to that entity.
+
+=================================================================
+METADATA
+=================================================================
+Airdate: 1 October 2006
+Production code: 101
+Written by: James Manos, Jr. (Teleplay)
+Director: Michael Cuesta
+Editor: Elena Maganini
+
+CAST (narratively present in Episode 1)
+Michael C. Hall — Dexter Morgan
+Julie Benz — Rita Bennett
+Jennifer Carpenter — Debra Morgan
+Erik King — James Doakes
+Lauren Velez — Maria LaGuerta
+David Zayas — Angel Batista
+James Remar — Harry Morgan
+C.S. Lee — Vince Masuka
+Jim Abele — Mike Donovan
+Margo Martindale — Camilla Figg
+Dominic Janes — Young Dexter
+Devon Graye — Teenage Dexter
+Christina Robinson — Astor Bennett
+Daniel Goldman — Cody Bennett
+Patrick Michael Buckley — Officer Oliver
+Ethan Smith — Jamie Jaworski
+Susie Taylor — Detective Sue
+Marc Macaulay — Detective Dan
+Justin Kane — Officer Simon
+Neeona Neal — Jane Saunders
+Jeanne Tidwell — Mrs. Donovan
+Roy Rutland — Desk Sergeant
+(Captain Thomas Matthews is named in the Summary; the Cokehead Murders "former
+boyfriend" and the three Donovan child-victims Corey Balanti, Tyler Kale, Joe
+Bigalow are named in the Summary.)
+
+=================================================================
+SYNOPSIS
+=================================================================
+Dexter's world is rocked when a rival serial murderer, dubbed the Ice Truck
+Killer by the media, privately contacts him and reveals that he knows Dexter's
+grisly secret. Meanwhile, Dexter's sister, Debra, is transferred to Homicide.
+
+Opening line: "Tonight's the night. And it's going to happen again and again —
+has to happen." — Dexter
+
+=================================================================
+SUMMARY (narrative source — verbatim from page)
+=================================================================
+It's nighttime in Miami, Florida, and the streets are busy. People are out
+having fun but so is Dexter Morgan. As he drives, he observes the people in the
+area, and reminisces on how he enjoys a variety of cultures and food. However,
+tonight he's after something different. He's hungry...but not for food. He needs
+to feed his urge to kill. Dexter's target is a pedophile and child killer named
+Mike Donovan whom he tracks to a choir event and hides in the backseat of his
+car, awaiting his prey. When Donovan enters, Dexter quickly slips a wire around
+Donovan's neck and orders him to drive. They end up in a wooded area near three
+open graves that Dexter recently dug up.
+
+Dexter forces Donovan inside a nearby building and confronts him about his
+crimes. He forces Donovan to look at the decaying bodies of his young victims -
+Corey Balanti, Tyler Kale, and Joe Bigalow. Donovan begins to pray, only to be
+smacked across his face. Dexter tells him that praying never helped anybody.
+Donovan begins to beg and Dexter asks if those little boys had begged. Donovan
+then admits his guilt, insisting that he couldn't help himself and Dexter has to
+understand. Dexter smiles, remarking that he definitely understands, but that he
+could never, ever hurt kids. When Donovan asks him why, Dexter moves forward,
+injects him with M99, and replies, "I have standards." As Donovan falls to the
+floor, unconscious, Dexter puts away the needle and removes his gloves.
+
+Dexter is next seen wearing his kill attire as he stands above Donovan, who is
+lying wrapped in plastic on a table. Using a scalpel, Dexter slices Donovan's
+right cheek and collects a drop of blood. He releases it onto a blood slide and
+places a second slide on top of it. A circle of blood appears and Dexter gazes
+at it for a moment.
+
+Dexter picks up a small power saw, and stands above Donovan's head. Lowering his
+visor, Dexter turns on the saw, brings it down, and slowly saws into Donovan's
+neck. During the night, Dexter uses his boat, Slice of Life, to dump Donovan's
+remains into the ocean near Bay Harbor.
+
+In the morning, he encounters a passing boat and he cheerily greets the captain
+as part of his "blending in" with the world. Dexter's narration reveals he is
+emotionally hollow, fakes human interaction, and that his foster parents Harry
+and Doris Morgan raised him well but are both dead.
+
+Dexter then flashes back to his childhood. His adoptive father, Harry, brings up
+a dog named Buddy, who went missing. Harry tells Dexter that he found the grave,
+and Dexter defends himself, saying that he did it because the barking kept his
+sick mother awake. Harry then says that more than just Buddy's bones were in the
+grave. The flashback ends and Dexter takes his boat to his marina, returning to
+his apartment shortly thereafter.
+
+Dexter lives on the top floor of a two-story apartment complex with a swimming
+pool. When he enters his apartment, its neat order is revealed. Dexter
+immediately heads to the air conditioning unit, removes the casing, reaches
+inside, and pulls out a blood slide box. Setting the box down, Dexter reminisces
+about the kill while he looks at the blood drop on Donovan's slide. He then
+places it next to a group of other slides inside the box. After he returns his
+trophy box to the AC unit, Dexter sits at his desk, pleased that he had honored
+the Code of Harry in this kill. (The code is a set of rules taught to him by
+Harry that allows Dexter to kill without being caught.)
+
+Dexter notices a phone message from his adoptive sister, Debra Morgan, who is a
+vice officer. He listens to her request for him to join her at a crime scene at
+the Seven Seas Motel. He has thoughts that if there's anyone he could have
+feelings for, it would be her (like a brother would). Dexter heads out to meet
+her at the crime scene.
+
+As Dexter crosses under the yellow police tape, Officer Oliver steps in his way
+and asks if he's a cop, to which Dexter replies by flashing his forensics
+laminate badge and saying, "No. Forensics." He sees his sister, undercover as a
+prostitute, calling him over to meet in a motel room.
+
+Upon entering the room, Dexter jokingly comments on the "sex suit" that Deb is
+wearing. She tells Dexter that a dead hooker was found chopped up in bits and
+pieces, and it's the third one in five months. They agree that a serial killer
+is at work.
+
+Debra doesn't know if there are suspects because Lt. Maria LaGuerta is keeping
+her in the room since she's working Vice and not a member of the Homicide
+division. She begs Dexter to look at the scene because he always gets "hunches,"
+and he finally agrees. Knowing that Dexter will help, Debra smiles at a possible
+chance to be assigned to Homicide.
+
+Dexter walks over into the pool area and slips on his latex gloves as Vince
+Masuka runs up to greet him. Masuka then asks why he's at the crime scene since
+there's no blood. Masuka asks Detective Angel Batista to lift the sheet and show
+Dexter the body. The strange aspect to this crime scene - no blood on, in, or
+outside of the body - sparks Dexter's curiosity and admiration. Batista notes an
+oddity in how the victim was dismembered. While the right leg is separated into
+four sections, the left leg is only separated into three with a final cut,
+apparently "interrupted." Dexter, still fascinated with the killer's bloodless
+technique, departs the scene after he tells Batista that, since there's no
+blood, he isn't needed there. Dexter wonders if this killer has exceeded his own
+abilities.
+
+On his return from the Seven Seas Motel, Dexter stops by Sadie's Donuts for his
+usual Donut Run. On most work days, in order to appear as a nice, normal guy, he
+offers a large box of donuts to his co-workers.
+
+At the station, an Officer at the desk takes a donut followed by Detective Dan
+and Detective Sue who joke about the next "blood bath" (since Dexter is a blood
+spatter analyst). After they walk away, Officer Debra Morgan shows up wearing her
+police uniform. She also chooses a donut and tells Dexter that Captain Thomas
+Matthews put her on the case, despite Lt. Maria LaGuerta's objections.
+
+Dexter then takes the donuts to Camilla Figg, the records supervisor. After she
+picks a donut, Dexter asks her if she has "anything new." She rolls her chair
+back to pick out a case file. Before she gives it to him, she states, "One of
+these days, you're going to tell me." Dexter responds that blood spatter doesn't
+take up all his time and he likes helping; it fills his nights. In reality,
+Camilla is one of Dexter's unwitting sources for victims. He asks for case files
+on someone particularly heinous, in order to get information for a kill.
+
+Next, Dexter greets Det. Angel Batista in basic Spanish and he takes the last
+donut. Walking away, Dexter looks into the box and thinks, "Just like me. Empty
+inside."
+
+In front of a wall hung with blood spatter patterns, Dexter sits spinning around
+in his chair. Sgt. James Doakes (looking rather angry) walks up to Dexter's desk
+and asks where the hell he's been. Within Miami Metro Homicide, Doakes (who
+deeply dislikes Dexter) is the immediate supervisor of the department and works
+under Lt. Maria LaGuerta.
+
+Doakes orders Dexter to write a blood report about another murder case. Doakes
+insists that two people died in a drug deal, but Dexter has his doubts. As Doakes
+walks away, he looks back at Dexter with suspicion.
+
+Before Dexter writes the report for Doakes, he goes to check out the Hotel
+Cokehead Murders crime scene where Officer Simon is assigned. Dexter states that
+the blood "tells a story." He acts out how the male victim was quickly stabbed in
+the carotid artery, based on the blood's pattern on a white wall. Dexter then
+walks over to where the female victim was killed. There the wall has thinner
+streaks of blood caused by slashing. Dexter says the killer knows how to use a
+blade, and then leaves to take a lunch break.
+
+During his break, Dexter stalks his next target, Jamie Jaworski, a valet with a
+secret hobby of being a rapist. When Jaworski murdered a woman named Jane
+Saunders in a snuff film, he escaped justice due to a faulty warrant. Dexter
+breaks into Jaworski's house to snoop around and is almost attacked by his dog.
+Dexter finds the definitive proof that Jaworski is guilty and Jaworski's fate is
+sealed. However, Dexter feels that he must wait until the time is right to place
+him on his table.
+
+Dexter goes on a date with his girlfriend, Rita Bennett, a domestic violence
+victim. As a result of her violent past with her husband, Rita has no interest
+in sex. Since Dexter secretly feels comfortable with the lack of intimacy, he
+thinks she is an ideal girlfriend for him. Rita also has two young children,
+with whom Dexter gets along well. While on their date at the Crab Festival,
+Dexter notices a crime scene in which another victim has been cut into pieces
+with no traces of blood; however, this time the head is missing.
+
+When Dexter brings Rita home, he is still thinking about the dismembered body. In
+trying to describe the killer's technique, he makes cutting motions across
+Rita's thigh. She thinks he wants to have sex and hurriedly gets out of the car,
+leaving Dexter to wonder why he did that to her.
+
+While at lunch, Dexter and Debra discuss the dismembered bodies, and Deb says
+that one of them felt ice cold. When she mentions the term "cell
+crystallization," Dexter speculates that the killer is using a Refrigerated Truck
+to transport the body parts.
+
+While Dexter waits to attend a briefing about the bloodless victims, he notices
+Mrs. Donovan inquiring about her missing husband. While reassuring himself that
+he covered his tracks, Sgt James Doakes appears and asks Dexter if he has a thing
+for grieving widows, and calls him a psycho. Dexter says he is there for the
+briefing. Doakes tells Lt. Maria LaGuerta that Dexter doesn't belong in the
+briefing and that he's still waiting on Dexter's spatter report on the Hotel
+Cokehead Murders Case. However, LaGuerta lets Dexter sit in at the briefing,
+which irritates Doakes. During the meeting, Debra brings up the idea of a
+refrigerated truck, but she is shot down by LaGuerta.
+
+Following the briefing, Dexter and Doakes meet with LaGuerta in her office to go
+over the Cokehead Murders Case. Dexter insists that the murders had nothing to do
+with cocaine. He says that the man was quickly dispatched, while the woman was an
+emotional kill. He suggests an old boyfriend, but Doakes plays off Dexter's hunch
+as a waste of time. As Dexter is checking his spatter pattern, Doakes warns him,
+"I'm watching you." LaGuerta simply sits at her desk and smiles at Dexter.
+
+The time is right for Dexter to kill Jamie Jaworski and he captures him at a
+construction site called Baywater Luxury Apartments where he has hung a photo of
+Jane Saunders. Jaworski is wrapped in plastic and secured to a table, after which
+Dexter collects a blood slide. When Jaworski admits his guilt and says he is not
+sorry, Dexter kills him with a cleaver. While he is dismembering the body, Rita
+calls Dexter and asks to see him. He says that he is finishing a task and will
+stop by later.
+
+As Dexter drives to see Rita, he is sidetracked when he notices a refrigerated
+truck. He follows it, only to have the head of the last victim tossed at his car
+by the driver. Police arrive on the scene and he is questioned by LaGuerta, while
+Doakes stands glaring at Dexter from afar. LaGuerta tells Dexter that he was
+right about the Cokehead Murders, and Doakes arrested the boyfriend, but he still
+hates Dexter. When LaGuerta begins to flirt with Dexter, he says that he is tired
+and pretends to go home. Instead, he heads to Rita's house.
+
+It's early morning when Dexter arrives at Rita's house. She is hurt that he
+didn't come over the night before, but he explains about the head and she
+understands. Then he finds out why Rita wanted to see him. She awkwardly
+expresses her interest in taking their relationship to a more intimate level.
+Dexter is taken off guard and doesn't quite know how to respond. They move to the
+couch, but Dexter is saved from following through when Rita's son, Cody, calls
+from the neighbor's house. He is sick and needs to be picked up.
+
+When Dexter enters his apartment, he notices a small doll's head fastened to his
+refrigerator door. Inside, he finds the other parts of the doll, severed just
+like the bloodless bodies. Dexter is intrigued and his thought is that this is a
+friendly message — "Hey, want to play?" — and yes, he wants to play.
+
+=================================================================
+SHORT EPISODE-1 QUOTES (supporting context; paraphrase preferred)
+=================================================================
+- Dexter (opening): "Tonight's the night. And it's going to happen again and
+  again — has to happen."
+- Dexter to Donovan (child killer): "Children — I could never do that. ...
+  I have standards."
+- Dexter (self): "I don't have feelings about anything, but if I could have
+  feelings at all, I'd have them for Deb."
+- Doakes to Dexter: "I'm watching you."
+- Harry to teenage Dexter: "Whenever you get an urge, you come to me... we deal
+  with it together." / "There are people out there who do really bad things...
+  and the police can't catch them all."
+- Dexter (final, doll): "I think this is a friendly message... 'Hey, want to
+  play?' And yes, I want to play. I really, really do."
+
+=================================================================
+EXCLUDED SECTIONS (retained for provenance; NOT used for seeding)
+=================================================================
+Notes, Trivia, Errors, Reception, Related Pages, and Gallery captions from the
+source page are intentionally omitted from this snapshot's narrative use. They
+reference later seasons/episodes (e.g., Season 5 Baywater, later set/character
+changes, the killer's eventual media/alias framing) and are out of the Episode 1
+spoiler boundary. The Related Pages list names a "Fountain Victim"; because the
+Episode 1 Summary does not associate the second bloodless crime scene with a
+fountain, the second victim is modelled as the neutral "Second Bloodless Victim"
+rather than importing the related-page label.
