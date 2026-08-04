@@ -334,6 +334,15 @@ async def database_handler(_request: Request, exc: Exception) -> JSONResponse:
 **How to avoid:** Create the app's runtime credential as a second Console-managed database user with the **Member** role (read/write to data, no security-admin capability) rather than reusing the original Administrator account created at instance provisioning. Document this Free-tier ceiling explicitly in `docs/DEPLOYMENT.md` (DOCS-03) so a future upgrade to a paid tier is understood as the path to true custom RBAC.
 **Warning signs:** Any attempt to run `CREATE ROLE ...`/`GRANT ...` Cypher against the Aura instance returning a permission or "unsupported" error — this is expected on Free tier, not a misconfiguration.
 
+> **CORRECTION (2026-08-04, primary docs fetched — supersedes the Console-Member recommendation above):**
+> The "Member" role referenced above is a **console/project role** (inviting human collaborators via Project Settings → Users), NOT a database-level credential. Aura's own docs state: "User management within the Aura console does not replace built-in roles or fine-grained RBAC at the database level." The documented way to create an **instance database user** is Cypher in the Query browser (Connect-instance docs, Option 1 — "Create a new user via the Aura console"):
+> ```cypher
+> CREATE USER app_user SET PASSWORD '<long-random>' CHANGE NOT REQUIRED;
+> SHOW USERS;  -- verify
+> ```
+> Requirements: log into the Aura Console, open **Query**, connect with the admin (`neo4j`) credentials from the downloaded credentials file, run the above. Custom `CREATE ROLE`/`GRANT` remains unsupported on Free (Operations Manual manage-roles page applies to Business Critical / VDC / Enterprise only).
+> **Practical split:** keep the original `neo4j` credential private for administration + migrations (constraint/index creation — `backend/app/graph/seed.py` runs `CREATE CONSTRAINT`/`CREATE INDEX`), and put only `app_user` in the deployed backend env vars. Verify `app_user` has graph read/write access at execution time (if data access is denied, try `GRANT ROLE editor TO app_user` — built-in role assignment may still work even though `CREATE ROLE` does not — and if that also fails, run the one-time reseed with the admin credential and note the Free-tier ceiling in DEPLOYMENT.md).
+
 ### Pitfall 6: CI Node version must satisfy the repo's own `jsdom` engines constraint
 **What goes wrong:** Picking an arbitrary/older Node LTS (e.g. 20) for the GitHub Actions frontend job will fail `npm ci` or produce undefined behavior in `vitest`.
 **Why it happens:** `frontend/package-lock.json`'s pinned `jsdom@30.0.1` declares `"engines": {"node": "^22.22.2 || ^24.15.0 || >=26.0.0"}` [VERIFIED: `frontend/package-lock.json:5830-5832`, read this session — `"engines": { "node": "^22.22.2 || ^24.15.0 || >=26.0.0" }`], which excludes Node 20 and Node 23 entirely.
