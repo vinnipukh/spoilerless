@@ -45,9 +45,13 @@ imply (that's Phase 9), and does not cover the 10 new features (also Phase 9).
 
 ### Production cookie/CORS/CSRF
 - **D-09:** `SESSION_COOKIE_SECURE` must default to `true` (not merely be settable) — current default `false` is itself a finding (`docs/PROBLEMS.md` #8).
-- **D-10:** Cross-origin deployment (Vercel frontend, Render backend — different domains) needs `SameSite=None; Secure` on the session cookie. Must not break the existing `verify_origin` CSRF check (`backend/app/api/auth.py`).
+- **D-10 (RESOLVED — custom domain purchased):** Research flagged that `SameSite=None` cookies between default `*.vercel.app`/`*.onrender.com` domains break login on Safari and privacy-hardened Firefox/Chrome (third-party cookie blocking). User explicitly wants Safari/Firefox to work, so the fix is a shared custom root domain, not accepted breakage. **Domain purchased: `spoilerless.net`** (Cloudflare Registrar, $11.86/yr, done by the user 2026-08-04). Deployment layout:
+  - `app.spoilerless.net` → Vercel (frontend), custom domain configured in the Vercel project.
+  - `api.spoilerless.net` → Render (backend), custom domain configured in the Render service.
+  - Because both are subdomains of the same registrable domain (`spoilerless.net`), the session cookie can be set with `Domain=spoilerless.net` (or `.spoilerless.net`) so it's shared across both subdomains and is treated as **same-site**, not cross-site, by every browser (Safari's third-party-cookie blocking does not apply — "site" is the eTLD+1, `spoilerless.net`, not the full hostname). `SameSite=Lax` (the codebase's existing default) is sufficient; `SameSite=None` is no longer needed.
+  - Follow-up work implied: register `app.spoilerless.net`/`api.spoilerless.net` DNS records at Cloudflare (CNAME to Vercel's/Render's provided target hostnames) and add both as custom domains in the Vercel/Render dashboards — Claude's discretion on exact DNS record values (read from each platform's custom-domain setup screen at execution time, they're account-specific).
 - **D-11:** `verify_origin`'s current fail-open behavior (missing Origin/Referer → request allowed through) is a named gap (`docs/PROBLEMS.md` #10) — must be tightened for state-changing routes. `POST /api/auth/logout` currently has no `verify_origin` dependency at all and must gain one.
-- **D-12:** `FRONTEND_ORIGINS` in production must be the exact deployed Vercel origin(s), no wildcard.
+- **D-12:** `FRONTEND_ORIGINS` in production must be the exact deployed origin — `https://app.spoilerless.net`, no wildcard.
 
 ### Rate limiting
 - **D-13:** Login, chat-send, and content-write endpoints (notes, custom nodes, custom relationships) need per-user/IP rate limiting, returning `429` in the existing sanitized error envelope shape.
