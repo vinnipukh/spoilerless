@@ -294,18 +294,32 @@ def test_graph_nodes_include_image_fields(live_client: TestClient) -> None:
         assert "image_url" in node
         assert "image_source_url" in node
 
-    # All 9 seeded S01E01-03 characters carry a manually-verified Fandom
-    # portrait; every other node type stays null (never set on Neo4j).
+    # D-14 curation (07-06): only the 6 order-1 characters carry a curated
+    # Fandom portrait; the 3 future characters (Paul vfo 2, Rudy vfo 3,
+    # Harry vfo 3) deliberately have no seed portrait, so at boundary 3 they
+    # serialize with null image fields. Every other node type stays null.
     characters = [node for node in payload["nodes"] if node["type"] == "Character"]
     assert len(characters) == 9
+    portraited_ids = {
+        "dexter:character:dexter_morgan",
+        "dexter:character:debra_morgan",
+        "dexter:character:angel_batista",
+        "dexter:character:maria_laguerta",
+        "dexter:character:james_doakes",
+        "dexter:character:rita_bennett",
+    }
     for character in characters:
-        assert character["image_url"], character
-        assert character["image_url"].startswith(
-            "https://static.wikia.nocookie.net/dexter/"
-        )
-        assert character["image_source_url"].startswith(
-            "https://dexter.fandom.com/wiki/"
-        )
+        if character["id"] in portraited_ids:
+            assert character["image_url"], character
+            assert character["image_url"].startswith(
+                "https://static.wikia.nocookie.net/dexter/"
+            )
+            assert character["image_source_url"].startswith(
+                "https://dexter.fandom.com/wiki/"
+            )
+        else:
+            assert character["image_url"] is None, character
+            assert character["image_source_url"] is None, character
 
     non_characters = [node for node in payload["nodes"] if node["type"] != "Character"]
     assert non_characters
@@ -659,15 +673,28 @@ def test_graph_hidden_character_image_urls_never_serialized(
     for hidden_fragment in ("Paul_Bennett_7.PNG", "Brianmoser1.png", "HarryFace.jpg"):
         assert hidden_fragment not in one_text, hidden_fragment
 
-    # Boundary 2: Paul is revealed (portrait present), Rudy and Harry still hidden.
+    # Boundary 2: Paul is revealed. Per D-14 curation (07-06) Paul, Rudy and
+    # Harry carry NO seed portrait (future characters), so their serialized
+    # image fields must be null — the fragment may never appear at any
+    # boundary. Only the order-1 characters' portraits exist.
     two = live_client.get("/api/series/series_dexter/graph?visible_until_order=2")
     assert two.status_code == 200
-    two_text = json.dumps(two.json(), sort_keys=True)
-    assert "Paul_Bennett_7.PNG" in two_text
-    for hidden_fragment in ("Brianmoser1.png", "HarryFace.jpg"):
-        assert hidden_fragment not in two_text, hidden_fragment
+    two_payload = two.json()
+    for hidden_fragment in ("Paul_Bennett_7.PNG", "Brianmoser1.png", "HarryFace.jpg"):
+        assert hidden_fragment not in json.dumps(two_payload, sort_keys=True), hidden_fragment
+    paul = next(
+        node
+        for node in two_payload["nodes"]
+        if node["id"] == "dexter:character:paul_bennett"
+    )
+    assert paul["image_url"] is None
+    assert paul["image_source_url"] is None
+    # The order-1 revealed characters keep their portraits.
+    two_text = json.dumps(two_payload, sort_keys=True)
+    assert "Dexter_Morgan" in two_text or "Season_7_Photo_Promo" in two_text
 
-    # Boundary 3: everything is revealed — Harry's portrait is returned again.
+    # Boundary 3: everything is revealed — Harry's serialized image fields
+    # are still null (no future-character portraits in seed, D-14).
     three = live_client.get("/api/series/series_dexter/graph?visible_until_order=3")
     assert three.status_code == 200
     three_payload = three.json()
@@ -676,8 +703,8 @@ def test_graph_hidden_character_image_urls_never_serialized(
         for node in three_payload["nodes"]
         if node["id"] == "dexter:character:harry_morgan"
     )
-    assert harry["image_url"] is not None
-    assert harry["image_source_url"] is not None
+    assert harry["image_url"] is None
+    assert harry["image_source_url"] is None
 
 
 # ===================================================================
