@@ -30,7 +30,12 @@ import { getProgress, updateProgress } from '../api/progress'
 // the pendingChange/confirmChange modal flow, whose copy states Episodes
 // 1 through N will be considered watched.
 
-const STORAGE_KEY = 'hdgraf.watchProgress'
+const STORAGE_KEY = 'spoilerless.watchProgress'
+
+// Legacy sessionStorage key (pre-REBRAND-01). readStored falls back to it
+// once when the new key is absent; writeStored removes it after writing the
+// new key (T-09-01-02 migration spirit).
+const LEGACY_STORAGE_KEY = 'hdgraf.watchProgress'
 
 type Stored = {
   seriesId: string
@@ -56,7 +61,8 @@ type State = {
 
 function readStored(): Stored | null {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY)
+    const raw =
+      sessionStorage.getItem(STORAGE_KEY) ?? sessionStorage.getItem(LEGACY_STORAGE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw)
     if (
@@ -78,6 +84,8 @@ function readStored(): Stored | null {
 // D-07 migration initializes watched = view = the stored value.
 function writeStored(seriesId: string, visibleUntilOrder: number) {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ seriesId, visibleUntilOrder }))
+  // One-time migration completion: drop the legacy key once the new key is written.
+  sessionStorage.removeItem(LEGACY_STORAGE_KEY)
 }
 
 function initialState(): State {

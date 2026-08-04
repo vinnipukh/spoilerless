@@ -1,5 +1,5 @@
 <!-- generated-by: gsd-doc-writer -->
-# HD Graf Cehennemi
+# Spoilerless
 
 **A spoiler-aware, source-grounded television-series knowledge graph application.**
 
@@ -20,7 +20,7 @@ Explore characters, events, locations, claims, and relationships through an inte
 | `.env` (repo root) | Backend settings (`NEO4J_*`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`, `ADMIN_EMAILS`, `REDIS_URL`, `LLM_*`) | Read by `spoilerless/app/core/config.py` via pydantic-settings. **Never committed.** Points at the shared AuraDB by default. |
 | `frontend/.env.local` | `VITE_GOOGLE_CLIENT_ID` only | Read by Vite for local dev. `VITE_API_BASE_URL` stays commented (the dev proxy handles `/api`). **Never committed.** |
 | `scripts/env-local.sh` | Local-Docker Neo4j credentials (`localhost:7687`) | `source scripts/env-local.sh` before running the spoilerless/tests against the local Docker Neo4j — **never** edit `.env` to switch databases. |
-| `docker-compose.yml` | Local Neo4j Community container (`hdgrafcehennemi-neo4j`, auth `neo4j` / `hdgraf-local-password`) | Only for local testing; production uses AuraDB. |
+| `docker-compose.yml` | Local Neo4j Community container (`spoilerless-neo4j`, auth `neo4j` / `hdgraf-local-password`) | Only for local testing; production uses AuraDB. |
 
 ### Platform environment variables
 
@@ -53,7 +53,7 @@ Build settings: Framework Preset **Vite**, Root Directory **`frontend/`**, Build
 
 ### Fresh machine checklist
 
-1. `git clone https://github.com/vinnipukh/hdgrafcehennemi.git`
+1. `git clone https://github.com/vinnipukh/spoilerless.git`
 2. `uv sync` (backend deps) and `cd frontend && npm install`
 3. `cp .env.example .env` → fill in real values (AuraDB creds, Google Client ID, emails, Redis URL)
 4. `cp frontend/.env.example frontend/.env.local` → set `VITE_GOOGLE_CLIENT_ID`
@@ -140,8 +140,8 @@ See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the full system breakdo
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/vinnipukh/hdgrafcehennemi.git
-cd hdgrafcehennemi
+git clone https://github.com/vinnipukh/spoilerless.git
+cd spoilerless
 cp .env.example .env
 ```
 
@@ -186,7 +186,7 @@ uv sync
 uv run --project spoilerless python -m spoilerless.app.graph.setup
 ```
 
-The setup module creates Neo4j constraints and seeds the Dexter series, episodes, characters, locations, events, claims, sources, and evidence fragments. Although `pyproject.toml` declares an `hdgraf-setup` script, the current project packaging configuration does not install that executable through `uv sync`.
+The setup module creates Neo4j constraints and seeds the Dexter series, episodes, characters, locations, events, claims, sources, and evidence fragments. Although `pyproject.toml` declares an `spoilerless-setup` script, the current project packaging configuration does not install that executable through `uv sync`.
 
 ### 5. Start the backend
 
@@ -215,8 +215,8 @@ For a full walkthrough with troubleshooting, see [`docs/GETTING-STARTED.md`](./d
 ## Project Structure
 
 ```
-hdgrafcehennemi/
-├── backend/
+spoilerless/
+├── spoilerless/
 │   ├── app/
 │   │   ├── api/            # Route handlers (series, graph, user_content, auth,
 │   │   │                   #   revisions, candidates, progress, chat, change_set, settings)

@@ -1,5 +1,5 @@
 <!-- generated-by: gsd-doc-writer -->
-# HD Graf Cehennemi — Architecture Guide
+# Spoilerless — Architecture Guide
 
 > **Project:** Spoiler-aware TV series knowledge graph
 > **Prototype scope:** Dexter, Season 1, Episodes 1–3
@@ -42,7 +42,7 @@
 
 ## 1. System Overview
 
-HD Graf Cehennemi is a **spoiler-aware TV series knowledge graph** application. It lets a signed-in user explore character relationships, events, locations, organizations, and narrative claims from a TV series — all filtered by how much of the series they've watched. Users can also attach notes, create custom nodes/relationships, and — when an LLM provider is configured — ask a spoiler-grounded chat agent questions about the graph.
+Spoilerless is a **spoiler-aware TV series knowledge graph** application. It lets a signed-in user explore character relationships, events, locations, organizations, and narrative claims from a TV series — all filtered by how much of the series they've watched. Users can also attach notes, create custom nodes/relationships, and — when an LLM provider is configured — ask a spoiler-grounded chat agent questions about the graph.
 
 The core architectural invariant is that **spoilery content is never transmitted to the client** (or to the LLM) unless the requester has already reached that point in the story. Spoiler-sensitive content nodes, relationships, and claims carry a `visible_from_order` field; system records such as users, sessions, progress, chat, ChangeSets, and settings do not universally carry it. Spoiler-aware reads filter content at the Cypher layer rather than after retrieval.
 
@@ -148,8 +148,8 @@ Spoiler Filter    ← parameterized Cypher with built-in visibility gating
 ## 3. Directory Structure Rationale
 
 ```
-hdgrafcehennemi/
-├── backend/
+spoilerless/
+├── spoilerless/
 │   └── app/
 │       ├── api/            # Route handlers — one module per resource area
 │       ├── cache/          # Optional Redis layer: redis_client.py (shared
@@ -190,7 +190,7 @@ hdgrafcehennemi/
 └── .env.example                # Environment variable template
 ```
 
-The split between `data/` (content) and `ontology/` (schema) lets the seed pipeline validate every seeded entity against the type system before writing to Neo4j — a malformed seed file fails fast at `hdgraf-setup` time rather than producing an inconsistent graph. The backend's `api/ → services/ → repository/ → graph/` layering mirrors a conventional three-tier backend, with `spoiler/` singled out as its own directory specifically because the spoiler-filtering Cypher is the system's central invariant and is kept free of FastAPI/Pydantic imports so it can be unit-tested and audited in isolation.
+The split between `data/` (content) and `ontology/` (schema) lets the seed pipeline validate every seeded entity against the type system before writing to Neo4j — a malformed seed file fails fast at `spoilerless-setup` time rather than producing an inconsistent graph. The backend's `api/ → services/ → repository/ → graph/` layering mirrors a conventional three-tier backend, with `spoiler/` singled out as its own directory specifically because the spoiler-filtering Cypher is the system's central invariant and is kept free of FastAPI/Pydantic imports so it can be unit-tested and audited in isolation.
 
 ---
 
@@ -350,7 +350,7 @@ Created idempotently by `setup_database()`: `id` uniqueness constraints for the 
 
 #### Seed Pipeline
 
-The `setup_database()` pipeline (invoked via `uv run hdgraf-setup`, registered in `pyproject.toml` as the `hdgraf-setup` script) loads seed JSON from `data/dexter/`, validates it against the ontology (node types, relationship types, claim types/statuses/confidence levels, ID uniqueness, evidence completeness), creates constraints and indexes, upserts all nodes via `MERGE`, creates structural and provenance relationships, and runs a visibility integrity audit.
+The `setup_database()` pipeline (invoked via `uv run spoilerless-setup`, registered in `pyproject.toml` as the `spoilerless-setup` script) loads seed JSON from `data/dexter/`, validates it against the ontology (node types, relationship types, claim types/statuses/confidence levels, ID uniqueness, evidence completeness), creates constraints and indexes, upserts all nodes via `MERGE`, creates structural and provenance relationships, and runs a visibility integrity audit.
 
 ---
 

@@ -1,4 +1,4 @@
-# HD Graf Cehennemi — Spoiler Visibility Terminology (Locked Vocabulary)
+# Spoilerless — Spoiler Visibility Terminology (Locked Vocabulary)
 
 **Status:** DOCS-01 deliverable (plan 07-01) · **Date:** 2026-08-03
 **Purpose:** Lock the visibility vocabulary so every later plan in phase 07 (07-02..07-08) and every

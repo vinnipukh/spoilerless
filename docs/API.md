@@ -1,5 +1,5 @@
 <!-- generated-by: gsd-doc-writer -->
-# HD Graf Cehennemi HTTP API
+# Spoilerless HTTP API
 
 The backend is a FastAPI application defined by `spoilerless.app.main:app`. Its generated OpenAPI document is the authoritative machine-readable contract.
 
@@ -159,7 +159,7 @@ Candidate ingest and read, and ChangeSet propose/reject/revert, are intentionall
 {
   "status": "ok",
   "database": "connected",
-  "service": "hdgrafcehennemi-backend"
+  "service": "spoilerless-backend"
 }
 ```
 

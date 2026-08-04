@@ -1,4 +1,4 @@
-# HD Graf Cehennemi — Spoiler Threat Model
+# Spoilerless — Spoiler Threat Model
 
 **Status:** DOCS-01 deliverable (plan 07-01) · **Date:** 2026-08-03
 **Source inventory:** `.planning/phases/07-spoiler-safety-hardening/07-AUDIT.md` (repository audit of
@@ -114,7 +114,7 @@ returning the content itself.
 
 | Class | Enforcement layer | Backend query / service | Frontend behavior | Test coverage | Fail-closed rule |
 |---|---|---|---|---|---|
-| **I21 — Cache key / stale cache** | Frontend sessionStorage + backend-authoritative reconciliation | No server cache of visibility; backend is authoritative | `sessionStorage['hdgraf.watchProgress']` (useWatchProgress.ts:21) holds a single `visibleUntilOrder`; reconciled on mount | `frontend/src/hooks/useWatchProgress.test.ts`; 07-03 adds watched/view split (matrix row K1) | Stale cached progress must never widen the effective boundary; D-05 storage shape (watched/view split) lands in 07-03. |
+| **I21 — Cache key / stale cache** | Frontend sessionStorage + backend-authoritative reconciliation | No server cache of visibility; backend is authoritative | `sessionStorage['spoilerless.watchProgress']` (useWatchProgress.ts:21) holds a single `visibleUntilOrder`; reconciled on mount | `frontend/src/hooks/useWatchProgress.test.ts`; 07-03 adds watched/view split (matrix row K1) | Stale cached progress must never widen the effective boundary; D-05 storage shape (watched/view split) lands in 07-03. |
 | **I22 — Episode code / season strings** | Numeric-order authority (D-09) | `SERIES_EPISODES_QUERY` orders by `episode_order` (numeric); `code` returned for display; selector selects by `episode_order` | EpisodeSelector keys/selects by numeric order | 07-03 ordering regression (matrix row O1) | Never compare episode-code strings or season-number strings for visibility; episode-code ordering is never used for reveal decisions (D-09). |
 
 ## 5. Completion gate (D-25)

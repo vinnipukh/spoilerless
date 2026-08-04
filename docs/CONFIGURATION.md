@@ -1,7 +1,7 @@
 <!-- generated-by: gsd-doc-writer -->
 # Configuration
 
-> **HD Graf Cehennemi** — configuration reference for all runtime, build, and infrastructure settings.
+> **Spoilerless** — configuration reference for all runtime, build, and infrastructure settings.
 
 ---
 
@@ -224,7 +224,7 @@ unthrottled and always queries Neo4j directly:
 GET /health
 ```
 
-Returns `{"status": "ok", "database": "connected", "service": "hdgrafcehennemi-backend"}` (HTTP 200) when
+Returns `{"status": "ok", "database": "connected", "service": "spoilerless-backend"}` (HTTP 200) when
 Neo4j is reachable, or `{"status": "degraded", "database": "unavailable", ...}` with HTTP 503 otherwise.
 
 ---
@@ -332,7 +332,7 @@ The `docker-compose.yml` at the project root runs a single Neo4j Community conta
 services:
   neo4j:
     image: neo4j:2026.06.0-community
-    container_name: hdgrafcehennemi-neo4j
+    container_name: spoilerless-neo4j
     restart: unless-stopped
 
     ports:
@@ -632,7 +632,7 @@ docker compose up -d
 
 # 3. Install Python deps and seed the database
 uv sync
-uv run hdgraf-setup
+uv run spoilerless-setup
 
 # 4. Start the backend
 uv run uvicorn spoilerless.app.main:app --reload

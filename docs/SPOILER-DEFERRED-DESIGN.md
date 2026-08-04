@@ -1,4 +1,4 @@
-# HD Graf Cehennemi — Deferred Feature Design (Future Invariants)
+# Spoilerless — Deferred Feature Design (Future Invariants)
 
 **Status:** DOCS-02 deliverable (plan 07-01) · **Date:** 2026-08-03
 **Purpose:** Document the *safe future design* of features that are deliberately **not built this

@@ -1,4 +1,4 @@
-# HD Graf Cehennemi — Authoritative Project Specification
+# Spoilerless — Authoritative Project Specification
 
 > **Status vocabulary:** **implemented** describes the current repository; **prototype target** describes the original one-week vertical slice; **future direction** is architectural guidance, not a claim of implementation.
 >
@@ -6,7 +6,7 @@
 
 ## 1. Aim, prototype boundary, and current state
 
-HD Graf Cehennemi is a spoiler-aware, source-grounded television-series knowledge-graph application. It combines an Obsidian-like interactive graph for characters, events, locations, organizations, objects, claims, relationships, sources, evidence, notes, and revisions with an LLM chat that may use only graph data visible at the viewer's persisted watch progress.
+Spoilerless is a spoiler-aware, source-grounded television-series knowledge-graph application. It combines an Obsidian-like interactive graph for characters, events, locations, organizations, objects, claims, relationships, sources, evidence, notes, and revisions with an LLM chat that may use only graph data visible at the viewer's persisted watch progress.
 
 The historical one-week prototype target was deliberately narrow:
 

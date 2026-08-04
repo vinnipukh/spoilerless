@@ -1,7 +1,7 @@
 <!-- generated-by: gsd-doc-writer -->
 # Testing
 
-HD Graf Cehennemi has a Python backend suite under `spoilerless/tests/` and a colocated React/TypeScript frontend suite under `frontend/src/`.
+Spoilerless has a Python backend suite under `spoilerless/tests/` and a colocated React/TypeScript frontend suite under `frontend/src/`.
 
 ## Test frameworks and setup
 
@@ -38,7 +38,7 @@ NEO4J_PASSWORD=hdgraf-local-password
 NEO4J_DATABASE=neo4j
 ```
 
-The same file adds both the repository root and `backend/` to `sys.path`, so run backend commands from the repository root. This also avoids failures in tests that open repository-relative fixtures such as `data/dexter/test/extraction_fixture.json` and `docs/extraction-schema.json`.
+The same file adds both the repository root and `spoilerless/` to `sys.path`, so run backend commands from the repository root. This also avoids failures in tests that open repository-relative fixtures such as `data/dexter/test/extraction_fixture.json` and `docs/extraction-schema.json`.
 
 ### Frontend
 
@@ -169,7 +169,7 @@ The HTTP surface is a closed inventory. Adding, removing, or changing a route re
 
 | Symptom | Likely cause | Action |
 |---|---|---|
-| Root-relative fixture `FileNotFoundError` | pytest was run from `backend/` | Re-run from the repository root. |
+| Root-relative fixture `FileNotFoundError` | pytest was run from `spoilerless/` | Re-run from the repository root. |
 | Many unrelated live-DB failures after an aborted run | Shared Neo4j contains partial fixture state | Stop; inspect/backup the database, then clean or reseed only with explicit data-loss awareness. Re-run a focused file before blaming source. |
 | `test_seed_idempotency.py` fails with a relationship/node count mismatch | `test_candidate_ingest.py`/`test_candidate_review.py` left extra `Claim`/`EvidenceFragment` rows on `series_dexter` from an earlier run | Re-seed against a disposable database, or run `test_seed_idempotency.py` before the candidate test files rather than after them. |
 | React renders an empty container or many Testing Library lookups fail | `NODE_ENV=production` leaked into Vitest | Re-run with `NODE_ENV=test CI=1`. |

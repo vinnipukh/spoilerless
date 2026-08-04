@@ -1,7 +1,7 @@
 <!-- generated-by: gsd-doc-writer -->
 # Getting Started
 
-Run the HD Graf Cehennemi Dexter prototype locally with Neo4j, the FastAPI backend, and the React frontend.
+Run the Spoilerless Dexter prototype locally with Neo4j, the FastAPI backend, and the React frontend.
 
 ## Prerequisites
 
@@ -34,8 +34,8 @@ npm --version
 1. Clone the repository and enter it:
 
    ```bash
-   git clone https://github.com/vinnipukh/hdgrafcehennemi.git
-   cd hdgrafcehennemi
+   git clone https://github.com/vinnipukh/spoilerless.git
+   cd spoilerless
    ```
 
 2. Create local configuration files from the committed templates:
@@ -90,7 +90,7 @@ docker compose up -d
 docker compose ps neo4j
 ```
 
-Docker Compose defines one service named `neo4j`, using the container name `hdgrafcehennemi-neo4j`. Wait until it is healthy.
+Docker Compose defines one service named `neo4j`, using the container name `spoilerless-neo4j`. Wait until it is healthy.
 
 | Service | Local address | Purpose |
 |---|---|---|
@@ -99,7 +99,7 @@ Docker Compose defines one service named `neo4j`, using the container name `hdgr
 
 ### 2. Seed the graph
 
-The `pyproject.toml` declares an `hdgraf-setup` entry point, but the project currently has no build-system/package setting, so `uv sync` may skip installing that executable. The directly runnable module is:
+The `pyproject.toml` declares an `spoilerless-setup` entry point, but the project currently has no build-system/package setting, so `uv sync` may skip installing that executable. The directly runnable module is:
 
 ```bash
 uv run python -m spoilerless.app.graph.setup
@@ -152,7 +152,7 @@ Candidate extraction review is currently an API workflow rather than a dedicated
 
 ## Common Setup Issues
 
-### `hdgraf-setup` is not found
+### `spoilerless-setup` is not found
 
 `uv sync` currently warns that project entry points are skipped because the repository has no build system or `tool.uv.package = true`. Use the verified module form instead:
 

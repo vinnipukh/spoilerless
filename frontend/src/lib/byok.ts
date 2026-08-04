@@ -1,21 +1,21 @@
 // BYOK (bring-your-own-key) LLM settings, frontend half of D-06 (AI-01):
 // the provider key/base_url/model live ONLY in this browser's localStorage
-// under 'hdgraf:byok-llm-settings' and travel per-request as X-LLM-* headers.
+// under 'spoilerless:byok-llm-settings' and travel per-request as X-LLM-* headers.
 // The key never leaves this browser except as a request header to the user's
 // configured endpoint - nothing here touches the network, and no
 // settings-persistence endpoint is involved (AI-01, D-05).
 import type { StoredLLMSettings } from '@/types/settings'
 
-export const BYOK_STORAGE_KEY = 'hdgraf:byok-llm-settings'
+export const BYOK_STORAGE_KEY = 'spoilerless:byok-llm-settings'
 
-/**
- * Read the stored BYOK settings from localStorage. Absent or malformed
- * storage returns null and never throws - the settings form must stay
- * usable regardless of what is (or is not) in the browser.
- */
-export function getStoredLLMSettings(): StoredLLMSettings | null {
+// Legacy key (pre-REBRAND-01). getStoredLLMSettings falls back to it once when
+// the new key is absent so existing BYOK settings survive the rename;
+// saveLLMSettings removes it after writing the new key (T-09-01-02).
+const LEGACY_BYOK_STORAGE_KEY = 'hdgraf:byok-llm-settings'
+
+function readKey(key: string): StoredLLMSettings | null {
   try {
-    const raw = window.localStorage.getItem(BYOK_STORAGE_KEY)
+    const raw = window.localStorage.getItem(key)
     if (!raw) return null
     const parsed: unknown = JSON.parse(raw)
     if (typeof parsed !== 'object' || parsed === null) return null
@@ -35,8 +35,20 @@ export function getStoredLLMSettings(): StoredLLMSettings | null {
 }
 
 /**
+ * Read the stored BYOK settings from localStorage. Absent or malformed
+ * storage returns null and never throws - the settings form must stay
+ * usable regardless of what is (or is not) in the browser.
+ */
+export function getStoredLLMSettings(): StoredLLMSettings | null {
+  // REBRAND-01 read-compat migration: prefer the new key, fall back to the
+  // legacy key once so settings saved before the rename are not lost.
+  return readKey(BYOK_STORAGE_KEY) ?? readKey(LEGACY_BYOK_STORAGE_KEY)
+}
+
+/**
  * Persist the BYOK settings, trimming all three free-text fields on write
- * (matches the backend's whitespace-only-key rejection).
+ * (matches the backend's whitespace-only-key rejection). The legacy key is
+ * removed once the new key is written, completing the one-time migration.
  */
 export function saveLLMSettings(settings: StoredLLMSettings): void {
   const trimmed: StoredLLMSettings = {
@@ -46,6 +58,7 @@ export function saveLLMSettings(settings: StoredLLMSettings): void {
     model: settings.model.trim(),
   }
   window.localStorage.setItem(BYOK_STORAGE_KEY, JSON.stringify(trimmed))
+  window.localStorage.removeItem(LEGACY_BYOK_STORAGE_KEY)
 }
 
 /**

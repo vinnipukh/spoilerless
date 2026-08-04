@@ -209,7 +209,7 @@ describe('App', () => {
     render(<App />)
 
     // Should show the login page (title)
-    expect(await screen.findByText('HD Graf Cehennemi')).toBeInTheDocument()
+    expect(await screen.findByText('Spoilerless')).toBeInTheDocument()
     expect(screen.getByText(/spoiler-safe graph browser/i)).toBeInTheDocument()
   })
 
@@ -297,7 +297,7 @@ describe('App', () => {
 
   it('restores confirmed state from sessionStorage on mount without opening confirmation modal', async () => {
     currentAuthState = 'authenticated'
-    sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
+    sessionStorage.setItem('spoilerless.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
 
     render(<App />)
 
@@ -311,7 +311,7 @@ describe('App', () => {
 
   it('ChatLauncher opens the panel in Chat mode, and clicking it again while already in Chat mode collapses the panel', async () => {
     currentAuthState = 'authenticated'
-    sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
+    sessionStorage.setItem('spoilerless.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
 
     const user = userEvent.setup()
     render(<App />)
@@ -328,7 +328,7 @@ describe('App', () => {
 
   it('toggles between the graph workspace and the settings page via the topBar button', async () => {
     currentAuthState = 'authenticated'
-    sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
+    sessionStorage.setItem('spoilerless.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
     // BYOK (08-02): the settings form is populated from localStorage, not a
     // server GET - seed it so the stored model shows in the form.
     localStorage.setItem(
@@ -358,7 +358,7 @@ describe('App', () => {
 
   it('selecting a node while the chat sheet is open shows the node details AND keeps chat visible', async () => {
     currentAuthState = 'authenticated'
-    sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
+    sessionStorage.setItem('spoilerless.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
 
     const user = userEvent.setup()
     render(<App />)
@@ -395,7 +395,7 @@ describe('App', () => {
 
     it('clicking a citation chip\'s "Show in graph" icon updates the graph focus without leaving Chat mode', async () => {
       currentAuthState = 'authenticated'
-      sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
+      sessionStorage.setItem('spoilerless.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
       vi.mocked(useChatMessages).mockReturnValue(chatMessagesWithCitation())
 
       const user = userEvent.setup()
@@ -416,7 +416,7 @@ describe('App', () => {
 
     it('clicking a citation chip body switches to Inspector mode and selects the referenced resource', async () => {
       currentAuthState = 'authenticated'
-      sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
+      sessionStorage.setItem('spoilerless.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
       vi.mocked(useChatMessages).mockReturnValue(chatMessagesWithCitation())
 
       const user = userEvent.setup()
@@ -478,7 +478,7 @@ describe('App', () => {
 
     it('clears an active graph focus that references a node hidden by the new (lower) boundary', async () => {
       currentAuthState = 'authenticated'
-      sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 3 }))
+      sessionStorage.setItem('spoilerless.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 3 }))
       vi.mocked(useChatMessages).mockReturnValue(chatMessagesWithCitation(paulBennettCitation))
 
       const user = userEvent.setup()
@@ -496,7 +496,7 @@ describe('App', () => {
 
     it('leaves a graph focus untouched when a progress decrease does not hide any of its referenced elements', async () => {
       currentAuthState = 'authenticated'
-      sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 3 }))
+      sessionStorage.setItem('spoilerless.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 3 }))
       // claimCitation references char_dexter_morgan/loc_miami_metro/edge_2 —
       // all present (by id) in both graphResponseS01E01 and graphResponseS01E03.
       vi.mocked(useChatMessages).mockReturnValue(chatMessagesWithCitation(claimCitation))
@@ -541,7 +541,7 @@ describe('App', () => {
 
     it('applying a ChangeSet refreshes the graph incrementally — no full relayout, no GraphCanvas remount, focus moved to the new resource', async () => {
       currentAuthState = 'authenticated'
-      sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
+      sessionStorage.setItem('spoilerless.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
       vi.mocked(useChatMessages).mockReturnValue(chatMessagesWithProposedChangeSet(proposedChangeSetAwaitingConfirmation))
       vi.mocked(confirmChangeSet).mockResolvedValue(proposedChangeSetApplied)
 
@@ -584,7 +584,7 @@ describe('App', () => {
 
     it('renders the Protected badge for a canonical-edit refusal in the full app, claiming no canonical modification', async () => {
       currentAuthState = 'authenticated'
-      sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
+      sessionStorage.setItem('spoilerless.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
       vi.mocked(useChatMessages).mockReturnValue(chatMessagesWithProposedChangeSet(protectedOverrideChangeSet))
 
       const user = userEvent.setup()

@@ -19,14 +19,14 @@ This guide covers local development for the FastAPI/Neo4j backend and the React/
 Clone the upstream repository directly:
 
 ```bash
-git clone https://github.com/vinnipukh/hdgrafcehennemi.git
-cd hdgrafcehennemi
+git clone https://github.com/vinnipukh/spoilerless.git
+cd spoilerless
 ```
 
 If you plan to contribute through a fork, fork the repository on GitHub, clone your fork instead, and optionally retain the upstream repository as a remote:
 
 ```bash
-git remote add upstream https://github.com/vinnipukh/hdgrafcehennemi.git
+git remote add upstream https://github.com/vinnipukh/spoilerless.git
 ```
 
 ### Configure the backend and frontend
@@ -56,7 +56,7 @@ npm install
 cd ..
 ```
 
-`pyproject.toml` declares an `hdgraf-setup` console script, but this checkout is not installed as a package by the current uv environment, so the module invocation above is the reliable seed command.
+`pyproject.toml` declares an `spoilerless-setup` console script, but this checkout is not installed as a package by the current uv environment, so the module invocation above is the reliable seed command.
 
 ### Start the development servers
 
@@ -92,7 +92,7 @@ There is no separate Python build command or configured Python lint/format comma
 | `uv run pytest spoilerless/tests/test_openapi_contract.py` | Run one backend test file. |
 | `uv run pytest spoilerless/tests/test_graph_api.py -k "graph_error_shapes"` | Run tests selected by name. |
 
-Run pytest from the repository root. Some tests open root-relative files under `data/` and `docs/`, so changing the working directory to `backend/` can produce misleading `FileNotFoundError` failures.
+Run pytest from the repository root. Some tests open root-relative files under `data/` and `docs/`, so changing the working directory to `spoilerless/` can produce misleading `FileNotFoundError` failures.
 
 ### Frontend scripts
 

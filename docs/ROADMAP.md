@@ -1,10 +1,10 @@
-# HD Graf Cehennemi — Authoritative Roadmap
+# Spoilerless — Authoritative Roadmap
 
 > **Maintenance note:** This is the canonical roadmap after consolidation. Update status here when implementation changes; do not revive the root roadmap as a competing status source. Normative invariants and future ingestion rules live in [PROJECT-SPEC.md](PROJECT-SPEC.md).
 
 ## 0. Project summary and status legend
 
-HD Graf Cehennemi is a spoiler-safe narrative knowledge graph for television series. Its prototype content boundary is Dexter Season 1, S01E01–S01E03. Users browse a source-grounded graph, control a watch-progress boundary, add personal content, inspect revisions, and optionally chat with an LLM over only the allowed subgraph.
+Spoilerless is a spoiler-safe narrative knowledge graph for television series. Its prototype content boundary is Dexter Season 1, S01E01–S01E03. Users browse a source-grounded graph, control a watch-progress boundary, add personal content, inspect revisions, and optionally chat with an LLM over only the allowed subgraph.
 
 The long-term product combines manual editing, source-backed automatic extraction, spoiler-aware filtering, evidence/provenance, revision history, human review, and GraphRAG.
 
@@ -60,7 +60,7 @@ Database: Neo4j Community via Docker Compose
 Packages: uv (Python), npm (frontend)
 ```
 
-The historical planned tree has become a layered implementation under `backend/app/{api,core,domain,graph,llm,repository,retrieval,revisions,services,spoiler}`, `backend/tests`, `frontend/src/{api,components,hooks,types}`, `ontology/`, and `data/dexter/{metadata,seed,test}`. The actual current structure and rationale are authoritative in [ARCHITECTURE.md](ARCHITECTURE.md#3-directory-structure-rationale).
+The historical planned tree has become a layered implementation under `spoilerless/app/{api,core,domain,graph,llm,repository,retrieval,revisions,services,spoiler}`, `spoilerless/tests`, `frontend/src/{api,components,hooks,types}`, `ontology/`, and `data/dexter/{metadata,seed,test}`. The actual current structure and rationale are authoritative in [ARCHITECTURE.md](ARCHITECTURE.md#3-directory-structure-rationale).
 
 ## 4. Ontology and atomic claim baseline
 
@@ -101,7 +101,7 @@ Operational instructions: [GETTING-STARTED.md](GETTING-STARTED.md).
 - [x] Implement `GET /api/series`.
 - [x] Implement `GET /api/series/{series_id}` and `/episodes`.
 
-Acceptance: the seeded graph contains one Dexter series with three ordered episodes. Seed code and idempotency tests are in `backend/app/graph/seed.py` and `backend/tests/test_seed_idempotency.py`.
+Acceptance: the seeded graph contains one Dexter series with three ordered episodes. Seed code and idempotency tests are in `spoilerless/app/graph/seed.py` and `spoilerless/tests/test_seed_idempotency.py`.
 
 ### Milestone 3 — Spoiler-aware graph endpoint
 
@@ -286,6 +286,10 @@ Testing commands and live-Neo4j safety are in [TESTING.md](TESTING.md).
 - extend the review UI while preserving candidate origin and revision history;
 - inherit source episode visibility and prove reprocessing idempotency;
 - evaluate vector/hybrid retrieval only after it can preserve the same spoiler boundary.
+
+### Product feature ideas (brainstorm, unscoped)
+
+Ungrouped, unscoped user-facing feature ideas — graph UX, chat, provenance, collaboration, multi-series, provider UX — live in [FEATURE-IDEAS.md](FEATURE-IDEAS.md). None of it carries roadmap status until explicitly scoped against [PROJECT-SPEC.md §3](PROJECT-SPEC.md#3-non-negotiable-architecture-invariants).
 
 ### Deliberately later product breadth
 

@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { useWatchProgress } from './useWatchProgress'
 import { getProgress, updateProgress } from '../api/progress'
 
-const STORAGE_KEY = 'hdgraf.watchProgress'
+const STORAGE_KEY = 'spoilerless.watchProgress'
 
 vi.mock('../api/progress', () => ({
   getProgress: vi.fn(),

@@ -1,7 +1,7 @@
 <!-- generated-by: gsd-doc-writer -->
 # Deployment
 
-HD Graf Cehennemi is live on the zero-cost production stack below, with
+Spoilerless is live on the zero-cost production stack below, with
 custom domains at `spoilerless.net`, automated CI, and production-grade
 access control.
 
@@ -50,7 +50,7 @@ The backend connects to AuraDB via `Neo4jDatabase.open()` in
   the path to true custom RBAC.
 
 The seed data (Dexter S01E01-03 fixture graph) is migrated via the
-existing idempotent `hdgraf-setup` script (`spoilerless.app.graph.setup`)
+existing idempotent `spoilerless-setup` script (`spoilerless.app.graph.setup`)
 run against the Aura instance. Docker Compose Neo4j is **no longer part
 of any production deployment path** — it exists only for local
 development (see Local Deployment below).
@@ -115,7 +115,7 @@ in any production deployment path.
 
    ```bash
    uv sync
-   uv run hdgraf-setup
+   uv run spoilerless-setup
    ```
 
 4. Start the FastAPI backend:

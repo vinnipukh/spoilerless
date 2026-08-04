@@ -54,7 +54,7 @@
 }
 
 /*
-  HD Graf Cehennemi — dark-first "Obsidian-style" graph token set.
+  Spoilerless — dark-first "Obsidian-style" graph token set.
   Locked palette per Phase 2 UI-SPEC decision (dark-indigo, developer-tool match).
   :root carries the dark palette directly since dark is the only/default theme
   for this phase; .dark is kept identical so a future light-mode toggle can
