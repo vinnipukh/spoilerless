@@ -5,6 +5,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.app.api.deps import OptionalUserDependency
+from backend.app.cache.graph_cache import (
+    get_cached_graph,
+    set_cached_graph,
+)
 from backend.app.domain.graph import (
     GraphResponse,
 )
@@ -89,10 +93,22 @@ async def get_graph(
                 requested_view, record.watched_through_order
             )
 
-    return await service.fetch_graph(
+    # Cache-aside (INFRA-02): check hit before the Neo4j query. The
+    # cache key encodes the effective boundary + user_id, so a boundary
+    # change is always a cache miss with no need to invalidate (T-08-06-02).
+    user_id = user["id"] if user is not None else None
+    cached = await get_cached_graph(series_id, effective, user_id)
+    if cached is not None:
+        return GraphResponse.model_validate(cached)
+
+    result = await service.fetch_graph(
         series_id,
         effective,
         node_labels=VISIBLE_NODE_LABELS,
         user_relationship_types=USER_RELATIONSHIP_TYPES,
         effective_view_order=effective,
     )
+
+    # Write-through on miss (best-effort; swallows Redis errors).
+    await set_cached_graph(series_id, effective, user_id, result.model_dump(mode="json"))
+    return result
