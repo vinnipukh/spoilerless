@@ -74,7 +74,7 @@ Plans:
 - [x] 08-02-PLAN.md — BYOK LLM chat: browser-held key/base_url/model, per-request headers, backend passthrough (completed 2026-08-04: cf2f685, 7665168, 7e7e025)
 - [x] 08-03-PLAN.md — Admin role: candidate review, ChangeSet confirm, and /api/settings/llm gated to admin (completed 2026-08-04: 037d43c, 573462e, 11acd74, abbb7e7)
 - [x] 08-04-PLAN.md — Cookie/CORS/CSRF hardening: fail-closed verify_origin, logout CSRF coverage, settings-driven SameSite
-- [ ] 08-05-PLAN.md — Redis foundation + rate limiting: multi-worker-safe 429 on login/chat-send/content-write
+- [x] 08-05-PLAN.md — Redis foundation + rate limiting: multi-worker-safe 429 on login/chat-send/content-write (completed 2026-08-04: a672d17, 1f8a3e9)
 - [ ] 08-06-PLAN.md — Graph query response cache: Redis cache-aside keyed by (series_id, boundary, user_id), invalidated on write
 - [ ] 08-07-PLAN.md — Ops: GitHub Actions CI gate, structured exception logging, external uptime check
 - [ ] 08-08-PLAN.md — docs/DEPLOYMENT.md rewrite for the real hosted target and rollback procedure
