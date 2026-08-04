@@ -41,6 +41,9 @@ export function useChatMessages(
   // reappear on return, without destroying the session (D-12).
   const key = `${seriesId ?? ''}:${sessionId ?? ''}:${visibleUntilOrder ?? ''}`
   const [prevKey, setPrevKey] = useState(key)
+  // Guards the initial getChatSession fetch below against a send that races
+  // ahead of it — see sendStartedRef.
+  const sendStartedRef = useRef(false)
   if (prevKey !== key) {
     setPrevKey(key)
     setStatus(canFetch(seriesId, sessionId) ? { status: 'loading' } : { status: 'idle' })
@@ -48,6 +51,7 @@ export function useChatMessages(
     setCitations([])
     setGraphFocus(EMPTY_GRAPH_FOCUS)
     setProposedChangeSet(null)
+    sendStartedRef.current = false
   }
 
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -57,13 +61,21 @@ export function useChatMessages(
     let cancelled = false
     getChatSession(seriesId, sessionId)
       .then((detail) => {
-        if (!cancelled) {
+        // A freshly created session's own mount races the queued first-turn
+        // send (ChatPanel.tsx's handleSend->queuedSend flush): both fire off
+        // the same render. If the send already started streaming by the
+        // time this resolves, applying the (necessarily message-less) fetch
+        // result would stomp the in-progress/optimistic turn back to
+        // 'success' with an empty list — the exact "chat breaks on the
+        // first message only" bug, since a second message never races an
+        // unchanged sessionId's mount effect.
+        if (!cancelled && !sendStartedRef.current) {
           setMessages(detail.messages)
           setStatus({ status: 'success' })
         }
       })
       .catch((error) => {
-        if (!cancelled) {
+        if (!cancelled && !sendStartedRef.current) {
           setStatus({
             status: 'error',
             error: error instanceof ApiError ? error : new ApiError({ code: 'unknown_error', message: 'Request failed.' }),
@@ -78,6 +90,7 @@ export function useChatMessages(
   const sendChatMessage = useCallback(
     (content: string) => {
       if (!seriesId || !sessionId) return
+      sendStartedRef.current = true
       const controller = new AbortController()
       abortControllerRef.current = controller
       setStatus({ status: 'streaming', streamingText: '' })

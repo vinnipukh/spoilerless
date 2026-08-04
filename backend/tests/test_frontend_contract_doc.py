@@ -57,7 +57,6 @@ EXPECTED_OPERATIONS: set[tuple[str, str]] = {
     ("post", "/api/series/{series_id}/change-sets/{change_set_id}/revert"),
     # Authentication
     ("post", "/api/auth/google"),
-    ("post", "/api/auth/dev"),
     ("get", "/api/auth/me"),
     ("post", "/api/auth/logout"),
     # Settings (LLM provider configuration)
@@ -96,8 +95,8 @@ def test_document_and_openapi_have_exact_locked_inventory() -> None:
     assert generated == EXPECTED_OPERATIONS
     assert {path for _, path in documented} == EXPECTED_TEMPLATES
     assert set(app.openapi()["paths"]) == EXPECTED_TEMPLATES
-    assert len(documented) == len(generated) == 45
-    assert len(EXPECTED_TEMPLATES) == 33
+    assert len(documented) == len(generated) == 44
+    assert len(EXPECTED_TEMPLATES) == 32
     assert all("?" not in path for path in EXPECTED_TEMPLATES)
 
 

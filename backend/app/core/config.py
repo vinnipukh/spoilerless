@@ -27,17 +27,17 @@ class Settings(BaseSettings):
         default=False,
         description="Set the Secure flag on the session cookie.",
     )
-    auth_dev_code: str = Field(
-        default="",
-        description=(
-            "Development-only sign-in code for POST /api/auth/dev (bypasses "
-            "Google OAuth). Empty disables the dev login endpoint entirely. "
-            "Never set in production."
-        ),
-    )
     frontend_origins: str = Field(
         default="http://localhost:5173",
         description="Comma-separated list of allowed CORS frontend origins.",
+    )
+    allowed_emails: str = Field(
+        default="",
+        description=(
+            "Comma-separated allowlist of email addresses permitted to sign in. "
+            "Empty disables the allowlist (any verified Google account may sign "
+            "in) — never leave empty in production."
+        ),
     )
 
     # LLM provider (GraphRAG chat) — backend-only, never exposed to clients.

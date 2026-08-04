@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import secrets
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -18,12 +17,15 @@ from backend.app.api.deps import (
 from backend.app.core.config import get_settings
 from backend.app.core.errors import error_responses, http_error
 from backend.app.domain.auth import (
-    DevLoginRequest,
     GoogleAuthRequest,
     UserPublic,
     UserResponse,
 )
-from backend.app.services.auth import GoogleTransportError, GoogleVerificationError
+from backend.app.services.auth import (
+    EmailNotAllowedError,
+    GoogleTransportError,
+    GoogleVerificationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +39,8 @@ AUTH_UNAUTHENTICATED = "AUTH_UNAUTHENTICATED"
 AUTH_SESSION_EXPIRED = "AUTH_SESSION_EXPIRED"
 AUTH_SESSION_INVALID = "AUTH_SESSION_INVALID"
 AUTH_ORIGIN_NOT_ALLOWED = "AUTH_ORIGIN_NOT_ALLOWED"
+AUTH_EMAIL_NOT_ALLOWED = "AUTH_EMAIL_NOT_ALLOWED"
 AUTH_DISABLED = "AUTH_DISABLED"
-AUTH_DEV_LOGIN_DISABLED = "AUTH_DEV_LOGIN_DISABLED"
-AUTH_DEV_LOGIN_INVALID_CODE = "AUTH_DEV_LOGIN_INVALID_CODE"
 
 
 def _allowed_origins() -> list[str]:
@@ -50,6 +51,16 @@ def _allowed_origins() -> list[str]:
         for o in settings.frontend_origins.split(",")
         if o.strip()
     ]
+
+
+def _allowed_emails() -> frozenset[str]:
+    """Parse the configured email allowlist, lowercased. Empty means unrestricted."""
+    settings = get_settings()
+    return frozenset(
+        e.strip().lower()
+        for e in settings.allowed_emails.split(",")
+        if e.strip()
+    )
 
 
 async def verify_origin(request: Request) -> None:
@@ -168,6 +179,14 @@ async def google_auth(
             credential=payload.credential,
             client_id=settings.google_client_id,
             session_ttl=settings.session_ttl_seconds,
+            allowed_emails=_allowed_emails(),
+        )
+    except EmailNotAllowedError as exc:
+        logger.warning("google_auth: email_not_allowed (%s)", exc.email)
+        raise http_error(
+            403,
+            AUTH_EMAIL_NOT_ALLOWED,
+            "This account is not authorized to access this application.",
         )
     except GoogleVerificationError as exc:
         logger.warning("google_auth: %s", str(exc))
@@ -190,62 +209,6 @@ async def google_auth(
             "AUTH_SERVICE_UNAVAILABLE",
             "Authentication service is temporarily unavailable.",
         )
-
-    _make_cookie(
-        response,
-        raw_token,
-        secure=settings.session_cookie_secure,
-        cookie_name=settings.session_cookie_name,
-    )
-
-    return UserResponse(user=UserPublic.model_validate(
-        {k: v for k, v in user.items() if k in UserPublic.model_fields}
-    ))
-
-
-@router.post(
-    "/dev",
-    response_model=UserResponse,
-    status_code=200,
-    summary="Sign in with a development code (dev-only bypass)",
-    responses={
-        403: error_responses(403)[403],
-        422: error_responses(422)[422],
-    },
-)
-async def dev_auth(
-    payload: DevLoginRequest,
-    response: Response,
-    service: AuthServiceDependency,
-    _csrf: Annotated[None, Depends(verify_origin)],
-) -> UserResponse:
-    """Authenticate with a development code, bypassing Google.
-
-    Development-only escape hatch for when the Google Sign-In service is
-    unavailable or not configured. Gated by ``AUTH_DEV_CODE``: the endpoint
-    is disabled (403) until that setting holds a non-empty value, and the
-    submitted code is compared in constant time. Never enable in production.
-    Creates/updates a fixed local dev identity and sets the same HttpOnly
-    session cookie as the Google flow, so the rest of the app is unchanged.
-    """
-    settings = get_settings()
-
-    if not settings.auth_dev_code:
-        raise http_error(
-            403, AUTH_DEV_LOGIN_DISABLED, "Development login is not enabled."
-        )
-
-    if not secrets.compare_digest(payload.code, settings.auth_dev_code):
-        raise http_error(
-            403, AUTH_DEV_LOGIN_INVALID_CODE, "Invalid development login code."
-        )
-
-    user, raw_token = await service.authenticate_dev(
-        google_sub="dev-local",
-        email="dev@localhost",
-        display_name="Dev User",
-        session_ttl=settings.session_ttl_seconds,
-    )
 
     _make_cookie(
         response,

@@ -51,7 +51,6 @@ The following table is the complete locked inventory: **45 method/path operation
 | POST | `/api/series/{series_id}/change-sets/{change_set_id}/reject` |
 | POST | `/api/series/{series_id}/change-sets/{change_set_id}/revert` |
 | POST | `/api/auth/google` |
-| POST | `/api/auth/dev` |
 | GET | `/api/auth/me` |
 | POST | `/api/auth/logout` |
 | GET | `/api/settings/llm` |
@@ -66,7 +65,7 @@ The following table is the complete locked inventory: **45 method/path operation
 {"detail":{"code":"resource_not_found","message":"Resource not found."}}
 ```
 
-Machine codes currently emitted by HTTP errors, SSE errors, and candidate-ingest item errors include `series_not_found`, `resource_not_found`, `resource_conflict`, `resource_already_exists`, `invalid_request`, `invalid_visible_until_order`, `too_many_requests`, `database_unavailable`, `database_error`, `constraint_violation`, `changeset_stale`, `candidate_not_found`, `cannot_approve_non_candidate`, `cannot_revert_create`, `cannot_revert_canonical`, `invalid_action`, `invalid_extraction_payload`, `ingest_error`, `AUTH_INVALID_GOOGLE_CREDENTIAL`, `AUTH_UNAUTHENTICATED`, `AUTH_ORIGIN_NOT_ALLOWED`, `AUTH_DISABLED`, `AUTH_SERVICE_UNAVAILABLE`, `LLM_DISABLED`, `LLM_PROVIDER_UNAVAILABLE`, and `LLM_STREAM_FAILED`. Hidden direct reads on boundary-enforced routes deliberately use the same `404 resource_not_found` envelope as absent resources. Shared database, validation, and authentication handlers sanitize internal details, but candidate ingest/approve/reject/edit paths currently interpolate caught exception text into public **422** messages, and candidate reads do not consistently enforce a required spoiler boundary: list filtering is optional and direct GET has no boundary.
+Machine codes currently emitted by HTTP errors, SSE errors, and candidate-ingest item errors include `series_not_found`, `resource_not_found`, `resource_conflict`, `resource_already_exists`, `invalid_request`, `invalid_visible_until_order`, `too_many_requests`, `database_unavailable`, `database_error`, `constraint_violation`, `changeset_stale`, `candidate_not_found`, `cannot_approve_non_candidate`, `cannot_revert_create`, `cannot_revert_canonical`, `invalid_action`, `invalid_extraction_payload`, `ingest_error`, `AUTH_INVALID_GOOGLE_CREDENTIAL`, `AUTH_UNAUTHENTICATED`, `AUTH_ORIGIN_NOT_ALLOWED`, `AUTH_EMAIL_NOT_ALLOWED`, `AUTH_DISABLED`, `AUTH_SERVICE_UNAVAILABLE`, `LLM_DISABLED`, `LLM_PROVIDER_UNAVAILABLE`, and `LLM_STREAM_FAILED`. Hidden direct reads on boundary-enforced routes deliberately use the same `404 resource_not_found` envelope as absent resources. Shared database, validation, and authentication handlers sanitize internal details, but candidate ingest/approve/reject/edit paths currently interpolate caught exception text into public **422** messages, and candidate reads do not consistently enforce a required spoiler boundary: list filtering is optional and direct GET has no boundary.
 
 ## Origin and server ownership
 
@@ -110,17 +109,7 @@ Verifies the Google ID token signature, issuer, audience (`GOOGLE_CLIENT_ID`), a
 {"user":{"id":"user:abc","email":"user@example.com","display_name":"Test User","avatar_url":"https://...","created_at":"2025-01-01T00:00:00Z","updated_at":"2025-01-01T00:00:00Z"}}
 ```
 
-A missing or invalid request body returns sanitized **422** `invalid_request`. Expired or invalid Google credentials return generic **401** `AUTH_INVALID_GOOGLE_CREDENTIAL`; unconfigured auth returns **401** `AUTH_DISABLED`.
-
-### POST /api/auth/dev
-
-Request body:
-
-```json
-{"code": "<AUTH_DEV_CODE value>"}
-```
-
-Development-only sign-in that bypasses Google entirely. Disabled unless the `AUTH_DEV_CODE` setting holds a non-empty value (disabled → **403** `AUTH_DEV_LOGIN_DISABLED`); a wrong code returns **403** `AUTH_DEV_LOGIN_INVALID_CODE` (constant-time comparison). On success it upserts the fixed local dev identity (`dev@localhost`, "Dev User", `google_sub="dev-local"`), sets the same HttpOnly session cookie as the Google flow, and returns the standard `{user: ...}` `UserPublic` shape. **Never enable in production** — it exists so development can continue while the Google Sign-In service is unavailable.
+A missing or invalid request body returns sanitized **422** `invalid_request`. Expired or invalid Google credentials return generic **401** `AUTH_INVALID_GOOGLE_CREDENTIAL`; unconfigured auth returns **401** `AUTH_DISABLED`. When `ALLOWED_EMAILS` is set, a verified-but-unlisted email returns **403** `AUTH_EMAIL_NOT_ALLOWED`.
 
 ### GET /api/auth/me
 

@@ -18,17 +18,6 @@ class GoogleAuthRequest(BaseModel):
     )
 
 
-class DevLoginRequest(BaseModel):
-    """Request body for POST /api/auth/dev (development-only bypass)."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    code: str = Field(
-        min_length=1,
-        description="Development login code configured via AUTH_DEV_CODE.",
-    )
-
-
 class UserPublic(BaseModel):
     """Public user representation returned to the client.
 

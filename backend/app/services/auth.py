@@ -40,6 +40,14 @@ class GoogleTransportError(Exception):
     """
 
 
+class EmailNotAllowedError(ValueError):
+    """Verified Google identity's email is not on the configured allowlist."""
+
+    def __init__(self, email: str) -> None:
+        self.email = email
+        super().__init__(f"Email not allowed: {email}")
+
+
 @dataclass(frozen=True)
 class ProductionGoogleVerifier:
     """Production verifier using the official ``google-auth`` library.
@@ -102,12 +110,21 @@ class AuthService:
         self._verifier = verifier or ProductionGoogleVerifier()
 
     async def authenticate(
-        self, credential: str, client_id: str, session_ttl: int
+        self,
+        credential: str,
+        client_id: str,
+        session_ttl: int,
+        allowed_emails: frozenset[str] | None = None,
     ) -> tuple[dict[str, Any], str]:
         """Verify Google token, upsert user, create session.
 
         Returns (user_record, raw_session_token).
         Identity is derived solely from the verified ``sub`` claim.
+
+        ``allowed_emails``, when non-empty, restricts sign-in to that set
+        (case-insensitive). Checked after verification so the rejection is
+        based on a Google-attested email, not client-supplied input. Raises
+        ``EmailNotAllowedError`` for a verified-but-unlisted email.
         """
         info = await self._verifier.verify(credential, client_id)
 
@@ -116,33 +133,14 @@ class AuthService:
         display_name: str = info.get("name", "")
         avatar_url: str = info.get("picture", "")
 
+        if allowed_emails and email.lower() not in allowed_emails:
+            raise EmailNotAllowedError(email)
+
         user = await self._user_repo.upsert(
             google_sub=google_sub,
             email=email,
             display_name=display_name,
             avatar_url=avatar_url,
-        )
-
-        raw_token = await self._session_repo.create(
-            user_id=user["id"], ttl_seconds=session_ttl
-        )
-
-        return user, raw_token
-
-    async def authenticate_dev(
-        self, google_sub: str, email: str, display_name: str, session_ttl: int
-    ) -> tuple[dict[str, Any], str]:
-        """Create a session for a development identity, skipping Google.
-
-        Used only by the ``AUTH_DEV_CODE``-gated dev login route. The caller
-        is responsible for checking the dev code before calling this — the
-        method itself performs no authorization.
-        """
-        user = await self._user_repo.upsert(
-            google_sub=google_sub,
-            email=email,
-            display_name=display_name,
-            avatar_url="",
         )
 
         raw_token = await self._session_repo.create(
