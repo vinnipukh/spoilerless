@@ -83,6 +83,23 @@ duplicated here (#5→AUTH-04/AI-01..03, #6→SEC-03, #7→AUTH-02, #8→SEC-01,
 - [ ] **PROB-20**: The live database is reseeded (or a startup schema check added) so it matches the current seed script — no `01N52 property key does not exist` warnings on episode queries. Resolves #44.
 - [ ] **PROB-21**: A root-level React error boundary (plus a per-panel boundary around chat) prevents one uncaught render error from blanking the entire app; committed debug `console.log` statements (e.g. `GraphCanvas.tsx`'s module-load log) are removed. Resolves #45.
 
+### Second-audit findings (PROB-22+ — added 2026-08-05, Phase 9 discuss D-01: ALL 57 findings in scope)
+
+PROBLEMS.md's 4th–6th passes (2026-08-04/05) added findings #46–57 after the
+original 45-finding mapping. Each is folded in below.
+
+- [ ] **PROB-22**: One-time cleanup of the live DB landfill — sweep zombie `:AppUser` rows (~3,855) and expired/orphaned `:Session` nodes (21/21 expired); candidate tests move to scratch `series_*` ids with teardown fixtures; CI gains a DB-pollution gate. Resolves #46 (and #14/#15 root cause).
+- [ ] **PROB-23**: Real behavioral test for `ProductionGoogleVerifier` (garbage token + MockTransport) so the `NameError`-on-verification-failure class (#42) can never ship again; FE wire-shape contract tests that do NOT mock the API client (progress payload #43 class). Resolves #47.
+- [ ] **PROB-24**: `get_user_notes` results actually enter the assembled context — add a `notes` accumulator bucket in `retrieval/pipeline.py` and pass `retrieved["notes"]` to `assemble_context` (currently `<notes>` is always empty). Resolves #48.
+- [ ] **PROB-25**: One visibility-derivation rule for both create paths — direct user-content API (stamps `episode.episode_order`) and ChangeSet apply (stamps `current_progress`) must share a single rule (recommended `max(episode order, current progress)` fail-closed). Resolves #49.
+- [ ] **PROB-26**: Stamp `created_by` on direct user-content API creates (notes, custom nodes/relationships) too — currently only ChangeSet creates carry actor attribution. Resolves #50.
+- [ ] **PROB-27**: ChangeSet revert preserves the apply-revision link — keep both ids (`apply_revision_id` + `revert_revision_id`) instead of overwriting. Resolves #51.
+- [ ] **PROB-28**: LLM provider edge cases — catch `JSONDecodeError` in `OpenAICompatibleProvider` SSE parsing (parity with Gemini); delete dead `detect_language`; cap or summarize replayed tool results in the pipeline loop. Resolves #52.
+- [ ] **PROB-29**: Read-path hardening — add `series_id` to SOURCES/EVIDENCE endpoint MATCH in `spoiler/filter.py`; fix `docs/DEVELOPMENT.md:50` command drift. Resolves #53.
+- [ ] **PROB-30**: Env consolidation — merge to root `.env` + `envDir: '..'` in `vite.config.ts`, delete `backend/.env`, add startup/CI equality check for `GOOGLE_CLIENT_ID` vs `VITE_GOOGLE_CLIENT_ID`. Resolves #55 (note: client id is populated — cleanup, not a bug fix).
+- [ ] **PROB-31**: Fix `useWatchProgress.ts::requestChange` silent no-ops (lines 133/139) and the mount-time hydration race — clicking a locked episode must always open the unlock dialog / load the episode; add regression test. Resolves #56.
+- [ ] **PROB-32**: Graph canvas density overhaul — cluster-aware layout (cytoscape-fcose, compound/cluster parent nodes), node/edge-type filter toggles, zoom-based label culling, focus/neighborhood mode, deterministic layout; update `GraphCanvas.test.tsx` count assertions. Resolves #57 (feeds FEAT-11).
+
 ## New Features (FEAT)
 
 Ten new user-facing capabilities on top of the existing graph/chat product.
@@ -127,5 +144,5 @@ Ten new user-facing capabilities on top of the existing graph/chat product.
 | Requirement | Phase |
 |---|---|
 | AUTH-01..04, AI-01..03, SEC-01..03, INFRA-01..05, OPS-01, OPS-02, OPS-03, DOCS-03 | Phase 8 — Production Deployment & Automated CI/CD |
-| PROB-01..21, FEAT-01..10, DOCS-04 | Phase 9 — Feature Expansion & Full Audit Remediation |
+| PROB-01..21, PROB-22..32, FEAT-01..10, DOCS-04 | Phase 9 — Feature Expansion & Full Audit Remediation |
 | POLISH-01..03 | Phase 10 — Polish & Finishing Touches |
