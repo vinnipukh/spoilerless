@@ -24,8 +24,13 @@ class Settings(BaseSettings):
         description="Session time-to-live in seconds.",
     )
     session_cookie_secure: bool = Field(
-        default=False,
-        description="Set the Secure flag on the session cookie.",
+        default=True,
+        description=(
+            "Set the Secure flag on the session cookie. True is the "
+            "production-safe default (Render/Vercel are HTTPS-only); local "
+            "HTTP dev must explicitly opt out via SESSION_COOKIE_SECURE=false "
+            "in .env."
+        ),
     )
     frontend_origins: str = Field(
         default="http://localhost:5173",

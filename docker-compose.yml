@@ -1,15 +1,15 @@
 services:
   neo4j:
-    image: neo4j:2026-community
+    image: neo4j:2026.06.0-community
     container_name: hdgrafcehennemi-neo4j
     restart: unless-stopped
 
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
 
     environment:
-      NEO4J_AUTH: neo4j/hdgraf-local-password
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-change-me}
 
     volumes:
       - ./neo4j_data:/data

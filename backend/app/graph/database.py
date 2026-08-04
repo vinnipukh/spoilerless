@@ -27,6 +27,9 @@ class Neo4jDatabase:
                     self._settings.neo4j_username,
                     self._settings.neo4j_password,
                 ),
+                max_connection_pool_size=50,
+                connection_timeout=30.0,
+                liveness_check_timeout=60.0,
             )
 
     async def verify_connection(self) -> None:

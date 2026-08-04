@@ -29,9 +29,15 @@ type FetchOptions = {
   headers?: Record<string, string>
 }
 
+// VITE_API_BASE_URL prefixes every apiFetch request in production (direct
+// cross-origin call to the hosted backend, e.g. https://api.spoilerless.net);
+// '' when unset preserves the relative-URL local-dev behavior through the
+// Vite proxy.
+const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
+
 export async function apiFetch<T>(url: string, options?: FetchOptions): Promise<T> {
   const { method = 'GET', body, headers } = options ?? {}
-  const res = await fetch(url, {
+  const res = await fetch(`${apiBase}${url}`, {
     method,
     headers: {
       'Content-Type': body !== undefined ? 'application/json' : '',
