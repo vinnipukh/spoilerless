@@ -2,9 +2,8 @@
 
 Gathered 2026-08-04, continuing directly from the completed v1.2 Spoiler-Safety
 Hardening milestone. Moves the app from a local-only prototype to a real,
-zero-cost hosted deployment, closing the gaps documented in
-`docs/DEPLOYMENT.md`'s "Pre-production safety gaps" section and the
-admin/role gap flagged in `PROJECT.md`.
+zero-cost hosted deployment, closes every finding in `docs/PROBLEMS.md`'s
+2026-08-04 audit (45 verified issues), and adds 10 new user-facing features.
 
 ## Stack Additions (locked for this milestone)
 
@@ -19,9 +18,9 @@ stack components (no second graph DB, no JWT auth, no frontend rewrite).
 ### Authentication & access control (AUTH)
 
 - [x] **AUTH-01**: Only email addresses on an operator-configured allowlist (`ALLOWED_EMAILS`) can sign in via Google OAuth; a verified-but-unlisted email is rejected with `403 AUTH_EMAIL_NOT_ALLOWED`. An empty allowlist means unrestricted (any verified Google account may sign in).
-- [x] **AUTH-02**: The development authentication bypass (`POST /api/auth/dev`, `AUTH_DEV_CODE`) is removed entirely from the codebase — no code path can create a session without a verified Google credential.
+- [x] **AUTH-02**: The development authentication bypass (`POST /api/auth/dev`, `AUTH_DEV_CODE`) is removed entirely from the codebase — no code path can create a session without a verified Google credential. Resolves `docs/PROBLEMS.md` #7.
 - [ ] **AUTH-03**: An admin role exists on the user record and is enforced on candidate review (approve/reject/edit) and ChangeSet approval endpoints; a non-admin user's request to these endpoints is rejected with a clear 403.
-- [ ] **AUTH-04**: `/api/settings/llm` requires the admin role, or is retired in favor of the per-user BYOK flow (AI-01..03) — closing the SSRF/cross-user-takeover gap flagged in `PROJECT.md`'s Key Decisions.
+- [ ] **AUTH-04**: `/api/settings/llm` requires the admin role, or is retired in favor of the per-user BYOK flow (AI-01..03) — closing the SSRF/cross-user-takeover gap flagged in `PROJECT.md`'s Key Decisions and `docs/PROBLEMS.md` #5.
 
 ### AI chat — bring your own key (AI)
 
@@ -31,31 +30,86 @@ stack components (no second graph DB, no JWT auth, no frontend rewrite).
 
 ### Production security hardening (SEC)
 
-- [ ] **SEC-01**: `SESSION_COOKIE_SECURE=true` and `FRONTEND_ORIGINS` restricted to the exact deployed frontend origin(s) in the production environment configuration.
-- [ ] **SEC-02**: When frontend and backend are deployed on different origins, the session cookie uses `SameSite=None; Secure` without breaking the existing CSRF Origin/Referer check (`verify_origin`).
-- [ ] **SEC-03**: Login, chat-send, and content-write endpoints (notes, custom nodes, custom relationships) enforce a rate limit per user/IP; exceeding it returns `429` in the existing error envelope.
+- [ ] **SEC-01**: `SESSION_COOKIE_SECURE=true` by default (not merely available) and `FRONTEND_ORIGINS` restricted to the exact deployed frontend origin(s) in the production environment configuration. Resolves `docs/PROBLEMS.md` #8.
+- [ ] **SEC-02**: When frontend and backend are deployed on different origins, the session cookie uses `SameSite=None; Secure` without breaking the existing CSRF Origin/Referer check (`verify_origin`); the check no longer auto-allows a missing Origin/Referer on state-changing routes, and `POST /api/auth/logout` gets the same CSRF dependency. Resolves `docs/PROBLEMS.md` #10.
+- [ ] **SEC-03**: Login, chat-send, and content-write endpoints (notes, custom nodes, custom relationships) enforce a rate limit per user/IP, backed by a store that works correctly across multiple worker processes (not an in-memory per-process dict); exceeding it returns `429` in the existing error envelope. Resolves `docs/PROBLEMS.md` #6.
 
 ### Infrastructure & hosting (INFRA)
 
-- [ ] **INFRA-01**: Neo4j runs on Neo4j AuraDB Free instead of local Docker Compose in the production environment; existing seed data migrates without loss.
+- [ ] **INFRA-01**: Neo4j runs on Neo4j AuraDB Free instead of local Docker Compose in the production environment; existing seed data migrates without loss; the Compose recipe that publishes DB ports to the internet with a hardcoded password is no longer part of any deployment path. Resolves `docs/PROBLEMS.md` #27, #31.
 - [ ] **INFRA-02**: Upstash Redis caches spoiler-filtered graph query responses keyed by `(series_id, effective_boundary, user_id)`; entries are invalidated on any write that changes the underlying cached data.
-- [ ] **INFRA-03**: The FastAPI backend runs on Render's free web service tier with all required environment variables (Neo4j, Redis, Google OAuth, frontend origins) configured.
-- [ ] **INFRA-04**: The Vite frontend builds and deploys on Vercel's Hobby tier, reaching the Render backend through configured API routing/CORS.
-- [ ] **INFRA-05**: All deployment secrets (Neo4j password, Google OAuth client credentials, Redis URL) are stored as platform environment variables on Render/Vercel/Upstash, never committed to the repository.
+- [ ] **INFRA-03**: The FastAPI backend runs on Render's free web service tier with all required environment variables (Neo4j, Redis, Google OAuth, frontend origins) configured; the app connects to Neo4j through a dedicated least-privilege database role, not the admin superuser, with explicit driver pool/timeout/TLS settings. Resolves `docs/PROBLEMS.md` #36.
+- [ ] **INFRA-04**: The Vite-built client deploys on Vercel's Hobby tier and reaches the Render backend through configured API routing/CORS.
+- [ ] **INFRA-05**: All deployment secrets (Neo4j password, Google OAuth client credentials, Redis URL) exist only as platform environment variables on Render/Vercel/Upstash; none appear in the repository.
 
 ### Operations (OPS)
 
-- [ ] **OPS-01**: A CI workflow runs backend `pytest` and frontend build+lint on every pull request.
+- [ ] **OPS-01**: A GitHub Actions CI workflow runs backend `pytest` and frontend build+lint automatically on every pull request, gating merge visibility.
 - [ ] **OPS-02**: An external uptime check polls `GET /health` on the deployed backend and can alert (email/webhook) on a non-200 response or timeout.
+- [ ] **OPS-03**: Backend emits structured request/error logs (exceptions logged before being sanitized in the response, not dropped) so login failures, stream failures, and DB errors are visible to the operator. Resolves `docs/PROBLEMS.md` #39.
 
 ### Documentation (DOCS)
 
 - [ ] **DOCS-03**: `docs/DEPLOYMENT.md` is rewritten to describe the actual production target (Vercel/Render/Aura/Upstash) replacing its current "no production deployment target defined" statement, including a real rollback procedure for the hosted environment.
+- [ ] **DOCS-04**: `docs/API.md`, `docs/ARCHITECTURE.md`, and `docs/ROADMAP.md` are corrected to match live behavior (route counts, ChangeSet chat capability, "known gaps" that already shipped, and no longer deferring auth/CSRF/roles as unstarted). Resolves `docs/PROBLEMS.md` #21, #22, #23, #24.
+
+## Problem Remediation — `docs/PROBLEMS.md` audit (PROB)
+
+Every item below traces to a specific numbered finding in `docs/PROBLEMS.md`
+(2026-08-04 audit, verified against live source/tests/logs). Findings already
+covered by another requirement above are cross-referenced there and not
+duplicated here (#5→AUTH-04/AI-01..03, #6→SEC-03, #7→AUTH-02, #8→SEC-01,
+#10→SEC-02, #21-24→DOCS-04, #27/#31→INFRA-01, #36→INFRA-03, #39→OPS-03).
+
+- [ ] **PROB-01**: Every mutation endpoint requires an authenticated owner — notes, custom nodes/relationships, candidate ingest/approve/reject/edit, and revision revert all depend on `CurrentUserDependency` and bind records to the acting `user_id`; candidate approve/revert additionally require the admin role. Resolves #1, #2, #3, #4.
+- [ ] **PROB-02**: User-content records (`NoteResponse` and friends) carry an owner `user_id`; update/delete are owner-only (or admin-only); reads are scoped appropriately. Resolves #4, #11.
+- [ ] **PROB-03**: Session IDs use a collision-proof identifier (e.g. `session:{uuid4()}`) instead of a second-resolution timestamp; expired/revoked sessions are swept by a background job instead of sliding forever on every read. Resolves #9, #32.
+- [ ] **PROB-04**: Anonymous/unauthenticated graph and episode reads cannot request an arbitrary client-chosen `visible_until_order`; the effective boundary for anonymous readers is fixed (e.g. order 1) or requires a session. Resolves #12.
+- [ ] **PROB-05**: Candidate list/get endpoints require a resolved spoiler boundary (no default-to-everything on an omitted `visible_until_order`). Resolves #13.
+- [ ] **PROB-06**: `backend/tests/test_seed_idempotency.py` and the rest of the suite run against a disposable/containerized Neo4j, not the live application database; the 3 currently-red tests pass deterministically. Resolves #14, #15.
+- [ ] **PROB-07**: The flaky `App.test.tsx` end-to-end test passes deterministically both in isolation and in the full suite run. Resolves #17.
+- [ ] **PROB-08**: `npm run lint` reports 0 errors, including the real `react-hooks/refs` stale-ref bugs in `useChatSessions.ts`/`useNotes.ts`/`useRevisions.ts`; lint becomes a CI gate (feeds OPS-01). Resolves #16.
+- [ ] **PROB-09**: All emitted error codes use one consistent casing convention matching `ErrorDetail.code`'s validation pattern. Resolves #20.
+- [ ] **PROB-10**: Committed placeholder/boilerplate files (root `main.py` PyCharm template, `frontend/README.md` Vite boilerplate) are removed; a `LICENSE` is added; seed character images are self-hosted or dropped instead of hotlinking Fandom. Resolves #25, #28.
+- [ ] **PROB-11**: The repository's default branch is pushed to and kept in sync with a real, accessible remote — no unpushed work is the only copy of the project. Resolves #29.
+- [ ] **PROB-12**: `approve_candidate`/`reject_candidate` return the `revision_id` that `RevisionRepository.log_revision` actually persisted (not a fabricated hash), and every logged revision records the acting `user_id`. Resolves #33, #34.
+- [ ] **PROB-13**: Chat turns handle mid-stream failures without orphaning the user's message or swallowing the error silently — a failed turn is marked with a status and the underlying exception is logged. Resolves #35.
+- [ ] **PROB-14**: `ProductionGoogleVerifier.verify`'s exception handling references a correctly-imported exception type (fixes the `NameError` that turns any real verification failure into a misleading `503`). Resolves #42.
+- [ ] **PROB-15**: The frontend progress-confirm request body matches exactly what the backend's `_exactly_one_boundary_field` validator accepts — confirming watch progress persists on the first try instead of 422ing and only appearing to work optimistically. Resolves #43.
+- [ ] **PROB-16**: `validate_visibility_order` treats a `None`-valued order as the same invalid-input case as `order < 1` (422), not an uncaught `TypeError` (500). Resolves #37.
+- [ ] **PROB-17**: The backend emits baseline security headers (CSP, HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`); CORS no longer combines `allow_methods=["*"]`/`allow_headers=["*"]` with `allow_credentials=True`. Resolves #38.
+- [ ] **PROB-18**: Direct unit tests exist for `graph/database.py`, `graph/ontology.py`, `services/series.py`, `api/series.py`, `api/deps.py`, `core/config.py`, and `main.py`'s lifespan/health path. Resolves #40.
+- [ ] **PROB-19**: Small correctness/trust fixes — remove the `repository/settings.py` docstring's claim of a constraint that no longer exists; make the frontend's API-key trim match backend behavior (reject whitespace-only keys server-side too); `api/candidates.py` uses a public repository method instead of reaching into `repo._db`; `load_ontology()` is cached instead of re-reading YAML on every import. Resolves #41.
+- [ ] **PROB-20**: The live database is reseeded (or a startup schema check added) so it matches the current seed script — no `01N52 property key does not exist` warnings on episode queries. Resolves #44.
+- [ ] **PROB-21**: A root-level React error boundary (plus a per-panel boundary around chat) prevents one uncaught render error from blanking the entire app; committed debug `console.log` statements (e.g. `GraphCanvas.tsx`'s module-load log) are removed. Resolves #45.
+
+## New Features (FEAT)
+
+Ten new user-facing capabilities on top of the existing graph/chat product.
+
+- [ ] **FEAT-01**: A search bar lets the user jump directly to a node by name instead of manually panning/zooming the graph.
+- [ ] **FEAT-02**: A timeline view shows the visible story's events in chronological order alongside (or as an alternative to) the graph.
+- [ ] **FEAT-03**: Advancing watch progress visually highlights nodes/edges newly revealed by that episode (e.g. a temporary glow), distinguishing them from previously-visible content.
+- [ ] **FEAT-04**: A series dashboard lists all available series with the user's per-series progress, replacing/augmenting the single series dropdown as the entry point.
+- [ ] **FEAT-05**: A user can export a character's or claim's visible knowledge (notes, claims, evidence) as a Markdown or PDF document.
+- [ ] **FEAT-06**: A "how are X and Y connected" relationship finder highlights the shortest visible path between two selected nodes.
+- [ ] **FEAT-07**: Full-text search covers note and claim content, not just node names, and returns matching nodes.
+- [ ] **FEAT-08**: A command palette (Cmd/Ctrl+K) lets the user jump to a node, switch episode, or open chat without leaving the keyboard.
+- [ ] **FEAT-09**: A user can generate a read-only shareable link snapshotting their current spoiler-safe graph view at their effective boundary.
+- [ ] **FEAT-10**: The graph and detail panel are usable on mobile viewports — touch pan/zoom/tap on the canvas and a responsive detail panel layout.
+
+## Polish (POLISH)
+
+- [ ] **POLISH-01**: A full regression pass (backend `pytest`, frontend `vitest`, `npm run lint`, `npm run build`) is green with zero known failures at milestone close.
+- [ ] **POLISH-02**: A conversational UAT pass covers the full golden path (login → series/episode select → graph explore → chat with BYOK key → notes → export → new features) with no unresolved regressions.
+- [ ] **POLISH-03**: `README.md` and root-level docs reflect the shipped v1.3 state (features, deployment, screenshots/links) — no stale "prototype only, no deployment" language remains.
 
 ## Future Requirements (deferred)
 
-- Full CI/CD: dependency scanning, artifact publication, staged promotion, branch-protection enforcement (OPS-01 is a minimal PR gate only)
-- Full observability: centralized logs, metrics dashboards, incident/rollback runbook automation (OPS-02 is a single health-check ping only)
+- Full CI/CD: dependency scanning, artifact publication, staged promotion, branch-protection enforcement (OPS-01 is a PR gate only)
+- Full observability: centralized log aggregation, metrics dashboards, tracing (OPS-03 is structured app-level logging only, no external aggregator)
+- God-file decomposition (`retrieval/pipeline.py`, `retrieval/tools.py`, `llm/system_prompt.py`, `repository/change_set.py`, `repository/user_content.py`) — noted in `docs/PROBLEMS.md` #18 as a maintainability risk, not required for a safe public launch
+- Versioned Neo4j schema migrations (`docs/PROBLEMS.md` #19) — seed-as-schema continues for this milestone
 - Person / ACTED_AS / APPEARS_IN actor model (carried from v1.1/v1.2)
 - Reviews, ratings, trivia, recommendations (carried from v1.1/v1.2)
 - Automated ingestion/extraction from external sources (carried from v1.1/v1.2)
@@ -64,7 +118,7 @@ stack components (no second graph DB, no JWT auth, no frontend rewrite).
 
 - Multi-region or high-availability hosting — single free-tier instance per service
 - A paid tier / usage-based billing model for hosting costs — this milestone targets $0
-- Mobile/social features
+- Mobile native apps (FEAT-10 is responsive web, not a native app)
 - Migrating off Neo4j, FastAPI, or React/Vite — hosting changes only, no rewrite
 - Per-provider LLM proxy/normalization beyond the existing OpenAI-compatible interface
 
@@ -72,4 +126,6 @@ stack components (no second graph DB, no JWT auth, no frontend rewrite).
 
 | Requirement | Phase |
 |---|---|
-| AUTH-01..04, AI-01..03, SEC-01..03, INFRA-01..05, OPS-01..02, DOCS-03 | Phase 8 — Production Deployment & Access Hardening (pending roadmap) |
+| AUTH-01..04, AI-01..03, SEC-01..03, INFRA-01..05, OPS-01, OPS-02, OPS-03, DOCS-03 | Phase 8 — Production Deployment & Automated CI/CD |
+| PROB-01..21, FEAT-01..10, DOCS-04 | Phase 9 — Feature Expansion & Full Audit Remediation |
+| POLISH-01..03 | Phase 10 — Polish & Finishing Touches |
