@@ -1,4 +1,5 @@
 import { apiFetch, ApiError } from './client'
+import { getLLMHeaders } from '@/lib/byok'
 import type { ChatSession, ChatSessionDetail, MessageResponseEnvelope } from '../types/chat'
 
 // ── Sessions ──
@@ -36,7 +37,8 @@ export function sendMessage(
 ): Promise<MessageResponseEnvelope> {
   return apiFetch(
     `/api/series/${encodeURIComponent(seriesId)}/chat/sessions/${encodeURIComponent(sessionId)}/messages`,
-    { method: 'POST', body: { question: content } },
+    // BYOK (D-06): browser-held key/base_url/model ride as X-LLM-* headers.
+    { method: 'POST', body: { question: content }, headers: getLLMHeaders() },
   )
 }
 
@@ -73,11 +75,16 @@ export async function streamMessage(
   callbacks: StreamMessageCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
+  // BYOK (D-06): this raw SSE fetch carries the X-LLM-* headers like any
+  // other chat request, and VITE_API_BASE_URL ('' by default) prefixes the
+  // URL so a hosted frontend can reach a backend on another origin. The
+  // shared apiFetch cannot serve this call (it awaits a JSON body).
+  const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
   const res = await fetch(
-    `/api/series/${encodeURIComponent(seriesId)}/chat/sessions/${encodeURIComponent(sessionId)}/messages/stream`,
+    `${apiBase}/api/series/${encodeURIComponent(seriesId)}/chat/sessions/${encodeURIComponent(sessionId)}/messages/stream`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getLLMHeaders() },
       body: JSON.stringify({ question: content }),
       credentials: 'include',
       signal,

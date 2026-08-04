@@ -1,26 +1,14 @@
-// Mirrors backend/app/domain/settings.py's LLMSettingsResponse / LLMSettingsUpdate
-// field-for-field. The API key is write-only: the server never returns the full
-// key — only `api_key_configured` + a masked `api_key_masked` suffix (T-06-07).
+// BYOK-only settings shape (AI-01, D-05, D-06): the browser holds the LLM
+// provider key/base_url/model in localStorage and forwards them per-request
+// as X-LLM-* headers. The server no longer persists LLM settings from the
+// frontend, so the old LLMSettings / LLMSettingsUpdate response types (with
+// `enabled` and `system_prompt_language`) are gone.
 
 export type LLMProvider = 'gemini' | 'openai_compatible'
 
-export type SystemPromptLanguage = 'english' | 'turkish'
-
-export type LLMSettings = {
+export type StoredLLMSettings = {
   provider: LLMProvider
-  model: string | null
-  base_url: string | null
-  enabled: boolean
-  system_prompt_language: SystemPromptLanguage
-  api_key_configured: boolean
-  api_key_masked: string | null
-}
-
-export type LLMSettingsUpdate = {
-  provider: LLMProvider
-  api_key?: string
-  base_url?: string | null
-  model?: string | null
-  enabled?: boolean
-  system_prompt_language?: SystemPromptLanguage
+  api_key: string
+  base_url: string
+  model: string
 }

@@ -3,8 +3,8 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { getLLMSettings, updateLLMSettings } from '@/api/settings'
-import type { LLMSettings, LLMProvider, SystemPromptLanguage } from '@/types/settings'
+import { getStoredLLMSettings, saveLLMSettings } from '@/lib/byok'
+import type { LLMProvider } from '@/types/settings'
 
 type Props = {
   onBack: () => void
@@ -15,7 +15,7 @@ const inputClass = cn(
   '[color-scheme:dark]',
 )
 
-// Heroicons outline eye / eye-slash (no emoji — svg-icon-replacements rule).
+// Heroicons outline eye / eye-slash (no emoji - svg-icon-replacements rule).
 function EyeIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4 shrink-0" aria-hidden="true">
@@ -39,67 +39,25 @@ export function SettingsPage({ onBack }: Props) {
   const [baseUrl, setBaseUrl] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
-  const [enabled, setEnabled] = useState(false)
-  const [promptLanguage, setPromptLanguage] = useState<SystemPromptLanguage>('english')
-  const [saved, setSaved] = useState<LLMSettings | null>(null)
-  const [status, setStatus] = useState<'loading' | 'idle' | 'saving' | 'error'>('loading')
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [saveError, setSaveError] = useState<string | null>(null)
+  const [savedMessage, setSavedMessage] = useState<string | null>(null)
 
-  // Loading is best-effort: a failed GET must never block saving (the PUT is
-  // independent), so the form always ends up editable with sane defaults.
+  // BYOK (AI-01/D-05): the key/base_url/model live ONLY in this browser's
+  // localStorage - there is no settings-persistence endpoint anymore, so the
+  // form is populated synchronously from localStorage and saving never
+  // touches the network.
   useEffect(() => {
-    let cancelled = false
-    getLLMSettings()
-      .then((settings) => {
-        if (cancelled) return
-        setProvider(settings.provider)
-        setModel(settings.model ?? '')
-        setBaseUrl(settings.base_url ?? '')
-        setEnabled(settings.enabled)
-        setPromptLanguage(settings.system_prompt_language ?? 'english')
-        setSaved(settings)
-        setStatus('idle')
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return
-        // Keep the form editable — the previous config is simply unknown.
-        setStatus('idle')
-        setErrorMessage(
-          error instanceof Error && error.message
-            ? `Could not load current settings (${error.message}). Save will overwrite them.`
-            : 'Could not load current settings. Save will overwrite them.',
-        )
-      })
-    return () => {
-      cancelled = true
+    const stored = getStoredLLMSettings()
+    if (stored) {
+      setProvider(stored.provider)
+      setModel(stored.model)
+      setBaseUrl(stored.base_url)
+      setApiKey(stored.api_key)
     }
   }, [])
 
-  async function handleSave() {
-    setStatus('saving')
-    setSaveError(null)
-    setErrorMessage(null)
-    try {
-      const updated = await updateLLMSettings({
-        provider,
-        api_key: apiKey.trim() || undefined,
-        model: model.trim() || null,
-        base_url: baseUrl.trim() || null,
-        enabled,
-        system_prompt_language: promptLanguage,
-      })
-      setSaved(updated)
-      setApiKey('')
-      setStatus('idle')
-    } catch (error: unknown) {
-      setStatus('idle')
-      setSaveError(
-        error instanceof Error && error.message
-          ? `Failed to save LLM settings: ${error.message}`
-          : 'Failed to save LLM settings.',
-      )
-    }
+  function handleSave() {
+    saveLLMSettings({ provider, api_key: apiKey, base_url: baseUrl, model })
+    setSavedMessage('Saved to this browser.')
   }
 
   return (
@@ -117,182 +75,107 @@ export function SettingsPage({ onBack }: Props) {
           </Button>
         </div>
 
-        {status === 'loading' ? (
-          <p className="mt-6 text-sm text-muted-foreground">Loading…</p>
-        ) : (
-          <div className="mt-4 flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="settings-provider" className="text-sm font-medium">
-                Provider
-              </label>
-              <Select value={provider} onValueChange={(value) => setProvider(value as LLMProvider)}>
-                <SelectTrigger id="settings-provider" className="min-h-11 w-full">
-                  <SelectValue placeholder="Provider" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="gemini">Google Gemini</SelectItem>
-                  <SelectItem value="openai_compatible">OpenAI-compatible endpoint</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {provider === 'gemini'
-                  ? 'Uses the official Gemini REST API (generativelanguage.googleapis.com).'
-                  : 'Any OpenAI-compatible /chat/completions endpoint (base URL + model).'}
-              </p>
-            </div>
+        <div className="mt-4 flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="settings-provider" className="text-sm font-medium">
+              Provider
+            </label>
+            <Select value={provider} onValueChange={(value) => setProvider(value as LLMProvider)}>
+              <SelectTrigger id="settings-provider" className="min-h-11 w-full">
+                <SelectValue placeholder="Provider" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="gemini">Google Gemini</SelectItem>
+                <SelectItem value="openai_compatible">OpenAI-compatible endpoint</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {provider === 'gemini'
+                ? 'Uses the official Gemini REST API (generativelanguage.googleapis.com).'
+                : 'Any OpenAI-compatible /chat/completions endpoint (base URL + model).'}
+            </p>
+          </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="settings-api-key" className="text-sm font-medium">
-                API key
-              </label>
-              <div className="relative">
-                <input
-                  id="settings-api-key"
-                  type={showApiKey ? 'text' : 'password'}
-                  autoComplete="off"
-                  className={cn(inputClass, 'pr-11')}
-                  placeholder={
-                    saved?.api_key_configured
-                      ? `${saved.api_key_masked ?? 'configured'} (stored — leave blank to keep)`
-                      : 'Paste your API key'
-                  }
-                  value={apiKey}
-                  onChange={(event) => setApiKey(event.target.value)}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey((visible) => !visible)}
-                  aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
-                  className="absolute right-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                  {showApiKey ? <EyeOffIcon /> : <EyeIcon />}
-                </button>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="settings-model" className="text-sm font-medium">
-                Model
-              </label>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="settings-api-key" className="text-sm font-medium">
+              API key
+            </label>
+            <div className="relative">
               <input
-                id="settings-model"
-                type="text"
+                id="settings-api-key"
+                type={showApiKey ? 'text' : 'password'}
                 autoComplete="off"
-                className={inputClass}
-                placeholder={
-                  provider === 'gemini'
-                    ? 'e.g. gemini-2.5-flash'
-                    : 'e.g. deepseek-chat'
-                }
-                value={model}
-                onChange={(event) => setModel(event.target.value)}
+                className={cn(inputClass, 'pr-11')}
+                placeholder="Paste your API key"
+                value={apiKey}
+                onChange={(event) => setApiKey(event.target.value)}
               />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="settings-base-url" className="text-sm font-medium">
-                Base URL
-              </label>
-              <input
-                id="settings-base-url"
-                type="text"
-                autoComplete="off"
-                className={inputClass}
-                placeholder={
-                  provider === 'gemini'
-                    ? 'https://generativelanguage.googleapis.com'
-                    : 'e.g. https://llm.example/v1'
-                }
-                value={baseUrl}
-                onChange={(event) => setBaseUrl(event.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                {provider === 'gemini'
-                  ? 'Optional — defaults to the official Gemini endpoint.'
-                  : 'Required for OpenAI-compatible providers.'}
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="settings-prompt-language" className="text-sm font-medium">
-                Assistant language
-              </label>
-              <Select
-                value={promptLanguage}
-                onValueChange={(value) => setPromptLanguage(value as SystemPromptLanguage)}
-              >
-                <SelectTrigger id="settings-prompt-language" className="min-h-11 w-full">
-                  <SelectValue placeholder="Language" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="english">English</SelectItem>
-                  <SelectItem value="turkish">Türkçe (Turkish)</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Selects which system prompt the GraphRAG agent receives — the
-                assistant always replies in that language.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-input px-3 py-2.5">
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <label htmlFor="settings-enabled" className="text-sm font-medium">
-                  Enable the chat assistant
-                </label>
-                <p className="text-xs text-muted-foreground">
-                  {enabled
-                    ? 'Chat and retrieval endpoints are active.'
-                    : 'Disabled — chat returns LLM disabled. Turn this on after saving a key.'}
-                </p>
-              </div>
               <button
-                id="settings-enabled"
                 type="button"
-                role="switch"
-                aria-checked={enabled}
-                aria-label="Enable the chat assistant"
-                onClick={() => setEnabled((current) => !current)}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2"
+                onClick={() => setShowApiKey((visible) => !visible)}
+                aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+                className="absolute right-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
               >
-                <span
-                  className={cn(
-                    'relative inline-flex h-6 w-11 items-center rounded-full transition-colors motion-reduce:transition-none',
-                    enabled ? 'bg-primary' : 'bg-muted',
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'inline-block size-5 transform rounded-full bg-background shadow transition-transform motion-reduce:transition-none',
-                      enabled ? 'translate-x-5' : 'translate-x-0.5',
-                    )}
-                  />
-                </span>
+                {showApiKey ? <EyeOffIcon /> : <EyeIcon />}
               </button>
             </div>
-
-            {errorMessage && (
-              <p className="text-sm text-destructive">{errorMessage}</p>
-            )}
-            {saveError && (
-              <p className="text-sm text-destructive">{saveError}</p>
-            )}
-            {status === 'idle' && saved?.api_key_configured && (
-              <p className="text-sm text-muted-foreground">
-                API key configured ({saved.api_key_masked}).
-              </p>
-            )}
-
-            <Button
-              type="button"
-              onClick={handleSave}
-              disabled={status === 'saving'}
-              className="min-h-11"
-            >
-              {status === 'saving' ? 'Saving…' : 'Save settings'}
-            </Button>
           </div>
-        )}
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="settings-model" className="text-sm font-medium">
+              Model
+            </label>
+            <input
+              id="settings-model"
+              type="text"
+              autoComplete="off"
+              className={inputClass}
+              placeholder={
+                provider === 'gemini'
+                  ? 'e.g. gemini-2.5-flash'
+                  : 'e.g. deepseek-chat'
+              }
+              value={model}
+              onChange={(event) => setModel(event.target.value)}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="settings-base-url" className="text-sm font-medium">
+              Base URL
+            </label>
+            <input
+              id="settings-base-url"
+              type="text"
+              autoComplete="off"
+              className={inputClass}
+              placeholder={
+                provider === 'gemini'
+                  ? 'https://generativelanguage.googleapis.com'
+                  : 'e.g. https://llm.example/v1'
+              }
+              value={baseUrl}
+              onChange={(event) => setBaseUrl(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              {provider === 'gemini'
+                ? 'Optional - defaults to the official Gemini endpoint.'
+                : 'Required for OpenAI-compatible providers.'}
+            </p>
+          </div>
+
+          {savedMessage && (
+            <p className="text-sm text-muted-foreground">{savedMessage}</p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Your API key never leaves this browser except as a per-request
+            header sent to the endpoint you configure above.
+          </p>
+
+          <Button type="button" onClick={handleSave} className="min-h-11">
+            Save settings
+          </Button>
+        </div>
       </Card>
     </div>
   )
