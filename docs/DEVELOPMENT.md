@@ -12,6 +12,7 @@ This guide covers local development for the FastAPI/Neo4j backend and the React/
 - Node.js `^20.19.0` or `>=22.12.0` (the engine range required by the installed Vite 8 toolchain)
 - npm (the frontend has a committed `package-lock.json`)
 - Docker Desktop or another Docker Compose implementation for local Neo4j
+- Redis is optional for local development. `docker-compose.yml` only runs Neo4j; leaving `REDIS_URL` unset in `.env` disables the Redis-backed rate limiter and the graph response cache (`backend/app/cache/`) without breaking anything else. See [CONFIGURATION.md](CONFIGURATION.md#rate-limiting--redis-cache) to enable them against Upstash or another Redis instance.
 
 ### Clone or fork
 
@@ -118,6 +119,8 @@ Set `NODE_ENV=test` explicitly in Git Bash. If the shell inherited `NODE_ENV=pro
 
 Keep dependencies flowing `backend/app/api/` → `backend/app/services/` → `backend/app/repository/` or `backend/app/graph/`. Shared Pydantic request/response contracts belong in `backend/app/domain/`. This keeps HTTP concerns out of graph access, makes service policy testable, and keeps spoiler filtering at the query boundary rather than in presentation code.
 
+`backend/app/cache/` is a cross-cutting infrastructure module, not part of that request-handling chain. `backend/app/cache/redis_client.py` exposes the one shared `redis.asyncio` client (`get_redis()`); `backend/app/services/rate_limit.py` and `backend/app/cache/graph_cache.py` both build on it. Routes call the cache/rate-limit helpers directly rather than going through the service layer. Both features are guarded on a non-empty `REDIS_URL` and fail open (never raise) on a Redis error, so Redis is a performance/protection layer, never a hard dependency. See [CONFIGURATION.md](CONFIGURATION.md#rate-limiting--redis-cache) for the full behavior.
+
 When adding or changing an endpoint:
 
 1. Add or update the domain model under `backend/app/domain/`; preserve strict validation such as `extra="forbid"` where the surrounding contract uses it.
@@ -126,6 +129,8 @@ When adding or changing an endpoint:
 4. Add the route under `backend/app/api/` and register a new router in `backend/app/main.py`.
 5. Add focused tests. For story-sensitive reads, test visible data **and** forbidden future sentinels, hidden-versus-missing behavior, invalid boundaries, graph closure, and sanitized errors.
 6. Keep the closed API inventory synchronized. `backend/tests/test_frontend_contract_doc.py` currently locks 44 operations across 32 path templates; route changes require updates to that test, `backend/tests/test_openapi_contract.py`, and `docs/frontend-api-contract.md`.
+7. If the new/changed route writes graph content that `GET /api/series/{series_id}/graph` could return, call `await invalidate_series(series_id)` from `backend/app/cache/graph_cache.py` after the write, following the existing pattern in `backend/app/api/candidates.py`, `backend/app/api/change_set.py`, and `backend/app/api/user_content.py`. Invalidation is coarse (whole series) by design; do not try to target a single cache key.
+8. If the new/changed route is a login, chat-send, or content-write style endpoint, add the matching dependency from `backend/app/services/rate_limit.py` (`login_rate_limiter`, `chat_send_rate_limiter`, or `content_write_rate_limiter`) rather than inventing a new limiter instance.
 
 The graph and GraphRAG paths must enforce `visible_from_order <= visible_until_order` before data reaches the frontend or model. Candidate review is the explicit exception: candidate list filtering is optional and candidate detail has no watch-boundary argument. Do not generalize that exception to other endpoints.
 

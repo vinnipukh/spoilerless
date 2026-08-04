@@ -4,7 +4,7 @@
 **Purpose:** Lock the visibility vocabulary so every later plan in phase 07 (07-02..07-08) and every
 future contributor uses identical semantics. Later plans reference this document verbatim; do not
 re-derive these rules. Source decisions: **D-02, D-03, D-05, D-09** in
-`.planning/phases/07-spoiler-safety-hardening/07-CONTEXT.md`.
+`.planning/milestones/v1.2-phases/07-spoiler-safety-hardening/07-CONTEXT.md`.
 
 ## 1. Canonical reveal-point property (D-02)
 
@@ -25,7 +25,7 @@ and episode metadata gates).
   episode. They never replace `visible_from_order` on the story resource itself. The resource-level
   reveal point stays `visible_from_order` everywhere.
 - Schema convention: `visible_from_order` is a **non-null** integer field
-  (`int = Field(ge=1)`, as in `domain/graph.py:11` and `domain/series.py`) so a null value fails
+  (`int = Field(ge=1)`, as in `domain/graph.py:15` and `domain/series.py`) so a null value fails
   validation — the schema layer itself fails closed.
 
 ## 2. Visibility rule — fail closed (D-03)

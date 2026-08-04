@@ -24,8 +24,9 @@ Coding agents should use [`docs/PROJECT-SPEC.md`](./docs/PROJECT-SPEC.md) for pr
 - **Revision history** — All user edits, corrections, and rejections are recorded in a revision log, enabling inspect-and-revert workflows.
 - **Candidate claim review** — Extraction candidates go through a review workflow before entering the canonical graph.
 - **Change sets** — Batched, confirmable edits with revision tracking and protection against conflicting changes.
-- **Google OAuth authentication** — Sign in with Google ID tokens. Sessions are managed via HttpOnly cookies with configurable TTL. A Google Cloud OAuth client is required to log in.
+- **Google OAuth authentication** — Sign in with Google ID tokens. Sessions are managed via HttpOnly cookies with configurable TTL. A Google Cloud OAuth client is required to log in. A user's role (`admin` or `user`) is derived server-side at login from the `ADMIN_EMAILS` allowlist; the admin role gates candidate review commits, change-set commits, and the application settings endpoints.
 - **Spoiler-grounded LLM chat (optional)** — Disabled by default. When enabled, an OpenAI-compatible chat model answers questions using only the spoiler-filtered, tool-allowlisted graph context for the user's watch progress.
+- **Redis-backed rate limiting and caching (optional)** — When `REDIS_URL` is set, login, chat-send, and content-write routes are rate-limited, and spoiler-filtered graph responses are cached. An empty `REDIS_URL` disables both features rather than failing startup.
 
 ---
 
@@ -66,6 +67,7 @@ See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the full system breakdo
 | **UI components** | shadcn/ui (Radix UI primitives, Lucide icons) |
 | **Python deps** | uv |
 | **Frontend deps** | npm |
+| **Rate limiting / caching** | Redis (Upstash) via `fastapi-limiter` — optional, disabled when `REDIS_URL` is empty |
 | **Orchestration** | Docker Compose (Neo4j container) |
 
 ---
@@ -86,7 +88,7 @@ cd hdgrafcehennemi
 cp .env.example .env
 ```
 
-Edit `.env` to set `NEO4J_PASSWORD` so it matches `docker-compose.yml` (the Compose default is `hdgraf-local-password`).
+Edit `.env` to set `NEO4J_PASSWORD` so it matches `docker-compose.yml` (the Compose default is `change-me`).
 
 ### 2. Set up Google OAuth
 
@@ -161,6 +163,7 @@ hdgrafcehennemi/
 │   ├── app/
 │   │   ├── api/            # Route handlers (series, graph, user_content, auth,
 │   │   │                   #   revisions, candidates, progress, chat, change_set, settings)
+│   │   ├── cache/          # Redis client, graph response cache (optional)
 │   │   ├── core/           # Config, error handling
 │   │   ├── domain/         # Pydantic models / schemas
 │   │   ├── graph/          # Neo4j database, ontology, seed, setup

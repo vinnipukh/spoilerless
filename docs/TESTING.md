@@ -137,13 +137,15 @@ The package defines only the `test` script (`vitest`); there are no separate `te
 - Keep spoiler-boundary assertions fail-closed: assert that hidden content is absent, not only that visible content is present.
 - Add API inventory changes to both contract tests and `docs/frontend-api-contract.md`; `test_openapi_contract.py` and `test_frontend_contract_doc.py` enforce the API surface.
 
-`backend/tests/conftest.py` contains only shared path and Neo4j environment setup. Most fixtures and helper functions are local to the test file that owns them. Examples include live database/client fixtures, in-memory authentication repositories, HTTP transport stubs, SSE parsers, and fixture-payload builders.
+`backend/tests/conftest.py` contains shared path and Neo4j environment setup, plus an autouse `_disable_rate_limiter` fixture that patches `RateLimiter.__call__` to a no-op so rate-limited routes are testable without a live Redis. Most other fixtures and helper functions are local to the test file that owns them. Examples include live database/client fixtures, in-memory authentication repositories, HTTP transport stubs, SSE parsers, and fixture-payload builders.
 
 ### Live Neo4j safety
 
 Backend integration tests are not automatically isolated from the application's default `neo4j` database. Several tests seed data, create scratch records, or delete records during cleanup. Do not run the backend integration suite against a Neo4j database containing irreplaceable data, and do not interrupt a run during fixture cleanup.
 
 When a test changes persistent user configuration, preserve and restore the previous value rather than deleting it unconditionally. `test_settings_api.py` demonstrates the required pattern: it backs up the existing `:AppSetting {key: 'llm'}` value, performs the test, then restores that value with a fresh driver and event loop. Scratch fixtures such as those in `test_retrieval_tools.py` create records under a dedicated series ID and delete that series in teardown.
+
+`test_candidate_ingest.py` and `test_candidate_review.py` are a known exception to that pattern: they write `Claim` and `EvidenceFragment` records onto the seeded `series_dexter` series and do not delete them in teardown. Running those files leaves extra rows on the shared database, which can make `test_seed_idempotency.py`'s exact-count assertions (e.g. relationship counts) fail on a later run against the same database even though the seed logic itself is correct. If `test_seed_idempotency.py` fails with a count mismatch, re-seed against a disposable database or run it before the candidate test files rather than treating the mismatch as a seed-logic bug.
 
 Treat the default test configuration as a **shared-live-database hazard**, not as an isolated test container:
 
@@ -169,6 +171,7 @@ The HTTP surface is a closed inventory. Adding, removing, or changing a route re
 |---|---|---|
 | Root-relative fixture `FileNotFoundError` | pytest was run from `backend/` | Re-run from the repository root. |
 | Many unrelated live-DB failures after an aborted run | Shared Neo4j contains partial fixture state | Stop; inspect/backup the database, then clean or reseed only with explicit data-loss awareness. Re-run a focused file before blaming source. |
+| `test_seed_idempotency.py` fails with a relationship/node count mismatch | `test_candidate_ingest.py`/`test_candidate_review.py` left extra `Claim`/`EvidenceFragment` rows on `series_dexter` from an earlier run | Re-seed against a disposable database, or run `test_seed_idempotency.py` before the candidate test files rather than after them. |
 | React renders an empty container or many Testing Library lookups fail | `NODE_ENV=production` leaked into Vitest | Re-run with `NODE_ENV=test CI=1`. |
 | `toBeInTheDocument` is missing | Wrong jest-dom entry/setup | Keep `@testing-library/jest-dom/vitest` in `frontend/src/test/setup.ts`. |
 | Pointer capture, `ResizeObserver`, `matchMedia`, or `React.act` fails | Required jsdom shim is absent | Add a suite-wide shim to `frontend/src/test/setup.ts`, not per test. |

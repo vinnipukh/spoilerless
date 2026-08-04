@@ -28,10 +28,11 @@ The backend reads configuration from the current working directory's `.env` file
 cp .env.example .env
 ```
 
-> **Verified against the repo:** `.env.example` (project root) was read directly and matches the table
-> below. Local secret-bearing `.env` files were intentionally not read. `LLM_FALLBACK_EN` and
-> `LLM_FALLBACK_TR` exist in the `Settings` class but are **not** listed in
-> `.env.example` (they are optional overrides). Secret values are never documented here.
+> **Verified against the repo:** `.env.example` (project root) was read directly. `SESSION_COOKIE_SAMESITE`,
+> `ALLOWED_EMAILS`, `ADMIN_EMAILS`, `REDIS_URL`, `LLM_FALLBACK_EN`, and `LLM_FALLBACK_TR` all exist as fields
+> on the `Settings` class but are **not** listed in `.env.example` (they are optional overrides/additions
+> with in-code defaults). Local secret-bearing `.env` files were intentionally not read. Secret values are
+> never documented here.
 
 ### Variable Reference
 
@@ -39,13 +40,17 @@ cp .env.example .env
 |---|---|---|---|
 | `NEO4J_URI` | _(none — must be set)_ | Yes | Bolt URI for the Neo4j database. Use `neo4j+s://` for TLS connections (e.g. Neo4j Aura). |
 | `NEO4J_USERNAME` | _(none — must be set)_ | Yes | Neo4j authentication username. |
-| `NEO4J_PASSWORD` | _(none — must be set)_ | Yes | Neo4j authentication password. Must match `NEO4J_AUTH` in `docker-compose.yml` for local development. |
+| `NEO4J_PASSWORD` | _(none — must be set)_ | Yes | Neo4j authentication password. Must match `NEO4J_AUTH` in `docker-compose.yml` for local development (see [Docker Compose](#docker-compose-neo4j)). |
 | `NEO4J_DATABASE` | `neo4j` | No | Neo4j database name to connect to. |
 | `GOOGLE_CLIENT_ID` | `""` (empty) | No — but sign-in fails without it | Google OAuth 2.0 Web Client ID used to verify Google ID tokens. When unset, `POST /api/auth/google` returns `401 AUTH_DISABLED`. |
 | `SESSION_COOKIE_NAME` | `session` | No | Name of the HttpOnly session cookie. |
 | `SESSION_TTL_SECONDS` | `604800` (7 days) | No — but sign-in fails if `<= 0` | Session time-to-live in seconds. `POST /api/auth/google` returns `401 AUTH_DISABLED` if this is explicitly set to a non-positive value; when unset, the default applies. |
-| `SESSION_COOKIE_SECURE` | `false` | No | Sets the `Secure` flag on the session cookie. Should be `true` in any HTTPS deployment. |
+| `SESSION_COOKIE_SAMESITE` | `lax` | No — not in `.env.example` | `SameSite` policy applied to the session cookie by `_make_cookie`/`_delete_cookie` in `backend/app/api/auth.py`. `lax` is correct for the same-site custom-domain layout; use `strict` or `none` (with `SESSION_COOKIE_SECURE=true`) deliberately per environment. |
+| `SESSION_COOKIE_SECURE` | `true` | No | Sets the `Secure` flag on the session cookie. Defaults to `true` (Render/Vercel are HTTPS-only); local HTTP dev must explicitly set `SESSION_COOKIE_SECURE=false`. |
 | `FRONTEND_ORIGINS` | `http://localhost:5173` | No | Comma-separated list of allowed CORS origins for the FastAPI backend. Also used by `verify_origin` in `backend/app/api/auth.py` for CSRF `Origin`/`Referer` validation on `POST /api/auth/google`; `POST /api/auth/logout` does not apply that dependency. |
+| `ALLOWED_EMAILS` | `""` (empty) | No — not in `.env.example` | Comma-separated, case-insensitive allowlist of emails permitted to sign in. Empty disables the allowlist (any verified Google account may sign in) — never leave empty in production. A verified-but-unlisted email raises `EmailNotAllowedError`, returned as `403 AUTH_EMAIL_NOT_ALLOWED`. |
+| `ADMIN_EMAILS` | `""` (empty) | No — not in `.env.example` | Comma-separated, case-insensitive allowlist of emails granted the `admin` application role at login (`backend/app/services/auth.py`). Empty means no admin exists yet. Role is re-derived from this variable on every login, so removing an email demotes that user on their next sign-in. |
+| `REDIS_URL` | `""` (empty) | No | Upstash-style `rediss://` Redis connection string used for rate-limit counters (`backend/app/services/rate_limit.py`) and the graph query response cache (`backend/app/cache/graph_cache.py`). Empty disables both features — rate limiting becomes a no-op and caching always falls through to Neo4j. See [Rate Limiting & Redis Cache](#rate-limiting--redis-cache). |
 | `LLM_ENABLED` | `false` | No | Master switch for the GraphRAG chat/retrieval endpoints. When `false`, chat calls raise `LLMProviderDisabled`, mapped to HTTP 503 with code `LLM_DISABLED`. |
 | `LLM_PROVIDER` | `openai_compatible` | No | Environment fallback for the active provider selector. Two implementations exist: `openai_compatible` and `gemini`. The PUT request model defaults an omitted `provider` field to `gemini`, which is then stored; that request default is distinct from this env/runtime fallback. |
 | `LLM_BASE_URL` | `""` (empty) | Effectively required for `openai_compatible` if `LLM_ENABLED=true` and no runtime override is stored; optional for Gemini | Base URL for the OpenAI-compatible `/chat/completions` endpoint, or the Gemini API base when `LLM_PROVIDER=gemini` (defaults to `https://generativelanguage.googleapis.com` if left empty for Gemini). |
@@ -88,8 +93,13 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     session_cookie_name: str = "session"
     session_ttl_seconds: int = 604800
-    session_cookie_secure: bool = False
+    session_cookie_samesite: str = "lax"
+    session_cookie_secure: bool = True
     frontend_origins: str = "http://localhost:5173"
+    allowed_emails: str = ""
+    admin_emails: str = ""
+
+    redis_url: str = ""
 
     llm_enabled: bool = False
     llm_provider: str = "openai_compatible"
@@ -152,7 +162,61 @@ honored on cross-origin requests from any listed origin.
 The same `FRONTEND_ORIGINS` value also drives `verify_origin()` in `backend/app/api/auth.py`, a FastAPI
 dependency applied to `POST /api/auth/google` but not `POST /api/auth/logout`. It compares the request's `Origin` (or, if absent,
 `Referer`) header against the configured origin list and rejects mismatches with `403 AUTH_ORIGIN_NOT_ALLOWED`.
-Setting `FRONTEND_ORIGINS=*` disables this check entirely (not recommended).
+A request with neither header is also rejected (fail-closed). Setting `FRONTEND_ORIGINS=*` disables this
+check entirely (not recommended). `SESSION_COOKIE_SAMESITE` (see below) is the complementary cookie-level
+defense — `verify_origin()` covers cases `SameSite` alone does not (subdomain-based attacks, top-level
+navigations).
+
+### Session cookie SameSite policy
+
+`_make_cookie()` / `_delete_cookie()` in `backend/app/api/auth.py` set the session cookie's `SameSite`
+attribute from `SESSION_COOKIE_SAMESITE` (default `lax`) rather than a hardcoded value, so it can be tuned
+per deployment (`strict` or `none` — the latter requires `SESSION_COOKIE_SECURE=true`).
+
+### Authentication allowlist and admin role
+
+Two optional comma-separated, case-insensitive email lists gate and classify sign-in
+(`backend/app/services/auth.py`, `backend/app/api/auth.py`):
+
+- **`ALLOWED_EMAILS`** — when non-empty, restricts sign-in to the listed emails. A verified-but-unlisted
+  Google account is rejected with `403 AUTH_EMAIL_NOT_ALLOWED` (`EmailNotAllowedError`). Empty means any
+  verified Google account may sign in.
+- **`ADMIN_EMAILS`** — when the signed-in email (lowercased) is a member, the user's `role` is set to
+  `"admin"`; otherwise `"user"`. Role is re-derived from this variable **on every login** — removing an
+  email demotes that user's `role` the next time they sign in, it is never read from client input or
+  persisted independent of login. `RequireAdminDependency` (`backend/app/api/deps.py`) enforces
+  `role == "admin"` on admin-only routes (for example `GET`/`PUT /api/settings/llm`), rejecting with
+  `403 forbidden` otherwise.
+
+Both checks run **after** Google token verification succeeds, so they are driven by a Google-attested email
+plus a server-controlled env var — never by unverified client input.
+
+### Rate limiting & Redis cache
+
+Two independent features share the single `REDIS_URL` setting and the one shared `redis.asyncio` client in
+`backend/app/cache/redis_client.py` (`get_redis()`, `lru_cache`-decorated). Both are guarded on a non-empty
+`REDIS_URL` and degrade to a no-op (not a crash) when it is unset — local development without Redis runs
+unthrottled and always queries Neo4j directly:
+
+- **Rate limiting** (`backend/app/services/rate_limit.py`) — `RateLimiter` dependencies backed by
+  `pyrate-limiter`'s Redis `RedisBucket` (one ZSET per window, atomic across multiple backend workers). Bound
+  once at FastAPI startup by `init_rate_limiter()` (`backend/app/main.py`'s `lifespan()`) when `REDIS_URL` is
+  set. Configured windows:
+
+  | Route group | Limit | Window | Key |
+  |---|---|---|---|
+  | Login (`POST /api/auth/google`) | 10 requests | 300s (5 min) | per IP |
+  | Chat send | 20 requests | 60s | per user |
+  | Content write | 30 requests | 60s | per user, falling back to IP |
+
+  A request over the limit is rejected with `429 too_many_requests`.
+- **Graph query response cache** (`backend/app/cache/graph_cache.py`) — cache-aside layer for
+  `GET /api/series/{series_id}/graph`. Cache key is `graph:{series_id}:{effective_boundary}:{user_id or 'anon'}`
+  with a `300`-second TTL (`DEFAULT_GRAPH_TTL_SECONDS`); any Redis error or unset `REDIS_URL` falls through
+  to querying Neo4j directly rather than surfacing a request failure.
+
+`REDIS_URL` is expected to be an Upstash-style `rediss://` TLS connection string; it is not declared in
+`.env.example` and is not read anywhere except these two modules.
 
 ### Health check
 
@@ -171,9 +235,11 @@ There are no `.env.development` / `.env.production` / `.env.test` files and no `
 conditional loading. The backend has a single `.env` file and no `ENVIRONMENT` setting, so per-environment
 configuration is done by maintaining a separate `.env` per deployment:
 
-- **Local development** — `cp .env.example .env`; set `NEO4J_PASSWORD` to the password portion of `NEO4J_AUTH`
-  (`hdgraf-local-password`); keep `NEO4J_URI=neo4j://localhost:7687` and
-  `FRONTEND_ORIGINS=http://localhost:5173`.
+- **Local development** — `cp .env.example .env`; set `NEO4J_PASSWORD` (the same value is substituted into
+  `docker-compose.yml`'s `NEO4J_AUTH`, defaulting to `change-me` if unset — see
+  [Docker Compose](#docker-compose-neo4j)); keep `NEO4J_URI=neo4j://localhost:7687` and
+  `FRONTEND_ORIGINS=http://localhost:5173`. `.env.example` ships `SESSION_COOKIE_SECURE=true`; set it to
+  `false` if the local backend is served over plain HTTP on a non-`localhost` host.
 - **Production / Neo4j Aura** — set `NEO4J_URI=neo4j+s://<instance>.databases.neo4j.io:7687`, real
   credentials, `SESSION_COOKIE_SECURE=true`, and the deployed frontend origin(s) in `FRONTEND_ORIGINS`.
   <!-- VERIFY: The exact production Neo4j Aura instance URI and cloud region are deployment-specific and
@@ -193,26 +259,33 @@ set at runtime through the API and is persisted in the graph — it is **not** p
 
 - **Storage:** `SettingsRepository` (`backend/app/repository/settings.py`) persists a single
   `:AppSetting {key: 'llm'}` node in Neo4j via `MERGE`, storing the payload as a JSON string property.
-- **Endpoints (auth required):**
+- **Endpoints (admin role required):**
   - `GET /api/settings/llm` — returns stored values with environment fallbacks, but not provider-construction defaults (for example, Gemini's default base URL is still returned as `null` when no URL is configured); the API key is masked
     (`mask_api_key()` returns `"••••" + last 4 chars` for keys longer than four characters, one bullet per character for shorter keys, or `None` if unset).
   - `PUT /api/settings/llm` — updates the configuration (`backend/app/api/settings.py`,
     `SettingsService.update_llm`).
+  - Both routes depend on `RequireAdminDependency` (`backend/app/api/deps.py`), so only a session whose
+    `role == "admin"` (see [Authentication allowlist and admin role](#authentication-allowlist-and-admin-role))
+    may view or change the shared LLM provider configuration; any other authenticated user gets
+    `403 forbidden`.
 - **Precedence:** For `provider`, `api_key`, `base_url`, and `model`, a non-empty stored graph value wins;
   otherwise the corresponding `LLM_*` setting from `Settings` is used as the fallback (`get_llm()` and
   `get_llm_provider()` use `stored.get(field) or env_value`). `enabled` is different because `false` is
   meaningful: presence in storage wins via `stored.get("enabled", env_value)`; only an absent stored key
   falls back to `settings.llm_enabled` (`backend/app/services/settings.py`).
 - **Supported providers:** `backend/app/domain/settings.py` declares
-  `LLM_PROVIDERS = ("gemini", "openai_compatible")`. The `PUT` request body (`LLMSettingsUpdate`) defaults
-  `provider` to `"gemini"` when not supplied — note this differs from the `LLM_PROVIDER` env default of
-  `"openai_compatible"` described above.
+  `LLM_PROVIDERS = ("gemini", "openai_compatible", "vllm", "ollama")`. `vllm` and `ollama` are scaffolding
+  only — accepted, validated, and stored, but with no dedicated provider class yet; both route through
+  `OpenAICompatibleProvider` since they speak the same OpenAI-compatible `/chat/completions` wire shape.
+  The `PUT` request body (`LLMSettingsUpdate`) defaults `provider` to `"gemini"` when not supplied — note
+  this differs from the `LLM_PROVIDER` env default of `"openai_compatible"` described above.
 - **Gemini default base URL:** When `provider` is `gemini` and no `base_url` is stored or set via
   `LLM_BASE_URL`, the service falls back to `DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com"`.
-- **Provider protocol and activation:** Two implementations are available, but only the effective configured
-  provider is active for a chat call. `OpenAICompatibleProvider` posts to `/chat/completions`.
-  `GeminiProvider` uses Gemini's `generateContent`/`streamGenerateContent` action family; the current streaming
-  implementation posts to `/v1beta/models/{model}:streamGenerateContent?alt=sse`. It is not an
+- **Provider protocol and activation:** Two implementations back the four supported providers, but only the
+  effective configured provider is active for a chat call. `OpenAICompatibleProvider` posts to
+  `/chat/completions` and serves `"openai_compatible"`, `"vllm"`, and `"ollama"`. `GeminiProvider` uses
+  Gemini's `generateContent`/`streamGenerateContent` action family and serves `"gemini"`; the current
+  streaming implementation posts to `/v1beta/models/{model}:streamGenerateContent?alt=sse`. It is not an
   OpenAI-compatible chat-completions endpoint.
 - **URL scheme validation:** `LLMSettingsUpdate.base_url` is validated to require an `http`/`https`
   scheme and a hostname (`_validate_base_url` in `backend/app/domain/settings.py`) — an SSRF-via-scheme
@@ -231,11 +304,6 @@ set at runtime through the API and is persisted in the graph — it is **not** p
 - **Secret write semantics:** `PUT /api/settings/llm` accepts `api_key: str | None`; sending `None` or an
   empty string preserves the previously stored key rather than clearing it, since `GET` never returns the
   full key for a client to round-trip.
-
-<!-- VERIFY: Whether `PUT /api/settings/llm` has any authorization/role check beyond "any authenticated
-session" — the route only depends on `CurrentUserDependency`, so any signed-in user can view (masked) and
-change the shared LLM provider configuration. Confirm this is the intended access model before exposing
-this endpoint outside a trusted/single-tenant deployment. -->
 
 ---
 
@@ -263,21 +331,29 @@ The `docker-compose.yml` at the project root runs a single Neo4j Community conta
 ```yaml
 services:
   neo4j:
-    image: neo4j:2026-community
+    image: neo4j:2026.06.0-community
     container_name: hdgrafcehennemi-neo4j
     restart: unless-stopped
+
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
+
     environment:
-      NEO4J_AUTH: neo4j/hdgraf-local-password
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-change-me}
+
     volumes:
       - ./neo4j_data:/data
       - ./neo4j_logs:/logs
       - ./neo4j_import:/import
       - ./neo4j_plugins:/plugins
+
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -287,10 +363,10 @@ services:
 
 | Property | Value | Notes |
 |---|---|---|
-| **Image** | `neo4j:2026-community` | <!-- VERIFY: This tag uses an unconventional (year-based) versioning scheme; confirm it resolves in your Docker registry. --> |
-| **Bolt port** | `7687` | Used by the Python driver — set `NEO4J_URI=neo4j://localhost:7687` to match. |
-| **HTTP port** | `7474` | Neo4j Browser UI at `http://localhost:7474`. |
-| **Credentials** | `neo4j` / `hdgraf-local-password` | Must match `NEO4J_PASSWORD` in `.env`. This is a hardcoded development-only secret. |
+| **Image** | `neo4j:2026.06.0-community` | Calendar-versioned tag (`YYYY.MM.PATCH`), Neo4j's current release scheme. |
+| **Bolt port** | `7687`, bound to `127.0.0.1` only | Used by the Python driver — set `NEO4J_URI=neo4j://localhost:7687` to match. Not reachable from outside the host. |
+| **HTTP port** | `7474`, bound to `127.0.0.1` only | Neo4j Browser UI at `http://localhost:7474`. |
+| **Credentials** | `neo4j` / value of the host's `NEO4J_PASSWORD` env var, defaulting to `change-me` if unset | `NEO4J_AUTH` is substituted from the shell/`.env` `NEO4J_PASSWORD` via Compose's `${VAR:-default}` syntax — it must match the backend's own `NEO4J_PASSWORD` for the driver to authenticate. Docker Compose reads `.env` at the project root automatically for this substitution. |
 | **APOC** | — | The `./neo4j_plugins` volume is mounted but no plugin JAR is auto-installed. To enable APOC, place `apoc-*-core.jar` in `neo4j_plugins/` and add `NEO4J_PLUGINS='["apoc"]'` to the `environment` block. |
 
 ### Starting Neo4j
@@ -332,10 +408,11 @@ export default defineConfig({
 ```
 
 The dev server runs on the Vite default port (`5173`) and proxies `/api/*` requests to the FastAPI backend
-at `http://127.0.0.1:8000`. During development, the frontend calls `fetch('/api/...')` with relative paths
-(see `frontend/src/api/client.ts`) rather than an absolute base URL. In production, a reverse proxy or a
-combined deployment must route `/api` traffic to the backend since Vite's dev proxy does not exist outside
-`vite dev`.
+at `http://127.0.0.1:8000`. In local development the frontend calls `fetch('/api/...')` with relative paths
+(see `frontend/src/api/client.ts`), relying on this proxy, since `VITE_API_BASE_URL` is unset. In production
+(the backend and frontend are hosted on separate origins — see `VITE_API_BASE_URL` below), the frontend
+instead issues an absolute cross-origin request directly to the hosted backend; Vite's dev proxy does not
+exist outside `vite dev`.
 
 ### Frontend environment variables
 
@@ -345,7 +422,7 @@ gitignored overrides; its secret-bearing contents were intentionally not inspect
 | Variable | Required | Description |
 |---|---|---|
 | `VITE_GOOGLE_CLIENT_ID` | Yes, for sign-in | Google OAuth client ID, read via `import.meta.env.VITE_GOOGLE_CLIENT_ID` in `frontend/src/components/auth/LoginPage.tsx`. Must match the backend's `GOOGLE_CLIENT_ID`. When unset, the login page renders a "Google Sign-In is not configured" message instead of the sign-in button. |
-| `VITE_API_BASE_URL` | No | Declared as `/api` in `frontend/.env.example`, but **not yet read by any source file** — `import.meta.env` is only consumed for `VITE_GOOGLE_CLIENT_ID`, and each API module (`frontend/src/api/series.ts`, `frontend/src/api/auth.ts`, etc.) still hardcodes the `/api` prefix. Reserved for future base-URL configuration. |
+| `VITE_API_BASE_URL` | No — commented out in `frontend/.env.example` | Read via `import.meta.env.VITE_API_BASE_URL ?? ''` in `frontend/src/api/client.ts` (used by `apiFetch`, the shared client for every non-streaming API call) and again in `frontend/src/api/chat.ts` for the raw SSE `streamMessage` fetch. Empty (the unset default) preserves relative-URL requests through the Vite dev proxy; setting it prefixes every request with an absolute origin so a hosted frontend can reach a backend on another origin — `frontend/.env.example`'s commented example is `VITE_API_BASE_URL=https://api.spoilerless.net`. <!-- VERIFY: The exact production API origin is deployment-specific; confirm the current value in the Vercel project's build-time environment variables. --> |
 
 > **Security:** Vite inlines `VITE_*` variables into the built JavaScript bundle at build time — never
 > store secrets in `frontend/.env.local`. `VITE_GOOGLE_CLIENT_ID` is a public OAuth client identifier
@@ -543,7 +620,11 @@ written to Neo4j.
 # 1. Copy environment templates
 cp .env.example .env
 cp frontend/.env.example frontend/.env.local
-# Edit .env — set NEO4J_PASSWORD to match docker-compose.yml, and GOOGLE_CLIENT_ID
+# Edit .env — set NEO4J_PASSWORD (docker-compose.yml substitutes this same
+# value into NEO4J_AUTH, defaulting to "change-me" if left unset) and
+# GOOGLE_CLIENT_ID. Optionally set ADMIN_EMAILS to grant yourself the admin
+# role (required for the LLM settings endpoints) and SESSION_COOKIE_SECURE=false
+# if serving the backend over plain HTTP on a non-localhost host.
 # Edit frontend/.env.local — set VITE_GOOGLE_CLIENT_ID to the same Google client ID
 
 # 2. Start Neo4j
@@ -603,13 +684,34 @@ backend verifies the token audience against its configured `GOOGLE_CLIENT_ID`; a
 
 > `GOOGLE_CLIENT_SECRET` is **not** used anywhere in this codebase. Never add it to any configuration file.
 
-### 5. Enabling the GraphRAG chat feature
+### 5. Restricting sign-in and granting the admin role
+
+1. Set `ALLOWED_EMAILS` to a comma-separated list of emails to restrict who may sign in at all; leave
+   empty (the default) to allow any verified Google account.
+2. Set `ADMIN_EMAILS` to a comma-separated list of emails that should receive the `admin` role, most
+   importantly your own — the LLM settings endpoints (`GET`/`PUT /api/settings/llm`) require it.
+3. Restart the backend. Role and allowlist membership are re-evaluated on **every** login, so removing an
+   email from `ADMIN_EMAILS`/`ALLOWED_EMAILS` and restarting takes effect the next time that user signs in
+   — no database migration needed.
+
+### 6. Enabling the GraphRAG chat feature
 
 1. Set `LLM_ENABLED=true` in `.env`, **or** enable it later via `PUT /api/settings/llm` (`enabled: true`)
-   once signed in — the runtime setting takes precedence over the env value.
+   once signed in as an admin (see [above](#5-restricting-sign-in-and-granting-the-admin-role)) — the
+   runtime setting takes precedence over the env value.
 2. Provide `LLM_API_KEY` and `LLM_MODEL` — either in `.env` or through the same `PUT /api/settings/llm`
    call. `LLM_PROVIDER` has a default; an explicit base URL is required only for `openai_compatible` because Gemini supplies its default URL.
 3. For `LLM_PROVIDER=gemini` with an empty `LLM_BASE_URL`, the service automatically uses
    `https://generativelanguage.googleapis.com`.
 4. Restart the backend if changes were made via `.env`; runtime-settings changes via the API take effect
    on the next chat call without a restart.
+
+### 7. Enabling Redis-backed rate limiting and the graph query cache (optional)
+
+1. Provision a Redis instance (Upstash's `rediss://` TLS URLs are the tested target) and set `REDIS_URL`
+   in `.env` to its connection string.
+2. Restart the backend. `init_rate_limiter()` binds the shared Redis client during `lifespan()` startup,
+   enabling the login/chat-send/content-write rate limits and the `GET /api/series/{series_id}/graph`
+   response cache described in [Rate Limiting & Redis Cache](#rate-limiting--redis-cache).
+3. Leaving `REDIS_URL` empty (the default) is a valid and supported local-dev configuration — both
+   features degrade to a no-op rather than failing startup or requests.

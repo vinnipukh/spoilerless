@@ -50,6 +50,14 @@ npm --version
    - Make `NEO4J_PASSWORD` match the password in `docker-compose.yml`'s `NEO4J_AUTH` setting.
    - Keep the local Neo4j URI on Bolt port `7687` and the database name `neo4j` unless you intentionally changed Compose.
    - Set `GOOGLE_CLIENT_ID` to a Google OAuth 2.0 Web Client ID if you want to sign in.
+   - Set `ADMIN_EMAILS` to your own Google account email (comma-separated for more than one) to grant yourself
+     the `admin` role at login. Admin is required to approve/reject/edit candidate claims, commit AI-proposed
+     change sets, and view or edit the LLM settings; role is re-derived from `ADMIN_EMAILS` on every login.
+   - Optionally set `REDIS_URL` to an Upstash-style `rediss://` connection string to enable Redis-backed
+     login/chat/content rate limiting and the `GET /api/series/{series_id}/graph` response cache — see the
+     [configuration reference](./CONFIGURATION.md#rate-limiting--redis-cache). `docker-compose.yml` does not
+     provision a local Redis container; leaving `REDIS_URL` empty is the default and both features degrade
+     to a no-op rather than blocking startup or requests.
 
 4. Edit `frontend/.env.local`:
 
@@ -137,10 +145,10 @@ The seeded identifiers are `series_dexter` and `dexter_s01e01` through `dexter_s
 2. Select a character or claim-backed relationship. The left inspector shows graph details, claims, evidence/source metadata, notes, and revision history where applicable.
 3. Advance to **S01E02**. Confirm the spoiler warning, then observe the newly unlocked nodes and relationships. Moving backward also asks for confirmation and contracts the visible graph.
 4. Add a note or user-created graph item from the available inspector/canvas controls. User content remains visually distinguishable and participates in revision/refresh flows.
-5. Open **Settings** with the top-bar gear to configure the optional LLM provider, model, API key, enabled switch, and English/Turkish assistant language. Settings saved here are stored in Neo4j and take precedence over matching `LLM_*` environment values.
+5. Open **Settings** with the top-bar gear to configure the optional LLM provider, model, API key, enabled switch, and English/Turkish assistant language. Settings saved here are stored in Neo4j and take precedence over matching `LLM_*` environment values. This page requires the signed-in account to carry the `admin` role (see `ADMIN_EMAILS` in [Installation](#installation)); a non-admin account gets `403 forbidden`.
 6. Open chat and ask about a relationship visible at the current progress. Chat is optional and reports a disabled/provider error when no effective provider is enabled; it must not retrieve beyond persisted watch progress.
 
-Candidate extraction review is currently an API workflow rather than a dedicated frontend screen. Use Swagger UI at `http://localhost:8000/docs` to inspect the ingest, list/get, edit, approve, and reject routes under `/api/series/{series_id}/candidates`. Candidate ingestion accepts structured, evidence-bearing records; it is not an automatic subtitle/script ingestion pipeline.
+Candidate extraction review is currently an API workflow rather than a dedicated frontend screen. Use Swagger UI at `http://localhost:8000/docs` to inspect the ingest, list/get, edit, approve, and reject routes under `/api/series/{series_id}/candidates`. Ingest and list/get carry no authentication requirement; edit, approve, and reject require the `admin` role, same as Settings above. Candidate ingestion accepts structured, evidence-bearing records; it is not an automatic subtitle/script ingestion pipeline.
 
 ## Common Setup Issues
 

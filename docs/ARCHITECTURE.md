@@ -32,6 +32,8 @@
    - [7.10 Spoiler-Safety Invariants](#710-spoiler-safety-invariants)
    - [7.11 Settings System (User-Configurable LLM Provider)](#711-settings-system-user-configurable-llm-provider)
    - [7.12 Candidate Extraction & Review Workflow](#712-candidate-extraction--review-workflow)
+   - [7.13 Role-Based Access Control (Admin Role)](#713-role-based-access-control-admin-role)
+   - [7.14 Redis-Backed Rate Limiting and Graph Response Cache](#714-redis-backed-rate-limiting-and-graph-response-cache)
 8. [Key Design Decisions](#8-key-design-decisions)
 9. [Future Extensibility Points](#9-future-extensibility-points)
 10. [Appendices](#10-appendices)
@@ -55,8 +57,9 @@ The system is a multi-series-capable web application composed of three deployabl
 | Backend | Python 3.13+, FastAPI 0.140+, Uvicorn, Pydantic v2 |
 | Database | Neo4j 2026 Community (Docker Compose) |
 | Graph driver | `neo4j` Python driver 6.2+ (async) |
-| Auth | Google Sign-In (ID token verification via `google-auth`) |
+| Auth | Google Sign-In (ID token verification via `google-auth`); `ADMIN_EMAILS`-derived `admin`/`user` role |
 | LLM (optional) | OpenAI-compatible chat completions or Google Gemini REST |
+| Cache / rate limiting (optional) | Upstash Redis via `redis.asyncio` + `pyrate-limiter` (`fastapi-limiter`'s successor) — disabled when `REDIS_URL` is empty |
 | Package management | `uv` (Python), `npm` (frontend) |
 | Orchestration | Docker Compose (Neo4j container only — backend/frontend run natively) |
 
@@ -109,14 +112,21 @@ The system is a multi-series-capable web application composed of three deployabl
 │  │ GraphRAG-lite (optional) — backend/app/retrieval/, llm/     │  │
 │  │ RetrievalPipeline · 11 allowlisted tools · LLMProvider      │  │
 │  └───────────────────────────────────────────────────────────┘  │
+│                          │                                        │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ Cache / Rate-Limit Layer (optional) — backend/app/cache/,   │  │
+│  │ services/rate_limit.py — one shared redis.asyncio client;    │  │
+│  │ cache-aside for GET .../graph, RedisBucket rate limiters on  │  │
+│  │ login/chat-send/content-write; no-op when REDIS_URL is empty │  │
+│  └───────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
-                          │  bolt://localhost:7687
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              Neo4j 2026 Community (Docker, :7474 / :7687)         │
-│  Series, Season, Episode, Scene, Character, Location,             │
-│  Organization, Object, Event, Claim, Source, EvidenceFragment,    │
-│  UserNote, Revision, AppUser, ChangeSet, ChatMessage, AppSetting  │
+                          │  bolt://localhost:7687        │ rediss://
+                          ▼                                 ▼ (optional)
+┌─────────────────────────────────────────────────────────────────┐   ┌──────────────┐
+│              Neo4j 2026 Community (Docker, :7474 / :7687)         │   │ Upstash Redis│
+│  Series, Season, Episode, Scene, Character, Location,             │   │ (rate limits,│
+│  Organization, Object, Event, Claim, Source, EvidenceFragment,    │   │  graph cache)│
+│  UserNote, Revision, AppUser, ChangeSet, ChatMessage, AppSetting  │   └──────────────┘
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -142,6 +152,10 @@ hdgrafcehennemi/
 ├── backend/
 │   └── app/
 │       ├── api/            # Route handlers — one module per resource area
+│       ├── cache/          # Optional Redis layer: redis_client.py (shared
+│       │                    #   redis.asyncio singleton) and graph_cache.py
+│       │                    #   (cache-aside for GET .../graph); both no-op
+│       │                    #   when REDIS_URL is empty
 │       ├── core/           # Settings (pydantic-settings) and error-envelope helpers
 │       ├── domain/         # Pydantic models — the request/response contract
 │       ├── graph/          # Neo4j driver, ontology loader, seed pipeline, candidate
@@ -153,6 +167,9 @@ hdgrafcehennemi/
 │       ├── retrieval/      # GraphRAG-lite pipeline and allowlisted retrieval tools
 │       ├── revisions/      # Revision (audit trail) domain module
 │       ├── services/       # Business logic orchestration, one class per feature
+│       │                    #   (rate_limit.py is a module of RateLimiter
+│       │                    #   dependency instances, not a class-per-feature
+│       │                    #   service)
 │       ├── spoiler/        # Isolated, dependency-free spoiler-filter Cypher constants
 │       └── main.py         # FastAPI app assembly, router registration, CORS, lifespan
 │   └── tests/               # pytest suite (backend/tests/, see pyproject.toml testpaths)
@@ -250,9 +267,13 @@ Ten route modules registering **44 HTTP operations** (including `GET /health` in
 
 Route modules consistently use FastAPI `APIRouter`s and Pydantic request/response models, but dependency and data-access patterns vary: most inject services or repositories, `user_content.py` constructs its repository inside handlers, and `candidates.py`/`revisions.py` include direct transaction or data-access logic.
 
+#### Rate Limiting and Admin Gating
+
+Three route groups carry an optional `RateLimiter` dependency (`backend/app/services/rate_limit.py`; see [7.14](#714-redis-backed-rate-limiting-and-graph-response-cache)): `POST /api/auth/google` (10/5min per IP), chat message send (20/min per user), and every `user_content.py` write route (30/min per user, falling back to IP). A separate, unrelated gate — `RequireAdminDependency` (see [7.13](#713-role-based-access-control-admin-role)) — requires the `admin` role on `candidates.py`'s approve/reject/edit routes, `change_set.py`'s confirm route, and both `settings.py` routes; propose/reject/revert on ChangeSets and ingest/list/get on candidates are intentionally not admin-gated.
+
 #### Graph Route — The Critical Read Path
 
-`GET /api/series/{series_id}/graph?visible_until_order=N` is the most architecturally significant endpoint. It validates the series exists, resolves the boundary against a persisted episode order, delegates to `GraphService.fetch_graph()` (which runs seven Cypher queries concurrently), and returns a closed-form `GraphResponse` containing every visible node, edge, claim, source, and evidence fragment.
+`GET /api/series/{series_id}/graph?visible_until_order=N` is the most architecturally significant endpoint. It validates the series exists, resolves the boundary against a persisted episode order, checks the Redis cache-aside layer (`backend/app/cache/graph_cache.py`) keyed on `graph:{series_id}:{effective_boundary}:{user_id or 'anon'}`, and on a miss delegates to `GraphService.fetch_graph()` (which runs seven Cypher queries concurrently) before writing the result back to the cache with a 300-second TTL. It returns a closed-form `GraphResponse` containing every visible node, edge, claim, source, and evidence fragment. Caching is disabled (`get_cached_graph`/`set_cached_graph` are no-ops) whenever `REDIS_URL` is empty or Redis errors — the route always falls through to Neo4j rather than failing the request.
 
 The locked operation inventory (method/path templates and response schemas) is maintained separately in [`docs/frontend-api-contract.md`](./frontend-api-contract.md); the OpenAPI spec generated by `backend.app.main:app` is authoritative.
 
@@ -269,6 +290,8 @@ The locked operation inventory (method/path templates and response schemas) is m
 - **`ChatService`** (`chat.py`) — owns the GraphRAG-lite turn lifecycle: resolve boundary → load spoiler-filtered history → run the retrieval pipeline → stream the grounded answer back over SSE. Persists every `ChatMessage` with a `visible_until_order_snapshot` equal to the boundary resolved at turn time.
 - **`ChangeSetService`** (`change_set.py`) — Stage 1 **propose** validates a typed operation list against the ontology and the resolved boundary, then persists an `awaiting_confirmation` ChangeSet draft and its linking relationships without mutating target graph content. Stage 2 **confirm/apply** applies the validated operations in a single Neo4j transaction, prevents replay by returning the stored result when the ChangeSet status is already `applied`, and logs a `Revision` in the same transaction; the random `idempotency_key` is generated only after mutation and is not checked for replay detection. Stage 3 **revert** restores pre-apply state for create-shaped ChangeSets.
 - **`SettingsService`** (`settings.py`) — resolves the effective LLM configuration (stored graph value wins, `LLM_*` env settings are the fallback) and masks the API key on read.
+
+`backend/app/services/rate_limit.py` is not a class-per-feature service in this same sense — it defines the `RateLimiter` FastAPI dependency and the three module-level route-group instances described in [7.14](#714-redis-backed-rate-limiting-and-graph-response-cache).
 
 ---
 
@@ -344,6 +367,9 @@ The `setup_database()` pipeline (invoked via `uv run hdgraf-setup`, registered i
 | `RetrievalPipeline` | `backend/app/retrieval/pipeline.py` | Orchestrates allowlisted tool calls, context assembly, and citation validation for the GraphRAG-lite chat |
 | `ChangeSetService` | `backend/app/services/change_set.py` | The typed, two-stage (propose/confirm) protocol that is the only path through which the graph can be mutated by chat-driven writes |
 | `RevisionRepository.log_revision` | `backend/app/revisions/__init__.py` (used across services and repositories) | Shared pattern for writing an append-only before/after audit record in the same transaction as any content mutation |
+| `require_admin` / `RequireAdminDependency` | `backend/app/api/deps.py` | FastAPI dependency gate requiring `role == "admin"` (derived server-side from `ADMIN_EMAILS` at login); rejects with `403 forbidden` otherwise |
+| `get_redis()` | `backend/app/cache/redis_client.py` | The single shared, `lru_cache`-decorated `redis.asyncio` client; every Redis-backed feature imports it rather than constructing its own connection |
+| `RateLimiter` | `backend/app/services/rate_limit.py` | FastAPI dependency enforcing a per-window request count via a Redis-backed `pyrate-limiter` bucket; a no-op until `init_rate_limiter()` binds it (or when `REDIS_URL` is empty) |
 
 ---
 
@@ -457,10 +483,11 @@ Every automatic claim requires at least one `EvidenceFragment` (`SUPPORTED_BY`) 
 1. The frontend initiates Google Sign-In via the Google Identity Services library and receives an ID token (JWT).
 2. The token is sent to `POST /api/auth/google`.
 3. The backend verifies signature, issuer (`accounts.google.com`), audience (`GOOGLE_CLIENT_ID`), and expiration.
-4. The user record is upserted in Neo4j, keyed on Google's `sub` claim.
-5. A session is created with a SHA-256-hashed token (persisted as a `(:Session)` node by `Neo4jSessionRepository`); an HttpOnly, `SameSite=Lax` cookie is set on the response.
+4. If `ALLOWED_EMAILS` is non-empty, the verified email (case-insensitively) must be a member or the request is rejected with `403 AUTH_EMAIL_NOT_ALLOWED`; an empty allowlist permits any verified Google account.
+5. `role` is derived server-side from `ADMIN_EMAILS` membership (`"admin"` if the verified email matches, `"user"` otherwise) — never read from the request — and the user record is upserted in Neo4j keyed on Google's `sub` claim, re-syncing `role` on every login so removing an email from `ADMIN_EMAILS` demotes that user on their next sign-in.
+6. A session is created with a SHA-256-hashed token (persisted as a `(:Session)` node by `Neo4jSessionRepository`); an HttpOnly cookie is set on the response with `SameSite` taken from `SESSION_COOKIE_SAMESITE` (default `lax`, tunable per deployment).
 
-`GET /api/auth/me` reads the cookie, validates the session, and refreshes its TTL (default 7 days, `SESSION_TTL_SECONDS`). `POST /api/auth/logout` revokes the session and always returns `204`. The session cookie uses `SameSite=Lax`; the explicit `verify_origin` origin/referer dependency is attached only to `POST /api/auth/google`, not to logout or the other state-changing routes.
+`GET /api/auth/me` reads the cookie, validates the session, and refreshes its TTL (default 7 days, `SESSION_TTL_SECONDS`). `POST /api/auth/logout` revokes the session and always returns `204`. `POST /api/auth/google` also carries the `login_rate_limiter` dependency (10 requests / 5 minutes per IP; see [7.14](#714-redis-backed-rate-limiting-and-graph-response-cache)) and the explicit `verify_origin` origin/referer dependency, which rejects a request presenting neither header (fail-closed) as well as a mismatched one with `403 AUTH_ORIGIN_NOT_ALLOWED`; `verify_origin` is attached only to `POST /api/auth/google`, not to logout or the other state-changing routes.
 
 ### 7.6 Error Handling
 
@@ -475,11 +502,15 @@ Every automatic claim requires at least one `EvidenceFragment` (`SUPPORTED_BY`) 
 | 401 | `AUTH_UNAUTHENTICATED` | No valid session |
 | 401 | `AUTH_INVALID_GOOGLE_CREDENTIAL` | Google token verification failed |
 | 401 | `AUTH_DISABLED` | Google auth or session TTL not configured |
+| 403 | `AUTH_EMAIL_NOT_ALLOWED` | Verified Google email not in a non-empty `ALLOWED_EMAILS` |
+| 403 | `AUTH_ORIGIN_NOT_ALLOWED` | `Origin`/`Referer` missing or not in `FRONTEND_ORIGINS` (`POST /api/auth/google` only) |
+| 403 | `forbidden` | `RequireAdminDependency` rejected a non-admin caller |
 | 404 | `series_not_found` | Series lookup missed |
 | 404 | `resource_not_found` | Hidden or absent resource |
 | 409 | `resource_conflict` | Ownership violation or dependency |
 | 422 | `invalid_request` | Validation failure |
 | 422 | `invalid_visible_until_order` | Bad boundary value |
+| 429 | `too_many_requests` | A `RateLimiter`-gated route exceeded its window (login/chat-send/content-write) |
 | 503 | `database_unavailable` | Neo4j unreachable |
 
 `install_database_error_handlers()` and `install_llm_error_handlers()` (installed in `main.py`) register handlers so validation, constraint, connectivity, and LLM-provider errors are translated into this envelope. Database error messages are intentionally generic — never leaking Cypher, connection details, or internals.
@@ -562,7 +593,7 @@ Each tool takes only allowlisted, typed parameters (never a free-text Cypher str
 **Location:** `backend/app/api/change_set.py`, `backend/app/services/change_set.py`, `backend/app/repository/change_set.py`. The LLM **cannot write to the graph directly**. Typed staged ChangeSet endpoints exist for separately submitted proposals, but the current chat/retrieval pipeline does not create or return them and always emits `proposed_change_set: null`:
 
 ```
-Stage 1 — PROPOSE (POST /api/series/{series_id}/change-sets)
+Stage 1 — PROPOSE (POST /api/series/{series_id}/change-sets, not admin-gated)
   A typed ChangeSet: { summary, operations: [create_node | update_node |
   delete_node | create_relationship | update_relationship |
   delete_relationship | create_claim | update_claim | delete_claim |
@@ -576,19 +607,20 @@ Stage 1 — PROPOSE (POST /api/series/{series_id}/change-sets)
   │   the requested mutation.
   └── Persists the ChangeSet draft and linking relationships — status: awaiting_confirmation; target graph content is unchanged
 
-Stage 2 — CONFIRM (POST .../confirm) | REJECT (POST .../reject)
-  Confirm: ownership/status check → staleness check (409 changeset_stale) →
+Stage 2 — CONFIRM (POST .../confirm, admin-only) | REJECT (POST .../reject)
+  Confirm: RequireAdminDependency (403 forbidden for a non-admin caller) →
+  ownership/status check → staleness check (409 changeset_stale) →
   replay prevented by stored `status == 'applied'` (the post-apply random idempotency key is not checked) → single Neo4j transaction (all-or-nothing)
-  → Revision logged in the same transaction
-  Reject: marks the ChangeSet rejected; no database change
+  → Revision logged in the same transaction → cache/graph_cache.invalidate_series()
+  Reject: marks the ChangeSet rejected; no database change; not admin-gated
 
-Stage 3 — REVERT (POST .../revert, applied ChangeSets only)
+Stage 3 — REVERT (POST .../revert, applied ChangeSets only, not admin-gated)
   Only create-shaped ChangeSets are revertible; a conflict guard returns 409
   if a later unrelated change touched the created resource; creates a new
   Reverted revision
 ```
 
-The frontend renders a proposed ChangeSet as a preview card (per-operation summary, before/after rows for updates, a destructive banner when deletes are present) with explicit Confirm/Reject controls — the only UI path into the confirm/reject endpoints.
+Only Stage 2's confirm step is admin-gated — the reasoning is that confirming is the step that actually applies an AI-proposed mutation to the shared canonical graph, so propose/reject/revert remain open to any authenticated user. The frontend renders a proposed ChangeSet as a preview card (per-operation summary, before/after rows for updates, a destructive banner when deletes are present) with explicit Confirm/Reject controls — the only UI path into the confirm/reject endpoints; a non-admin viewer's Confirm click surfaces the `403 forbidden` response.
 
 ### 7.10 Spoiler-Safety Invariants
 
@@ -607,7 +639,7 @@ The frontend renders a proposed ChangeSet as a preview card (per-operation summa
 
 Lets an authenticated user configure the GraphRAG chat agent's LLM provider from the UI instead of only via `.env`. A single `(:AppSetting {key: 'llm'})` node holds the configuration as a JSON-serialized string. `SettingsService.get_llm()` resolves the *effective* configuration field-by-field: the stored graph value wins, the `LLM_*` environment settings are the fallback/bootstrap path.
 
-**API key handling (write-only secret):** `GET /api/settings/llm` never returns the full key — only `api_key_configured: bool` and a masked form. On `PUT`, `null` or `""` keeps the previously stored key; whitespace-only input is truthy and is currently persisted rather than treated as blank. The full key never appears in any response model or log line. Both routes require an authenticated session and operate on a single shared global configuration, not a per-user one.
+**API key handling (write-only secret):** `GET /api/settings/llm` never returns the full key — only `api_key_configured: bool` and a masked form. On `PUT`, `null` or `""` keeps the previously stored key; whitespace-only input is truthy and is currently persisted rather than treated as blank. The full key never appears in any response model or log line. Both routes carry `RequireAdminDependency` — only a session whose `role == "admin"` (see [7.13](#713-role-based-access-control-admin-role)) may view or change the shared LLM provider configuration; any other authenticated user gets `403 forbidden`. The configuration itself remains a single shared global record, not a per-user one.
 
 | Route | Method | Purpose |
 |---|---|---|
@@ -627,15 +659,41 @@ Candidate claims, their sources, and their evidence fragments derive determinist
 **Layering deviation:** `candidates.py` calls `CandidateRepository` directly — there is no `CandidateService` — and approve/reject/edit handlers inline managed-transaction logic, calling `RevisionRepository.log_revision` in the mutation transaction. It is not the only API-layer bypass: `user_content.py` calls `UserContentRepository` directly, `revisions.py` performs direct database/transaction work, and chat session routing constructs `ChatService`, which owns `ChatRepository`, while `chat.py` imports repository exceptions.
 
 ```
-POST .../candidates/ingest       → origin: candidate, status: candidate (idempotent MERGE)
-GET  .../candidates               → list, optional visible_until_order filter
-GET  .../candidates/{id}          → one candidate claim
-PATCH .../candidates/{id}         → edit mutable fields
-POST .../candidates/{id}/approve  → status: candidate → canonical (409 if origin isn't candidate)
-POST .../candidates/{id}/reject   → status: candidate → rejected
+POST .../candidates/ingest       → origin: candidate, status: candidate (idempotent MERGE); not admin-gated
+GET  .../candidates               → list, optional visible_until_order filter; not admin-gated
+GET  .../candidates/{id}          → one candidate claim; not admin-gated
+PATCH .../candidates/{id}         → edit mutable fields (admin-only)
+POST .../candidates/{id}/approve  → status: candidate → canonical (409 if origin isn't candidate) (admin-only)
+POST .../candidates/{id}/reject   → status: candidate → rejected (admin-only)
 ```
 
-Every approve/reject/edit call logs a `Revision` with before/after snapshots in the same transaction, so candidate review participates in the same append-only audit trail as user-content and ChangeSet mutations.
+`PATCH .../candidates/{id}`, `POST .../approve`, and `POST .../reject` all carry `RequireAdminDependency` — only a session with `role == "admin"` can edit, approve, or reject a candidate claim. Ingest and the two read routes carry no auth dependency at all, unchanged from before. Every approve/reject/edit call logs a `Revision` with before/after snapshots in the same transaction and invalidates the series' cached graph entries (`cache/graph_cache.invalidate_series()`), so candidate review participates in the same append-only audit trail as user-content and ChangeSet mutations.
+
+### 7.13 Role-Based Access Control (Admin Role)
+
+**Location:** `backend/app/api/deps.py` (`require_admin`, `RequireAdminDependency`), `backend/app/services/auth.py` (role derivation at login), `backend/app/repository/user.py` (`role` persisted on the `(:AppUser)` node), `backend/app/domain/auth.py` (`UserPublic.role: Literal["admin", "user"]`).
+
+`role` is a two-value field — `"admin"` or `"user"` — assigned server-side at every login from `ADMIN_EMAILS` membership (a comma-separated, case-insensitive env allowlist), never accepted from the client or derived from any request body. `UserRepository.upsert()` re-syncs `role` on every login (`ON MATCH SET u.role = $role`), so removing an email from `ADMIN_EMAILS` demotes that user's role the next time they sign in — no database migration needed. Pre-migration `AppUser` records without a stored `role` default to `"user"` via `coalesce(u.role, 'user')` in `GET_USER_BY_ID_QUERY` and the `UserPublic` model's `default="user"`.
+
+`require_admin` is a `CurrentUserDependency`-composed FastAPI dependency: it first resolves the authenticated user (`401 AUTH_UNAUTHENTICATED` if no valid session), then checks `user["role"] == "admin"`, raising `403 forbidden` otherwise. It currently gates exactly five routes: `candidates.py`'s `PATCH .../{id}`, `POST .../approve`, `POST .../reject`; `change_set.py`'s `POST .../confirm`; and both `settings.py` routes (`GET`/`PUT /api/settings/llm`). The rationale is consistent across all five: each is the step that commits AI-proposed or extracted content to the shared canonical graph, or mutates the shared LLM provider configuration, rather than merely reading or drafting.
+
+Ordinary user-content, revision, progress, chat, and ChangeSet-propose/reject/revert routes remain open to any authenticated user — this RBAC layer does not implement per-user ownership or ordinary multi-tenant isolation (see [Normative follow-ups](#normative-follow-ups-planned-not-implemented)); it is a single admin/non-admin distinction layered on top of the existing session-cookie authentication from [7.5](#75-authentication--sessions).
+
+### 7.14 Redis-Backed Rate Limiting and Graph Response Cache
+
+**Location:** `backend/app/cache/redis_client.py`, `backend/app/cache/graph_cache.py`, `backend/app/services/rate_limit.py`. Both features share the one `redis.asyncio` client returned by `get_redis()` (`lru_cache`-decorated, mirroring `core/config.py::get_settings()`) and are gated on a single setting, `REDIS_URL` (an Upstash-style `rediss://` TLS connection string). An empty `REDIS_URL` disables both features as a no-op — local development without Redis runs unthrottled and always queries Neo4j directly — rather than crashing startup or failing requests.
+
+**Rate limiting** (`services/rate_limit.py`) — a `RateLimiter` FastAPI dependency class backed by `pyrate-limiter`'s `RedisBucket` (one atomic Redis-Lua-scripted ZSET per window, correct across multiple concurrently-running backend workers/instances). Three module-level instances gate three route groups:
+
+| Instance | Route(s) | Limit | Window | Identifier |
+|---|---|---|---|---|
+| `login_rate_limiter` | `POST /api/auth/google` | 10 requests | 300s (5 min) | client IP |
+| `chat_send_rate_limiter` | Chat message send (streaming and non-streaming) | 20 requests | 60s | authenticated user id |
+| `content_write_rate_limiter` | Every `user_content.py` write route (notes, custom nodes, custom relationships — create/update/delete) | 30 requests | 60s | authenticated user id, falling back to IP (user-content routes gain no ownership dependency until a later phase) |
+
+`rate_limit_identifier()` reads `request.state.user` (stamped by `require_current_user` — see [7.5](#75-authentication--sessions)) when present, else falls back to `request.client.host`. A request over the limit gets `429 too_many_requests` via the shared error envelope ([7.6](#76-error-handling)). `init_rate_limiter()` binds the Redis-backed `Limiter` to all three instances once, in `main.py`'s `lifespan()`, immediately after `database.open()`, guarded on non-empty `REDIS_URL`; until bound (or when unbound), every `RateLimiter.__call__()` is a no-op.
+
+**Graph response cache** (`cache/graph_cache.py`) — a cache-aside layer in front of `GET /api/series/{series_id}/graph` only (see [4.2](#42-api-layer-fastapi)). Cache keys are `graph:{series_id}:{effective_boundary}:{user_id or 'anon'}` with a 300-second TTL (`DEFAULT_GRAPH_TTL_SECONDS`); because the effective spoiler boundary is part of the key, a boundary change is always a correct cache miss with no explicit invalidation required. Content-changing routes that mutate a series' graph (`candidates.py`'s approve/reject/edit, `change_set.py`'s confirm, `user_content.py`'s custom-node/custom-relationship create/update) call `invalidate_series(series_id)` after a successful write, which coarsely deletes every cached entry for that series via `SCAN`+`DELETE` rather than attempting to re-derive which exact `(boundary, user)` combinations the write affected. Any Redis error on read or write is swallowed and treated as a cache miss/no-op — caching is a performance layer, never a hard dependency, and a Redis outage degrades every graph read back to always querying Neo4j directly.
 
 ---
 
@@ -659,6 +717,10 @@ Every approve/reject/edit call logs a `Revision` with before/after snapshots in 
 
 **D-09 — Visibility derived from entity, not client.** For creates, `visible_from_order` is derived from the referenced target entity, never accepted from the client — a note attached to a season-5 character is only visible to users who've reached season 5, regardless of what the client submits.
 
+**D-10 — Admin role gates canonical-graph commits, not ordinary reads/writes.** `role` is a two-value, server-derived (`ADMIN_EMAILS`) field re-synced on every login. Only the routes that actually commit externally-sourced content to the shared canonical graph or mutate shared configuration — candidate approve/reject/edit, ChangeSet confirm, and both LLM settings routes — require it; propose/reject/revert on ChangeSets and ordinary user-content CRUD remain open to any authenticated user (see [7.13](#713-role-based-access-control-admin-role)).
+
+**D-11 — Redis is optional infrastructure, never a hard dependency.** Rate limiting and the graph response cache both share one client, gate on a single `REDIS_URL` setting, and fail open (rate limiting) or fall through to Neo4j (caching) on any Redis error or absent configuration — a Redis outage degrades performance/throughput protection but never produces a request failure (see [7.14](#714-redis-backed-rate-limiting-and-graph-response-cache)).
+
 ---
 
 ## 9. Future Extensibility Points
@@ -675,9 +737,9 @@ Every approve/reject/edit call logs a `Revision` with before/after snapshots in 
 ### Normative follow-ups (planned, not implemented)
 
 - **Close retrieval-hop gaps:** every retrieval query should visibility-gate the matched Claim and every subject/object/source/evidence hop before returning rows or aggregate counts. The gaps listed in [7.10](#710-spoiler-safety-invariants) remain current implementation debt, not approved exceptions to the spoiler-safety requirement.
-- **Make ownership and CSRF explicit:** user-content, revision, and candidate mutations should gain an authenticated owner/admin policy, and all cookie-authenticated state-changing routes should enforce a server-side CSRF signal. CORS alone is not that protection.
+- **Make ownership and CSRF explicit (partially addressed):** candidate approve/reject/edit and ChangeSet confirm now require the `admin` role ([7.13](#713-role-based-access-control-admin-role)), but ordinary user-content and revision mutations still carry no authenticated owner binding — any signed-in user can edit/delete any other user's notes and custom content. A general server-side CSRF signal for cookie-authenticated state-changing routes (beyond `verify_origin` on `POST /api/auth/google`) also remains unimplemented; CORS alone is not that protection.
 - **Unify candidate boundaries:** candidate list and direct-read routes should eventually resolve the same server-authoritative watch boundary as other story-sensitive reads; their optional/missing boundary behavior is a known exception today.
-- **Scope shared settings:** the global `AppSetting` should become per-user or admin-gated, with a deployment-appropriate outbound-host policy for `base_url`. The existing http(s)-scheme check does not prevent authenticated users from redirecting the shared provider to an attacker-controlled or private host.
+- **Scope shared settings (partially addressed):** `GET`/`PUT /api/settings/llm` are now admin-gated ([7.11](#711-settings-system-user-configurable-llm-provider)), closing the "any authenticated user" exposure, but the underlying `AppSetting` record is still a single shared global configuration rather than per-user, and the existing http(s)-scheme check on `base_url` does not prevent an admin from redirecting the shared provider to an attacker-controlled or private host.
 
 ---
 
@@ -704,8 +766,12 @@ Every approve/reject/edit call logs a `Revision` with before/after snapshots in 
 | `GOOGLE_CLIENT_ID` | `""` | Google OAuth client ID |
 | `SESSION_COOKIE_NAME` | `session` | HttpOnly cookie name |
 | `SESSION_TTL_SECONDS` | `604800` | Session lifetime (7 days) |
-| `SESSION_COOKIE_SECURE` | `False` | Secure flag on the session cookie |
-| `FRONTEND_ORIGINS` | `http://localhost:5173` | Comma-separated CORS allowed origins |
+| `SESSION_COOKIE_SAMESITE` | `lax` | `SameSite` policy on the session cookie |
+| `SESSION_COOKIE_SECURE` | `True` | Secure flag on the session cookie (set `false` for local HTTP dev) |
+| `FRONTEND_ORIGINS` | `http://localhost:5173` | Comma-separated CORS allowed origins; also drives `verify_origin` CSRF checks |
+| `ALLOWED_EMAILS` | `""` | Comma-separated sign-in allowlist; empty permits any verified Google account |
+| `ADMIN_EMAILS` | `""` | Comma-separated allowlist granted the `admin` role at login (see [7.13](#713-role-based-access-control-admin-role)) |
+| `REDIS_URL` | `""` | Upstash-style `rediss://` URL enabling rate limiting and the graph cache (see [7.14](#714-redis-backed-rate-limiting-and-graph-response-cache)) |
 | `LLM_ENABLED` | `False` | Enable the GraphRAG chat/retrieval endpoints |
 | `LLM_PROVIDER` | `openai_compatible` | LLM provider implementation selector |
 

