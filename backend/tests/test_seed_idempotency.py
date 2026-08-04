@@ -101,6 +101,13 @@ async def test_seed_is_idempotent_and_complete(live_database: Neo4jDatabase) -> 
     await live_database.execute_query(
         "MATCH (n) WHERE n.origin = 'user' OR n.id STARTS WITH 'user-' DETACH DELETE n"
     )
+    # Candidate-origin residue from other test modules (test_candidate_ingest
+    # ingests claims/evidence/sources into series_dexter) must be cleared too,
+    # or the pristine-seed counts below fail. Fixes CI: the whole suite shares
+    # one container, so earlier tests' candidate nodes leak into this one.
+    await live_database.execute_query(
+        "MATCH (n) WHERE n.origin = 'candidate' DETACH DELETE n"
+    )
     first_counts = await setup_database(live_database)
     first = await _snapshot(live_database)
     second_counts = await setup_database(live_database)
@@ -321,6 +328,12 @@ async def test_custom_node_write_rejects_null_episode(
 @pytest.mark.asyncio
 async def test_constraints_visibility_and_provenance(live_database: Neo4jDatabase) -> None:
     """Uniqueness constraints exist, no node has null visibility, all claims have provenance."""
+    # Clear candidate-origin residue from earlier test modules (same shared
+    # container issue as test_seed_is_idempotent_and_complete) so provenance
+    # is checked against the pristine canonical seed only.
+    await live_database.execute_query(
+        "MATCH (n) WHERE n.origin = 'candidate' DETACH DELETE n"
+    )
     await setup_database(live_database)
     constraints = await live_database.execute_query(
         """
@@ -422,6 +435,9 @@ async def test_setup_preserves_user_layer_and_deleted_resources_stay_deleted(
     live_database: Neo4jDatabase,
 ) -> None:
     await live_database.execute_query(USER_LAYER_CLEANUP_QUERY)
+    await live_database.execute_query(
+        "MATCH (n) WHERE n.origin = 'candidate' DETACH DELETE n"
+    )
     try:
         await setup_database(live_database)
         canonical_before = await _layer_snapshot(live_database, "canonical")
