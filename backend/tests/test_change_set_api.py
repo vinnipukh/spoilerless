@@ -139,7 +139,12 @@ class FakeUserRepo:
         self._store: dict[str, dict[str, Any]] = {}
 
     async def upsert(
-        self, google_sub: str, email: str, display_name: str, avatar_url: str
+        self,
+        google_sub: str,
+        email: str,
+        display_name: str,
+        avatar_url: str,
+        role: str = "user",
     ) -> dict[str, Any]:
         record = {
             "id": f"user:{uuid4()}",
@@ -147,6 +152,7 @@ class FakeUserRepo:
             "email": email,
             "display_name": display_name,
             "avatar_url": avatar_url,
+            "role": role,
             "created_at": "2026-01-01T00:00:00+00:00",
             "updated_at": "2026-01-01T00:00:00+00:00",
         }
@@ -246,13 +252,17 @@ def _authed(
     fake_user_repo: FakeUserRepo,
     session_repo: InMemorySessionRepository,
     progress: int = 1,
+    role: str = "admin",
 ) -> dict[str, Any]:
+    # This suite exercises confirm (and the propose→confirm pipeline), which
+    # is admin-only since 08-03 (AUTH-03) — the actor defaults to an admin.
     user = asyncio.run(
         fake_user_repo.upsert(
             google_sub=f"sub-{uuid4()}",
             email="user@example.com",
             display_name="Test User",
             avatar_url="",
+            role=role,
         )
     )
     raw_token = asyncio.run(session_repo.create(user["id"], ttl_seconds=3600))
