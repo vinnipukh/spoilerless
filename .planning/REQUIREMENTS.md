@@ -1,85 +1,75 @@
-# HD Graf Cehennemi — v1.2 Spoiler-Safety Hardening Requirements
+# HD Graf Cehennemi — v1.3 Production Deployment & Access Hardening Requirements
 
-Gathered 2026-08-02 from the supplied "spoiler-free graph database" plan —
-selectively adopting its highest-value spoiler-hardening concepts onto the
-existing stack. No database migration, no rewrite, no new stack.
+Gathered 2026-08-04, continuing directly from the completed v1.2 Spoiler-Safety
+Hardening milestone. Moves the app from a local-only prototype to a real,
+zero-cost hosted deployment, closing the gaps documented in
+`docs/DEPLOYMENT.md`'s "Pre-production safety gaps" section and the
+admin/role gap flagged in `PROJECT.md`.
 
-## Stack Constraint (locked)
+## Stack Additions (locked for this milestone)
 
-Keep: Neo4j Community, FastAPI, official Neo4j Python driver, React +
-TypeScript + Vite, Cytoscape.js, Google authentication, HttpOnly backend
-sessions. Do NOT introduce: Memgraph, GQLAlchemy, Next.js, JWT auth, Redis,
-a second graph DB, a frontend rewrite, unrestricted Cypher, social
-recommendations, ratings/reviews, trivia ingestion, external TMDb/IMDb/OMDb
-imports, actor scraping, or a spoiler-unrelated visual redesign.
+This milestone explicitly re-scopes in what v1.2's REQUIREMENTS.md locked
+out: **Redis** (via Upstash, managed/free) for graph-query response caching,
+and a hosted target (Vercel + Render + Neo4j AuraDB Free) replacing the
+local-only Docker Compose + Uvicorn + Vite dev-server model. No other new
+stack components (no second graph DB, no JWT auth, no frontend rewrite).
 
 ## Active Requirements
 
-### Progress model (PROG)
+### Authentication & access control (AUTH)
 
-- [ ] **PROG-01**: User can view an earlier already-watched episode without lowering their watched progress — selecting it changes only the temporary view boundary and requires no unlock confirmation.
-- [ ] **PROG-02**: User can unlock episodes 1..N contiguously with one confirmation; the confirmation states Episodes 1 through N will be considered watched.
-- [ ] **PROG-03**: Backend enforces `1 <= view_as_of_order <= watched_through_order`; effective boundary = `min(view_as_of_order, watched_through_order)` and can never be raised by the frontend or the LLM.
-- [ ] **PROG-04**: Existing single-value progress records migrate to `watched_through_order = view_as_of_order = old value` without data loss or a manual DB reset; migration is idempotent and preserves chat snapshots, ChangeSets, and revisions.
+- [x] **AUTH-01**: Only email addresses on an operator-configured allowlist (`ALLOWED_EMAILS`) can sign in via Google OAuth; a verified-but-unlisted email is rejected with `403 AUTH_EMAIL_NOT_ALLOWED`. An empty allowlist means unrestricted (any verified Google account may sign in).
+- [x] **AUTH-02**: The development authentication bypass (`POST /api/auth/dev`, `AUTH_DEV_CODE`) is removed entirely from the codebase — no code path can create a session without a verified Google credential.
+- [ ] **AUTH-03**: An admin role exists on the user record and is enforced on candidate review (approve/reject/edit) and ChangeSet approval endpoints; a non-admin user's request to these endpoints is rejected with a clear 403.
+- [ ] **AUTH-04**: `/api/settings/llm` requires the admin role, or is retired in favor of the per-user BYOK flow (AI-01..03) — closing the SSRF/cross-user-takeover gap flagged in `PROJECT.md`'s Key Decisions.
 
-### Visibility policy (VIS)
+### AI chat — bring your own key (AI)
 
-- [ ] **VIS-01**: One central visibility-policy service owns `visible_from_order` semantics (`is_visible`, `effective_view_order`, `require_visible_resource`, metadata masking); story-sensitive data fails closed when visibility metadata is missing — no `coalesce(visible_from_order, 1)` defaults.
-- [ ] **VIS-02**: Publication order is the authoritative reveal order — numeric episode ordering across seasons (S01E09 < S01E10, season-end < next-season-start), never episode-code string or season-number string ordering; flashbacks/flash-forwards do not alter reveal order.
-- [ ] **VIS-03**: Every story-sensitive relationship is visible only when its own `visible_from_order` is set and satisfied, independently of its endpoint nodes; hidden relationships never affect counts, layout, degree, or GraphRAG context.
-- [ ] **VIS-04**: The provenance chain Character/Event → Claim → EvidenceFragment → Source is gated at the effective boundary — a visible Claim never exposes future Evidence, visible Evidence never exposes a future Source title/locator, citation labels and external links stay safe.
-- [ ] **VIS-05**: User Notes created at a later boundary are hidden when viewing an earlier boundary; Notes never reference hidden resources and never enter chat context below their creation boundary.
+- [ ] **AI-01**: A user can enter their own LLM provider API key (plus base URL/model) in the frontend; the value is stored only in the browser (`localStorage`) and sent per-request to the backend as a request header, never as a persisted server-side setting.
+- [ ] **AI-02**: The backend never persists, logs, or writes a user-supplied LLM API key to any datastore, chat record, or log line; it exists only in request-scoped memory for the duration of a single chat call.
+- [ ] **AI-03**: Chat is unavailable with a clear message (no request sent to the LLM provider) when the user has not supplied a key and no server-side fallback key is configured.
 
-### Episode metadata (META)
+### Production security hardening (SEC)
 
-- [ ] **META-01**: Above the effective boundary, a spoiler-sensitive episode title is replaced server-side by a generic label (e.g. "S01E05 — Episode 5"); episode code and season/episode number stay visible so the user can select and unlock.
-- [ ] **META-02**: Above the effective boundary, synopsis, runtime, and spoiler-sensitive image/thumbnail are not returned in any API response; masking happens in the backend, not via CSS.
-- [ ] **META-03**: Missing title-safety metadata for a future episode fails conservatively (generic label) per a documented rule; metadata decisions live in seed/domain data, never hard-coded in UI components.
+- [ ] **SEC-01**: `SESSION_COOKIE_SECURE=true` and `FRONTEND_ORIGINS` restricted to the exact deployed frontend origin(s) in the production environment configuration.
+- [ ] **SEC-02**: When frontend and backend are deployed on different origins, the session cookie uses `SameSite=None; Secure` without breaking the existing CSRF Origin/Referer check (`verify_origin`).
+- [ ] **SEC-03**: Login, chat-send, and content-write endpoints (notes, custom nodes, custom relationships) enforce a rate limit per user/IP; exceeding it returns `429` in the existing error envelope.
 
-### Search, autocomplete, aggregates (SEARCH)
+### Infrastructure & hosting (INFRA)
 
-- [ ] **SEARCH-01**: Hidden entities and aliases behave exactly like nonexistent ones in search, autocomplete, citation lookup, and node selection — a hidden exact ID returns the same public behavior as an unknown ID; timing/errors do not intentionally distinguish hidden from nonexistent.
-- [ ] **SEARCH-02**: Counts and aggregates (appearance counts, degree, relationship counts, cast ordering, node sizing) are computed only from visible resources and labeled "seen so far" where displayed; no total-future counts, no last_appearance_order, no early final status (dead/alive) — even unrendered, hidden counts are absent from API responses.
+- [ ] **INFRA-01**: Neo4j runs on Neo4j AuraDB Free instead of local Docker Compose in the production environment; existing seed data migrates without loss.
+- [ ] **INFRA-02**: Upstash Redis caches spoiler-filtered graph query responses keyed by `(series_id, effective_boundary, user_id)`; entries are invalidated on any write that changes the underlying cached data.
+- [ ] **INFRA-03**: The FastAPI backend runs on Render's free web service tier with all required environment variables (Neo4j, Redis, Google OAuth, frontend origins) configured.
+- [ ] **INFRA-04**: The Vite frontend builds and deploys on Vercel's Hobby tier, reaching the Render backend through configured API routing/CORS.
+- [ ] **INFRA-05**: All deployment secrets (Neo4j password, Google OAuth client credentials, Redis URL) are stored as platform environment variables on Render/Vercel/Upstash, never committed to the repository.
 
-### Media safety (MEDIA)
+### Operations (OPS)
 
-- [ ] **MEDIA-01**: Images above the effective boundary are never returned; a neutral fallback (initials placeholder) is used instead, with alt text that leaks nothing.
-- [ ] **MEDIA-02**: Image URLs/filenames are never shown as user-visible text, and failed image loads must not reveal future character existence (no presence inference through request outcomes).
-
-### Chat & GraphRAG (CHAT)
-
-- [ ] **CHAT-01**: GraphRAG retrieval uses the backend-derived effective boundary — while viewing Episode 1 with watched_through_order 3, the assistant behaves as an Episode 1-safe assistant and the LLM cannot raise the boundary.
-- [ ] **CHAT-02**: Chat history, messages, citations, and graph-focus above the current view boundary are hidden and never enter conversation memory; returning the view to a later episode restores eligible messages.
-- [ ] **CHAT-03**: The boundary snapshot used for every assistant response is persisted server-side; the assistant never reveals that safer hidden information exists.
-
-### Graph editing (EDIT)
-
-- [ ] **EDIT-01**: New user content (Notes, custom nodes/relationships, ChangeSets) derives `visible_from_order` from the current view context — never freely chosen by the LLM, never above watched_through_order; hidden targets and cross-series targets are rejected; canonical/candidate protection preserved.
-- [ ] **EDIT-02**: A stale later-boundary ChangeSet cannot be applied while viewing an earlier boundary; applying at an earlier view fails closed with a clear error.
+- [ ] **OPS-01**: A CI workflow runs backend `pytest` and frontend build+lint on every pull request.
+- [ ] **OPS-02**: An external uptime check polls `GET /health` on the deployed backend and can alert (email/webhook) on a non-200 response or timeout.
 
 ### Documentation (DOCS)
 
-- [ ] **DOCS-01**: A spoiler-leak threat model documents direct and indirect leak classes (titles, synopses, counts, search, images, citations, error messages, timing) with enforcement layer, query, frontend behavior, and fail-closed rule per class, plus a regression matrix.
-- [ ] **DOCS-02**: Deferred features (Person/APPEARS_IN model, reviews, ratings, trivia, recommendations, awards, external wiki integration) are documented with future invariants and no placeholder UI.
+- [ ] **DOCS-03**: `docs/DEPLOYMENT.md` is rewritten to describe the actual production target (Vercel/Render/Aura/Upstash) replacing its current "no production deployment target defined" statement, including a real rollback procedure for the hosted environment.
 
 ## Future Requirements (deferred)
 
-- Per-user/admin-gated LLM Settings scoping + full SSRF protection (carried from v1.1)
-- Person / ACTED_AS / APPEARS_IN actor model — only when cast pages/search are actually required; appearances then count visible episodes only (`episodes_seen_so_far`)
-- Reviews (spoiler_up_to_order), ratings (watched episodes only), trivia (visible_from_order), recommendations (no future-cast/plot/title leaks)
-- CI/CD pipeline; pre-existing test-pollution debt; frontend lint debt (28 errors)
+- Full CI/CD: dependency scanning, artifact publication, staged promotion, branch-protection enforcement (OPS-01 is a minimal PR gate only)
+- Full observability: centralized logs, metrics dashboards, incident/rollback runbook automation (OPS-02 is a single health-check ping only)
+- Person / ACTED_AS / APPEARS_IN actor model (carried from v1.1/v1.2)
+- Reviews, ratings, trivia, recommendations (carried from v1.1/v1.2)
+- Automated ingestion/extraction from external sources (carried from v1.1/v1.2)
 
 ## Out of Scope (this milestone)
 
-- New stack components (Memgraph, GQLAlchemy, Next.js, JWT, Redis, second graph DB) — the current stack is kept per the locked constraint
-- Database migration or rewrite — this is selective hardening on the existing model
-- Social features: follow lists, collaborative filtering, "also watched" recommendations, genre recs, awards, nominations
-- External ingestion: TMDb/IMDb/OMDb imports, actor scraping, trivia ingestion, live wiki integration
-- A "reset watched progress" feature (only the existing progress flows are adapted)
-- Visual redesign unrelated to spoiler safety
+- Multi-region or high-availability hosting — single free-tier instance per service
+- A paid tier / usage-based billing model for hosting costs — this milestone targets $0
+- Mobile/social features
+- Migrating off Neo4j, FastAPI, or React/Vite — hosting changes only, no rewrite
+- Per-provider LLM proxy/normalization beyond the existing OpenAI-compatible interface
 
 ## Traceability
 
 | Requirement | Phase |
 |---|---|
-| PROG-01..04, VIS-01..05, META-01..03, SEARCH-01..02, MEDIA-01..02, CHAT-01..03, EDIT-01..02, DOCS-01..02 | Phase 7 — Spoiler-Safety Hardening |
+| AUTH-01..04, AI-01..03, SEC-01..03, INFRA-01..05, OPS-01..02, DOCS-03 | Phase 8 — Production Deployment & Access Hardening (pending roadmap) |
