@@ -33,9 +33,20 @@ export function updateProgress(
   visibleUntilOrder: number,
   options?: ProgressUpdateOptions,
 ): Promise<UserSeriesProgress> {
-  const body: Record<string, number> = { visible_until_order: visibleUntilOrder }
-  if (options?.watchedThroughOrder != null) body.watched_through_order = options.watchedThroughOrder
-  if (options?.viewAsOfOrder != null) body.view_as_of_order = options.viewAsOfOrder
+  // Backend ProgressUpdateRequest (domain/progress.py) forbids sending
+  // visible_until_order AND watched_through_order together (422). Build the
+  // body per intent: forward confirm → watched_through_order (+ optional
+  // view_as_of_order); view-only → view_as_of_order ALONE (never the legacy
+  // confirm alias — PROG-01); legacy plain confirm → visible_until_order.
+  const body: Record<string, number> = {}
+  if (options?.watchedThroughOrder != null) {
+    body.watched_through_order = options.watchedThroughOrder
+    if (options?.viewAsOfOrder != null) body.view_as_of_order = options.viewAsOfOrder
+  } else if (options?.viewAsOfOrder != null) {
+    body.view_as_of_order = options.viewAsOfOrder
+  } else {
+    body.visible_until_order = visibleUntilOrder
+  }
   return apiFetch(`/api/series/${encodeURIComponent(seriesId)}/progress`, {
     method: 'POST',
     body,

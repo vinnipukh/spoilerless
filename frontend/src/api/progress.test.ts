@@ -48,6 +48,32 @@ describe('progress api client', () => {
     expect(result.visible_until_order).toBe(3)
   })
 
+  it('forward confirm posts watched_through_order (never the legacy visible_until_order alias)', async () => {
+    mockFetchJson(200, { ...sampleProgress, watched_through_order: 4, view_as_of_order: 4 })
+
+    await updateProgress('series_dexter', 4, { watchedThroughOrder: 4, viewAsOfOrder: 4 })
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/series/series_dexter/progress',
+      expect.objectContaining({
+        body: JSON.stringify({ watched_through_order: 4, view_as_of_order: 4 }),
+      }),
+    )
+  })
+
+  it('view-only change posts view_as_of_order alone — no confirm alias (PROG-01)', async () => {
+    mockFetchJson(200, { ...sampleProgress, view_as_of_order: 2 })
+
+    await updateProgress('series_dexter', 2, { viewAsOfOrder: 2 })
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/series/series_dexter/progress',
+      expect.objectContaining({
+        body: JSON.stringify({ view_as_of_order: 2 }),
+      }),
+    )
+  })
+
   it('throws ApiError with the backend code/message intact on a non-2xx response', async () => {
     mockFetchJson(404, { detail: { code: 'resource_not_found', message: 'Resource not found.' } })
 
