@@ -14,7 +14,11 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-LLM_PROVIDERS = ("gemini", "openai_compatible")
+# "vllm" and "ollama" are scaffolding only (accepted, validated, stored) —
+# both speak the OpenAI-compatible /chat/completions shape today so they
+# route through OpenAICompatibleProvider, same as "openai_compatible".
+# Dedicated provider classes/defaults land when those integrations are built.
+LLM_PROVIDERS = ("gemini", "openai_compatible", "vllm", "ollama")
 
 # Only these URL schemes may reach httpx/the provider client. This blocks the
 # classic SSRF-via-scheme-smuggling class (file://, gopher://, ftp://, etc.)
@@ -47,7 +51,7 @@ class LLMSettingsUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    provider: Literal["gemini", "openai_compatible"] = "gemini"
+    provider: Literal["gemini", "openai_compatible", "vllm", "ollama"] = "gemini"
     api_key: str | None = Field(default=None, max_length=4096)
     base_url: str | None = Field(default=None, max_length=2048)
     model: str | None = Field(default=None, max_length=256)
@@ -82,7 +86,7 @@ class LLMSettingsResponse(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    provider: Literal["gemini", "openai_compatible"]
+    provider: Literal["gemini", "openai_compatible", "vllm", "ollama"]
     model: str | None = None
     base_url: str | None = None
     # Effective on/off switch: stored value wins, else the LLM_ENABLED env

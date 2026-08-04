@@ -49,7 +49,8 @@ export function saveLLMSettings(settings: StoredLLMSettings): void {
 }
 
 /**
- * Headers for chat requests (D-06): X-LLM-Api-Key always, plus
+ * Headers for chat requests (D-06): X-LLM-Api-Key and X-LLM-Provider always
+ * (together they're enough for Gemini - no base_url needed), plus
  * X-LLM-Base-URL / X-LLM-Model when non-blank. A missing or whitespace-only
  * key returns {} so the backend falls back to its own config and the key is
  * never sent anywhere.
@@ -59,7 +60,10 @@ export function getLLMHeaders(): Record<string, string> {
   if (!settings) return {}
   const apiKey = settings.api_key.trim()
   if (!apiKey) return {}
-  const headers: Record<string, string> = { 'X-LLM-Api-Key': apiKey }
+  const headers: Record<string, string> = {
+    'X-LLM-Api-Key': apiKey,
+    'X-LLM-Provider': settings.provider,
+  }
   const baseUrl = settings.base_url.trim()
   const model = settings.model.trim()
   if (baseUrl) headers['X-LLM-Base-URL'] = baseUrl

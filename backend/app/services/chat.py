@@ -76,6 +76,7 @@ def _release_generation_slot(user_id: str) -> None:
 async def get_llm_provider(
     database: DatabaseDependency,
     x_llm_api_key: Annotated[str | None, Header(alias="X-LLM-Api-Key")] = None,
+    x_llm_provider: Annotated[str | None, Header(alias="X-LLM-Provider")] = None,
     x_llm_base_url: Annotated[str | None, Header(alias="X-LLM-Base-URL")] = None,
     x_llm_model: Annotated[str | None, Header(alias="X-LLM-Model")] = None,
 ) -> LLMProvider:
@@ -83,25 +84,35 @@ async def get_llm_provider(
 
     BYOK (bring-your-own-key): when the request carries a non-blank
     ``X-LLM-Api-Key`` header, the provider is built EXCLUSIVELY from the
-    ``X-LLM-Api-Key`` / ``X-LLM-Base-URL`` / ``X-LLM-Model`` header values —
-    the persisted ``:AppSetting {key: 'llm'}`` node and the ``LLM_*`` env
-    fallback are never consulted for that request, and BYOK only supports
-    the OpenAI-compatible interface (provider type is fixed to
-    ``openai_compatible``). This closes the shared-key SSRF/theft surface
-    (docs/PROBLEMS.md #5): a user can only ever spend or redirect their own
-    key to their own chosen host (T-08-02-01). The header values reach ONLY
-    the ``OpenAICompatibleProvider`` constructor — never a response model, a
-    log line, or a persisted record (T-08-02-02).
+    ``X-LLM-Api-Key`` / ``X-LLM-Provider`` / ``X-LLM-Base-URL`` /
+    ``X-LLM-Model`` header values — the persisted ``:AppSetting {key: 'llm'}``
+    node and the ``LLM_*`` env fallback are never consulted for that request.
+    This closes the shared-key SSRF/theft surface (docs/PROBLEMS.md #5): a
+    user can only ever spend or redirect their own key to their own chosen
+    host (T-08-02-01). The header values reach ONLY the provider constructor
+    — never a response model, a log line, or a persisted record (T-08-02-02).
+
+    ``X-LLM-Provider`` selects the wire protocol:
+    - missing/blank or ``openai_compatible``/``vllm``/``ollama`` -> a plain
+      OpenAI-compatible ``/chat/completions`` call (``vllm``/``ollama`` are
+      scaffolding: both already speak this shape, so they route through the
+      same ``OpenAICompatibleProvider`` today; dedicated provider classes can
+      follow later without changing this header contract).
+    - ``gemini`` -> ``GeminiProvider`` (Google's REST API, ``x-goog-api-key``
+      auth). ``base_url`` is optional here and falls back to the official
+      Gemini endpoint — unlike the OpenAI-compatible branch, only
+      ``api_key`` and ``model`` are required, so entering just a provider
+      name and an API key is enough to use Gemini via BYOK.
 
     Without BYOK headers the resolution order is unchanged — persisted
     stored settings first, then the ``LLM_*`` env fallback (now the optional
     server-side fallback tier per D-06, not the primary path). The API key
     is read only here, inside the provider constructor — it never appears in
-    a response model, a log line, or a Revision record (T-06-07). ``gemini``
-    falls back to the official Google endpoint when no ``base_url`` is
-    configured anywhere.
+    a response model, a log line, or a Revision record (T-06-07).
     """
     if x_llm_api_key and x_llm_api_key.strip():
+        api_key = x_llm_api_key.strip()
+        provider = (x_llm_provider or "openai_compatible").strip().lower()
         base_url = (x_llm_base_url or "").strip()
         model = (x_llm_model or "").strip()
         if base_url:
@@ -116,11 +127,20 @@ async def get_llm_provider(
                 error = exc.errors()[0]
                 raise http_error(422, "invalid_request", error["msg"]) from exc
             base_url = validated.base_url
+        if provider == "gemini":
+            if not model:
+                raise LLMProviderUnavailable("The LLM provider is not configured.")
+            return GeminiProvider(
+                api_key=api_key,
+                model=model,
+                base_url=base_url or DEFAULT_GEMINI_BASE_URL,
+            )
+        # openai_compatible, vllm, ollama (scaffolding — see docstring).
         if not base_url or not model:
             raise LLMProviderUnavailable("The LLM provider is not configured.")
         return OpenAICompatibleProvider(
             base_url=base_url,
-            api_key=x_llm_api_key.strip(),
+            api_key=api_key,
             model=model,
         )
     settings = get_settings()
@@ -142,7 +162,9 @@ async def get_llm_provider(
             model=model,
             base_url=base_url or DEFAULT_GEMINI_BASE_URL,
         )
-    if provider != "openai_compatible":
+    # vllm/ollama are scaffolding (see get_llm_provider docstring) — both
+    # already speak the OpenAI-compatible shape, so they share this branch.
+    if provider not in ("openai_compatible", "vllm", "ollama"):
         raise LLMProviderUnavailable(
             f"Unsupported LLM provider: {provider}"
         )

@@ -187,6 +187,7 @@ describe('BYOK header attachment (D-06)', () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           'X-LLM-Api-Key': 'sk-browser-key',
+          'X-LLM-Provider': 'openai_compatible',
           'X-LLM-Base-URL': 'https://llm.example/v1',
           'X-LLM-Model': 'deepseek-chat',
         }),
@@ -210,6 +211,7 @@ describe('BYOK header attachment (D-06)', () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           'X-LLM-Api-Key': 'sk-browser-key',
+          'X-LLM-Provider': 'openai_compatible',
           'X-LLM-Base-URL': 'https://llm.example/v1',
           'X-LLM-Model': 'deepseek-chat',
         }),
@@ -257,7 +259,11 @@ describe('BYOK header attachment (D-06)', () => {
     expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
-        headers: { 'Content-Type': 'application/json', 'X-LLM-Api-Key': 'sk-key-only' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-LLM-Api-Key': 'sk-key-only',
+          'X-LLM-Provider': 'gemini',
+        },
       }),
     )
   })

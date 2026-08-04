@@ -87,12 +87,16 @@ export function SettingsPage({ onBack }: Props) {
               <SelectContent>
                 <SelectItem value="gemini">Google Gemini</SelectItem>
                 <SelectItem value="openai_compatible">OpenAI-compatible endpoint</SelectItem>
+                <SelectItem value="vllm">vLLM (coming soon)</SelectItem>
+                <SelectItem value="ollama">Ollama (coming soon)</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
               {provider === 'gemini'
-                ? 'Uses the official Gemini REST API (generativelanguage.googleapis.com).'
-                : 'Any OpenAI-compatible /chat/completions endpoint (base URL + model).'}
+                ? 'Uses the official Gemini REST API - just an API key and model are required.'
+                : provider === 'vllm' || provider === 'ollama'
+                  ? 'Scaffolding only for now - configure it like an OpenAI-compatible endpoint (base URL + model) until dedicated support lands.'
+                  : 'Any OpenAI-compatible /chat/completions endpoint (base URL + model).'}
             </p>
           </div>
 
@@ -160,7 +164,7 @@ export function SettingsPage({ onBack }: Props) {
             <p className="text-xs text-muted-foreground">
               {provider === 'gemini'
                 ? 'Optional - defaults to the official Gemini endpoint.'
-                : 'Required for OpenAI-compatible providers.'}
+                : 'Required.'}
             </p>
           </div>
 
