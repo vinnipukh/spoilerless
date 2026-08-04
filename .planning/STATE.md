@@ -5,15 +5,15 @@ milestone_name: Production Deployment & Access Hardening
 current_phase: 8
 current_phase_name: production-deployment-automated-ci-cd
 status: executing
-stopped_at: "None — Plan 08-05 (Redis rate limiter) complete (a672d17, 1f8a3e9); next plan 08-06 (graph query response cache)."
-last_updated: "2026-08-04T12:22:22.000Z"
+stopped_at: "None — Plan 08-08 (DEPLOYMENT.md rewrite) complete (8bdf633); Phase 8 is fully planned (6 executed of 8, 2 pending: 08-07 partial)."
+last_updated: "2026-08-04T21:30:00.000Z"
 last_activity: 2026-08-04
-last_activity_desc: Plan 08-05 (Redis-backed rate limiter) completed — redis + fastapi-limiter installed, RateLimiter deps on login/chat-send/content-write, 429 in existing envelope, no live Redis needed for tests
+last_activity_desc: Plan 08-08 (DEPLOYMENT.md rewrite) completed — docs/DEPLOYMENT.md now describes real production stack (Vercel + Render + AuraDB Free + Upstash Redis, spoilerless.net)
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 8
-  completed_plans: 5
+  completed_plans: 7
   percent: 63
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-08-04)
 ## Current Position
 
 Phase: 8 (production-deployment-automated-ci-cd) — EXECUTING
-Plan: 6 of 8
+Plan: 8 of 8
 Status: Executing Phase 8
-Last activity: 2026-08-04 — Plan 08-05 (rate limiter) complete; 08-06 (graph query response cache) is next
+Last activity: 2026-08-04 — Plan 08-08 (DEPLOYMENT.md rewrite) complete; Phase 8 execution finished (08-01..08-08); 08-07 partially complete (CI landed, logging/uptime pending)
 
 Progress: [███░░░░░░░] 38% (v1.3); 7 phases complete across v1.0–v1.2
 
@@ -39,8 +39,8 @@ Progress: [███░░░░░░░] 38% (v1.3); 7 phases complete across 
 
 **Velocity:**
 
-- Total plans completed (all milestones to date): 40 (v1.0/v1.1: 27, v1.2: 8, v1.3: 5)
-- v1.3: 5 plans completed (08-01 tracer, 08-02 BYOK, 08-03 admin role, 08-04 CSRF, 08-05 rate limiter), 3 planned (08-06..08-08)
+- Total plans completed (all milestones to date): 42 (v1.0/v1.1: 27, v1.2: 8, v1.3: 7)
+- v1.3: 7 plans completed (08-01 tracer, 08-02 BYOK, 08-03 admin role, 08-04 CSRF, 08-05 rate limiter, 08-06 graph cache, 08-08 DEPLOYMENT.md rewrite), 1 partial (08-07 CI committed, logging/uptime pending)
 
 **By Phase:**
 
@@ -48,9 +48,9 @@ Progress: [███░░░░░░░] 38% (v1.3); 7 phases complete across 
 |-------|-------|-------|
 | 1–6 (v1.0/v1.1) | 27 | See `.planning/milestones/v1.1-ROADMAP.md` for per-plan durations |
 | 7 (v1.2 Spoiler-Safety Hardening) | 8 | See `.planning/milestones/v1.2-phases/07-spoiler-safety-hardening/` SUMMARY.md files |
-| 8–10 (v1.3) | 5 | See Phase 8 SUMMARY.md files (08-01..08-05 complete) |
+| 8–10 (v1.3) | 7 | See Phase 8 SUMMARY.md files (08-01..08-06, 08-08 complete; 08-07 partial) |
 
-**Recent Trend:** v1.3 executing — Plan 08-05 (Redis rate limiter) completed 2026-08-04.
+**Recent Trend:** v1.3 executing — Plan 08-08 (DEPLOYMENT.md rewrite) completed 2026-08-04.
 
 *Updated after each plan completion*
 
@@ -93,11 +93,11 @@ Items acknowledged and carried forward, not in v1.3 scope:
 
 ## Session Continuity
 
-Last session: 2026-08-04 12:22 UTC
-Stopped at: Plan 08-05 (Redis rate limiter) complete — commits a672d17 (test RED) + 1f8a3e9 (feat GREEN) + docs commit (SUMMARY/STATE/ROADMAP); next: 08-06 (graph query response cache)
+Last session: 2026-08-04 21:30 UTC
+Stopped at: Plan 08-08 (DEPLOYMENT.md rewrite) complete — commit 8bdf633; Phase 8 execution complete (08-01..08-08); 08-07 partial (CI committed, logging/uptime pending)
 Resume file: None
 
 ## Operator Next Steps
 
-- Set REDIS_URL (Upstash rediss:// connection string, collected in 08-01's user_setup) on the Render service to activate rate limiting in production; verify with the deploy smoke test that login/chat/content-write routes accept requests and that 11th login within 5 minutes returns 429 `too_many_requests`.
-- Resume with plan 08-06 (graph query response cache), which reuses `backend/app/cache/redis_client.py::get_redis()` as its single Redis connection point.
+- 08-07 Task 2 (structured exception logging + redacting request middleware) and Task 3 (UptimeRobot monitor on /health) remain as open Phase 8 items.
+- Resume with Phase 9 planning (feature expansion + full audit remediation, per `.planning/REQUIREMENTS.md`).
