@@ -110,12 +110,16 @@ async def verify_origin(request: Request) -> None:
         except Exception:
             candidate = None
 
-    # If neither Origin nor Referer is present, allow the request through.
-    # SameSite=Lax on the session cookie blocks cross-site POSTs without
-    # needing header validation; this check is defense-in-depth for cases
-    # where SameSite is insufficient (subdomain attacks, legacy browsers).
+    # Fail closed: a request with neither Origin nor Referer is rejected —
+    # header absence is no longer trusted (SEC-02, docs/PROBLEMS.md #10).
+    # Browsers send Origin on cross-origin and same-origin POSTs alike, so
+    # a missing header signals a non-browser client; SameSite remains the
+    # complementary cookie-level defense.
     if candidate is None:
-        return
+        raise http_error(
+            403, AUTH_ORIGIN_NOT_ALLOWED,
+            "Request origin is not allowed.",
+        )
 
     if candidate in origins:
         return
@@ -133,7 +137,7 @@ def _make_cookie(response: Response, raw_token: str, secure: bool, cookie_name: 
         value=raw_token,
         httponly=True,
         secure=secure,
-        samesite="lax",
+        samesite=get_settings().session_cookie_samesite,
         path="/",
     )
 
@@ -144,7 +148,7 @@ def _delete_cookie(response: Response, secure: bool, cookie_name: str) -> None:
         key=cookie_name,
         path="/",
         secure=secure,
-        samesite="lax",
+        samesite=get_settings().session_cookie_samesite,
         httponly=True,
     )
 
@@ -267,6 +271,7 @@ async def logout(
     request: Request,
     response: Response,
     service: AuthServiceDependency,
+    _csrf: Annotated[None, Depends(verify_origin)],
 ) -> Response:
     """Invalidate the server-side session and delete the browser cookie."""
     settings = get_settings()

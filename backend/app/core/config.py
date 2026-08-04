@@ -23,6 +23,14 @@ class Settings(BaseSettings):
         default=604800,  # 7 days
         description="Session time-to-live in seconds.",
     )
+    session_cookie_samesite: str = Field(
+        default="lax",
+        description=(
+            "SameSite policy for the session cookie. 'lax' (default) is "
+            "correct for the same-site custom-domain layout (D-10); choose "
+            "'strict' or 'none' (with Secure) deliberately per environment."
+        ),
+    )
     session_cookie_secure: bool = Field(
         default=True,
         description=(
