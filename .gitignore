@@ -58,3 +58,5 @@ neo4j_import/
 Thumbs.db
 # GSD temporary planning files
 .planning/tmp/
+# Personal internship report — not for the public repo
+docs/internship-report/

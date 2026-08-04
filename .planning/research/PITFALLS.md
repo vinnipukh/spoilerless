@@ -436,8 +436,8 @@ How roadmap phases should address these pitfalls.
 - Neo4j Cypher documentation on OPTIONAL MATCH semantics and NULL handling
 - Cytoscape.js performance guidelines (github.com/cytoscape/cytoscape.js/wiki/Performance)
 - Known issues from similar spoiler-safe graph projects (TV knowledge graphs)
-- CONCERNS.md — codebase audit findings from `C:\Users\arhan\PycharmProjects\hdgrafcehennemi\.planning\codebase\CONCERNS.md`
-- ROADMAP.md — milestone definitions from `C:\Users\arhan\PycharmProjects\hdgrafcehennemi\ROADMAP.md`
+- CONCERNS.md — codebase audit findings from `.planning/codebase/CONCERNS.md`
+- ROADMAP.md — milestone definitions from `ROADMAP.md`
 - Personal experience: narrative knowledge graph projects where the "perfect ontology" trap delayed working prototypes by weeks
 - Neo4j existence constraint documentation (`CREATE CONSTRAINT ... REQUIRE prop IS NOT NULL`)
 
