@@ -86,3 +86,23 @@ OptionalUserDependency = Annotated[dict[str, Any] | None, Depends(get_optional_c
 
 
 CurrentUserDependency = Annotated[dict[str, Any], Depends(require_current_user)]
+
+
+async def require_admin(user: CurrentUserDependency) -> dict[str, Any]:
+    """Require the authenticated user to carry the admin role (AUTH-03/AUTH-04).
+
+    ``role`` is derived server-side from ``ADMIN_EMAILS`` membership at login
+    (never read from any request body), so this gate is the enforcement half
+    of the D-03 design: only a trusted operator-designated admin can commit
+    candidate claims or AI-proposed ChangeSets to the shared canonical graph,
+    or mutate the shared LLM settings. Uses the existing lowercase
+    ``"forbidden"`` error code from ``backend/app/core/errors.py``'s
+    ``_ERROR_SPECS[403]`` (docs/PROBLEMS.md #20 already flags the casing
+    inconsistency — do not add a new uppercase code).
+    """
+    if user.get("role") != "admin":
+        raise http_error(403, "forbidden", "Admin role required for this action.")
+    return user
+
+
+RequireAdminDependency = Annotated[dict[str, Any], Depends(require_admin)]

@@ -7,6 +7,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from backend.app.api.deps import RequireAdminDependency
 from backend.app.core.errors import error_responses, http_error
 from backend.app.domain.extraction import ExtractionBatchEnvelope
 from backend.app.domain.revision import RevisionAction
@@ -174,8 +175,10 @@ async def approve_candidate(
     series_id: SeriesId,
     claim_id: ClaimId,
     repo: CandidateRepoDependency,
+    _admin: RequireAdminDependency,
 ) -> dict:
-    """Approve a candidate claim, promoting it from 'candidate' to 'canonical' status."""
+    """Approve a candidate claim, promoting it from 'candidate' to 'canonical'
+    status. Admin-only since 08-03 (AUTH-03, T-08-03-01) — a non-admin gets 403."""
     db = repo._db
 
     async def _approve(tx: Any, cmd: dict[str, Any]) -> dict[str, Any]:
@@ -226,8 +229,10 @@ async def reject_candidate(
     series_id: SeriesId,
     claim_id: ClaimId,
     repo: CandidateRepoDependency,
+    _admin: RequireAdminDependency,
 ) -> dict:
-    """Reject a candidate claim, setting its status to 'rejected'."""
+    """Reject a candidate claim, setting its status to 'rejected'.
+    Admin-only since 08-03 (AUTH-03, T-08-03-01) — a non-admin gets 403."""
     db = repo._db
 
     async def _reject(tx: Any, cmd: dict[str, Any]) -> dict[str, Any]:
@@ -277,8 +282,10 @@ async def edit_candidate(
     claim_id: ClaimId,
     body: EditCandidateRequest,
     repo: CandidateRepoDependency,
+    _admin: RequireAdminDependency,
 ) -> dict:
-    """Edit a candidate claim's mutable fields. Creates a revision with before/after snapshots."""
+    """Edit a candidate claim's mutable fields. Creates a revision with
+    before/after snapshots. Admin-only since 08-03 (AUTH-03, T-08-03-01)."""
     db = repo._db
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
 

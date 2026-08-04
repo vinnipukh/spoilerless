@@ -15,7 +15,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from backend.app.api.deps import CurrentUserDependency, DatabaseDependency
+from backend.app.api.deps import CurrentUserDependency, DatabaseDependency, RequireAdminDependency
 from backend.app.core.errors import error_responses, http_error
 from backend.app.domain.change_set import ChangeSetCreateRequest, ChangeSetResponse
 from backend.app.services.change_set import (
@@ -112,8 +112,13 @@ async def confirm_change_set(
     change_set_id: str,
     user: CurrentUserDependency,
     service: ChangeSetServiceDependency,
+    _admin: RequireAdminDependency,
 ) -> ChangeSetResponse:
     """Re-validate everything fresh and apply the whole ChangeSet transactionally.
+
+    Admin-only since 08-03 (AUTH-03, T-08-03-02) — confirming applies an
+    AI-proposed ChangeSet to the shared canonical graph, so a non-admin gets
+    403 before any mutation. propose/reject/revert are intentionally NOT gated.
 
     Confirming an already-``applied`` ChangeSet is a safe idempotent no-op
     (the original stored result is returned). A stale ChangeSet (proposed at

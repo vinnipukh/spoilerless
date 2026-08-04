@@ -11,7 +11,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from backend.app.api.deps import CurrentUserDependency, DatabaseDependency
+from backend.app.api.deps import DatabaseDependency, RequireAdminDependency
 from backend.app.core.errors import error_responses
 from backend.app.domain.settings import LLMSettingsResponse, LLMSettingsUpdate
 from backend.app.services.settings import SettingsService
@@ -33,7 +33,7 @@ SettingsServiceDependency = Annotated[SettingsService, Depends(get_settings_serv
     responses={401: error_responses(401)[401]},
 )
 async def get_llm_settings(
-    _user: CurrentUserDependency,
+    _admin: RequireAdminDependency,
     service: SettingsServiceDependency,
 ) -> LLMSettingsResponse:
     return await service.get_llm()
@@ -47,7 +47,7 @@ async def get_llm_settings(
 )
 async def update_llm_settings(
     update: LLMSettingsUpdate,
-    _user: CurrentUserDependency,
+    _admin: RequireAdminDependency,
     service: SettingsServiceDependency,
 ) -> LLMSettingsResponse:
     return await service.update_llm(update)
