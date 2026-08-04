@@ -48,7 +48,7 @@ Plans: 07-01 audit + threat model + domain design · 07-02 progress migration + 
 
 **Milestone Goal:** Move HD Graf Cehennemi from a local-only prototype to a real, zero-cost hosted deployment (Vercel + Render + Neo4j AuraDB Free + Upstash Redis) with automated CI/CD, every finding in `docs/PROBLEMS.md`'s 45-item audit resolved, 10 new features, and a final polish pass.
 
-- [ ] Phase 8: Production Deployment & Automated CI/CD (8 plans) — planned, ready to execute
+- [x] Phase 8: Production Deployment & Automated CI/CD (8 plans) — planned, ready to execute (completed 2026-08-04)
 - [ ] Phase 9: Feature Expansion & Full Audit Remediation (TBD plans) — pending planning
 - [ ] Phase 10: Polish & Finishing Touches (TBD plans) — pending planning
 
@@ -66,7 +66,7 @@ Plans: 07-01 audit + threat model + domain design · 07-02 progress migration + 
   4. Neo4j runs on AuraDB Free (no exposed local Compose recipe in the deploy path) through a least-privilege app DB role; Upstash Redis caches and invalidates graph query responses; the backend is live on Render and the frontend on Vercel, reaching each other through configured CORS; every secret is a platform environment variable, none in the repo
   5. A GitHub Actions workflow runs backend `pytest` + frontend build/lint on every PR; an external uptime check on `GET /health` can alert on failure; the backend logs exceptions instead of dropping them; `docs/DEPLOYMENT.md` documents the real hosted target and rollback procedure
 
-**Plans**: 7/8 plans executed (08-07 nearly complete — Tasks 1-2 done, Task 3 at checkpoint)
+**Plans**: 8/8 plans executed and verified (08-01..08-08) — Phase 8 COMPLETE 2026-08-05 (VERIFICATION.md passed; 2 items carried to Phase 9: 09-02 CI re-run, 09-03 admin live check)
 
 Plans:
 
@@ -76,7 +76,7 @@ Plans:
 - [x] 08-04-PLAN.md — Cookie/CORS/CSRF hardening: fail-closed verify_origin, logout CSRF coverage, settings-driven SameSite
 - [x] 08-05-PLAN.md — Redis foundation + rate limiting: multi-worker-safe 429 on login/chat-send/content-write (completed 2026-08-04: a672d17, 1f8a3e9)
 - [x] 08-06-PLAN.md — Graph query response cache: Redis cache-aside keyed by (series_id, boundary, user_id), invalidated on write (completed 2026-08-04: 913f211, 7fae2a4, 22bb957)
-- [ ] 08-07-PLAN.md — Ops: GitHub Actions CI gate, structured exception logging, external uptime check (Tasks 1-2 complete, Task 3 at checkpoint)
+- [x] 08-07-PLAN.md — Ops: GitHub Actions CI gate, structured exception logging, external uptime check (completed 2026-08-04: 3516c2c, 7eeebd6; CI lint fixes on ci-smoke-test — re-run carried to 09-02; UptimeRobot monitor live, UAT #11 pass)
 - [x] 08-08-PLAN.md — docs/DEPLOYMENT.md rewrite for the real hosted target and rollback procedure (completed 2026-08-04: 8bdf633)
 
 **UI hint**: yes
@@ -85,16 +85,31 @@ Plans:
 
 **Goal**: Every one of `docs/PROBLEMS.md`'s 45 verified findings is resolved, and the product gains 10 new user-facing capabilities on top of the now-deployed app.
 **Depends on**: Phase 8 (fixing ownership/audit/test-infra bugs and adding features on a still-local, unhardened app would need redoing against the real hosted environment)
-**Requirements**: PROB-01..21, FEAT-01..10, DOCS-04
+**Requirements**: PROB-01..21, FEAT-01..10, DOCS-04, REBRAND-01, FEAT-11
 **Success Criteria** (what must be TRUE):
+
+  0. REBRAND-01: every user-visible and repo-level `hdgrafcehennemi` reference is renamed to `spoilerless` (package dirs, pyproject, docker-compose container name, service names, README, DEPLOYMENT.md, /health `service` field, UI title "HD Graf Cehennemi" → "Spoilerless") — git history intentionally untouched; runtime/deploy names updated
 
   1. Every mutation endpoint (notes, custom nodes/relationships, candidates, revision revert) requires an authenticated, correctly-scoped owner; user-content records carry owner `user_id`; session IDs are collision-proof and swept on expiry; anonymous/candidate reads can no longer request an arbitrary spoiler boundary
   2. Both test suites (backend `pytest` against a disposable DB, frontend `vitest`) are fully green and deterministic — no suite mutates the live application database; `npm run lint` is 0 errors; error codes use one consistent casing
   3. Committed boilerplate/junk is removed, a LICENSE exists, seed images are no longer hotlinked from a third party, the repo is pushed to a real accessible remote, revision/candidate-approval responses are internally consistent, chat mid-stream failures are logged not silently orphaned, the Google-verifier `NameError` and the progress-confirm 422 contract bug are fixed, `None`-valued visibility orders 422 instead of 500ing, baseline security headers are present, core modules (db driver, ontology loader, series service, config, lifespan) have direct tests, and a root error boundary + debug-log cleanup ship
   4. `docs/API.md`, `docs/ARCHITECTURE.md`, and `docs/ROADMAP.md` match live behavior — no stale route counts, no "known gaps" that already shipped, no claims contradicted by the running code
   5. All 10 new features are live and usable: node search/jump, timeline view, newly-revealed highlight on episode advance, series dashboard, note/claim export, shortest-path relationship finder, full-text note/claim search, command palette, shareable read-only snapshot link, and a mobile-usable graph/detail panel
+  6. FEAT-11 (Obsidian-style second-brain touches, small scope): node backlinks panel (reverse relationships + mentions), hover preview card on graph nodes, quick-switcher jump (⌘K fuzzy search), graph filters by node type/edge type, per-node properties (aliases, created/updated, source), and version-history surfaced via the existing Revision system — spoiler boundary preserved throughout; no free-form canvas or personal-layer rewrite in this phase
 
-**Plans**: TBD
+**Plans**: TBD — carries Phase 8 blocked/undone items (below)
+
+**Phase 8 carry-over (blocked / undone — must land in Phase 9):**
+
+- [ ] **09-01**: External uptime monitor (08-07 Task 3, `checkpoint:human-action`) — UptimeRobot account + HTTPS monitor for `https://api.spoilerless.net/health` (5-min) + email alert contact; verify alert fires (OPS-02)
+- [ ] **09-02**: CI smoke fixes → main (08-07 UAT #4, `fixed-pending-ci-rerun`) — merge/re-verify `ci-smoke-test` branch (React-Compiler-era rules scoped to warnings, typed `catch(err)` handlers, seed-idempotency cleanup, graph-image D-14 curation); confirm GitHub Actions green on main (OPS-01)
+- [ ] **09-03**: Admin role live verification (08-UAT #6, skipped) — configure `ADMIN_EMAILS`; verify candidate approve/reject/edit + ChangeSet confirm admin-gated, non-admin 403 (AUTH-03)
+- [ ] **09-04**: `REDIS_URL` on Render (08-05/08-06 runtime gate) — set Upstash `rediss://`; verify live 429 rate-limit + graph-cache invalidation (SEC-03, INFRA-02)
+- [ ] **09-05**: Seed-test pollution debt (STATE.md blocker) — candidate-origin residue teardown between `test_candidate_ingest.py` and `test_seed_idempotency.py` (PROB-06)
+- [ ] **09-06**: Frontend lint 0-error cleanup — pre-existing 28 errors + `react-hooks/refs` stale-ref bugs in `useChatSessions.ts`/`useNotes.ts`/`useRevisions.ts` (PROB-08)
+- [ ] **09-07**: Full CI/CD (deferred OPS) — dependency scanning, artifact publication, staged promotion, branch-protection enforcement (OPS-01 is minimal PR gate only)
+- [ ] **09-08**: Full observability (deferred OPS) — centralized logs, metrics dashboards, incident/rollback runbook automation (OPS-02 is single health ping only)
+
 **UI hint**: yes
 
 #### Phase 10: Polish & Finishing Touches
@@ -123,11 +138,11 @@ Plans:
 | 05.1 Candidate review frontend UI | v1.0/v1.1 | — | Complete | 2026-07-30 |
 | 6. Spoiler-safe GraphRAG chat and graph-editing agent | v1.1 | 13/13 | Complete | 2026-08-02 |
 | 7. Spoiler-Safety Hardening | v1.2 | 8/8 | Complete | 2026-08-03 |
-| 8. Production Deployment & Automated CI/CD | v1.3 | 7/8 | In Progress |  |
+| 8. Production Deployment & Automated CI/CD | v1.3 | 8/8 | Complete    | 2026-08-04 |
 | 9. Feature Expansion & Full Audit Remediation | v1.3 | 0/TBD | Not started | - |
 | 10. Polish & Finishing Touches | v1.3 | 0/TBD | Not started | - |
 
 Full phase details archived at `.planning/milestones/v1.1-ROADMAP.md` / `.planning/milestones/v1.1-phases/` and `.planning/milestones/v1.2-ROADMAP.md` / `.planning/milestones/v1.2-phases/` (v1.2 archive supersedes the earlier v1.1 archive, which predates Phase 7).
 
 ---
-*Last updated: 2026-08-04 — v1.3 Production Deployment & Access Hardening roadmapped (Phases 8–10, restructured per user direction: deploy+CI / features+full audit remediation / polish; 21 PROB + 10 FEAT + 3 POLISH requirements added on top of the original 18)*
+*Last updated: 2026-08-05 — Phase 8 (Production Deployment & Automated CI/CD) COMPLETE and verified (VERIFICATION.md passed, operator UAT 10/12; CI re-run + admin live check carried to Phase 9 as 09-02/09-03). Phase 9 now carries 8 Phase 8 carry-over plans (09-01..09-08) + PROB/FEAT/DOCS-04/REBRAND-01/FEAT-11 requirements.*

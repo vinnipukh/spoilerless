@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Production Deployment & Access Hardening
-current_phase: 8
-current_phase_name: production-deployment-automated-ci-cd
+current_phase: 9
+current_phase_name: Feature Expansion & Full Audit Remediation
 status: executing
-stopped_at: "None — Plan 08-07 Tasks 1-2 (CI + exception logging) complete (3516c2c, 7eeebd6); Task 3 (UptimeRobot) at checkpoint."
-last_updated: "2026-08-04T22:00:00.000Z"
+stopped_at: "Plan 08-07 Tasks 1-2 complete — commits 3516c2c (CI) + 25479f6 (RED) + 7eeebd6 (GREEN); Task 3 (UptimeRobot external monitor) at checkpoint:human-action"
+last_updated: "2026-08-04T21:45:47.016Z"
 last_activity: 2026-08-04
-last_activity_desc: Plan 08-07 Tasks 1-2 completed — GitHub Actions CI workflow landed + structured exception logging + redacting middleware; Task 3 (external uptime monitor) at human-action checkpoint
+last_activity_desc: Phase 8 complete, transitioned to Phase 9
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 8
-  completed_plans: 7
-  percent: 88
+  completed_plans: 8
+  percent: 33
 ---
 
 # HD Graf Cehennemi — Project State
@@ -24,23 +24,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-04)
 
 **Core value:** Users can safely explore a TV-series knowledge graph — and chat about it — without ever seeing information beyond their selected watch progress; the backend filters before data reaches the frontend, the LLM, or any tool call.
-**Current focus:** Phase 8 — production-deployment-automated-ci-cd
+**Current focus:** Phase 9 — feature-expansion-&-full-audit-remediation
 
 ## Current Position
 
-Phase: 8 (production-deployment-automated-ci-cd) — EXECUTING
-Plan: 8 of 8
-Status: Executing Phase 8
-Last activity: 2026-08-04 — Plan 08-08 (DEPLOYMENT.md rewrite) complete; Phase 8 execution finished (08-01..08-08); 08-07 partially complete (CI landed, logging/uptime pending)
+Phase: 9 — Feature Expansion & Full Audit Remediation
+Plan: Not started
+Status: Phase 8 complete (8/8 plans verified); Phase 9 not started
+Last activity: 2026-08-05 — Phase 8 closed out (VERIFICATION.md passed, operator-UAT verified)
 
-Progress: [███░░░░░░░] 38% (v1.3); 7 phases complete across v1.0–v1.2
+Progress: [███░░░░░░░] 33% (v1.3, 1/3 phases); 7 phases complete across v1.0–v1.2
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed (all milestones to date): 42 (v1.0/v1.1: 27, v1.2: 8, v1.3: 7)
-- v1.3: 7 plans completed (08-01 tracer, 08-02 BYOK, 08-03 admin role, 08-04 CSRF, 08-05 rate limiter, 08-06 graph cache, 08-08 DEPLOYMENT.md rewrite), 08-07 nearly complete (Tasks 1-2 done: CI + exception logging + middleware; Task 3 UptimeRobot at checkpoint)
+- Total plans completed (all milestones to date): 43 (v1.0/v1.1: 27, v1.2: 8, v1.3: 8)
+- v1.3: 8 plans completed (08-01..08-08) — phase verified by operator UAT (10/12 passed; CI re-run + admin live check carried to Phase 9 as 09-02/09-03)
 
 **By Phase:**
 
@@ -48,9 +48,10 @@ Progress: [███░░░░░░░] 38% (v1.3); 7 phases complete across 
 |-------|-------|-------|
 | 1–6 (v1.0/v1.1) | 27 | See `.planning/milestones/v1.1-ROADMAP.md` for per-plan durations |
 | 7 (v1.2 Spoiler-Safety Hardening) | 8 | See `.planning/milestones/v1.2-phases/07-spoiler-safety-hardening/` SUMMARY.md files |
-| 8–10 (v1.3) | 7 | See Phase 8 SUMMARY.md files (08-01..08-06, 08-08 complete; 08-07 partial) |
+| 8 (v1.3 Production Deployment) | 8 | Phase complete — VERIFICATION.md passed 2026-08-05; 2 items carried to Phase 9 (09-02, 09-03) |
+| 9–10 (v1.3) | TBD | Phase 9 pending planning — carries 8 Phase 8 carry-over plans (09-01..09-08) |
 
-**Recent Trend:** v1.3 executing — Plan 08-08 (DEPLOYMENT.md rewrite) completed 2026-08-04.
+**Recent Trend:** v1.3 — Phase 8 (Production Deployment & Automated CI/CD) complete and verified 2026-08-05; Phase 9 planning next.
 
 *Updated after each plan completion*
 
@@ -74,9 +75,9 @@ None yet.
 
 ### Blockers/Concerns
 
-- Pre-existing test-pollution debt in `test_seed_idempotency.py` (untorn-down candidate-origin fixture from `test_candidate_ingest.py`; 8 candidate nodes currently in the shared live DB) — not mapped to any v1.3 requirement, remains open technical debt (details: deferred-items.md, 08-03/08-04)
-- Pre-existing frontend lint debt (28 errors, none newly introduced in v1.1) — not mapped to any v1.3 requirement, remains open technical debt
-- Deploy-time: REDIS_URL (Upstash rediss:// from 08-01 user_setup) must be set on Render for rate limiting to activate; empty = rate limiting disabled (by design, 08-05)
+- Pre-existing test-pollution debt in `test_seed_idempotency.py` (untorn-down candidate-origin fixture from `test_candidate_ingest.py`; 8 candidate nodes currently in the shared live DB) — now mapped to Phase 9 carry-over **09-05** (PROB-06)
+- Pre-existing frontend lint debt (28 errors, none newly introduced in v1.1) — now mapped to Phase 9 carry-over **09-06** (PROB-08; CI fix branch `ci-smoke-test` scoped 3 React-Compiler-era rules to warnings, 0 lint errors verified locally)
+- Deploy-time: REDIS_URL (Upstash rediss:// from 08-01 user_setup) must be set on Render for rate limiting to activate; empty = rate limiting disabled (by design, 08-05) — mapped to Phase 9 carry-over **09-04**
 
 ## Deferred Items
 
@@ -93,11 +94,11 @@ Items acknowledged and carried forward, not in v1.3 scope:
 
 ## Session Continuity
 
-Last session: 2026-08-04 22:00 UTC
-Stopped at: Plan 08-07 Tasks 1-2 complete — commits 3516c2c (CI) + 25479f6 (RED) + 7eeebd6 (GREEN); Task 3 (UptimeRobot external monitor) at checkpoint:human-action
+Last session: 2026-08-05
+Stopped at: Phase 8 complete and verified (08-VERIFICATION.md status: passed, operator UAT 10/12 — CI re-run + admin live check carried to Phase 9 as 09-02/09-03)
 Resume file: None
 
 ## Operator Next Steps
 
-- 08-07 Task 3: Create a free UptimeRobot account, add an HTTP(s) monitor for https://api.spoilerless.net/health (5-minute interval), and configure an email alert contact. See 08-07-SUMMARY.md for details.
-- Resume with Phase 9 planning (feature expansion + full audit remediation, per `.planning/REQUIREMENTS.md`).
+- Phase 8 is CLOSED — no open Phase 8 action items. UptimeRobot monitor is live (UAT #11 pass; free-tier false-downs during Render sleep are a known free-tier cost, not a defect).
+- Resume with Phase 9 planning (feature expansion + full audit remediation, per `.planning/REQUIREMENTS.md`). Phase 9 carries 8 Phase 8 carry-over plans (09-01..09-08) listed in ROADMAP.md — CI smoke re-run to main (09-02) and admin-role live check (09-03) are the two user-action-adjacent ones.

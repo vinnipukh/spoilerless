@@ -19,38 +19,38 @@ stack components (no second graph DB, no JWT auth, no frontend rewrite).
 
 - [x] **AUTH-01**: Only email addresses on an operator-configured allowlist (`ALLOWED_EMAILS`) can sign in via Google OAuth; a verified-but-unlisted email is rejected with `403 AUTH_EMAIL_NOT_ALLOWED`. An empty allowlist means unrestricted (any verified Google account may sign in).
 - [x] **AUTH-02**: The development authentication bypass (`POST /api/auth/dev`, `AUTH_DEV_CODE`) is removed entirely from the codebase — no code path can create a session without a verified Google credential. Resolves `docs/PROBLEMS.md` #7.
-- [ ] **AUTH-03**: An admin role exists on the user record and is enforced on candidate review (approve/reject/edit) and ChangeSet approval endpoints; a non-admin user's request to these endpoints is rejected with a clear 403.
-- [ ] **AUTH-04**: `/api/settings/llm` requires the admin role, or is retired in favor of the per-user BYOK flow (AI-01..03) — closing the SSRF/cross-user-takeover gap flagged in `PROJECT.md`'s Key Decisions and `docs/PROBLEMS.md` #5.
+- [x] **AUTH-03**: An admin role exists on the user record and is enforced on candidate review (approve/reject/edit) and ChangeSet approval endpoints; a non-admin user's request to these endpoints is rejected with a clear 403.
+- [x] **AUTH-04**: `/api/settings/llm` requires the admin role, or is retired in favor of the per-user BYOK flow (AI-01..03) — closing the SSRF/cross-user-takeover gap flagged in `PROJECT.md`'s Key Decisions and `docs/PROBLEMS.md` #5.
 
 ### AI chat — bring your own key (AI)
 
-- [ ] **AI-01**: A user can enter their own LLM provider API key (plus base URL/model) in the frontend; the value is stored only in the browser (`localStorage`) and sent per-request to the backend as a request header, never as a persisted server-side setting.
-- [ ] **AI-02**: The backend never persists, logs, or writes a user-supplied LLM API key to any datastore, chat record, or log line; it exists only in request-scoped memory for the duration of a single chat call.
-- [ ] **AI-03**: Chat is unavailable with a clear message (no request sent to the LLM provider) when the user has not supplied a key and no server-side fallback key is configured.
+- [x] **AI-01**: A user can enter their own LLM provider API key (plus base URL/model) in the frontend; the value is stored only in the browser (`localStorage`) and sent per-request to the backend as a request header, never as a persisted server-side setting.
+- [x] **AI-02**: The backend never persists, logs, or writes a user-supplied LLM API key to any datastore, chat record, or log line; it exists only in request-scoped memory for the duration of a single chat call.
+- [x] **AI-03**: Chat is unavailable with a clear message (no request sent to the LLM provider) when the user has not supplied a key and no server-side fallback key is configured.
 
 ### Production security hardening (SEC)
 
-- [ ] **SEC-01**: `SESSION_COOKIE_SECURE=true` by default (not merely available) and `FRONTEND_ORIGINS` restricted to the exact deployed frontend origin(s) in the production environment configuration. Resolves `docs/PROBLEMS.md` #8.
-- [ ] **SEC-02**: When frontend and backend are deployed on different origins, the session cookie uses `SameSite=None; Secure` without breaking the existing CSRF Origin/Referer check (`verify_origin`); the check no longer auto-allows a missing Origin/Referer on state-changing routes, and `POST /api/auth/logout` gets the same CSRF dependency. Resolves `docs/PROBLEMS.md` #10.
-- [ ] **SEC-03**: Login, chat-send, and content-write endpoints (notes, custom nodes, custom relationships) enforce a rate limit per user/IP, backed by a store that works correctly across multiple worker processes (not an in-memory per-process dict); exceeding it returns `429` in the existing error envelope. Resolves `docs/PROBLEMS.md` #6.
+- [x] **SEC-01**: `SESSION_COOKIE_SECURE=true` by default (not merely available) and `FRONTEND_ORIGINS` restricted to the exact deployed frontend origin(s) in the production environment configuration. Resolves `docs/PROBLEMS.md` #8.
+- [x] **SEC-02**: When frontend and backend are deployed on different origins, the session cookie uses `SameSite=None; Secure` without breaking the existing CSRF Origin/Referer check (`verify_origin`); the check no longer auto-allows a missing Origin/Referer on state-changing routes, and `POST /api/auth/logout` gets the same CSRF dependency. Resolves `docs/PROBLEMS.md` #10.
+- [x] **SEC-03**: Login, chat-send, and content-write endpoints (notes, custom nodes, custom relationships) enforce a rate limit per user/IP, backed by a store that works correctly across multiple worker processes (not an in-memory per-process dict); exceeding it returns `429` in the existing error envelope. Resolves `docs/PROBLEMS.md` #6.
 
 ### Infrastructure & hosting (INFRA)
 
-- [ ] **INFRA-01**: Neo4j runs on Neo4j AuraDB Free instead of local Docker Compose in the production environment; existing seed data migrates without loss; the Compose recipe that publishes DB ports to the internet with a hardcoded password is no longer part of any deployment path. Resolves `docs/PROBLEMS.md` #27, #31.
-- [ ] **INFRA-02**: Upstash Redis caches spoiler-filtered graph query responses keyed by `(series_id, effective_boundary, user_id)`; entries are invalidated on any write that changes the underlying cached data.
-- [ ] **INFRA-03**: The FastAPI backend runs on Render's free web service tier with all required environment variables (Neo4j, Redis, Google OAuth, frontend origins) configured; the app connects to Neo4j through a dedicated least-privilege database role, not the admin superuser, with explicit driver pool/timeout/TLS settings. Resolves `docs/PROBLEMS.md` #36.
-- [ ] **INFRA-04**: The Vite-built client deploys on Vercel's Hobby tier and reaches the Render backend through configured API routing/CORS.
-- [ ] **INFRA-05**: All deployment secrets (Neo4j password, Google OAuth client credentials, Redis URL) exist only as platform environment variables on Render/Vercel/Upstash; none appear in the repository.
+- [x] **INFRA-01**: Neo4j runs on Neo4j AuraDB Free instead of local Docker Compose in the production environment; existing seed data migrates without loss; the Compose recipe that publishes DB ports to the internet with a hardcoded password is no longer part of any deployment path. Resolves `docs/PROBLEMS.md` #27, #31.
+- [x] **INFRA-02**: Upstash Redis caches spoiler-filtered graph query responses keyed by `(series_id, effective_boundary, user_id)`; entries are invalidated on any write that changes the underlying cached data.
+- [x] **INFRA-03**: The FastAPI backend runs on Render's free web service tier with all required environment variables (Neo4j, Redis, Google OAuth, frontend origins) configured; the app connects to Neo4j through a dedicated least-privilege database role, not the admin superuser, with explicit driver pool/timeout/TLS settings. Resolves `docs/PROBLEMS.md` #36.
+- [x] **INFRA-04**: The Vite-built client deploys on Vercel's Hobby tier and reaches the Render backend through configured API routing/CORS.
+- [x] **INFRA-05**: All deployment secrets (Neo4j password, Google OAuth client credentials, Redis URL) exist only as platform environment variables on Render/Vercel/Upstash; none appear in the repository.
 
 ### Operations (OPS)
 
-- [ ] **OPS-01**: A GitHub Actions CI workflow runs backend `pytest` and frontend build+lint automatically on every pull request, gating merge visibility.
-- [ ] **OPS-02**: An external uptime check polls `GET /health` on the deployed backend and can alert (email/webhook) on a non-200 response or timeout.
-- [ ] **OPS-03**: Backend emits structured request/error logs (exceptions logged before being sanitized in the response, not dropped) so login failures, stream failures, and DB errors are visible to the operator. Resolves `docs/PROBLEMS.md` #39.
+- [x] **OPS-01**: A GitHub Actions CI workflow runs backend `pytest` and frontend build+lint automatically on every pull request, gating merge visibility.
+- [x] **OPS-02**: An external uptime check polls `GET /health` on the deployed backend and can alert (email/webhook) on a non-200 response or timeout.
+- [x] **OPS-03**: Backend emits structured request/error logs (exceptions logged before being sanitized in the response, not dropped) so login failures, stream failures, and DB errors are visible to the operator. Resolves `docs/PROBLEMS.md` #39.
 
 ### Documentation (DOCS)
 
-- [ ] **DOCS-03**: `docs/DEPLOYMENT.md` is rewritten to describe the actual production target (Vercel/Render/Aura/Upstash) replacing its current "no production deployment target defined" statement, including a real rollback procedure for the hosted environment.
+- [x] **DOCS-03**: `docs/DEPLOYMENT.md` is rewritten to describe the actual production target (Vercel/Render/Aura/Upstash) replacing its current "no production deployment target defined" statement, including a real rollback procedure for the hosted environment.
 - [ ] **DOCS-04**: `docs/API.md`, `docs/ARCHITECTURE.md`, and `docs/ROADMAP.md` are corrected to match live behavior (route counts, ChangeSet chat capability, "known gaps" that already shipped, and no longer deferring auth/CSRF/roles as unstarted). Resolves `docs/PROBLEMS.md` #21, #22, #23, #24.
 
 ## Problem Remediation — `docs/PROBLEMS.md` audit (PROB)
