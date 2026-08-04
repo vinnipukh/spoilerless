@@ -67,7 +67,7 @@ Plans: 07-01 audit + threat model + domain design · 07-02 progress migration + 
 
 Plans:
 - [ ] 08-01-PLAN.md — Tracer: production deploy skeleton (Render + Vercel + AuraDB + spoilerless.net custom domain, one real Google login end-to-end)
-- [ ] 08-02-PLAN.md — BYOK LLM chat: browser-held key/base_url/model, per-request headers, backend passthrough
+- [x] 08-02-PLAN.md — BYOK LLM chat: browser-held key/base_url/model, per-request headers, backend passthrough (completed 2026-08-04: cf2f685, 7665168, 7e7e025)
 - [ ] 08-03-PLAN.md — Admin role: candidate review, ChangeSet confirm, and /api/settings/llm gated to admin
 - [ ] 08-04-PLAN.md — Cookie/CORS/CSRF hardening: fail-closed verify_origin, logout CSRF coverage, settings-driven SameSite
 - [ ] 08-05-PLAN.md — Redis foundation + rate limiting: multi-worker-safe 429 on login/chat-send/content-write
