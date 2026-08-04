@@ -12,10 +12,12 @@ from __future__ import annotations
 
 from typing import Annotated, Any, AsyncIterator
 
-from fastapi import Depends
+from fastapi import Depends, Header
+from pydantic import ValidationError
 
 from backend.app.api.deps import DatabaseDependency
 from backend.app.core.config import get_settings
+from backend.app.core.errors import http_error
 from backend.app.domain.chat import (
     ChatMessageResponse,
     ChatSessionDetailResponse,
@@ -24,7 +26,7 @@ from backend.app.domain.chat import (
     GraphFocus,
     MessageResponseEnvelope,
 )
-from backend.app.domain.settings import DEFAULT_GEMINI_BASE_URL
+from backend.app.domain.settings import DEFAULT_GEMINI_BASE_URL, LLMSettingsUpdate
 from backend.app.graph.database import Neo4jDatabase
 from backend.app.llm.provider import (
     GeminiProvider,
@@ -71,16 +73,56 @@ def _release_generation_slot(user_id: str) -> None:
         _concurrent_generations[user_id] = current - 1
 
 
-async def get_llm_provider(database: DatabaseDependency) -> LLMProvider:
-    """Build the configured LLM provider from stored settings (then env).
+async def get_llm_provider(
+    database: DatabaseDependency,
+    x_llm_api_key: Annotated[str | None, Header(alias="X-LLM-Api-Key")] = None,
+    x_llm_base_url: Annotated[str | None, Header(alias="X-LLM-Base-URL")] = None,
+    x_llm_model: Annotated[str | None, Header(alias="X-LLM-Model")] = None,
+) -> LLMProvider:
+    """Build the LLM provider for one request (request-scoped, D-06).
 
-    Resolution order per field: the persisted ``:AppSetting {key: 'llm'}``
-    node first, then the ``LLM_*`` env/settings fallback. The API key is read
-    only here, inside the provider constructor — it never appears in a
-    response model, a log line, or a Revision record (T-06-07). ``gemini``
+    BYOK (bring-your-own-key): when the request carries a non-blank
+    ``X-LLM-Api-Key`` header, the provider is built EXCLUSIVELY from the
+    ``X-LLM-Api-Key`` / ``X-LLM-Base-URL`` / ``X-LLM-Model`` header values —
+    the persisted ``:AppSetting {key: 'llm'}`` node and the ``LLM_*`` env
+    fallback are never consulted for that request, and BYOK only supports
+    the OpenAI-compatible interface (provider type is fixed to
+    ``openai_compatible``). This closes the shared-key SSRF/theft surface
+    (docs/PROBLEMS.md #5): a user can only ever spend or redirect their own
+    key to their own chosen host (T-08-02-01). The header values reach ONLY
+    the ``OpenAICompatibleProvider`` constructor — never a response model, a
+    log line, or a persisted record (T-08-02-02).
+
+    Without BYOK headers the resolution order is unchanged — persisted
+    stored settings first, then the ``LLM_*`` env fallback (now the optional
+    server-side fallback tier per D-06, not the primary path). The API key
+    is read only here, inside the provider constructor — it never appears in
+    a response model, a log line, or a Revision record (T-06-07). ``gemini``
     falls back to the official Google endpoint when no ``base_url`` is
     configured anywhere.
     """
+    if x_llm_api_key and x_llm_api_key.strip():
+        base_url = (x_llm_base_url or "").strip()
+        model = (x_llm_model or "").strip()
+        if base_url:
+            # Reuse LLMSettingsUpdate._validate_base_url (http/https only,
+            # host required) so a malformed BYOK base_url fails the same way
+            # a malformed stored one does — HTTP 422, never silently
+            # reaching an unintended scheme (T-08-02-03). The api key is
+            # never part of the error payload.
+            try:
+                validated = LLMSettingsUpdate(base_url=base_url)
+            except ValidationError as exc:
+                error = exc.errors()[0]
+                raise http_error(422, "invalid_request", error["msg"]) from exc
+            base_url = validated.base_url
+        if not base_url or not model:
+            raise LLMProviderUnavailable("The LLM provider is not configured.")
+        return OpenAICompatibleProvider(
+            base_url=base_url,
+            api_key=x_llm_api_key.strip(),
+            model=model,
+        )
     settings = get_settings()
     stored = await SettingsRepository(database).get_llm() or {}
     # The on/off switch is part of the persisted settings (UI-controllable);
