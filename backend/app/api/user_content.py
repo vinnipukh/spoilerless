@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Query, Response
 
 from backend.app.core.errors import error_responses, http_error
+from backend.app.cache.graph_cache import invalidate_series
 from backend.app.domain.user_content import (
     NoteCreate,
     NoteResponse,
@@ -136,10 +137,15 @@ async def create_custom_node(
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
 ) -> CustomNodeResponse:
     try:
-        return CustomNodeResponse.model_validate(await _repository(database).create_custom_node(series_id, payload))
-    except UserContentValidationError as exc: raise _invalid(exc) from exc
-    except UserContentConflict as exc: raise _conflict(exc) from exc
-    except UserContentNotFound as exc: raise _not_found() from exc
+        row = await _repository(database).create_custom_node(series_id, payload)
+    except UserContentValidationError as exc:
+        raise _invalid(exc) from exc
+    except UserContentConflict as exc:
+        raise _conflict(exc) from exc
+    except UserContentNotFound as exc:
+        raise _not_found() from exc
+    await invalidate_series(series_id)
+    return CustomNodeResponse.model_validate(row)
 
 
 @router.get("/{series_id}/custom-nodes/{node_id}", response_model=CustomNodeResponse,
@@ -158,10 +164,15 @@ async def update_custom_node(
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
 ) -> CustomNodeResponse:
     try:
-        return CustomNodeResponse.model_validate(await _repository(database).update_custom_node(series_id, node_id, payload))
-    except UserContentValidationError as exc: raise _invalid(exc) from exc
-    except UserContentConflict as exc: raise _conflict(exc) from exc
-    except UserContentNotFound as exc: raise _not_found() from exc
+        row = await _repository(database).update_custom_node(series_id, node_id, payload)
+    except UserContentValidationError as exc:
+        raise _invalid(exc) from exc
+    except UserContentConflict as exc:
+        raise _conflict(exc) from exc
+    except UserContentNotFound as exc:
+        raise _not_found() from exc
+    await invalidate_series(series_id)
+    return CustomNodeResponse.model_validate(row)
 
 
 @router.delete("/{series_id}/custom-nodes/{node_id}", status_code=204,
@@ -175,6 +186,7 @@ async def delete_custom_node(
     except UserContentValidationError as exc: raise _invalid(exc) from exc
     except UserContentConflict as exc: raise _conflict(exc) from exc
     except UserContentNotFound as exc: raise _not_found() from exc
+    await invalidate_series(series_id)
     return Response(status_code=204)
 
 
@@ -185,10 +197,15 @@ async def create_custom_relationship(
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
 ) -> CustomRelationshipResponse:
     try:
-        return CustomRelationshipResponse.model_validate(await _repository(database).create_custom_relationship(series_id, payload))
-    except UserContentValidationError as exc: raise _invalid(exc) from exc
-    except UserContentConflict as exc: raise _conflict(exc) from exc
-    except UserContentNotFound as exc: raise _not_found() from exc
+        row = await _repository(database).create_custom_relationship(series_id, payload)
+    except UserContentValidationError as exc:
+        raise _invalid(exc) from exc
+    except UserContentConflict as exc:
+        raise _conflict(exc) from exc
+    except UserContentNotFound as exc:
+        raise _not_found() from exc
+    await invalidate_series(series_id)
+    return CustomRelationshipResponse.model_validate(row)
 
 
 @router.get("/{series_id}/custom-relationships/{relationship_id}", response_model=CustomRelationshipResponse,
@@ -207,10 +224,15 @@ async def update_custom_relationship(
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
 ) -> CustomRelationshipResponse:
     try:
-        return CustomRelationshipResponse.model_validate(await _repository(database).update_custom_relationship(series_id, relationship_id, payload))
-    except UserContentValidationError as exc: raise _invalid(exc) from exc
-    except UserContentConflict as exc: raise _conflict(exc) from exc
-    except UserContentNotFound as exc: raise _not_found() from exc
+        row = await _repository(database).update_custom_relationship(series_id, relationship_id, payload)
+    except UserContentValidationError as exc:
+        raise _invalid(exc) from exc
+    except UserContentConflict as exc:
+        raise _conflict(exc) from exc
+    except UserContentNotFound as exc:
+        raise _not_found() from exc
+    await invalidate_series(series_id)
+    return CustomRelationshipResponse.model_validate(row)
 
 
 @router.delete("/{series_id}/custom-relationships/{relationship_id}", status_code=204,
@@ -224,4 +246,5 @@ async def delete_custom_relationship(
     except UserContentValidationError as exc: raise _invalid(exc) from exc
     except UserContentConflict as exc: raise _conflict(exc) from exc
     except UserContentNotFound as exc: raise _not_found() from exc
+    await invalidate_series(series_id)
     return Response(status_code=204)

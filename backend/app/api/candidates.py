@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from backend.app.api.deps import RequireAdminDependency
+from backend.app.cache.graph_cache import invalidate_series
 from backend.app.core.errors import error_responses, http_error
 from backend.app.domain.extraction import ExtractionBatchEnvelope
 from backend.app.domain.revision import RevisionAction
@@ -209,11 +210,13 @@ async def approve_candidate(
         return {"id": cmd["claim_id"], "status": "canonical", "origin": "candidate", "revision_id": rev_id}
 
     try:
-        return await db.execute_write(_approve, {"series_id": series_id, "claim_id": claim_id, "now": datetime.now(timezone.utc)})
+        result = await db.execute_write(_approve, {"series_id": series_id, "claim_id": claim_id, "now": datetime.now(timezone.utc)})
     except HTTPException:
         raise
     except Exception as exc:
         raise http_error(422, "invalid_extraction_payload", f"Approve error: {exc}")
+    await invalidate_series(series_id)
+    return result
 
 
 # --- Reject ---
@@ -261,11 +264,13 @@ async def reject_candidate(
         return {"id": cmd["claim_id"], "status": "rejected", "origin": "candidate", "revision_id": rev_id}
 
     try:
-        return await db.execute_write(_reject, {"series_id": series_id, "claim_id": claim_id, "now": datetime.now(timezone.utc)})
+        result = await db.execute_write(_reject, {"series_id": series_id, "claim_id": claim_id, "now": datetime.now(timezone.utc)})
     except HTTPException:
         raise
     except Exception as exc:
         raise http_error(422, "invalid_extraction_payload", f"Reject error: {exc}")
+    await invalidate_series(series_id)
+    return result
 
 
 # --- Edit ---
@@ -319,10 +324,12 @@ async def edit_candidate(
         return {"id": cmd["claim_id"], "status": "edited", "origin": "candidate", "revision_id": rev_id, "updates_applied": list(cmd["updates"].keys())}
 
     try:
-        return await db.execute_write(_edit, {"series_id": series_id, "claim_id": claim_id, "updates": updates, "now": datetime.now(timezone.utc)})
+        result = await db.execute_write(_edit, {"series_id": series_id, "claim_id": claim_id, "updates": updates, "now": datetime.now(timezone.utc)})
     except HTTPException:
         raise
     except ValueError as exc:
         raise http_error(422, "invalid_extraction_payload", str(exc))
     except Exception as exc:
         raise http_error(422, "invalid_extraction_payload", f"Edit error: {exc}")
+    await invalidate_series(series_id)
+    return result

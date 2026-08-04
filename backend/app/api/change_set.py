@@ -16,6 +16,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from backend.app.api.deps import CurrentUserDependency, DatabaseDependency, RequireAdminDependency
+from backend.app.cache.graph_cache import invalidate_series
 from backend.app.core.errors import error_responses, http_error
 from backend.app.domain.change_set import ChangeSetCreateRequest, ChangeSetResponse
 from backend.app.services.change_set import (
@@ -126,7 +127,7 @@ async def confirm_change_set(
     rejected with a distinct ``409 changeset_stale`` — never silently applied.
     """
     try:
-        return await service.confirm(user["id"], series_id, change_set_id)
+        result = await service.confirm(user["id"], series_id, change_set_id)
     except ChangeSetNotFound:
         _not_found()
     except ChangeSetStale:
@@ -135,6 +136,8 @@ async def confirm_change_set(
         _conflict("This ChangeSet has already been resolved and cannot be confirmed again.")
     except ChangeSetOperationInvalid:
         _invalid()
+    await invalidate_series(series_id)
+    return result
 
 
 @router.post(
@@ -195,7 +198,7 @@ async def revert_change_set(
     overwrite that change.
     """
     try:
-        return await service.revert(user["id"], series_id, change_set_id)
+        result = await service.revert(user["id"], series_id, change_set_id)
     except ChangeSetNotFound:
         _not_found()
     except ChangeSetNotRevertible:
@@ -207,3 +210,5 @@ async def revert_change_set(
         )
     except ChangeSetRevertUnsupported:
         _invalid()
+    await invalidate_series(series_id)
+    return result
