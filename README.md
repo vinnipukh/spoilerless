@@ -7,6 +7,63 @@ Explore characters, events, locations, claims, and relationships through an inte
 
 > **Prototype scope:** Dexter, Season 1, Episodes 1–3.
 
+---
+
+## Deployment & Environment Quick Reference
+
+**Production stack (live):** Vercel `app.spoilerless.net` (frontend) · Render `api.spoilerless.net` (backend) · Neo4j AuraDB Free `03a8623b` · Upstash Redis `darling-rat-221809` · Cloudflare DNS + apex redirect.
+
+### Where configuration lives
+
+| Location | Holds | Notes |
+|---|---|---|
+| `.env` (repo root) | Backend settings (`NEO4J_*`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`, `ADMIN_EMAILS`, `REDIS_URL`, `LLM_*`) | Read by `backend/app/core/config.py` via pydantic-settings. **Never committed.** Points at the shared AuraDB by default. |
+| `frontend/.env.local` | `VITE_GOOGLE_CLIENT_ID` only | Read by Vite for local dev. `VITE_API_BASE_URL` stays commented (the dev proxy handles `/api`). **Never committed.** |
+| `scripts/env-local.sh` | Local-Docker Neo4j credentials (`localhost:7687`) | `source scripts/env-local.sh` before running the backend/tests against the local Docker Neo4j — **never** edit `.env` to switch databases. |
+| `docker-compose.yml` | Local Neo4j Community container (`hdgrafcehennemi-neo4j`, auth `neo4j` / `hdgraf-local-password`) | Only for local testing; production uses AuraDB. |
+
+### Platform environment variables
+
+**Render — `api.spoilerless.net`** (required unless noted):
+
+```
+NEO4J_URI=neo4j+s://03a8623b.databases.neo4j.io
+NEO4J_USERNAME=neo4j
+NEO4J_PASSWORD=<AuraDB password>
+NEO4J_DATABASE=03a8623b
+GOOGLE_CLIENT_ID=<Google OAuth web client ID>
+ALLOWED_EMAILS=<comma-separated sign-in allowlist>
+ADMIN_EMAILS=<comma-separated admin allowlist>
+FRONTEND_ORIGINS=https://app.spoilerless.net
+REDIS_URL=rediss://default:<token>@darling-rat-221809.upstash.io:6379   # optional; empty disables rate limiting + graph cache
+SESSION_COOKIE_SECURE=true                                            # optional
+SESSION_TTL_SECONDS=604800                                            # optional
+```
+
+**Vercel — `app.spoilerless.net`**:
+
+```
+VITE_API_BASE_URL=https://api.spoilerless.net
+VITE_GOOGLE_CLIENT_ID=<same Google OAuth web client ID>
+```
+
+Build settings: Framework Preset **Vite**, Root Directory **`frontend/`**, Build Command **`npm run build`**, Output Directory **`dist`**.
+
+**Cloudflare — DNS + redirect:** CNAME `app` → Vercel target (proxied), CNAME `api` → Render target (DNS-only), apex `@` A-record `192.0.2.1` (proxied), plus a Dynamic Redirect rule: hostname `spoilerless.net` → 301 → `concat("https://app.spoilerless.net", http.request.uri.path)`.
+
+### Fresh machine checklist
+
+1. `git clone https://github.com/vinnipukh/hdgrafcehennemi.git`
+2. `uv sync` (backend deps) and `cd frontend && npm install`
+3. `cp .env.example .env` → fill in real values (AuraDB creds, Google Client ID, emails, Redis URL)
+4. `cp frontend/.env.example frontend/.env.local` → set `VITE_GOOGLE_CLIENT_ID`
+5. Optional local DB: `docker compose up -d neo4j`, then use `source scripts/env-local.sh` before local runs
+6. Backend: `uv run uvicorn backend.app.main:app --reload` · Frontend: `cd frontend && npm run dev`
+
+Full platform-specific procedures, rollback, and monitoring: [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md).
+
+---
+
 ## Product direction
 
 The repository is a polished vertical prototype for a **spoiler-aware, provenance-backed narrative knowledge graph**: an Obsidian-like graph, human-authored knowledge, revision history, and GraphRAG over only the viewer-visible subgraph. Candidate review and chat, which began as roadmap goals, are now implemented; automated subtitle/script ingestion, production deployment, and broader product scope remain future work.
