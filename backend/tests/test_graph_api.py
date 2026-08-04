@@ -693,15 +693,28 @@ def test_graph_hidden_character_image_urls_never_serialized(
     for hidden_fragment in ("Paul_Bennett_7.PNG", "Brianmoser1.png", "HarryFace.jpg"):
         assert hidden_fragment not in one_text, hidden_fragment
 
-    # Boundary 2: Paul is revealed (portrait present), Rudy and Harry still hidden.
+    # Boundary 2: Paul is revealed. Per D-14 curation (07-06) Paul, Rudy and
+    # Harry carry NO seed portrait (future characters), so their serialized
+    # image fields must be null — the fragment may never appear at any
+    # boundary. Only the order-1 characters' portraits exist.
     two = live_client.get("/api/series/series_dexter/graph?visible_until_order=2")
     assert two.status_code == 200
-    two_text = json.dumps(two.json(), sort_keys=True)
-    assert "Paul_Bennett_7.PNG" in two_text
-    for hidden_fragment in ("Brianmoser1.png", "HarryFace.jpg"):
-        assert hidden_fragment not in two_text, hidden_fragment
+    two_payload = two.json()
+    for hidden_fragment in ("Paul_Bennett_7.PNG", "Brianmoser1.png", "HarryFace.jpg"):
+        assert hidden_fragment not in json.dumps(two_payload, sort_keys=True), hidden_fragment
+    paul = next(
+        node
+        for node in two_payload["nodes"]
+        if node["id"] == "dexter:character:paul_bennett"
+    )
+    assert paul["image_url"] is None
+    assert paul["image_source_url"] is None
+    # The order-1 revealed characters keep their portraits.
+    two_text = json.dumps(two_payload, sort_keys=True)
+    assert "Dexter_Morgan" in two_text or "Season_7_Photo_Promo" in two_text
 
-    # Boundary 3: everything is revealed — Harry's portrait is returned again.
+    # Boundary 3: everything is revealed — Harry's serialized image fields
+    # are still null (no future-character portraits in seed, D-14).
     three = live_client.get("/api/series/series_dexter/graph?visible_until_order=3")
     assert three.status_code == 200
     three_payload = three.json()
@@ -710,8 +723,8 @@ def test_graph_hidden_character_image_urls_never_serialized(
         for node in three_payload["nodes"]
         if node["id"] == "dexter:character:harry_morgan"
     )
-    assert harry["image_url"] is not None
-    assert harry["image_source_url"] is not None
+    assert harry["image_url"] is None
+    assert harry["image_source_url"] is None
 
 
 # ===================================================================
