@@ -443,14 +443,14 @@ async def test_setup_preserves_user_layer_and_deleted_resources_stay_deleted(
     try:
         await setup_database(live_database)
         canonical_before = await _layer_snapshot(live_database, "canonical")
-        assert sum(len(layer) for layer in canonical_before.values()) == 67
+        assert sum(len(layer) for layer in canonical_before.values()) == 495
 
         await live_database.execute_query(USER_LAYER_CREATE_QUERY)
         user_before = await _layer_snapshot(live_database, "user")
         first_report = await setup_database(live_database)
         second_report = await setup_database(live_database)
 
-        assert first_report == second_report == {"nodes": 48, "relationships": 27}
+        assert first_report == second_report == {"nodes": 272, "relationships": 255}
         assert await _layer_snapshot(live_database, "canonical") == canonical_before
         assert await _layer_snapshot(live_database, "user") == user_before
 
