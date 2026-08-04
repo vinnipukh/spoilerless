@@ -16,6 +16,14 @@ from neo4j.exceptions import ServiceUnavailable
 from pydantic import ValidationError
 
 from backend.app.core.errors import install_database_error_handlers
+from backend.app.cache import graph_cache
+from backend.app.cache.graph_cache import (
+    _cache_key,
+    get_cached_graph,
+    invalidate_series,
+    set_cached_graph,
+)
+from backend.app.core.config import get_settings
 from backend.app.domain.graph import GraphResponse
 from backend.app.graph.database import Neo4jDatabase, get_database
 from backend.app.graph.seed import setup_database
@@ -716,3 +724,116 @@ class TestSeedImageCuration:
         order_one = [character for character in characters if character["visible_from_order"] == 1]
         assert order_one
         assert any(character.get("image_url") for character in order_one)
+
+
+# ===================================================================
+# INFRA-02 — cache-aside layer in front of GET /api/series/{id}/graph
+# (08-06). No live Redis: graph_cache's get_redis is pointed at an
+# in-memory _FakeRedis (no-op pattern) or left disabled (empty
+# redis_url) — the endpoint must behave identically either way.
+# ===================================================================
+
+
+class _FakeRedis:
+    """In-memory stand-in for the shared ``redis.asyncio`` client.
+
+    Mirrors the real client's byte values (decode_responses=False) and
+    only the surface graph_cache uses: get / setex / scan_iter / delete.
+    """
+
+    def __init__(self) -> None:
+        self._store: dict[str, bytes] = {}
+
+    async def get(self, key: str) -> bytes | None:
+        return self._store.get(key)
+
+    async def setex(self, key: str, _ttl: int, value: str | bytes) -> None:
+        self._store[key] = value.encode() if isinstance(value, str) else value
+
+    async def scan_iter(self, match: str | None = None):
+        prefix = match.split("*", 1)[0] if match else ""
+        for key in list(self._store):
+            if key.startswith(prefix):
+                yield key
+
+    async def delete(self, *keys: str) -> None:
+        for key in keys:
+            self._store.pop(key, None)
+
+
+async def _async_noop() -> None:
+    return None
+
+
+def _enable_cache(monkeypatch: pytest.MonkeyPatch, fake: _FakeRedis) -> None:
+    """Point graph_cache at a fake Redis and enable the cache guard."""
+    monkeypatch.setattr(get_settings(), "redis_url", "rediss://fake:6379")
+    monkeypatch.setattr(graph_cache, "get_redis", lambda: fake)
+
+
+@pytest.fixture
+def cached_live_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[tuple[TestClient, _FakeRedis]]:
+    """live_client with the cache-aside path enabled against a fake Redis.
+
+    A non-empty redis_url would make main's lifespan call
+    init_rate_limiter() and open a real Upstash connection, so that startup
+    hook is neutralized too — the graph endpoint's cache helpers are what
+    these tests exercise, not the rate limiter.
+    """
+    fake = _FakeRedis()
+    _enable_cache(monkeypatch, fake)
+    main_module = importlib.import_module("backend.app.main")
+    monkeypatch.setattr(main_module, "init_rate_limiter", _async_noop)
+    asyncio.run(_seed_live_database())
+    with TestClient(main_module.app) as client:
+        yield client, fake
+
+
+async def test_get_cached_graph_miss_then_hit(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = _FakeRedis()
+    _enable_cache(monkeypatch, fake)
+
+    assert await get_cached_graph("series_dexter", 1, None) is None
+
+    await set_cached_graph("series_dexter", 1, None, {"nodes": []})
+    assert await get_cached_graph("series_dexter", 1, None) == {"nodes": []}
+
+
+async def test_cache_key_separates_series_boundary_and_user() -> None:
+    assert _cache_key("series_dexter", 1, None) == "graph:series_dexter:1:anon"
+    assert _cache_key("series_dexter", 1, "user:1") == "graph:series_dexter:1:user:1"
+    assert _cache_key("series_dexter", 1, None) != _cache_key("series_dexter", 2, None)
+    assert _cache_key("series_dexter", 1, "user:1") != _cache_key("series_dexter", 1, None)
+    assert _cache_key("series_dexter", 1, "user:1") != _cache_key("series_other", 1, "user:1")
+
+
+async def test_cache_helpers_are_noops_when_redis_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(get_settings(), "redis_url", "")
+    calls: list[object] = []
+    monkeypatch.setattr(
+        graph_cache, "get_redis", lambda: calls.append(object()) or _FakeRedis()
+    )
+
+    assert await get_cached_graph("series_dexter", 1, None) is None
+    await set_cached_graph("series_dexter", 1, None, {"nodes": []})
+    await invalidate_series("series_dexter")
+
+    assert calls == []
+
+
+def test_graph_endpoint_cache_hit_matches_miss_byte_for_byte(
+    cached_live_client: tuple[TestClient, _FakeRedis],
+) -> None:
+    client, fake = cached_live_client
+
+    miss = client.get("/api/series/series_dexter/graph?visible_until_order=1")
+    hit = client.get("/api/series/series_dexter/graph?visible_until_order=1")
+
+    assert miss.status_code == hit.status_code == 200
+    assert miss.json() == hit.json()
+    assert json.dumps(miss.json(), sort_keys=True) == json.dumps(hit.json(), sort_keys=True)
+    assert any(key.startswith("graph:series_dexter:1:anon") for key in fake._store)
