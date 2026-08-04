@@ -1053,3 +1053,249 @@ def test_session_message_count_never_leaks_hidden_message_count(
     true_total = asyncio.run(_true_total())
     assert true_total == 6
     assert visible_count != true_total
+
+
+# ---------------------------------------------------------------------------
+# BYOK (bring-your-own-key) — request-scoped provider from X-LLM-* headers
+# (08-02, D-04..D-08). The real get_llm_provider dependency runs (no
+# dependency override); OpenAICompatibleProvider is monkeypatched so tests
+# capture exactly what the dependency would construct while the pipeline
+# still streams deterministically with zero network.
+# ---------------------------------------------------------------------------
+
+BYOK_API_KEY = "sk-byok-secret-1234"
+BYOK_BASE_URL = "https://byok.example/v1"
+BYOK_MODEL = "byok-model-7"
+STORED_API_KEY = "sk-stored-secret-9999"
+STORED_BASE_URL = "https://stored.example/v1"
+STORED_MODEL = "stored-model-1"
+ENV_API_KEY = "sk-env-secret-5555"
+ENV_BASE_URL = "https://env.example/v1"
+ENV_MODEL = "env-model-2"
+
+
+def _llm_settings_write(payload: dict[str, Any]) -> None:
+    """Persist an :AppSetting {key:'llm'} payload (test-created row)."""
+
+    async def _write() -> None:
+        clean = Neo4jDatabase()
+        clean.open()
+        try:
+            await clean.execute_query(
+                "MERGE (s:AppSetting {key: $k}) SET s.value = $v",
+                k="llm",
+                v=json.dumps(payload),
+            )
+        finally:
+            await clean.close()
+
+    asyncio.run(_write())
+
+
+class CapturingBYOKProvider:
+    """Records the constructor kwargs get_llm_provider passes to
+    OpenAICompatibleProvider, then behaves like FakeLLMProvider (scripted
+    events, recorded ``.calls``) so the pipeline runs end-to-end.
+
+    The header-supplied API key must appear ONLY in the constructor kwargs —
+    never in ``.calls``, a response, or a persisted record (T-08-02-01/02).
+    """
+
+    scripted_events: list[LLMEvent] = []
+    constructed: list[dict[str, Any]] = []
+    instances: list["CapturingBYOKProvider"] = []
+
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        api_key: str,
+        model: str,
+        client: Any = None,
+    ) -> None:
+        CapturingBYOKProvider.constructed.append(
+            {"base_url": base_url, "api_key": api_key, "model": model}
+        )
+        self.scripted_events: list[LLMEvent] = list(type(self).scripted_events)
+        self.calls: list[dict[str, Any]] = []
+        CapturingBYOKProvider.instances.append(self)
+
+    async def stream_chat(self, **kwargs: Any) -> AsyncIterator[LLMEvent]:
+        self.calls.append(kwargs)
+        for event in self.scripted_events:
+            yield event
+
+
+@pytest.fixture(autouse=True)
+def _reset_byok_capture() -> None:
+    CapturingBYOKProvider.scripted_events = _neighborhood_scripted_events()
+    CapturingBYOKProvider.constructed = []
+    CapturingBYOKProvider.instances = []
+
+
+def _build_byok_app(
+    database: Neo4jDatabase,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+    monkeypatch: pytest.MonkeyPatch,
+) -> FastAPI:
+    """App with the REAL get_llm_provider dependency and a capturing
+    OpenAICompatibleProvider (no network, no dependency override)."""
+    monkeypatch.setattr(
+        "backend.app.services.chat.OpenAICompatibleProvider",
+        CapturingBYOKProvider,
+    )
+    return _build_app(database, fake_user_repo, session_repo, provider=None)
+
+
+def _byok_headers() -> dict[str, str]:
+    return {
+        "X-LLM-Api-Key": BYOK_API_KEY,
+        "X-LLM-Base-URL": BYOK_BASE_URL,
+        "X-LLM-Model": BYOK_MODEL,
+    }
+
+
+def test_byok_headers_build_provider_from_headers_bypassing_stored_and_env(
+    database: Neo4jDatabase,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """X-LLM-* headers win over BOTH the stored settings and the
+    LLM_ENABLED env switch: the provider is built purely from the header
+    values (D-06), and the stored key never reaches the constructor. The
+    header key never appears in the response, the provider's recorded
+    ``.calls``, or the persisted message row."""
+    backup = _llm_settings_backup()
+    _llm_settings_clear()
+    try:
+        # Stored settings say DISABLED with a different key — the BYOK path
+        # must ignore them entirely.
+        _llm_settings_write(
+            {
+                "provider": "openai_compatible",
+                "api_key": STORED_API_KEY,
+                "base_url": STORED_BASE_URL,
+                "model": STORED_MODEL,
+                "enabled": False,
+                "system_prompt_language": "english",
+            }
+        )
+        monkeypatch.setenv("LLM_ENABLED", "false")
+        get_settings.cache_clear()
+
+        app = _build_byok_app(database, fake_user_repo, session_repo, monkeypatch)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            _authed(client, fake_user_repo, session_repo, progress=1)
+            session = _create_session(client)
+
+            response = client.post(
+                f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages",
+                json={"question": "Who is Dexter related to?"},
+                headers=_byok_headers(),
+            )
+            assert response.status_code == 200, response.text
+            envelope = response.json()
+            assert envelope["message"]["content"] == "Dexter and Debra are siblings."
+
+            # Built from exactly the header values — nothing else.
+            assert CapturingBYOKProvider.constructed == [
+                {
+                    "base_url": BYOK_BASE_URL,
+                    "api_key": BYOK_API_KEY,
+                    "model": BYOK_MODEL,
+                }
+            ]
+            # The stored key never reached the constructor.
+            assert STORED_API_KEY not in json.dumps(CapturingBYOKProvider.constructed)
+            # The header key never appears in the response, the recorded
+            # provider calls, or the persisted message row.
+            assert BYOK_API_KEY not in response.text
+            assert BYOK_API_KEY not in json.dumps(
+                CapturingBYOKProvider.instances[-1].calls
+            )
+            detail = client.get(
+                f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}"
+            )
+            assert detail.status_code == 200
+            assert BYOK_API_KEY not in detail.text
+    finally:
+        _llm_settings_restore(backup)
+        get_settings.cache_clear()
+
+
+def test_byok_headers_stream_endpoint_builds_provider_and_never_leaks_key(
+    database: Neo4jDatabase,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The SSE streaming endpoint uses the same request-scoped BYOK
+    construction; the key never appears in the stream text or the persisted
+    assistant message."""
+    backup = _llm_settings_backup()
+    _llm_settings_clear()
+    try:
+        app = _build_byok_app(database, fake_user_repo, session_repo, monkeypatch)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            _authed(client, fake_user_repo, session_repo, progress=1)
+            session = _create_session(client)
+
+            response = client.post(
+                f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages/stream",
+                json={"question": "Who is Dexter related to?"},
+                headers=_byok_headers(),
+            )
+            assert response.status_code == 200, response.text
+            done_events = [
+                payload
+                for kind, payload in _parse_sse(response.text)
+                if kind == "done"
+            ]
+            assert len(done_events) == 1
+            assert done_events[0]["message"]["content"] == "Dexter and Debra are siblings."
+
+            assert CapturingBYOKProvider.constructed[-1]["api_key"] == BYOK_API_KEY
+            assert BYOK_API_KEY not in response.text
+            detail = client.get(
+                f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}"
+            )
+            assert detail.status_code == 200
+            assert BYOK_API_KEY not in detail.text
+    finally:
+        _llm_settings_restore(backup)
+
+
+def test_malformed_byok_base_url_scheme_is_rejected_like_stored_settings(
+    database: Neo4jDatabase,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A malformed BYOK base_url (non-http(s) scheme) fails the same way a
+    malformed stored one does — HTTP 422 via the shared
+    LLMSettingsUpdate._validate_base_url logic (T-08-02-03) — and the key is
+    never echoed in the error body."""
+    backup = _llm_settings_backup()
+    _llm_settings_clear()
+    try:
+        app = _build_byok_app(database, fake_user_repo, session_repo, monkeypatch)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            _authed(client, fake_user_repo, session_repo, progress=1)
+            session = _create_session(client)
+
+            response = client.post(
+                f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages",
+                json={"question": "Who is Dexter related to?"},
+                headers={
+                    "X-LLM-Api-Key": BYOK_API_KEY,
+                    "X-LLM-Base-URL": "gopher://evil.example",
+                    "X-LLM-Model": BYOK_MODEL,
+                },
+            )
+            assert response.status_code == 422, response.text
+            assert "base_url" in response.text.lower()
+            assert BYOK_API_KEY not in response.text
+    finally:
+        _llm_settings_restore(backup)
