@@ -450,7 +450,12 @@ class TestLogout:
     ) -> None:
         _set_env(monkeypatch, SESSION_COOKIE_NAME="session")
 
-        response = client.post("/api/auth/logout")
+        # FRONTEND_ORIGINS is the fixture default (http://localhost:5173), so
+        # logout now needs a matching Origin header (fail-closed CSRF).
+        response = client.post(
+            "/api/auth/logout",
+            headers={"Origin": "http://localhost:5173"},
+        )
         assert response.status_code == 204
 
     def test_logout_deletes_cookie(
@@ -468,6 +473,58 @@ class TestLogout:
         assert "session=" in set_cookie
         # Should expire the cookie
         assert _assert_cookie_expired(set_cookie), f"Expected expired cookie, got: {set_cookie}"
+
+    def test_logout_without_origin_or_referer_rejected(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _set_env(
+            monkeypatch,
+            GOOGLE_CLIENT_ID="test-client-id",
+            SESSION_TTL_SECONDS=3600,
+            SESSION_COOKIE_NAME="session",
+            FRONTEND_ORIGINS="http://localhost:5173",
+        )
+
+        auth_resp = client.post(
+            "/api/auth/google",
+            json={"credential": "valid-token"},
+            headers={"Origin": "http://localhost:5173"},
+        )
+        cookie = auth_resp.cookies.get("session")
+
+        # No Origin/Referer on logout - must fail closed like google_auth.
+        response = client.post("/api/auth/logout", cookies={"session": cookie})
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == AUTH_ORIGIN_NOT_ALLOWED
+
+    def test_logout_with_matching_origin_revokes_session(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _set_env(
+            monkeypatch,
+            GOOGLE_CLIENT_ID="test-client-id",
+            SESSION_TTL_SECONDS=3600,
+            SESSION_COOKIE_NAME="session",
+            FRONTEND_ORIGINS="http://localhost:5173",
+        )
+
+        auth_resp = client.post(
+            "/api/auth/google",
+            json={"credential": "valid-token"},
+            headers={"Origin": "http://localhost:5173"},
+        )
+        cookie = auth_resp.cookies.get("session")
+
+        logout_resp = client.post(
+            "/api/auth/logout",
+            cookies={"session": cookie},
+            headers={"Origin": "http://localhost:5173"},
+        )
+        assert logout_resp.status_code == 204
+
+        me_resp = client.get("/api/auth/me", cookies={"session": cookie})
+        assert me_resp.status_code == 401
 
 
 # ===================================================================
@@ -498,6 +555,57 @@ class TestCookieAttributes:
 
         assert response.status_code == 200
         assert "myapp_session=" in response.headers.get("set-cookie", "")
+
+    def test_cookie_samesite_from_settings(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _set_env(
+            monkeypatch,
+            GOOGLE_CLIENT_ID="test-client-id",
+            SESSION_TTL_SECONDS=3600,
+            SESSION_COOKIE_NAME="session",
+            SESSION_COOKIE_SAMESITE="none",
+            SESSION_COOKIE_SECURE=True,
+            FRONTEND_ORIGINS="*",
+        )
+
+        response = client.post(
+            "/api/auth/google",
+            json={"credential": "valid-token"},
+            headers={"Origin": "http://localhost:5173"},
+        )
+
+        assert response.status_code == 200
+        _assert_cookie_attr(response.headers.get("set-cookie", ""), "samesite=none")
+
+    def test_delete_cookie_samesite_from_settings(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _set_env(
+            monkeypatch,
+            GOOGLE_CLIENT_ID="test-client-id",
+            SESSION_TTL_SECONDS=3600,
+            SESSION_COOKIE_NAME="session",
+            SESSION_COOKIE_SAMESITE="none",
+            SESSION_COOKIE_SECURE=True,
+            FRONTEND_ORIGINS="*",
+        )
+
+        auth_resp = client.post(
+            "/api/auth/google",
+            json={"credential": "valid-token"},
+            headers={"Origin": "http://localhost:5173"},
+        )
+        cookie = auth_resp.cookies.get("session")
+
+        response = client.post(
+            "/api/auth/logout",
+            cookies={"session": cookie},
+            headers={"Origin": "http://localhost:5173"},
+        )
+
+        assert response.status_code == 204
+        _assert_cookie_attr(response.headers.get("set-cookie", ""), "samesite=none")
 
 
 # ===================================================================
@@ -616,10 +724,48 @@ class TestCSRFOriginValidation:
             FRONTEND_ORIGINS="*",
         )
 
-        # Without Origin header — should pass because wildcard bypasses CSRF
+        # Without Origin header - should pass because wildcard bypasses CSRF
         response = client.post(
             "/api/auth/google",
             json={"credential": "valid-token"},
+        )
+
+        assert response.status_code == 200
+
+    def test_post_google_rejects_missing_origin_and_referer(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _set_env(
+            monkeypatch,
+            GOOGLE_CLIENT_ID="test-client-id",
+            SESSION_TTL_SECONDS=3600,
+            FRONTEND_ORIGINS="http://localhost:5173",
+        )
+
+        # Neither Origin nor Referer present - must fail closed (SEC-02,
+        # docs/PROBLEMS.md #10).
+        response = client.post(
+            "/api/auth/google",
+            json={"credential": "valid-token"},
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == AUTH_ORIGIN_NOT_ALLOWED
+
+    def test_post_google_accepts_matching_referer(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _set_env(
+            monkeypatch,
+            GOOGLE_CLIENT_ID="test-client-id",
+            SESSION_TTL_SECONDS=3600,
+            FRONTEND_ORIGINS="http://localhost:5173",
+        )
+
+        response = client.post(
+            "/api/auth/google",
+            json={"credential": "valid-token"},
+            headers={"Referer": "http://localhost:5173/signin"},
         )
 
         assert response.status_code == 200
