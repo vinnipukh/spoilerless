@@ -301,8 +301,8 @@ function CreateRelationshipDialog({
       setPredicate('KNOWS')
       onOpenChange(false)
       onSuccess(rel)
-    } catch (err: any) {
-      setError(err?.message ?? 'Failed to create relationship.')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create relationship.')
     } finally {
       setSaving(false)
     }
