@@ -24,7 +24,7 @@ pass "FastAPI Swagger reachable"
 curl -fsS "$FRONTEND_URL" > "$TMP_DIR/frontend.html"
 pass "React development server reachable"
 
-uv run python -m backend.app.graph.setup > "$TMP_DIR/setup.txt"
+uv run python -m spoilerless.app.graph.setup > "$TMP_DIR/setup.txt"
 grep -q "Dexter graph setup complete: 41 nodes, 26 relationships" "$TMP_DIR/setup.txt"
 pass "deterministic setup completed"
 
@@ -36,7 +36,7 @@ with open(sys.argv[1], encoding="utf-8") as stream:
 assert payload == {
     "status": "ok",
     "database": "connected",
-    "service": "hdgrafcehennemi-backend",
+    "service": "spoilerless-backend",
 }
 PY
 pass "database-backed health is connected"

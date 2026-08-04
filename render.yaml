@@ -1,10 +1,10 @@
-# Render Blueprint — HD Graf Cehennemi backend (FastAPI + uv).
+# Render Blueprint — Spoilerless backend (FastAPI + uv).
 # Free-tier web service; auto-deploys on git push to the connected branch.
 services:
   - type: web
-    name: hdgrafcehennemi-api
+    name: spoilerless-api
     runtime: python
     plan: free
     autoDeploy: true
     buildCommand: uv sync --frozen
-    startCommand: uv run uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT

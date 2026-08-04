@@ -1,7 +1,7 @@
 services:
   neo4j:
     image: neo4j:2026.06.0-community
-    container_name: hdgrafcehennemi-neo4j
+    container_name: spoilerless-neo4j
     restart: unless-stopped
 
     ports:
