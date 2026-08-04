@@ -1,0 +1,43 @@
+[
+ {
+  "id": "dexter:org:miami_metro_pd",
+  "node_type": "Organization",
+  "series_id": "series_dexter",
+  "label": "Miami Metro Police Department",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:org:miami_metro_homicide",
+  "node_type": "Organization",
+  "series_id": "series_dexter",
+  "label": "Miami Metro Homicide",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:org:miami_metro_vice",
+  "node_type": "Organization",
+  "series_id": "series_dexter",
+  "label": "Miami Metro Vice",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:org:miami_metro_records",
+  "node_type": "Organization",
+  "series_id": "series_dexter",
+  "label": "Miami Metro Records Department",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:org:boys_choir",
+  "node_type": "Organization",
+  "series_id": "series_dexter",
+  "label": "Boys' Choir",
+  "visible_from_order": 1,
+  "origin": "candidate",
+  "confidence_level": "medium"
+ }
+]

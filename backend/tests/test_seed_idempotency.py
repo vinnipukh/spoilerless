@@ -106,15 +106,17 @@ async def test_seed_is_idempotent_and_complete(live_database: Neo4jDatabase) -> 
     second_counts = await setup_database(live_database)
     second = await _snapshot(live_database)
 
-    assert first_counts == second_counts == {"nodes": 41, "relationships": 26}
+    assert first_counts == second_counts == {"nodes": 265, "relationships": 254}
     assert first == second
     assert {row["label"]: row["count"] for row in first["nodes"]} == {
-        "Character": 9,
-        "Claim": 9,
+        "Character": 32,
+        "Claim": 105,
         "Episode": 3,
-        "Event": 3,
-        "EvidenceFragment": 9,
-        "Location": 4,
+        "Event": 39,
+        "EvidenceFragment": 36,
+        "Location": 24,
+        "Object": 17,
+        "Organization": 5,
         "Series": 1,
         "Source": 3,
     }

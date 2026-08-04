@@ -1,11 +1,282 @@
 [
-  {"id":"dexter:character:dexter_morgan","node_type":"Character","series_id":"series_dexter","label":"Dexter Morgan","visible_from_order":1,"origin":"canonical","image_url":"https://static.wikia.nocookie.net/dexter/images/0/06/Season_7_Photo_Promo.jpg/revision/latest?cb=20240714125943","image_source_url":"https://dexter.fandom.com/wiki/Dexter_Morgan"},
-  {"id":"dexter:character:debra_morgan","node_type":"Character","series_id":"series_dexter","label":"Debra Morgan","visible_from_order":1,"origin":"canonical","image_url":"https://static.wikia.nocookie.net/dexter/images/8/85/Debra_Morgan_Promo_444.jpg/revision/latest?cb=20200107185051","image_source_url":"https://dexter.fandom.com/wiki/Debra_Morgan"},
-  {"id":"dexter:character:angel_batista","node_type":"Character","series_id":"series_dexter","label":"Angel Batista","visible_from_order":1,"origin":"canonical","image_url":"https://static.wikia.nocookie.net/dexter/images/6/6f/Angel_705.jpg/revision/latest?cb=20220323205846","image_source_url":"https://dexter.fandom.com/wiki/Angel_Batista"},
-  {"id":"dexter:character:maria_laguerta","node_type":"Character","series_id":"series_dexter","label":"Maria LaGuerta","visible_from_order":1,"origin":"canonical","image_url":"https://static.wikia.nocookie.net/dexter/images/2/24/Maria_LaGuerta_222.jpg/revision/latest?cb=20191023060418","image_source_url":"https://dexter.fandom.com/wiki/Maria_LaGuerta"},
-  {"id":"dexter:character:james_doakes","node_type":"Character","series_id":"series_dexter","label":"James Doakes","visible_from_order":1,"origin":"canonical","image_url":"https://static.wikia.nocookie.net/dexter/images/7/7b/DoakesFace.jpg/revision/latest?cb=20250903072503","image_source_url":"https://dexter.fandom.com/wiki/James_Doakes"},
-  {"id":"dexter:character:rita_bennett","node_type":"Character","series_id":"series_dexter","label":"Rita Bennett","visible_from_order":1,"origin":"canonical","image_url":"https://static.wikia.nocookie.net/dexter/images/1/11/HQ_Rita_Bennett.jpg/revision/latest?cb=20091220190416","image_source_url":"https://dexter.fandom.com/wiki/Rita_Morgan"},
-  {"id":"dexter:character:paul_bennett","node_type":"Character","series_id":"series_dexter","label":"Paul Bennett","visible_from_order":2,"origin":"canonical"},
-  {"id":"dexter:character:rudy_cooper","node_type":"Character","series_id":"series_dexter","label":"Rudy Cooper","visible_from_order":3,"origin":"canonical"},
-  {"id":"dexter:character:harry_morgan","node_type":"Character","series_id":"series_dexter","label":"Harry Morgan","visible_from_order":3,"origin":"canonical"}
+ {
+  "id": "dexter:character:dexter_morgan",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Dexter Morgan",
+  "visible_from_order": 1,
+  "origin": "canonical",
+  "image_url": "https://static.wikia.nocookie.net/dexter/images/0/06/Season_7_Photo_Promo.jpg/revision/latest?cb=20240714125943",
+  "image_source_url": "https://dexter.fandom.com/wiki/Dexter_Morgan"
+ },
+ {
+  "id": "dexter:character:debra_morgan",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Debra Morgan",
+  "visible_from_order": 1,
+  "origin": "canonical",
+  "image_url": "https://static.wikia.nocookie.net/dexter/images/8/85/Debra_Morgan_Promo_444.jpg/revision/latest?cb=20200107185051",
+  "image_source_url": "https://dexter.fandom.com/wiki/Debra_Morgan"
+ },
+ {
+  "id": "dexter:character:angel_batista",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Angel Batista",
+  "visible_from_order": 1,
+  "origin": "canonical",
+  "image_url": "https://static.wikia.nocookie.net/dexter/images/6/6f/Angel_705.jpg/revision/latest?cb=20220323205846",
+  "image_source_url": "https://dexter.fandom.com/wiki/Angel_Batista"
+ },
+ {
+  "id": "dexter:character:maria_laguerta",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Maria LaGuerta",
+  "visible_from_order": 1,
+  "origin": "canonical",
+  "image_url": "https://static.wikia.nocookie.net/dexter/images/2/24/Maria_LaGuerta_222.jpg/revision/latest?cb=20191023060418",
+  "image_source_url": "https://dexter.fandom.com/wiki/Maria_LaGuerta"
+ },
+ {
+  "id": "dexter:character:james_doakes",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "James Doakes",
+  "visible_from_order": 1,
+  "origin": "canonical",
+  "image_url": "https://static.wikia.nocookie.net/dexter/images/7/7b/DoakesFace.jpg/revision/latest?cb=20250903072503",
+  "image_source_url": "https://dexter.fandom.com/wiki/James_Doakes"
+ },
+ {
+  "id": "dexter:character:rita_bennett",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Rita Bennett",
+  "visible_from_order": 1,
+  "origin": "canonical",
+  "image_url": "https://static.wikia.nocookie.net/dexter/images/1/11/HQ_Rita_Bennett.jpg/revision/latest?cb=20091220190416",
+  "image_source_url": "https://dexter.fandom.com/wiki/Rita_Morgan"
+ },
+ {
+  "id": "dexter:character:paul_bennett",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Paul Bennett",
+  "visible_from_order": 2,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:rudy_cooper",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Rudy Cooper",
+  "visible_from_order": 3,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:harry_morgan",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Harry Morgan",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:vince_masuka",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Vince Masuka",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:camilla_figg",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Camilla Figg",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:thomas_matthews",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Captain Thomas Matthews",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:doris_morgan",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Doris Morgan",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:astor_bennett",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Astor Bennett",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:cody_bennett",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Cody Bennett",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:mike_donovan",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Mike Donovan",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:mrs_donovan",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Mrs. Donovan",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:jamie_jaworski",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Jamie Jaworski",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:jane_saunders",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Jane Saunders",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:pool_victim",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Seven Seas Pool Victim",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:second_bloodless_victim",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Second Bloodless Victim",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:ice_truck_killer",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Ice Truck Killer",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:officer_oliver",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Officer Oliver",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:officer_simon",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Officer Simon",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:detective_dan",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Detective Dan",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:detective_sue",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Detective Sue",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:character:corey_balanti",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Corey Balanti",
+  "visible_from_order": 1,
+  "origin": "candidate",
+  "confidence_level": "medium",
+  "candidate": true
+ },
+ {
+  "id": "dexter:character:tyler_kale",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Tyler Kale",
+  "visible_from_order": 1,
+  "origin": "candidate",
+  "confidence_level": "medium",
+  "candidate": true
+ },
+ {
+  "id": "dexter:character:joe_bigalow",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Joe Bigalow",
+  "visible_from_order": 1,
+  "origin": "candidate",
+  "confidence_level": "medium",
+  "candidate": true
+ },
+ {
+  "id": "dexter:character:male_cokehead_victim",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Cokehead Murders Male Victim",
+  "visible_from_order": 1,
+  "origin": "candidate",
+  "confidence_level": "medium",
+  "candidate": true
+ },
+ {
+  "id": "dexter:character:female_cokehead_victim",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Cokehead Murders Female Victim",
+  "visible_from_order": 1,
+  "origin": "candidate",
+  "confidence_level": "medium",
+  "candidate": true
+ },
+ {
+  "id": "dexter:character:cokehead_boyfriend",
+  "node_type": "Character",
+  "series_id": "series_dexter",
+  "label": "Cokehead Murders Former Boyfriend",
+  "visible_from_order": 1,
+  "origin": "candidate",
+  "confidence_level": "medium",
+  "candidate": true
+ }
 ]

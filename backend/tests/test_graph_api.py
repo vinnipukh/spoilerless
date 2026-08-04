@@ -241,27 +241,33 @@ def test_graph_database_unavailable_is_sanitized(live_client: TestClient) -> Non
     assert "MATCH" not in response.text
 
 
+# Exact per-boundary magnitudes are no longer pinned: the S01E01 graph is
+# source-enriched and grows over time. The invariants that matter are (a) no
+# future-episode content leaks at a lower boundary (spoiler gate), (b) the
+# boundary's own episode content is present, and (c) every edge endpoint is a
+# visible node. Harry Morgan is intentionally visible from order 1 (the Buddy
+# flashback) and is therefore no longer forbidden at boundary 2.
 @pytest.mark.parametrize(
-    ("boundary", "expected", "forbidden"),
+    ("boundary", "forbidden", "present"),
     [
         (
             1,
-            {"nodes": 11, "edges": 6, "claims": 4, "sources": 1, "evidence": 3},
             ["dexter_s01e02", "S01E02", "Crocodile", "Paul Bennett", "Rudy Cooper", "ice rink"],
+            ["dexter_s01e01", "Dexter Morgan", "Mike Donovan"],
         ),
         (
             2,
-            {"nodes": 15, "edges": 10, "claims": 5, "sources": 2, "evidence": 5},
-            ["dexter_s01e03", "S01E03", "Popping Cherry", "Rudy Cooper", "Harry Morgan", "ice rink"],
+            ["dexter_s01e03", "S01E03", "Popping Cherry", "Rudy Cooper", "ice rink"],
+            ["dexter_s01e02", "Crocodile"],
         ),
-        (3, {"nodes": 20, "edges": 16, "claims": 8, "sources": 3, "evidence": 8}, []),
+        (3, [], ["dexter_s01e03", "Popping Cherry"]),
     ],
 )
 def test_graph_boundaries_have_full_json_sentinels(
     live_client: TestClient,
     boundary: int,
-    expected: dict[str, int],
     forbidden: list[str],
+    present: list[str],
 ) -> None:
     response = live_client.get(
         f"/api/series/series_dexter/graph?visible_until_order={boundary}"
@@ -271,15 +277,30 @@ def test_graph_boundaries_have_full_json_sentinels(
 
     assert response.status_code == 200, payload
     assert payload["visible_until_order"] == boundary
-    for collection, count in expected.items():
-        assert len(payload[collection]) == count
+    for collection in ("nodes", "edges", "claims", "sources", "evidence"):
+        assert len(payload[collection]) > 0, collection
     for sentinel in forbidden:
-        assert sentinel.lower() not in serialized.lower()
+        assert sentinel.lower() not in serialized.lower(), f"leaked: {sentinel}"
+    for sentinel in present:
+        assert sentinel.lower() in serialized.lower(), f"missing: {sentinel}"
     node_ids = {node["id"] for node in payload["nodes"]}
     assert all(
         edge["source"] in node_ids and edge["target"] in node_ids
         for edge in payload["edges"]
     )
+
+
+def test_graph_counts_grow_monotonically_across_boundaries(
+    live_client: TestClient,
+) -> None:
+    previous = 0
+    for boundary in (1, 2, 3):
+        payload = live_client.get(
+            f"/api/series/series_dexter/graph?visible_until_order={boundary}"
+        ).json()
+        count = len(payload["nodes"])
+        assert count >= previous, (boundary, count, previous)
+        previous = count
 
 
 def test_graph_nodes_include_image_fields(live_client: TestClient) -> None:
@@ -294,18 +315,31 @@ def test_graph_nodes_include_image_fields(live_client: TestClient) -> None:
         assert "image_url" in node
         assert "image_source_url" in node
 
-    # All 9 seeded S01E01-03 characters carry a manually-verified Fandom
-    # portrait; every other node type stays null (never set on Neo4j).
+    # The original curated S01E01 cast carries a manually-verified Fandom
+    # portrait. Source-enrichment characters (minor cast, victims, the
+    # unidentified killer) intentionally carry no image — the unknown killer must
+    # never receive an identity-revealing portrait. So: any character that has an
+    # image uses the Fandom CDN, and the core portrait-bearing cast still has one.
     characters = [node for node in payload["nodes"] if node["type"] == "Character"]
-    assert len(characters) == 9
+    by_id = {c["id"]: c for c in characters}
+    core_portrait_ids = [
+        "dexter:character:dexter_morgan",
+        "dexter:character:debra_morgan",
+        "dexter:character:angel_batista",
+        "dexter:character:maria_laguerta",
+        "dexter:character:james_doakes",
+        "dexter:character:rita_bennett",
+    ]
+    for cid in core_portrait_ids:
+        assert by_id[cid]["image_url"], cid
     for character in characters:
-        assert character["image_url"], character
-        assert character["image_url"].startswith(
-            "https://static.wikia.nocookie.net/dexter/"
-        )
-        assert character["image_source_url"].startswith(
-            "https://dexter.fandom.com/wiki/"
-        )
+        if character["image_url"]:
+            assert character["image_url"].startswith(
+                "https://static.wikia.nocookie.net/dexter/"
+            )
+            assert character["image_source_url"].startswith(
+                "https://dexter.fandom.com/wiki/"
+            )
 
     non_characters = [node for node in payload["nodes"] if node["type"] != "Character"]
     assert non_characters

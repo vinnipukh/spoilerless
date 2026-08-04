@@ -1,0 +1,138 @@
+[
+ {
+  "id": "dexter:object:slice_of_life",
+  "node_type": "Object",
+  "series_id": "series_dexter",
+  "label": "Slice of Life (Dexter's boat)",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:object:blood_slide_box",
+  "node_type": "Object",
+  "series_id": "series_dexter",
+  "label": "Blood-Slide Trophy Box",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:object:donovan_slide",
+  "node_type": "Object",
+  "series_id": "series_dexter",
+  "label": "Mike Donovan Blood Slide",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:object:jaworski_slide",
+  "node_type": "Object",
+  "series_id": "series_dexter",
+  "label": "Jamie Jaworski Blood Slide",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:object:m99",
+  "node_type": "Object",
+  "series_id": "series_dexter",
+  "label": "M99 Syringe",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:object:wire_garrote",
+  "node_type": "Object",
+  "series_id": "series_dexter",
+  "label": "Wire Garrote",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:object:scalpel",
+  "node_type": "Object",
+  "series_id": "series_dexter",
+  "label": "Scalpel",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:object:power_saw",
+  "node_type": "Object",
+  "series_id": "series_dexter",
+  "label": "Power Saw",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:object:cleaver",
+  "node_type": "Object",
+  "series_id": "series_dexter",
+  "label": "Cleaver",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:object:jane_photo",
+  "node_type": "Object",
+  "series_id": "series_dexter",
+  "label": "Jane Saunders Photograph",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:object:snuff_evidence",
+  "node_type": "Object",
+  "series_id": "series_dexter",
+  "label": "Jaworski Snuff-Film Evidence",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:object:refrigerated_truck",
+  "node_type": "Object",
+  "series_id": "series_dexter",
+  "label": "Refrigerated Truck",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:object:severed_head",
+  "node_type": "Object",
+  "series_id": "series_dexter",
+  "label": "Missing Severed Head",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:object:doll_head",
+  "node_type": "Object",
+  "series_id": "series_dexter",
+  "label": "Doll Head",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:object:dismembered_doll",
+  "node_type": "Object",
+  "series_id": "series_dexter",
+  "label": "Dismembered Doll",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:object:harrys_code",
+  "node_type": "Object",
+  "series_id": "series_dexter",
+  "label": "Harry's Code",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:object:forensics_badge",
+  "node_type": "Object",
+  "series_id": "series_dexter",
+  "label": "Forensics Badge",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ }
+]

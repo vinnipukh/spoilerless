@@ -1,6 +1,194 @@
 [
-  {"id":"dexter:location:miami_metro","node_type":"Location","series_id":"series_dexter","label":"Miami Metro Police Department","visible_from_order":1,"origin":"canonical"},
-  {"id":"dexter:location:miami_crime_scene","node_type":"Location","series_id":"series_dexter","label":"Miami crime scene","visible_from_order":1,"origin":"canonical"},
-  {"id":"dexter:location:rita_home","node_type":"Location","series_id":"series_dexter","label":"Rita's home","visible_from_order":2,"origin":"canonical"},
-  {"id":"dexter:location:ice_rink","node_type":"Location","series_id":"series_dexter","label":"Miami ice rink","visible_from_order":3,"origin":"canonical"}
+ {
+  "id": "dexter:location:miami_metro",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Miami Metro Police Department",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:miami_crime_scene",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Miami crime scene",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:rita_home",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Rita's home",
+  "visible_from_order": 2,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:ice_rink",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Miami ice rink",
+  "visible_from_order": 3,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:miami",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Miami",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:choir_event",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Boys' Choir Event",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:wooded_grave_site",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Wooded Grave Site",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:donovan_kill_building",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Donovan Kill Building",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:bay_harbor",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Bay Harbor Disposal Area",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:dexter_marina",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Dexter's Marina",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:dexter_apartment",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Dexter's Apartment",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:seven_seas_motel",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Seven Seas Motel",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:seven_seas_pool",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Seven Seas Motel Pool",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:sadies_donuts",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Sadie's Donuts",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:records_room",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Miami Metro Records Room",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:briefing_room",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Miami Metro Briefing Room",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:laguerta_office",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "LaGuerta's Office",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:cokehead_scene",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Hotel Cokehead Murders Crime Scene",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:jaworski_residence",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Jamie Jaworski's Residence",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:crab_festival",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Crab Festival",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:second_bloodless_scene",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Second Bloodless-Body Crime Scene",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:baywater",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Baywater Luxury Apartments",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:truck_encounter_road",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Road of the Refrigerated-Truck Encounter",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ },
+ {
+  "id": "dexter:location:neighbor_house",
+  "node_type": "Location",
+  "series_id": "series_dexter",
+  "label": "Neighbor's House",
+  "visible_from_order": 1,
+  "origin": "canonical"
+ }
 ]

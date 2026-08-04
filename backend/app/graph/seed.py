@@ -66,10 +66,21 @@ def load_seed_data() -> dict[str, Any]:
         "characters": read_json(SEED_DIR, "characters.json"),
         "events": read_json(SEED_DIR, "events.json"),
         "locations": read_json(SEED_DIR, "locations.json"),
+        "organizations": _read_optional_json(SEED_DIR, "organizations.json"),
+        "objects": _read_optional_json(SEED_DIR, "objects.json"),
         "claims": read_json(SEED_DIR, "claims.json"),
         "sources": read_json(SEED_DIR, "sources.json"),
         "evidence": read_json(SEED_DIR, "evidence_fragments.json"),
     }
+
+
+def _read_optional_json(directory: Path, filename: str) -> list[Any]:
+    """Read a seed list that may not exist yet (Organization/Object are optional)."""
+    path = directory / filename
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8") as stream:
+        return json.load(stream)
 
 
 def validate_seed(data: dict[str, Any], ontology: Ontology) -> None:
@@ -79,6 +90,8 @@ def validate_seed(data: dict[str, Any], ontology: Ontology) -> None:
         + data["characters"]
         + data["events"]
         + data["locations"]
+        + data["organizations"]
+        + data["objects"]
         + data["claims"]
         + data["sources"]
         + data["evidence"]
@@ -273,6 +286,8 @@ async def seed_graph(database: Neo4jDatabase, data: dict[str, Any]) -> None:
     await _upsert_nodes(database, "Character", data["characters"])
     await _upsert_nodes(database, "Event", data["events"])
     await _upsert_nodes(database, "Location", data["locations"])
+    await _upsert_nodes(database, "Organization", data["organizations"])
+    await _upsert_nodes(database, "Object", data["objects"])
     await _upsert_nodes(database, "Source", data["sources"])
     await _upsert_nodes(database, "EvidenceFragment", data["evidence"])
     await _upsert_nodes(database, "Claim", data["claims"])
