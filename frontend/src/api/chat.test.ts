@@ -8,7 +8,22 @@ import {
   streamMessage,
 } from './chat'
 import { ApiError } from './client'
+import { BYOK_STORAGE_KEY } from '@/lib/byok'
 import type { MessageResponseEnvelope } from '../types/chat'
+
+// Same expression chat.ts uses for the raw SSE fetch URL, so the expectation
+// tracks whatever VITE_API_BASE_URL the test env resolves ('' by default).
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
+const streamUrl = `${API_BASE}/api/series/series_dexter/chat/sessions/session_1/messages/stream`
+
+function storeByokSettings(settings: {
+  provider: string
+  api_key: string
+  base_url: string
+  model: string
+}) {
+  localStorage.setItem(BYOK_STORAGE_KEY, JSON.stringify(settings))
+}
 
 function mockFetchJson(status: number, body: unknown) {
   globalThis.fetch = vi.fn().mockResolvedValue({
@@ -26,8 +41,33 @@ function mockFetchNoContent() {
   }) as unknown as typeof fetch
 }
 
+// Fakes a `res.body.getReader()` ReadableStream reader that yields the
+// given raw SSE-text chunks (already `\n\n`-delimited) one at a time.
+function mockStreamResponse(chunks: string[], status = 200) {
+  let index = 0
+  const encoder = new TextEncoder()
+  globalThis.fetch = vi.fn().mockResolvedValue({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => null,
+    body: {
+      getReader: () => ({
+        read: async () => {
+          if (index < chunks.length) {
+            const value = encoder.encode(chunks[index])
+            index += 1
+            return { done: false, value }
+          }
+          return { done: true, value: undefined }
+        },
+      }),
+    },
+  }) as unknown as typeof fetch
+}
+
 beforeEach(() => {
   vi.restoreAllMocks()
+  localStorage.clear()
 })
 
 describe('chat api client', () => {
@@ -120,31 +160,110 @@ describe('chat api client', () => {
   })
 })
 
-describe('streamMessage', () => {
-  // Fakes a `res.body.getReader()` ReadableStream reader that yields the
-  // given raw SSE-text chunks (already `\n\n`-delimited) one at a time.
-  function mockStreamResponse(chunks: string[], status = 200) {
-    let index = 0
-    const encoder = new TextEncoder()
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: status >= 200 && status < 300,
-      status,
-      json: async () => null,
-      body: {
-        getReader: () => ({
-          read: async () => {
-            if (index < chunks.length) {
-              const value = encoder.encode(chunks[index])
-              index += 1
-              return { done: false, value }
-            }
-            return { done: true, value: undefined }
-          },
-        }),
-      },
-    }) as unknown as typeof fetch
+describe('BYOK header attachment (D-06)', () => {
+  const envelope: MessageResponseEnvelope = {
+    message: {
+      id: 'msg_1', role: 'assistant', content: 'Hi', created_at: '2026-01-01T00:00:00Z',
+      visible_until_order_snapshot: 1,
+    },
+    citations: [],
+    graph_focus: { node_ids: [], edge_ids: [] },
+    proposed_change_set: null,
   }
 
+  it('sendMessage attaches X-LLM-* headers when a key is stored', async () => {
+    storeByokSettings({
+      provider: 'openai_compatible',
+      api_key: 'sk-browser-key',
+      base_url: 'https://llm.example/v1',
+      model: 'deepseek-chat',
+    })
+    mockFetchJson(200, envelope)
+
+    await sendMessage('series_dexter', 'session_1', 'What happened?')
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/series/series_dexter/chat/sessions/session_1/messages',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'X-LLM-Api-Key': 'sk-browser-key',
+          'X-LLM-Base-URL': 'https://llm.example/v1',
+          'X-LLM-Model': 'deepseek-chat',
+        }),
+      }),
+    )
+  })
+
+  it('streamMessage attaches X-LLM-* headers when a key is stored', async () => {
+    storeByokSettings({
+      provider: 'openai_compatible',
+      api_key: 'sk-browser-key',
+      base_url: 'https://llm.example/v1',
+      model: 'deepseek-chat',
+    })
+    mockStreamResponse([`event: done\ndata: ${JSON.stringify(envelope)}\n\n`])
+
+    await streamMessage('series_dexter', 'session_1', 'Hi', { onDone: vi.fn() })
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      streamUrl,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'X-LLM-Api-Key': 'sk-browser-key',
+          'X-LLM-Base-URL': 'https://llm.example/v1',
+          'X-LLM-Model': 'deepseek-chat',
+        }),
+      }),
+    )
+  })
+
+  it('sendMessage omits X-LLM-* headers when no key is stored', async () => {
+    // localStorage is cleared in beforeEach - no BYOK key present.
+    mockFetchJson(200, envelope)
+
+    await sendMessage('series_dexter', 'session_1', 'Hi')
+
+    const [, options] = vi.mocked(globalThis.fetch).mock.calls[0]
+    expect(options.headers).not.toHaveProperty('X-LLM-Api-Key')
+    expect(options.headers).not.toHaveProperty('X-LLM-Base-URL')
+    expect(options.headers).not.toHaveProperty('X-LLM-Model')
+  })
+
+  it('streamMessage omits X-LLM-* headers when no key is stored', async () => {
+    mockStreamResponse([`event: done\ndata: ${JSON.stringify(envelope)}\n\n`])
+
+    await streamMessage('series_dexter', 'session_1', 'Hi', { onDone: vi.fn() })
+
+    const [, options] = vi.mocked(globalThis.fetch).mock.calls[0]
+    expect(options.headers).toEqual({ 'Content-Type': 'application/json' })
+  })
+
+  it('treats a whitespace-only stored key as absent (no X-LLM-* headers)', async () => {
+    storeByokSettings({ provider: 'gemini', api_key: '   ', base_url: '', model: '' })
+    mockFetchJson(200, envelope)
+
+    await sendMessage('series_dexter', 'session_1', 'Hi')
+
+    const [, options] = vi.mocked(globalThis.fetch).mock.calls[0]
+    expect(options.headers).not.toHaveProperty('X-LLM-Api-Key')
+  })
+
+  it('omits blank base_url/model headers but keeps the key header', async () => {
+    storeByokSettings({ provider: 'gemini', api_key: 'sk-key-only', base_url: '', model: '' })
+    mockFetchJson(200, envelope)
+
+    await sendMessage('series_dexter', 'session_1', 'Hi')
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headers: { 'Content-Type': 'application/json', 'X-LLM-Api-Key': 'sk-key-only' },
+      }),
+    )
+  })
+})
+
+describe('streamMessage', () => {
   it('reads text_delta chunks incrementally and invokes onTextDelta per chunk', async () => {
     const envelope: MessageResponseEnvelope = {
       message: {
@@ -167,7 +286,7 @@ describe('streamMessage', () => {
     await streamMessage('series_dexter', 'session_1', 'Hi', { onTextDelta, onDone })
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/series/series_dexter/chat/sessions/session_1/messages/stream',
+      streamUrl,
       expect.objectContaining({
         method: 'POST',
         credentials: 'include',

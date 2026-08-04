@@ -11,6 +11,7 @@ import {
   protectedOverrideChangeSet,
 } from './test/fixtures/chatFixtures'
 import { useChatMessages } from './hooks/useChatMessages'
+import { BYOK_STORAGE_KEY } from '@/lib/byok'
 import type { SeriesResponse, EpisodeResponse } from './types/series'
 import type { UserResponse } from './types/auth'
 import type { Citation } from './types/chat'
@@ -194,6 +195,7 @@ function graphFetchCalls() {
 beforeEach(() => {
   currentAuthState = 'unauthenticated'
   sessionStorage.clear()
+  localStorage.clear()
   vi.stubGlobal('fetch', vi.fn(fetchStub))
   vi.mocked(useChatMessages).mockReturnValue(defaultChatMessagesReturn())
 })
@@ -327,6 +329,12 @@ describe('App', () => {
   it('toggles between the graph workspace and the settings page via the topBar button', async () => {
     currentAuthState = 'authenticated'
     sessionStorage.setItem('hdgraf.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
+    // BYOK (08-02): the settings form is populated from localStorage, not a
+    // server GET - seed it so the stored model shows in the form.
+    localStorage.setItem(
+      BYOK_STORAGE_KEY,
+      JSON.stringify({ provider: 'gemini', api_key: 'AIzaStoredKey', base_url: '', model: 'gemini-2.5-flash' }),
+    )
 
     const user = userEvent.setup()
     render(<App />)
