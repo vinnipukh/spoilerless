@@ -66,13 +66,13 @@ Plans: 07-01 audit + threat model + domain design · 07-02 progress migration + 
   4. Neo4j runs on AuraDB Free (no exposed local Compose recipe in the deploy path) through a least-privilege app DB role; Upstash Redis caches and invalidates graph query responses; the backend is live on Render and the frontend on Vercel, reaching each other through configured CORS; every secret is a platform environment variable, none in the repo
   5. A GitHub Actions workflow runs backend `pytest` + frontend build/lint on every PR; an external uptime check on `GET /health` can alert on failure; the backend logs exceptions instead of dropping them; `docs/DEPLOYMENT.md` documents the real hosted target and rollback procedure
 
-**Plans**: 2/8 plans executed
+**Plans**: 3/8 plans executed
 
 Plans:
 
 - [x] 08-01-PLAN.md — Tracer: production deploy skeleton (Render + Vercel + AuraDB + spoilerless.net custom domain, one real Google login end-to-end)
 - [x] 08-02-PLAN.md — BYOK LLM chat: browser-held key/base_url/model, per-request headers, backend passthrough (completed 2026-08-04: cf2f685, 7665168, 7e7e025)
-- [ ] 08-03-PLAN.md — Admin role: candidate review, ChangeSet confirm, and /api/settings/llm gated to admin
+- [x] 08-03-PLAN.md — Admin role: candidate review, ChangeSet confirm, and /api/settings/llm gated to admin (completed 2026-08-04: 037d43c, 573462e, 11acd74, abbb7e7)
 - [ ] 08-04-PLAN.md — Cookie/CORS/CSRF hardening: fail-closed verify_origin, logout CSRF coverage, settings-driven SameSite
 - [ ] 08-05-PLAN.md — Redis foundation + rate limiting: multi-worker-safe 429 on login/chat-send/content-write
 - [ ] 08-06-PLAN.md — Graph query response cache: Redis cache-aside keyed by (series_id, boundary, user_id), invalidated on write
@@ -123,7 +123,7 @@ Plans:
 | 05.1 Candidate review frontend UI | v1.0/v1.1 | — | Complete | 2026-07-30 |
 | 6. Spoiler-safe GraphRAG chat and graph-editing agent | v1.1 | 13/13 | Complete | 2026-08-02 |
 | 7. Spoiler-Safety Hardening | v1.2 | 8/8 | Complete | 2026-08-03 |
-| 8. Production Deployment & Automated CI/CD | v1.3 | 2/8 | In Progress|  |
+| 8. Production Deployment & Automated CI/CD | v1.3 | 3/8 | In Progress|  |
 | 9. Feature Expansion & Full Audit Remediation | v1.3 | 0/TBD | Not started | - |
 | 10. Polish & Finishing Touches | v1.3 | 0/TBD | Not started | - |
 

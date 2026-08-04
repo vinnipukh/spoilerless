@@ -5,16 +5,16 @@ milestone_name: Production Deployment & Access Hardening
 current_phase: 8
 current_phase_name: production-deployment-automated-ci-cd
 status: executing
-stopped_at: Plan 08-02 (BYOK LLM chat) complete - frontend localStorage BYOK + X-LLM-* headers (AI-01/02/03)
-last_updated: "2026-08-04T13:25:00.000Z"
+stopped_at: Plan 08-03 (admin role) complete - AppUser role from ADMIN_EMAILS + require_admin gates on candidate review, ChangeSet confirm, /api/settings/llm (AUTH-03/04)
+last_updated: "2026-08-04T15:10:00.000Z"
 last_activity: 2026-08-04
-last_activity_desc: Plan 08-02 (BYOK LLM chat) completed - 1/8 plans done
+last_activity_desc: Plan 08-03 (admin role) completed - 2/8 plans done
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 8
-  completed_plans: 1
-  percent: 12
+  completed_plans: 2
+  percent: 25
 ---
 
 # HD Graf Cehennemi — Project State
@@ -29,18 +29,18 @@ See: .planning/PROJECT.md (updated 2026-08-04)
 ## Current Position
 
 Phase: 8 (production-deployment-automated-ci-cd) — EXECUTING
-Plan: 2 of 8
+Plan: 3 of 8
 Status: Executing Phase 8
-Last activity: 2026-08-04 — Plan 08-02 (BYOK LLM chat) completed
+Last activity: 2026-08-04 — Plan 08-03 (admin role) completed
 
-Progress: [█░░░░░░░░░] 12% (v1.3); 7 phases complete across v1.0–v1.2
+Progress: [██░░░░░░░░] 25% (v1.3); 7 phases complete across v1.0–v1.2
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed (all milestones to date): 36 (v1.0/v1.1: 27, v1.2: 8, v1.3: 1)
-- v1.3: 1 plan completed (08-02 BYOK), 7 planned (TBD per phase)
+- Total plans completed (all milestones to date): 37 (v1.0/v1.1: 27, v1.2: 8, v1.3: 2)
+- v1.3: 2 plans completed (08-02 BYOK, 08-03 admin role), 6 planned (TBD per phase)
 
 **By Phase:**
 
@@ -48,9 +48,9 @@ Progress: [█░░░░░░░░░] 12% (v1.3); 7 phases complete across 
 |-------|-------|-------|
 | 1–6 (v1.0/v1.1) | 27 | See `.planning/milestones/v1.1-ROADMAP.md` for per-plan durations |
 | 7 (v1.2 Spoiler-Safety Hardening) | 8 | See `.planning/milestones/v1.2-phases/07-spoiler-safety-hardening/` SUMMARY.md files |
-| 8–10 (v1.3) | 1 | See Phase 8 SUMMARY.md files (08-02 BYOK complete) |
+| 8–10 (v1.3) | 2 | See Phase 8 SUMMARY.md files (08-02 BYOK, 08-03 admin role complete) |
 
-**Recent Trend:** v1.3 executing — Plan 08-02 (BYOK LLM chat) completed 2026-08-04.
+**Recent Trend:** v1.3 executing — Plan 08-03 (admin role) completed 2026-08-04.
 
 *Updated after each plan completion*
 
@@ -62,6 +62,7 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 
 - [PROJECT.md]: Global (non-per-user) LLM Settings, built without a threat model — flagged as SSRF/cross-user-takeover surface; full fix deferred to v1.3 (Phase 8, AUTH-04/AI-01..03)
 - [08-02]: LLM settings moved to browser-only BYOK — frontend keeps key/base_url/model in localStorage ('hdgraf:byok-llm-settings') and sends them per-request as X-LLM-* headers; frontend api/settings.ts (GET/PUT /api/settings/llm) removed. Backend endpoint stays for now; 08-03 gates it to admin or retires it.
+- [08-03]: Admin role derived server-side from ADMIN_EMAILS at every login and persisted on AppUser (re-synced on each login — removals demote on next sign-in); require_admin gates candidate approve/reject/edit, ChangeSet confirm, and GET/PUT /api/settings/llm (403 "forbidden"). /api/settings/llm survives as admin-only server fallback (BYOK covers per-user path). ChangeSet reject/revert and candidate ingest/list/get intentionally NOT gated (Phase 9/PROB-01 scope).
 - [v1.3 requirements]: Stack additions locked for this milestone only — Upstash Redis (caching) and a hosted target (Vercel/Render/AuraDB); no other new stack components (no second graph DB, no JWT auth, no frontend rewrite)
 - [v1.3 roadmap]: AUTH-01 (email allowlist) and AUTH-02 (`/api/auth/dev` removal) landed ahead of formal planning; mapped to Phase 8 for traceability as verification/regression work, not new build work
 - [v1.3 roadmap]: Phases sequenced access-control/security (8) → data+hosting infra migration (9) → CI/monitoring/docs (10), since exposing the app publicly (Phase 9) should follow session/CORS/rate-limit hardening (Phase 8), and monitoring/docs (Phase 10) need a real deployed target to point at
@@ -90,10 +91,10 @@ Items acknowledged and carried forward, not in v1.3 scope:
 
 ## Session Continuity
 
-Last session: 2026-08-04 13:25
-Stopped at: Plan 08-02 (BYOK LLM chat) complete — backend request-scoped BYOK provider (cf2f685) + frontend localStorage settings/X-LLM-* headers (7665168, 7e7e025); 1/8 Phase 8 plans done
+Last session: 2026-08-04 15:10
+Stopped at: Plan 08-03 (admin role) complete — role field + ADMIN_EMAILS derivation (037d43c, 573462e) and admin enforcement gates (11acd74, abbb7e7); 2/8 Phase 8 plans done
 Resume file: None
 
 ## Operator Next Steps
 
-- Continue executing Phase 8 — next: plan 08-03 (admin role: candidate review, ChangeSet confirm, /api/settings/llm gated to admin)
+- Continue executing Phase 8 — next: plan 08-04 (cookie/CORS/CSRF hardening: fail-closed verify_origin, logout CSRF coverage, settings-driven SameSite)
