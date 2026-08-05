@@ -19,14 +19,14 @@ This guide covers local development for the FastAPI/Neo4j backend and the React/
 Clone the upstream repository directly:
 
 ```bash
-git clone https://github.com/vinnipukh/spoilerless.git
-cd spoilerless
+git clone https://github.com/vinnipukh/hdgrafcehennemi.git
+cd hdgrafcehennemi
 ```
 
 If you plan to contribute through a fork, fork the repository on GitHub, clone your fork instead, and optionally retain the upstream repository as a remote:
 
 ```bash
-git remote add upstream https://github.com/vinnipukh/spoilerless.git
+git remote add upstream https://github.com/vinnipukh/hdgrafcehennemi.git
 ```
 
 ### Configure the backend and frontend

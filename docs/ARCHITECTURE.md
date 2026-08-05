@@ -173,11 +173,14 @@ spoilerless/
 │       ├── spoiler/        # Isolated, dependency-free spoiler-filter Cypher constants
 │       └── main.py         # FastAPI app assembly, router registration, CORS, lifespan
 │   └── tests/               # pytest suite (spoilerless/tests/, see pyproject.toml testpaths)
+├── scripts/                 # zombie_sweep.py — dry-run-first cleanup of orphaned
+│                            #   :AppUser rows and stale :Session nodes (PROB-22/#46)
 ├── frontend/
 │   └── src/
 │       ├── api/            # Typed fetch clients, one file per backend resource
 │       ├── components/     # React components grouped by feature (graph, chat, auth, ...)
 │       ├── hooks/           # Data-fetching and state hooks
+│       ├── lib/             # searchIndex.ts (zero-dep substring search), byok.ts
 │       ├── providers/       # React context providers (auth)
 │       └── types/           # TypeScript types mirroring spoilerless/app/domain/*.py
 ├── data/dexter/             # Seed data for the Dexter S01E01–03 prototype
@@ -206,7 +209,8 @@ A single-page application that renders an interactive knowledge graph using Cyto
 
 ```
 frontend/src/
-├── api/              # client.ts (fetch wrapper + ApiError), graph.ts, series.ts,
+├── api/              # client.ts (fetch wrapper + ApiError; error normalization to
+│                      #   INVALID_REQUEST / UNKNOWN_ERROR), graph.ts, series.ts,
 │                      # auth.ts, revisions.ts, progress.ts, chat.ts, changeSet.ts,
 │                      # settings.ts, userContent.ts
 ├── components/
@@ -215,12 +219,21 @@ frontend/src/
 │   │                    # MessageList/MessageBubble, CitationChip, ChangeSetCard
 │   ├── detail/          # DetailPanel, StructuralEdgeCard, RevisionHistoryPanel
 │   ├── episode/          # EpisodeSelector, SeriesSelect, ConfirmAdvanceModal
-│   ├── graph/             # GraphCanvas, graphElements, graphStylesheet, GraphStatus
+│   ├── graph/             # GraphCanvas, graphElements, graphStylesheet,
+│   │                    # GraphControls, GraphLegend, GraphFocusIndicator,
+│   │                    # GraphStatus, NodeSearch, PathFinder, relationshipStyles
 │   ├── layout/             # AppShell
+│   ├── palette/            # CommandPalette (⌘K)
+│   ├── series/             # SeriesDashboard
 │   ├── settings/            # SettingsPage
+│   ├── timeline/            # TimelineView, TimelineEventRow
 │   └── ui/                  # shadcn/ui primitives (button, card, dialog, alert, ...)
 ├── hooks/               # useGraph, useWatchProgress, useSeries, useEpisodes,
-│                         # useNotes, useRevisions, useChatSessions, useChatMessages
+│                         # useNotes, useRevisions, useChatSessions, useChatMessages,
+│                         # useHotkey
+├── lib/                 # searchIndex.ts (zero-dep substring search behind node search,
+│                         #   notes & claims search, and the ⌘K palette), byok.ts,
+│                         #   nodeTypes.ts
 ├── providers/            # AuthContext, AuthProvider, useAuth
 └── types/                # graph.ts, series.ts, revision.ts, settings.ts — mirror
                            # spoilerless/app/domain/*.py
@@ -233,7 +246,14 @@ frontend/src/
 - **`graphStylesheet.ts`** — maps node types to shapes (Character → ellipse, Event/Location → round-rectangle, Organization → diamond, Episode → tag, Series → star, UserNote → dashed round-rectangle) and origin to border style (canonical = solid, candidate/user = dashed).
 - **`useWatchProgress.ts`** — watch-progress state machine with a `confirmedOrder` (the actual spoiler boundary) and a `pendingChange` (an unconfirmed jump that triggers a confirmation modal). The backend is authoritative: `sessionStorage` is used only as a loading-state cache, and on mount the hook reconciles the hydrated value against `GET /api/series/{id}/progress`, overriding it with the server record. `confirmChange()` awaits the `updateProgress()` backend write before committing local state (optimistically committing on transient network failure); hydrates from `sessionStorage` on mount so a page refresh never re-prompts.
 - **`AuthProvider.tsx`** — on mount calls `GET /api/auth/me` to silently restore a session from the cookie; any auth error resolves to an `unauthenticated` state rather than surfacing an error banner.
-- **`App.tsx` / `AppShell`** — orchestrates series selection → episode list loading → watch-progress state → graph fetching. Edge routing is intentionally three-way: claim-backed edges and claim-less `origin: "user"` edges open `DetailPanel`; only claim-less non-user edges open `StructuralEdgeCard`. Consequently, `claim_id: null` alone is not a structural-edge discriminator.
+- **`App.tsx` / `AppShell`** — a state-driven shell with **no router**: `view` is a `useState<'graph' | 'timeline' | 'settings'>('graph')` union, so the graph workspace, the timeline, and the settings page are plain state switches (entering settings unmounts the graph view, including the chat sheet). App orchestrates series selection → episode list loading → watch-progress state → graph fetching, wires `NodeSearch`/`CommandPalette` selections into the existing `graphFocus` path, and registers the `mod+k`/`/` hotkeys via `useHotkey`. Edge routing is intentionally three-way: claim-backed edges and claim-less `origin: "user"` edges open `DetailPanel`; only claim-less non-user edges open `StructuralEdgeCard`. Consequently, `claim_id: null` alone is not a structural-edge discriminator.
+- **`NodeSearch.tsx`** — floating search bar over the canvas (FEAT-01/FEAT-07, plan 09-09); a mode `ToggleGroup` switches between node search and grouped notes & claims search. Both run payload-local through `lib/searchIndex.ts` — zero-dep substring matching, with fuse.js explicitly excluded. Selection reuses the existing `onSelect` → `DetailPanel` / `graphFocus` path — never a second selection mechanism.
+- **`PathFinder.tsx`** — two-node selection mode (FEAT-06, plan 09-11) that POSTs `/api/series/{id}/graph/path` via `frontend/src/api/graph.ts` and renders the returned hop chain over the canvas.
+- **`GraphControls.tsx` / `GraphLegend.tsx`** — zoom/fit/reset controls and a collapsible legend derived from `relationshipStyles.ts`'s edge-color families.
+- **`CommandPalette.tsx`** — the ⌘K palette (FEAT-08, plan 09-09): a dialog overlay grouping "Jump to node" / "Switch episode" / "Actions". Node rows share `searchIndex` with `NodeSearch`; episode rows route through the `onRequestChange` prop (PROB-31 semantics — locked episodes open the unlock dialog, never a silent no-op); action rows switch views (timeline/settings/dashboard) and trigger the export seam.
+- **`TimelineView.tsx` / `SeriesDashboard.tsx`** — the FEAT-02 timeline (full-canvas chronological list of visible `Event` nodes rendered from the already boundary-filtered graph payload, via `TimelineEventRow`) and the FEAT-04 series dashboard (episode-overview dialog).
+- **`useHotkey.ts`** — global keyboard-shortcut hook (FEAT-08): one `window` `keydown` listener per combo (`mod+k`, `/`, `escape`) with cleanup and a ref-held handler; `{ skipWhenInputFocused: true }` stops `/` from hijacking typing.
+- **`searchIndex.ts`** (`lib/`) — the single zero-dependency substring search implementation behind node search, notes & claims search, and the palette; a pure function over payloads the frontend has already fetched (and the backend has already boundary-filtered).
 
 #### Vite Configuration
 
@@ -245,14 +265,14 @@ The dev server proxies `/api` requests to `http://127.0.0.1:8000`, avoiding CORS
 
 **Location:** `spoilerless/app/api/`
 
-Ten route modules registering **44 HTTP operations** (including `GET /health` in `main.py`) across roughly 32 unique path templates.
+Ten route modules registering **46 HTTP operations** (including `GET /health` in `main.py`) across roughly 34 unique path templates.
 
 #### Route Inventory
 
 | Module | Base path | Purpose |
 |---|---|---|
 | `series.py` | `/api/series` | List/get series, list episodes (no spoiler filter — metadata is public) |
-| `graph.py` | `/api/series/{series_id}/graph` | Spoiler-safe graph read (the critical read path) |
+| `graph.py` | `/api/series/{series_id}/graph`, `/graph/path`, `/export` | Spoiler-safe graph read (the critical read path), shortest visible path, Markdown export |
 | `user_content.py` | `/api/series/{series_id}/notes`, `/custom-nodes`, `/custom-relationships` | CRUD for user notes, custom nodes, custom relationships |
 | `revisions.py` | `/api/series/{series_id}/revisions` | List/get revisions, revert to a revision |
 | `progress.py` | `/api/series/{series_id}/progress` | Read/persist a user's watch-progress boundary |
@@ -276,6 +296,8 @@ Three route groups carry an optional `RateLimiter` dependency (`spoilerless/app/
 `GET /api/series/{series_id}/graph?visible_until_order=N` is the most architecturally significant endpoint. It validates the series exists, resolves the boundary against a persisted episode order, checks the Redis cache-aside layer (`spoilerless/app/cache/graph_cache.py`) keyed on `graph:{series_id}:{effective_boundary}:{user_id or 'anon'}`, and on a miss delegates to `GraphService.fetch_graph()` (which runs seven Cypher queries concurrently) before writing the result back to the cache with a 300-second TTL. It returns a closed-form `GraphResponse` containing every visible node, edge, claim, source, and evidence fragment. Caching is disabled (`get_cached_graph`/`set_cached_graph` are no-ops) whenever `REDIS_URL` is empty or Redis errors — the route always falls through to Neo4j rather than failing the request.
 
 The locked operation inventory (method/path templates and response schemas) is maintained separately in [`docs/frontend-api-contract.md`](./frontend-api-contract.md); the OpenAPI spec generated by `spoilerless.app.main:app` is authoritative.
+
+Two sibling routes added in plan 09-11 reuse the same spoiler-safe machinery. `POST /api/series/{series_id}/graph/path` (FEAT-06) finds the shortest visible path between two entities by executing the allowlisted `find_path` retrieval tool (the request's `max_hops` is clamped to the server ceiling `MAX_PATH_HOPS = 4`). `GET /api/series/{series_id}/export` (FEAT-05, D-11) returns the visible graph — or a single target node and its claims — rendered as Markdown (`text/markdown` with a `Content-Disposition: attachment` filename), assembled from the same `GraphService.fetch_graph()` response rather than a second filter implementation. Both resolve the effective boundary through the same `_resolve_effective_boundary` block the graph GET uses (anonymous readers fixed at order 1, authenticated readers clamped to persisted progress), so a client can never widen the spoiler window through either route.
 
 ---
 
@@ -304,6 +326,8 @@ The locked operation inventory (method/path templates and response schemas) is m
 - **`SessionRepository`** (`repository/session.py`) — a `SessionRepository` protocol with two implementations: `Neo4jSessionRepository` (the default, wired directly into `main.py`'s lifespan) persists sessions as `(:Session)` nodes linked via `(:AppUser)-[:HAS_SESSION]->(:Session)`, with uniqueness constraints on `id` and `token_hash` and an index on `expires_at` (created by the seed pipeline); `InMemorySessionRepository` is a plain-dictionary store with no synchronization, suitable only for single-process development and tests. Tokens are `secrets.token_urlsafe(48)`; only the SHA-256 hash is ever persisted; expired/revoked sessions are rejected lazily at read time (a periodic `DETACH DELETE` cleanup task is a documented TODO).
 - **`UserContentRepository`** (`repository/user_content.py`) — manages notes, custom nodes, and custom relationships. Visibility is **derived from the target entity** (notes inherit the target's `visible_from_order`; custom relationships use `MAX(source, target, episode)`). It validates ID namespacing (`user-note:`, `user-node:`, `user-rel:` prefixes) and mutation queries gate on `origin = 'user'`, but these routes do not bind an authenticated owner ID, so content is not isolated per user. Deleting a custom node with attached notes/claims returns `409`.
 - **`ChangeSetRepository`**, **`ChatRepository`**, **`SettingsRepository`** — the corresponding data-access layers for the ChangeSet, chat, and settings subsystems described in [7.9](#79-changeset-two-stage-mutation-flow), [7.8](#78-graphrag-lite-chat-pipeline), and [7.11](#711-settings-system-user-configurable-llm-provider).
+
+A separate operator script, `spoilerless/scripts/zombie_sweep.py` (PROB-22/#46), sweeps orphaned `(:AppUser)` rows and stale `(:Session)` nodes — dry-run-first by default (`python -m spoilerless.scripts.zombie_sweep --dry-run` counts; `--execute` deletes).
 
 ---
 
@@ -352,6 +376,8 @@ Created idempotently by `setup_database()`: `id` uniqueness constraints for the 
 
 The `setup_database()` pipeline (invoked via `uv run spoilerless-setup`, registered in `pyproject.toml` as the `spoilerless-setup` script) loads seed JSON from `data/dexter/`, validates it against the ontology (node types, relationship types, claim types/statuses/confidence levels, ID uniqueness, evidence completeness), creates constraints and indexes, upserts all nodes via `MERGE`, creates structural and provenance relationships, and runs a visibility integrity audit.
 
+After seeding, `spoilerless/app/graph/setup.py`'s `_check_visibility_schema()` (PROB-20/#44) verifies that every seeded story node under `series_dexter` — `Character`, `Event`, `Location`, `Organization`, `Object`, `Claim`, `EvidenceFragment`, `Source` — carries a non-null `visible_from_order`; any null raises a `SCHEMA DRIFT` error and the setup exits 1, so a stale live database can never silently hide the missing visibility gate again (a live reseed remains an operator-gated step).
+
 ---
 
 ## 5. Key Abstractions
@@ -367,7 +393,7 @@ The `setup_database()` pipeline (invoked via `uv run spoilerless-setup`, registe
 | `RetrievalPipeline` | `spoilerless/app/retrieval/pipeline.py` | Orchestrates allowlisted tool calls, context assembly, and citation validation for the GraphRAG-lite chat |
 | `ChangeSetService` | `spoilerless/app/services/change_set.py` | The typed, two-stage (propose/confirm) protocol that is the only path through which the graph can be mutated by chat-driven writes |
 | `RevisionRepository.log_revision` | `spoilerless/app/revisions/__init__.py` (used across services and repositories) | Shared pattern for writing an append-only before/after audit record in the same transaction as any content mutation |
-| `require_admin` / `RequireAdminDependency` | `spoilerless/app/api/deps.py` | FastAPI dependency gate requiring `role == "admin"` (derived server-side from `ADMIN_EMAILS` at login); rejects with `403 forbidden` otherwise |
+| `require_admin` / `RequireAdminDependency` | `spoilerless/app/api/deps.py` | FastAPI dependency gate requiring `role == "admin"` (derived server-side from `ADMIN_EMAILS` at login); rejects with `403 FORBIDDEN` otherwise |
 | `get_redis()` | `spoilerless/app/cache/redis_client.py` | The single shared, `lru_cache`-decorated `redis.asyncio` client; every Redis-backed feature imports it rather than constructing its own connection |
 | `RateLimiter` | `spoilerless/app/services/rate_limit.py` | FastAPI dependency enforcing a per-window request count via a Redis-backed `pyrate-limiter` bucket; a no-op until `init_rate_limiter()` binds it (or when `REDIS_URL` is empty) |
 
@@ -491,10 +517,10 @@ Every automatic claim requires at least one `EvidenceFragment` (`SUPPORTED_BY`) 
 
 ### 7.6 Error Handling
 
-**Location:** `spoilerless/app/core/errors.py`. A structured error envelope used by the API endpoints, except `/health`'s `503` response, which returns the `HealthResponse` fields `status`, `database`, and `service`:
+**Location:** `spoilerless/app/core/errors.py`. A structured error envelope used by the API endpoints, except `/health`'s `503` response, which returns the `HealthResponse` fields `status`, `database`, and `service`. Since 09-05 (PROB-09) all codes are canonical **UPPERCASE `SNAKE_CASE`** — the `ERROR_CODES` registry (33 codes) is validated by a Pydantic field validator that rejects unregistered or lowercase codes at startup; OpenAPI contract tests enforce the casing:
 
 ```json
-{ "detail": { "code": "series_not_found", "message": "Series not found." } }
+{ "detail": { "code": "SERIES_NOT_FOUND", "message": "Series not found." } }
 ```
 
 | Status | Code | When |
@@ -504,16 +530,18 @@ Every automatic claim requires at least one `EvidenceFragment` (`SUPPORTED_BY`) 
 | 401 | `AUTH_DISABLED` | Google auth or session TTL not configured |
 | 403 | `AUTH_EMAIL_NOT_ALLOWED` | Verified Google email not in a non-empty `ALLOWED_EMAILS` |
 | 403 | `AUTH_ORIGIN_NOT_ALLOWED` | `Origin`/`Referer` missing or not in `FRONTEND_ORIGINS` (`POST /api/auth/google` only) |
-| 403 | `forbidden` | `RequireAdminDependency` rejected a non-admin caller |
-| 404 | `series_not_found` | Series lookup missed |
-| 404 | `resource_not_found` | Hidden or absent resource |
-| 409 | `resource_conflict` | Ownership violation or dependency |
-| 422 | `invalid_request` | Validation failure |
-| 422 | `invalid_visible_until_order` | Bad boundary value |
-| 429 | `too_many_requests` | A `RateLimiter`-gated route exceeded its window (login/chat-send/content-write) |
-| 503 | `database_unavailable` | Neo4j unreachable |
+| 403 | `FORBIDDEN` | `RequireAdminDependency` rejected a non-admin caller |
+| 404 | `SERIES_NOT_FOUND` | Series lookup missed |
+| 404 | `RESOURCE_NOT_FOUND` | Hidden or absent resource |
+| 409 | `RESOURCE_CONFLICT` | Ownership violation or dependency |
+| 422 | `INVALID_REQUEST` | Validation failure |
+| 422 | `INVALID_VISIBLE_UNTIL_ORDER` | Bad boundary value |
+| 429 | `TOO_MANY_REQUESTS` | A `RateLimiter`-gated route exceeded its window (login/chat-send/content-write) |
+| 503 | `DATABASE_UNAVAILABLE` | Neo4j unreachable |
 
 `install_database_error_handlers()` and `install_llm_error_handlers()` (installed in `main.py`) register handlers so validation, constraint, connectivity, and LLM-provider errors are translated into this envelope. Database error messages are intentionally generic — never leaking Cypher, connection details, or internals.
+
+Since 09-05 (PROB-17) `main.py` also registers a `_security_headers_middleware` that stamps every response with `Content-Security-Policy` (default-src 'self', GIS script origins allowed), `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and `Referrer-Policy: strict-origin-when-cross-origin`; CORS is narrowed to an explicit method/header list (no wildcard with credentials).
 
 ### 7.7 Revision History
 
@@ -608,8 +636,8 @@ Stage 1 — PROPOSE (POST /api/series/{series_id}/change-sets, not admin-gated)
   └── Persists the ChangeSet draft and linking relationships — status: awaiting_confirmation; target graph content is unchanged
 
 Stage 2 — CONFIRM (POST .../confirm, admin-only) | REJECT (POST .../reject)
-  Confirm: RequireAdminDependency (403 forbidden for a non-admin caller) →
-  ownership/status check → staleness check (409 changeset_stale) →
+  Confirm: RequireAdminDependency (403 FORBIDDEN for a non-admin caller) →
+  ownership/status check → staleness check (409 CHANGESET_STALE) →
   replay prevented by stored `status == 'applied'` (the post-apply random idempotency key is not checked) → single Neo4j transaction (all-or-nothing)
   → Revision logged in the same transaction → cache/graph_cache.invalidate_series()
   Reject: marks the ChangeSet rejected; no database change; not admin-gated
@@ -620,7 +648,7 @@ Stage 3 — REVERT (POST .../revert, applied ChangeSets only, not admin-gated)
   Reverted revision
 ```
 
-Only Stage 2's confirm step is admin-gated — the reasoning is that confirming is the step that actually applies an AI-proposed mutation to the shared canonical graph, so propose/reject/revert remain open to any authenticated user. The frontend renders a proposed ChangeSet as a preview card (per-operation summary, before/after rows for updates, a destructive banner when deletes are present) with explicit Confirm/Reject controls — the only UI path into the confirm/reject endpoints; a non-admin viewer's Confirm click surfaces the `403 forbidden` response.
+Only Stage 2's confirm step is admin-gated — the reasoning is that confirming is the step that actually applies an AI-proposed mutation to the shared canonical graph, so propose/reject/revert remain open to any authenticated user. The frontend renders a proposed ChangeSet as a preview card (per-operation summary, before/after rows for updates, a destructive banner when deletes are present) with explicit Confirm/Reject controls — the only UI path into the confirm/reject endpoints; a non-admin viewer's Confirm click surfaces the `403 FORBIDDEN` response.
 
 ### 7.10 Spoiler-Safety Invariants
 
@@ -639,7 +667,7 @@ Only Stage 2's confirm step is admin-gated — the reasoning is that confirming 
 
 Lets an authenticated user configure the GraphRAG chat agent's LLM provider from the UI instead of only via `.env`. A single `(:AppSetting {key: 'llm'})` node holds the configuration as a JSON-serialized string. `SettingsService.get_llm()` resolves the *effective* configuration field-by-field: the stored graph value wins, the `LLM_*` environment settings are the fallback/bootstrap path.
 
-**API key handling (write-only secret):** `GET /api/settings/llm` never returns the full key — only `api_key_configured: bool` and a masked form. On `PUT`, `null` or `""` keeps the previously stored key; whitespace-only input is truthy and is currently persisted rather than treated as blank. The full key never appears in any response model or log line. Both routes carry `RequireAdminDependency` — only a session whose `role == "admin"` (see [7.13](#713-role-based-access-control-admin-role)) may view or change the shared LLM provider configuration; any other authenticated user gets `403 forbidden`. The configuration itself remains a single shared global record, not a per-user one.
+**API key handling (write-only secret):** `GET /api/settings/llm` never returns the full key — only `api_key_configured: bool` and a masked form. On `PUT`, `null` or `""` keeps the previously stored key; whitespace-only input is truthy and is currently persisted rather than treated as blank. The full key never appears in any response model or log line. Both routes carry `RequireAdminDependency` — only a session whose `role == "admin"` (see [7.13](#713-role-based-access-control-admin-role)) may view or change the shared LLM provider configuration; any other authenticated user gets `403 FORBIDDEN`. The configuration itself remains a single shared global record, not a per-user one.
 
 | Route | Method | Purpose |
 |---|---|---|
@@ -675,7 +703,7 @@ POST .../candidates/{id}/reject   → status: candidate → rejected (admin-only
 
 `role` is a two-value field — `"admin"` or `"user"` — assigned server-side at every login from `ADMIN_EMAILS` membership (a comma-separated, case-insensitive env allowlist), never accepted from the client or derived from any request body. `UserRepository.upsert()` re-syncs `role` on every login (`ON MATCH SET u.role = $role`), so removing an email from `ADMIN_EMAILS` demotes that user's role the next time they sign in — no database migration needed. Pre-migration `AppUser` records without a stored `role` default to `"user"` via `coalesce(u.role, 'user')` in `GET_USER_BY_ID_QUERY` and the `UserPublic` model's `default="user"`.
 
-`require_admin` is a `CurrentUserDependency`-composed FastAPI dependency: it first resolves the authenticated user (`401 AUTH_UNAUTHENTICATED` if no valid session), then checks `user["role"] == "admin"`, raising `403 forbidden` otherwise. It currently gates exactly five routes: `candidates.py`'s `PATCH .../{id}`, `POST .../approve`, `POST .../reject`; `change_set.py`'s `POST .../confirm`; and both `settings.py` routes (`GET`/`PUT /api/settings/llm`). The rationale is consistent across all five: each is the step that commits AI-proposed or extracted content to the shared canonical graph, or mutates the shared LLM provider configuration, rather than merely reading or drafting.
+`require_admin` is a `CurrentUserDependency`-composed FastAPI dependency: it first resolves the authenticated user (`401 AUTH_UNAUTHENTICATED` if no valid session), then checks `user["role"] == "admin"`, raising `403 FORBIDDEN` otherwise. It currently gates exactly five routes: `candidates.py`'s `PATCH .../{id}`, `POST .../approve`, `POST .../reject`; `change_set.py`'s `POST .../confirm`; and both `settings.py` routes (`GET`/`PUT /api/settings/llm`). The rationale is consistent across all five: each is the step that commits AI-proposed or extracted content to the shared canonical graph, or mutates the shared LLM provider configuration, rather than merely reading or drafting.
 
 Ordinary user-content, revision, progress, chat, and ChangeSet-propose/reject/revert routes remain open to any authenticated user — this RBAC layer does not implement per-user ownership or ordinary multi-tenant isolation (see [Normative follow-ups](#normative-follow-ups-planned-not-implemented)); it is a single admin/non-admin distinction layered on top of the existing session-cookie authentication from [7.5](#75-authentication--sessions).
 
@@ -691,7 +719,7 @@ Ordinary user-content, revision, progress, chat, and ChangeSet-propose/reject/re
 | `chat_send_rate_limiter` | Chat message send (streaming and non-streaming) | 20 requests | 60s | authenticated user id |
 | `content_write_rate_limiter` | Every `user_content.py` write route (notes, custom nodes, custom relationships — create/update/delete) | 30 requests | 60s | authenticated user id, falling back to IP (user-content routes gain no ownership dependency until a later phase) |
 
-`rate_limit_identifier()` reads `request.state.user` (stamped by `require_current_user` — see [7.5](#75-authentication--sessions)) when present, else falls back to `request.client.host`. A request over the limit gets `429 too_many_requests` via the shared error envelope ([7.6](#76-error-handling)). `init_rate_limiter()` binds the Redis-backed `Limiter` to all three instances once, in `main.py`'s `lifespan()`, immediately after `database.open()`, guarded on non-empty `REDIS_URL`; until bound (or when unbound), every `RateLimiter.__call__()` is a no-op.
+`rate_limit_identifier()` reads `request.state.user` (stamped by `require_current_user` — see [7.5](#75-authentication--sessions)) when present, else falls back to `request.client.host`. A request over the limit gets `429 TOO_MANY_REQUESTS` via the shared error envelope ([7.6](#76-error-handling)). `init_rate_limiter()` binds the Redis-backed `Limiter` to all three instances once, in `main.py`'s `lifespan()`, immediately after `database.open()`, guarded on non-empty `REDIS_URL`; until bound (or when unbound), every `RateLimiter.__call__()` is a no-op.
 
 **Graph response cache** (`cache/graph_cache.py`) — a cache-aside layer in front of `GET /api/series/{series_id}/graph` only (see [4.2](#42-api-layer-fastapi)). Cache keys are `graph:{series_id}:{effective_boundary}:{user_id or 'anon'}` with a 300-second TTL (`DEFAULT_GRAPH_TTL_SECONDS`); because the effective spoiler boundary is part of the key, a boundary change is always a correct cache miss with no explicit invalidation required. Content-changing routes that mutate a series' graph (`candidates.py`'s approve/reject/edit, `change_set.py`'s confirm, `user_content.py`'s custom-node/custom-relationship create/update) call `invalidate_series(series_id)` after a successful write, which coarsely deletes every cached entry for that series via `SCAN`+`DELETE` rather than attempting to re-derive which exact `(boundary, user)` combinations the write affected. Any Redis error on read or write is swallowed and treated as a cache miss/no-op — caching is a performance layer, never a hard dependency, and a Redis outage degrades every graph read back to always querying Neo4j directly.
 

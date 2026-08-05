@@ -1,8 +1,10 @@
 # Spoilerless — Spoiler Threat Model
 
 **Status:** DOCS-01 deliverable (plan 07-01) · **Date:** 2026-08-03
-**Source inventory:** `.planning/phases/07-spoiler-safety-hardening/07-AUDIT.md` (repository audit of
-leak channels, grounded in real symbols at HEAD, commit `8e286ed`).
+**Source inventory:** `docs/SPOILER-THREAT-MODEL.md` itself is the living leak-channel inventory
+(originally grounded in `.planning/phases/07-spoiler-safety-hardening/07-AUDIT.md` at commit `8e286ed`; that
+phase directory was archived during the Phase 8/9 restructure — audit findings were folded into this
+document and `docs/PROBLEMS.md`).
 **Locked vocabulary:** `docs/SPOILER-TERMINOLOGY.md` — read it first. `visible_from_order` is the single
 canonical reveal-point property; the visibility rule is **fail closed** (D-03).
 

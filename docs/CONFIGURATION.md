@@ -244,11 +244,7 @@ configuration is done by maintaining a separate `.env` per deployment:
   credentials, `SESSION_COOKIE_SECURE=true`, and the deployed frontend origin(s) in `FRONTEND_ORIGINS`.
   <!-- VERIFY: The exact production Neo4j Aura instance URI and cloud region are deployment-specific and
   not discoverable from the repository. -->
-- **Frontend** — Vite convention supports `frontend/.env`, `frontend/.env.local` (local
-  overrides, gitignored), plus optional `frontend/.env.production` / `frontend/.env.staging`; `frontend/.env` is absent. Only
-  `frontend/.env.example` and `frontend/.env.local` currently exist in the repo. `VITE_*` variables are
-  inlined into the bundle at build time, so production values must be present when `npm run build` runs —
-  they cannot be injected at runtime.
+- **Frontend** — since the 09-05 envDir consolidation, the frontend reads its `VITE_*` variables from the **root `.env`** via `envDir: '..'` in `frontend/vite.config.ts` — there is no `frontend/.env` or `frontend/.env.local` anymore (`frontend/.env.example` still exists as a reference template for the two `VITE_*` variables). `VITE_*` variables are inlined into the bundle at build time, so production values must be present when `npm run build` runs — they cannot be injected at runtime.
 
 ---
 
@@ -416,8 +412,7 @@ exist outside `vite dev`.
 
 ### Frontend environment variables
 
-`frontend/.env.example` (verified) declares two variables. A local `frontend/.env.local` may provide
-gitignored overrides; its secret-bearing contents were intentionally not inspected:
+Since the 09-05 envDir consolidation, `frontend/vite.config.ts` sets `envDir: '..'`, so the frontend reads its `VITE_*` variables from the **root `.env`** — `frontend/.env.local` was deleted and must not be recreated. `frontend/.env.example` (verified) remains as a reference template declaring the two variables:
 
 | Variable | Required | Description |
 |---|---|---|
@@ -425,7 +420,7 @@ gitignored overrides; its secret-bearing contents were intentionally not inspect
 | `VITE_API_BASE_URL` | No — commented out in `frontend/.env.example` | Read via `import.meta.env.VITE_API_BASE_URL ?? ''` in `frontend/src/api/client.ts` (used by `apiFetch`, the shared client for every non-streaming API call) and again in `frontend/src/api/chat.ts` for the raw SSE `streamMessage` fetch. Empty (the unset default) preserves relative-URL requests through the Vite dev proxy; setting it prefixes every request with an absolute origin so a hosted frontend can reach a backend on another origin — `frontend/.env.example`'s commented example is `VITE_API_BASE_URL=https://api.spoilerless.net`. <!-- VERIFY: The exact production API origin is deployment-specific; confirm the current value in the Vercel project's build-time environment variables. --> |
 
 > **Security:** Vite inlines `VITE_*` variables into the built JavaScript bundle at build time — never
-> store secrets in `frontend/.env.local`. `VITE_GOOGLE_CLIENT_ID` is a public OAuth client identifier
+> store secrets in the root `.env`. `VITE_GOOGLE_CLIENT_ID` is a public OAuth client identifier
 > (safe to expose to the browser by design), not a secret.
 
 ### TypeScript config
@@ -617,15 +612,15 @@ written to Neo4j.
 ### 1. First-time setup
 
 ```bash
-# 1. Copy environment templates
+# 1. Copy the environment template (frontend VITE_* vars live in this same
+#    root .env — there is no frontend/.env.local anymore)
 cp .env.example .env
-cp frontend/.env.example frontend/.env.local
 # Edit .env — set NEO4J_PASSWORD (docker-compose.yml substitutes this same
-# value into NEO4J_AUTH, defaulting to "change-me" if left unset) and
-# GOOGLE_CLIENT_ID. Optionally set ADMIN_EMAILS to grant yourself the admin
-# role (required for the LLM settings endpoints) and SESSION_COOKIE_SECURE=false
-# if serving the backend over plain HTTP on a non-localhost host.
-# Edit frontend/.env.local — set VITE_GOOGLE_CLIENT_ID to the same Google client ID
+# value into NEO4J_AUTH, defaulting to "change-me" if left unset),
+# GOOGLE_CLIENT_ID and VITE_GOOGLE_CLIENT_ID (same value), optionally
+# ADMIN_EMAILS to grant yourself the admin role (required for the LLM
+# settings endpoints) and SESSION_COOKIE_SECURE=false if serving the
+# backend over plain HTTP on a non-localhost host.
 
 # 2. Start Neo4j
 docker compose up -d
@@ -668,19 +663,21 @@ NEO4J_DATABASE=neo4j
 4. Copy the **Client ID** and set it in both places:
 
 ```bash
-# Backend .env
+# Backend + frontend, both in the root .env (envDir consolidation — no
+# frontend/.env.local)
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-
-# Frontend .env.local
 VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 ```
 
 5. Restart the backend and rebuild/restart the frontend dev server.
 
-**Important:** The `GOOGLE_CLIENT_ID` values in `.env` and `frontend/.env.local` must match exactly. The
-backend verifies the token audience against its configured `GOOGLE_CLIENT_ID`; a mismatch causes
-`google_auth()` to raise `GoogleVerificationError("audience_mismatch")`, returned to the client as
-`401 AUTH_INVALID_GOOGLE_CREDENTIAL`.
+**Important:** The `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID` values in the root `.env` must match
+exactly. The backend verifies the token audience against its configured `GOOGLE_CLIENT_ID`; a mismatch
+causes `google_auth()` to raise `GoogleVerificationError("audience_mismatch")`, returned to the client as
+`401 AUTH_INVALID_GOOGLE_CREDENTIAL`. Since 09-05, startup also runs
+`verify_google_client_id_equality()` — when **both** variables are set and differ, startup fails with a
+`RuntimeError` instead of shipping a broken login flow (a missing `VITE_GOOGLE_CLIENT_ID` in local dev
+does not crash).
 
 > `GOOGLE_CLIENT_SECRET` is **not** used anywhere in this codebase. Never add it to any configuration file.
 

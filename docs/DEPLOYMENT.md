@@ -11,8 +11,8 @@ access control.
 |---|---|---|---|
 | **Vercel** | Hobby (free) | Frontend static/SPA hosting | `app.spoilerless.net` |
 | **Render** | Free web service | Backend FastAPI (uvicorn) | `api.spoilerless.net` |
-| **Neo4j AuraDB** | Free | Production graph database (managed) | `neo4j+s://<dbid>.databases.neo4j.io` |
-| **Upstash Redis** | Free | Rate-limit counters + graph query response cache | `rediss://...` |
+| **Neo4j AuraDB** | Free | Production graph database (managed) | `neo4j+s://<dbid>.databases.neo4j.io` <!-- VERIFY: dbid is 03a8623b --> |
+| **Upstash Redis** | Free | Rate-limit counters + graph query response cache | `rediss://...` <!-- VERIFY: instance name darling-rat-221809 --> |
 | **Cloudflare** | Registrar | DNS for `spoilerless.net` (custom domains) | — |
 | **Google OAuth** | — | User authentication (no local password store) | — |
 
@@ -20,7 +20,7 @@ The `api.` subdomain's Cloudflare DNS record is **DNS-only (grey cloud)** —
 the proxy's idle timeout would kill long-running SSE chat streams. The
 `app.` subdomain is proxied (orange cloud). An apex redirect from
 `spoilerless.net` → `app.spoilerless.net` is configured via a Cloudflare
-Redirect Rule.
+Redirect Rule. <!-- VERIFY: Cloudflare apex redirect rule active -->
 
 ### Platform configuration files
 
@@ -28,7 +28,8 @@ Redirect Rule.
 |---|---|---|
 | `render.yaml` | Render | Blueprint: `uv sync --frozen` → `uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT`, free plan, `autoDeploy: true` |
 | `frontend/vercel.json` | Vercel | SPA catch-all rewrite (`/(.*)` → `/index.html`) for client-side routing. No `/api` proxy — the frontend calls the Render backend directly via `VITE_API_BASE_URL`. |
-| `.github/workflows/ci.yml` | GitHub Actions | Pull-request gate: backend `pytest` + frontend `build`/`lint` (see Build Pipeline) |
+| `.github/workflows/ci.yml` | GitHub Actions | Pull-request gate: backend `pytest` + DB-pollution gate + frontend `build`/`lint`/`audit` (see Build Pipeline) |
+| `.github/workflows/release.yml` | GitHub Actions | Staged-promotion skeleton (carry-over 09-07): manual `workflow_dispatch` with `release-candidate` / `release` stages. The `release` stage creates a `release-*` tag. Gated on the `ci` workflow passing on `main`. |
 
 ### Database — Neo4j AuraDB Free
 
@@ -157,14 +158,22 @@ request with two jobs:
 
 | Job | Runner | Steps |
 |---|---|---|
-| `backend` | `ubuntu-latest` | `actions/checkout@v5` → `astral-sh/setup-uv` → `uv sync --frozen` → seed a throwaway `neo4j:2026.06.0-community` service container → `uv run pytest` |
-| `frontend` | `ubuntu-latest` | `actions/checkout@v5` → `actions/setup-node@v4` (Node 24, satisfies `jsdom`'s engines constraint) → `npm ci` → `npm run build` (`tsc -b && vite build`) → `npm run lint` |
+| `backend` | `ubuntu-latest` | `actions/checkout@v5` → `astral-sh/setup-uv` → `uv sync --frozen` → seed a throwaway `neo4j:2026.06.0-community` service container → `uv run pytest` → DB-pollution gate (assert zero scratch/candidate residue) → `actions/upload-artifact@v4` (pytest cache on failure) |
+| `frontend` | `ubuntu-latest` | `actions/checkout@v5` → `actions/setup-node@v4` (Node 24, satisfies `jsdom`'s engines constraint) → `npm ci` → `npm run build` (`tsc -b && vite build`) → `npm run lint` → `npm audit --audit-level=high` |
 
 The CI backend job uses its own ephemeral Neo4j service container
 (pinned patch tag, port 7687, health check polling `localhost:7474`) —
-it never touches production AuraDB. No deploy step is included; Render
-and Vercel auto-deploy on push to the connected branch via their native
-git integration.
+it never touches production AuraDB. The DB-pollution gate (PROB-22,
+carry-over 09-08) fails the build if any scratch-series or
+candidate-origin nodes are left behind by the test suite. No deploy step
+is included; Render and Vercel auto-deploy on push to the connected
+branch via their native git integration.
+
+A separate release workflow (`.github/workflows/release.yml`) provides a
+manual `workflow_dispatch` for staged promotion (`release-candidate` /
+`release`) gated on the `ci` workflow passing on `main`. The `release`
+stage creates a `release-*` tag under the tag-protection rules in the
+branch-protection checklist below.
 
 To run the validation sequence locally:
 
@@ -174,7 +183,7 @@ uv run pytest
 
 # From frontend/
 npm run lint
-NODE_ENV=test CI=1 npm run test
+npm run test
 ```
 
 ## Environment Setup
@@ -192,7 +201,7 @@ environment variable settings:
 - `NEO4J_URI`
 - `NEO4J_USERNAME`
 - `NEO4J_PASSWORD`
-- `NEO4J_DATABASE` (defaults to `neo4j`; on AuraDB it is the instance ID)
+- `NEO4J_DATABASE` (defaults to `neo4j`; on AuraDB it is the instance ID) <!-- VERIFY: AuraDB instance ID is 03a8623b -->
 
 **Authentication**
 - `GOOGLE_CLIENT_ID`
@@ -210,7 +219,7 @@ environment variable settings:
 
 **Redis / rate limiting**
 - `REDIS_URL` (Upstash `rediss://` TLS connection string; empty disables
-  rate limiting and the graph cache)
+  rate limiting and the graph cache) <!-- VERIFY: Upstash instance darling-rat-221809 -->
 
 ### Vercel (frontend static hosting)
 
@@ -263,28 +272,49 @@ fetch queries Neo4j directly.
 - **Graph response cache** (Redis cache-aside, 300s TTL, invalidated on
   write) reduces Neo4j load on repeated graph fetches.
 - **CI gate** — GitHub Actions runs backend `pytest` and frontend
-  `build`/`lint` on every PR, with its own throwaway Neo4j service
-  container.
+  `build`/`lint`/`audit` on every PR, with its own throwaway Neo4j service
+  container and a DB-pollution gate (carry-over 09-08).
 
-### Known gaps (explicitly deferred to Phase 9)
+### Closed by Phase 9
+
+- **Structured exception logging** (09-06): the chat stream handler logs
+  `LLMProviderUnavailable` and bare exceptions with `logger.exception`
+  before yielding the SSE error event. The session-sweep background task
+  also logs failed iterations. Database and LLM error handlers are
+  installed during startup (`install_database_error_handlers`,
+  `install_llm_error_handlers`).
+- **Request-logging middleware** (09-08): every request is logged with
+  method, path, status, and duration (ms); `X-LLM-*`, `Cookie`,
+  `Set-Cookie`, and `Authorization` header values are redacted.
+- **Security headers** (PROB-17, 09-05): `Content-Security-Policy`,
+  `Strict-Transport-Security`, `X-Content-Type-Options`,
+  `X-Frame-Options`, `Referrer-Policy` on every response.
+- **DB-pollution CI gate** (09-08): the CI backend job asserts zero
+  scratch-series or candidate-origin residue after the test suite.
+- **Zombie sweep** (09-08): `spoilerless/scripts/zombie_sweep.py`
+  removes tie-less `AppUser` rows and expired/revoked/orphaned `Session`
+  nodes. `--dry-run` first, then `--execute`. Protected dev user is
+  never deleted.
+- **Session sweep** (09-08): a background task in the FastAPI lifespan
+  deletes expired/revoked sessions every hour.
+- **Write-path auth hardening** (09-03): all mutation routes require
+  authentication; ownership binding on user content; admin-only
+  candidate review.
+
+### Known gaps (explicitly deferred to later phases)
 
 Ownership binding, session-ID collision fix, user-content auth on all
 mutation routes, full request/response casing consistency, test-suite
 isolation from the live DB, frontend lint debt, stale-doc corrections,
 Neo4j AuraDB backup/restore, and ten new features — see
-`docs/PROBLEMS.md` (41 items) and `.planning/REQUIREMENTS.md` Phase 9
-(PROB-01..21, FEAT-01..10).
+`docs/PROBLEMS.md` (57 items) and `.planning/REQUIREMENTS.md` Phase 9
+(PROB-01..32, FEAT-01..10).
 
-### Gaps not yet implemented (Phase 8 items pending 08-07 completion)
+### Outstanding (not yet configured)
 
-- **Structured exception logging**: the backend's `install_error_handlers`
-  returns sanitised responses but does not yet log the original
-  exception before sanitising (OPS-03, planned 08-07 Task 2).
-- **Request-logging middleware**: no redacting request-logging
-  middleware exists yet (planned 08-07 Task 2).
-- **External uptime monitor**: no UptimeRobot (or equivalent) monitor
-  polls `GET /health` yet (OPS-02, planned 08-07 Task 3 — requires
-  human account sign-up).
+- **External uptime monitor** (OPS-02): no UptimeRobot (or equivalent)
+  monitor polls `GET /health` yet — requires human account sign-up. See
+  `docs/RUNBOOK.md` §1 for the planned detection flow.
 
 ## Rollback
 
@@ -299,9 +329,9 @@ fresh auto-deploy.
 
 ### Vercel (frontend)
 
-Vercel supports **promoting a prior deployment** from its dashboard:
+Vercel supports **Instant Rollback** from its dashboard:
 open the Vercel project → Deployments tab → select the last known good
-deployment → **Promote to Production**. This is **atomic and instant**
+deployment → **Instant Rollback**. This is **atomic and instant**
 — the chosen deployment's already-built assets become the production
 domain's content with no rebuild.
 
@@ -327,29 +357,43 @@ destroys the data without restoring an earlier graph.
 
 `GET https://api.spoilerless.net/health` returns:
 
-- HTTP 200 `{"status": "ok", "database": "connected"}` — backend and
+- HTTP 200 `{"status": "ok", "database": "connected", "service": "spoilerless-backend"}` — backend and
   Neo4j are healthy.
-- HTTP 503 `{"status": "degraded", "database": "unavailable"}` —
+- HTTP 503 `{"status": "degraded", "database": "unavailable", "service": "spoilerless-backend"}` —
   backend is running but Neo4j is unreachable.
 
 The endpoint is unauthenticated and read-only. The backend verifies
-Neo4j connectivity with a lightweight `verify_connection()` call.
+Neo4j connectivity with a lightweight `verify_connection()` call. A
+`HEAD /health` variant is also available for uptime monitors.
 
 ### External uptime monitor
 
 An UptimeRobot (or equivalent free-tier service) monitor on
 `https://api.spoilerless.net/health` with a 5-minute check interval and
-email alert on non-200 response or timeout is planned (08-07 Task 3,
-human-provisioned — not yet configured at time of writing).
+email alert on non-200 response or timeout is planned (human-provisioned
+— see `docs/RUNBOOK.md` §1 for the detection flow; not yet configured at
+time of writing). <!-- VERIFY: UptimeRobot monitor configured -->
 
 ### Platform-level monitoring
 
 Render and Vercel each provide build/runtime logs and basic metrics in
 their respective dashboards. No custom log drain, alert rule, custom
 dashboard, Sentry, Datadog, or OpenTelemetry integration is configured.
-The backend currently drops exceptions silently after sanitising
-responses — structured exception logging is planned (08-07 Task 2) but
-not yet shipped.
+
+The backend now includes structured logging infrastructure (Phase 9):
+- **Request-logging middleware** logs method, path, status, and duration
+  for every request, with sensitive headers (`X-LLM-*`, `Cookie`,
+  `Set-Cookie`, `Authorization`) redacted.
+- **Exception logging** in the chat stream handler and session-sweep
+  background task via `logger.exception`.
+- **Database and LLM error handlers** installed at startup
+  (`install_database_error_handlers`, `install_llm_error_handlers`).
+
+### Incident response
+
+See `docs/RUNBOOK.md` for the full incident detection, diagnosis ladder,
+rollback procedure, and zombie-sweep runbook. Key diagnostic commands
+are executable by a future operator without platform dashboard access.
 
 ### Local development
 
@@ -359,7 +403,7 @@ not yet shipped.
 - The Compose health check probes `http://localhost:7474` every 10
   seconds with a 5-second timeout and 10 retries.
 
-## Branch-protection checklist (carry-over 09-07 — operator applies in GitHub UI)
+## Branch-protection checklist (carry-over 09-08 — operator applies in GitHub UI)
 
 No repo-local CLI path exists for GitHub branch protection; the operator
 configures these in **Settings → Branches → Add rule (main)** during the

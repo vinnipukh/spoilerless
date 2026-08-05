@@ -34,15 +34,16 @@ npm --version
 1. Clone the repository and enter it:
 
    ```bash
-   git clone https://github.com/vinnipukh/spoilerless.git
-   cd spoilerless
+   git clone https://github.com/vinnipukh/hdgrafcehennemi.git
+   cd hdgrafcehennemi
    ```
 
-2. Create local configuration files from the committed templates:
+2. Create the local configuration file from the committed template. The frontend reads its `VITE_*`
+   variables from the **root `.env`** (via `envDir: '..'` in `frontend/vite.config.ts` — the
+   `frontend/.env.local` file was removed in the 09-05 envDir consolidation):
 
    ```bash
    cp .env.example .env
-   cp frontend/.env.example frontend/.env.local
    ```
 
 3. Edit the root `.env`:
@@ -59,12 +60,12 @@ npm --version
      provision a local Redis container; leaving `REDIS_URL` empty is the default and both features degrade
      to a no-op rather than blocking startup or requests.
 
-4. Edit `frontend/.env.local`:
+4. Set the frontend variable in the same root `.env`:
 
    - Set `VITE_GOOGLE_CLIENT_ID` to the same client ID used by the backend.
-   - Keep `VITE_API_BASE_URL=/api` as shown by the template.
+   - Keep `VITE_API_BASE_URL` commented out (the dev proxy handles `/api`).
 
-   The application can start without a Google client ID, but the login page reports that Google Sign-In is not configured. Do not commit either local environment file, and do not place secrets in `VITE_*` variables.
+   The application can start without a Google client ID, but the login page reports that Google Sign-In is not configured. Do not commit the root `.env`, and do not place secrets in `VITE_*` variables.
 
    <!-- VERIFY: Creating a Google OAuth 2.0 Web Client ID and registering http://localhost:5173 as an authorized JavaScript origin are external Google Cloud Console steps. -->
 
@@ -102,7 +103,7 @@ Docker Compose defines one service named `neo4j`, using the container name `spoi
 The `pyproject.toml` declares an `spoilerless-setup` entry point, but the project currently has no build-system/package setting, so `uv sync` may skip installing that executable. The directly runnable module is:
 
 ```bash
-uv run python -m spoilerless.app.graph.setup
+uv run --project spoilerless python -m spoilerless.app.graph.setup
 ```
 
 A successful run prints a `Dexter graph setup complete` summary. The seed operation is intended to create constraints and load the Dexter Season 1, Episodes 1–3 data from `data/dexter/`.
@@ -145,7 +146,7 @@ The seeded identifiers are `series_dexter` and `dexter_s01e01` through `dexter_s
 2. Select a character or claim-backed relationship. The left inspector shows graph details, claims, evidence/source metadata, notes, and revision history where applicable.
 3. Advance to **S01E02**. Confirm the spoiler warning, then observe the newly unlocked nodes and relationships. Moving backward also asks for confirmation and contracts the visible graph.
 4. Add a note or user-created graph item from the available inspector/canvas controls. User content remains visually distinguishable and participates in revision/refresh flows.
-5. Open **Settings** with the top-bar gear to configure the optional LLM provider, model, API key, enabled switch, and English/Turkish assistant language. Settings saved here are stored in Neo4j and take precedence over matching `LLM_*` environment values. This page requires the signed-in account to carry the `admin` role (see `ADMIN_EMAILS` in [Installation](#installation)); a non-admin account gets `403 forbidden`.
+5. Open **Settings** with the top-bar gear to configure the optional LLM provider, model, API key, enabled switch, and English/Turkish assistant language. Settings saved here are stored in Neo4j and take precedence over matching `LLM_*` environment values. This page requires the signed-in account to carry the `admin` role (see `ADMIN_EMAILS` in [Installation](#installation)); a non-admin account gets `403 FORBIDDEN`.
 6. Open chat and ask about a relationship visible at the current progress. Chat is optional and reports a disabled/provider error when no effective provider is enabled; it must not retrieve beyond persisted watch progress.
 
 Candidate extraction review is currently an API workflow rather than a dedicated frontend screen. Use Swagger UI at `http://localhost:8000/docs` to inspect the ingest, list/get, edit, approve, and reject routes under `/api/series/{series_id}/candidates`. Ingest and list/get carry no authentication requirement; edit, approve, and reject require the `admin` role, same as Settings above. Candidate ingestion accepts structured, evidence-bearing records; it is not an automatic subtitle/script ingestion pipeline.
@@ -157,7 +158,7 @@ Candidate extraction review is currently an API workflow rather than a dedicated
 `uv sync` currently warns that project entry points are skipped because the repository has no build system or `tool.uv.package = true`. Use the verified module form instead:
 
 ```bash
-uv run python -m spoilerless.app.graph.setup
+uv run --project spoilerless python -m spoilerless.app.graph.setup
 ```
 
 ### Python or Node.js is rejected
@@ -180,7 +181,7 @@ If the seed integrity audit fails against an older local graph, do not ignore th
 
 ### The login page says Google Sign-In is not configured
 
-Set the same OAuth Web Client ID in the backend's `GOOGLE_CLIENT_ID` and the frontend's `VITE_GOOGLE_CLIENT_ID`, then restart both dev servers. The local frontend origin must also be registered with the OAuth provider. Do not add a Google client secret; this application verifies browser-issued ID tokens using the client ID.
+Set the same OAuth Web Client ID in both `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID` in the **root `.env`** (since 09-05 the frontend reads `VITE_*` from the root `.env` via `envDir: '..'` — there is no `frontend/.env.local`), then restart both dev servers. The local frontend origin must also be registered with the OAuth provider. Do not add a Google client secret; this application verifies browser-issued ID tokens using the client ID.
 
 ### A local port is already in use
 

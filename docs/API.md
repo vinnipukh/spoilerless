@@ -7,7 +7,7 @@ The backend is a FastAPI application defined by `spoilerless.app.main:app`. Its 
 - Swagger UI: `/docs`
 - ReDoc: `/redoc`
 - API version: `0.1.0`
-- Registered surface: **44 method/path operations over 32 path templates**
+- Registered surface: **46 method/path operations over 34 path templates**
 
 All paths below are relative to the backend origin. JSON field names use `snake_case`. No production base URL is defined in the repository. <!-- VERIFY: deployed backend base URL -->
 
@@ -40,7 +40,7 @@ All paths below are relative to the backend origin. JSON field names use `snake_
 
 `google_sub` is an internal identity key and is deliberately excluded from `UserPublic` responses.
 
-The sign-in route checks the request `Origin`, or the origin reconstructed from `Referer`, against `FRONTEND_ORIGINS` when reconstruction succeeds. A malformed `Referer` that raises during parsing, such as one with an invalid port, is treated as having no candidate origin and is allowed. It returns `403 AUTH_ORIGIN_NOT_ALLOWED` for a mismatch. A request with neither header is allowed.
+The sign-in and logout routes check the request `Origin`, or the origin reconstructed from `Referer`, against `FRONTEND_ORIGINS` via the `verify_origin` dependency. The check fails closed: a request with neither header, or with a `Referer` that cannot be parsed into a candidate origin, is rejected with `403 AUTH_ORIGIN_NOT_ALLOWED`. A literal `*` in `FRONTEND_ORIGINS` disables the check. `SameSite=Lax` on the session cookie is the complementary cookie-level defense against cross-site POSTs.
 
 ### Session cookie
 
@@ -55,28 +55,32 @@ The cookie has these attributes:
 | Attribute | Value |
 |---|---|
 | `HttpOnly` | `true` |
-| `Secure` | `SESSION_COOKIE_SECURE` (default `false`) |
-| `SameSite` | `Lax` |
+| `Secure` | `SESSION_COOKIE_SECURE` (default `true`) |
+| `SameSite` | `SESSION_COOKIE_SAMESITE` (default `lax`; `strict` or `none` are supported) |
 | `Path` | `/` |
 | `Domain` | Not set |
 
-The raw cookie value is generated with `secrets.token_urlsafe(48)`. Only its SHA-256 hash is stored in a Neo4j `Session` node linked from the owning `AppUser` by `HAS_SESSION`. The server-side TTL is `SESSION_TTL_SECONDS` (default 604800 seconds, seven days) and is extended whenever an authenticated request successfully resolves the current user. Expired or revoked sessions are rejected lazily; no background cleanup task is implemented.
+The raw cookie value is generated with `secrets.token_urlsafe(48)`. Only its SHA-256 hash is stored in a Neo4j `Session` node linked from the owning `AppUser` by `HAS_SESSION`. The server-side TTL is `SESSION_TTL_SECONDS` (default 604800 seconds, seven days). Validating a session never extends its expiry (no slide-on-read); expiry is enforced by an `expires_at` check at read time, and a background sweep deletes expired and revoked `Session` nodes hourly (started only when the database is reachable at startup).
 
 - `GET /api/auth/me` requires a valid session and returns `UserResponse`.
-- `POST /api/auth/logout` revokes a supplied session and deletes the cookie. It returns `204` even when no cookie is supplied.
+- `POST /api/auth/logout` revokes a supplied session and deletes the cookie. It returns `204` even when no cookie is supplied. It is not session-gated but carries the same `verify_origin` dependency as sign-in.
 
 ### Which endpoints require a session?
 
-Only routes using `CurrentUserDependency` (directly, or transitively via `RequireAdminDependency`) require authentication:
+Routes using `CurrentUserDependency` (directly, or transitively via `RequireAdminDependency`) require authentication:
 
 - `GET /api/auth/me`
 - both watch-progress operations
 - all chat operations
 - all ChangeSet operations
 - both LLM-settings operations
-- candidate edit, approve, and reject operations
+- candidate ingest, edit, approve, and reject operations
+- all user-content write operations: create/update/delete for notes, custom nodes, and custom relationships
+- `POST /api/series/{series_id}/revisions/{revision_id}/revert`
 
-Series, episodes, graph, notes, custom nodes, custom relationships, revisions, candidate ingest/list/read, health, Google sign-in, and logout do **not** currently require a session. In particular, the current code does not apply a user identity or ownership dependency to user-content, revision, or candidate read/ingest routes.
+User-content writes and revision revert are additionally owner-scoped: mutating a resource owned by another user returns `403 FORBIDDEN` (admins bypass the check; legacy resources with no stored owner are admin-only, fail-closed).
+
+Series and episode reads, the graph read, shortest-path, and Markdown export routes, notes/custom-node/custom-relationship reads, revision reads, candidate list/read, health, Google sign-in, and logout do not require a session. The graph, episodes, shortest-path, and export routes take an optional session (`OptionalUserDependency`): anonymous readers are fixed at spoiler boundary order 1, while authenticated readers' effective boundary is clamped to their persisted watch progress.
 
 ### Which endpoints require the admin role?
 
@@ -89,7 +93,7 @@ Series, episodes, graph, notes, custom nodes, custom relationships, revisions, c
 - `GET /api/settings/llm`
 - `PUT /api/settings/llm`
 
-Candidate ingest and read, and ChangeSet propose/reject/revert, are intentionally **not** admin-gated — only the routes that commit candidate claims or an AI-proposed ChangeSet to the shared canonical graph, or mutate the shared LLM settings, require the admin role.
+Candidate read, and ChangeSet propose/reject/revert, are intentionally **not** admin-gated — only the routes that commit candidate claims or an AI-proposed ChangeSet to the shared canonical graph, or mutate the shared LLM settings, require the admin role. Candidate ingest and user-content writes require a valid session but not the admin role.
 
 ## Endpoints Overview
 
@@ -100,26 +104,28 @@ Candidate ingest and read, and ChangeSet propose/reject/revert, are intentionall
 | GET | `/api/series/{series_id}` | Read one series | No |
 | GET | `/api/series/{series_id}/episodes` | List episodes for a series | No |
 | GET | `/api/series/{series_id}/graph` | Read the spoiler-filtered graph | No |
-| POST | `/api/series/{series_id}/notes` | Create a user note | No |
+| POST | `/api/series/{series_id}/graph/path` | Find the shortest visible path between two entities | No |
+| GET | `/api/series/{series_id}/export` | Export the visible graph as Markdown | No |
+| POST | `/api/series/{series_id}/notes` | Create a user note | Yes |
 | GET | `/api/series/{series_id}/notes` | List visible notes | No |
 | GET | `/api/series/{series_id}/notes/{note_id}` | Read one visible note | No |
-| PATCH | `/api/series/{series_id}/notes/{note_id}` | Update note content | No |
-| DELETE | `/api/series/{series_id}/notes/{note_id}` | Delete a note | No |
-| POST | `/api/series/{series_id}/custom-nodes` | Create a custom node | No |
+| PATCH | `/api/series/{series_id}/notes/{note_id}` | Update note content | Yes |
+| DELETE | `/api/series/{series_id}/notes/{note_id}` | Delete a note | Yes |
+| POST | `/api/series/{series_id}/custom-nodes` | Create a custom node | Yes |
 | GET | `/api/series/{series_id}/custom-nodes/{node_id}` | Read one visible custom node | No |
-| PATCH | `/api/series/{series_id}/custom-nodes/{node_id}` | Update a custom node label | No |
-| DELETE | `/api/series/{series_id}/custom-nodes/{node_id}` | Delete a custom node | No |
-| POST | `/api/series/{series_id}/custom-relationships` | Create a custom relationship | No |
+| PATCH | `/api/series/{series_id}/custom-nodes/{node_id}` | Update a custom node label | Yes |
+| DELETE | `/api/series/{series_id}/custom-nodes/{node_id}` | Delete a custom node | Yes |
+| POST | `/api/series/{series_id}/custom-relationships` | Create a custom relationship | Yes |
 | GET | `/api/series/{series_id}/custom-relationships/{relationship_id}` | Read one visible custom relationship | No |
-| PATCH | `/api/series/{series_id}/custom-relationships/{relationship_id}` | Update a custom relationship predicate | No |
-| DELETE | `/api/series/{series_id}/custom-relationships/{relationship_id}` | Delete a custom relationship | No |
+| PATCH | `/api/series/{series_id}/custom-relationships/{relationship_id}` | Update a custom relationship predicate | Yes |
+| DELETE | `/api/series/{series_id}/custom-relationships/{relationship_id}` | Delete a custom relationship | Yes |
 | POST | `/api/auth/google` | Sign in with a Google ID token | No |
 | GET | `/api/auth/me` | Get the current authenticated user | Yes |
 | POST | `/api/auth/logout` | Revoke a session and clear its cookie | No |
 | GET | `/api/series/{series_id}/revisions` | List visible revisions | No |
 | GET | `/api/series/{series_id}/revisions/{revision_id}` | Read one visible revision | No |
-| POST | `/api/series/{series_id}/revisions/{revision_id}/revert` | Revert the resource state captured by a revision | No |
-| POST | `/api/series/{series_id}/candidates/ingest` | Ingest an extraction batch | No |
+| POST | `/api/series/{series_id}/revisions/{revision_id}/revert` | Revert the resource state captured by a revision | Yes |
+| POST | `/api/series/{series_id}/candidates/ingest` | Ingest an extraction batch | Yes |
 | GET | `/api/series/{series_id}/candidates` | List candidate claims | No |
 | GET | `/api/series/{series_id}/candidates/{claim_id}` | Read one candidate claim | No |
 | PATCH | `/api/series/{series_id}/candidates/{claim_id}` | Edit a candidate claim | Yes (admin) |
@@ -149,7 +155,7 @@ Candidate ingest and read, and ChangeSet propose/reject/revert, are intentionall
 - Resource creation returns `201`, except candidate batch ingestion and progress upsert, which return `200`.
 - Deletes and logout return `204` with no body.
 - Pydantic request models configured with `extra="forbid"` reject unknown request fields; response typing, including an untyped `dict` response, does not affect request validation.
-- The SSE chat route returns `text/event-stream`, not JSON.
+- The SSE chat route returns `text/event-stream`; the Markdown export route returns `text/markdown`.
 
 ### Series, episodes, health, and graph
 
@@ -163,9 +169,11 @@ Candidate ingest and read, and ChangeSet propose/reject/revert, are intentionall
 }
 ```
 
+The `503` body has the same shape with `"status": "degraded"` and `"database": "unavailable"`. A `HEAD /health` variant (omitted from the OpenAPI schema) returns the same status codes for uptime monitors.
+
 `GET /api/series` returns `SeriesResponse[]`; a single series has `id`, `title`, and `slug`. `GET /api/series/{series_id}/episodes` returns `EpisodeResponse[]` with `id`, `series_id`, season and episode numbers, `episode_order`, `code`, `title`, and `visible_from_order`.
 
-`GET /api/series/{series_id}/graph` requires the positive integer query parameter `visible_until_order`. The value must identify a persisted episode order for that series. The response is:
+`GET /api/series/{series_id}/graph` requires the positive integer query parameter `visible_until_order`. The value must identify a persisted episode order for that series. Anonymous readers are fixed at order 1 regardless of the parameter — a client-chosen boundary never widens the spoiler window without a session, and the persisted-episode check resolves against the effective order. Authenticated readers' effective boundary is clamped to their persisted watch progress. The response is:
 
 ```json
 {
@@ -180,6 +188,24 @@ Candidate ingest and read, and ChangeSet propose/reject/revert, are intentionall
 ```
 
 Every graph node and narrative item is filtered by `visible_from_order`. Claims also honor `valid_from_order` and `valid_until_order`. Returned edges are closed over the returned nodes: both endpoints must be present. Canonical/candidate claim projections carry their Claim ID; structural edges and user-authored relationship Claims both carry `claim_id: null`. User-origin edges are emitted only when both endpoints survive same-series node visibility filtering, so clients must not use null `claim_id` alone to classify an edge as structural. `GraphNode` additionally supports optional `image_url` and `image_source_url` fields.
+
+#### Shortest path
+
+`POST /api/series/{series_id}/graph/path` finds the shortest visible path between two entities:
+
+```json
+{
+  "source_entity_id": "dexter:character:dexter_morgan",
+  "target_entity_id": "dexter:character:debra_morgan",
+  "max_hops": 4
+}
+```
+
+`source_entity_id` and `target_entity_id` are required. `max_hops` is optional, defaults to the server ceiling `MAX_PATH_HOPS` (4), and is capped at 4 by the request model. The spoiler boundary is resolved server-side through the same path the graph GET uses — anonymous readers are fixed at order 1 and authenticated readers are clamped to their persisted progress — so the client cannot widen the visible window. The walk traverses only visible claims, so a path that exists only through a hidden intermediate node is indistinguishable from no path at all. The response shape is `{"found", "path", "edges", "hops"}`; when either endpoint is missing or not visible at the boundary, `found` is `false` with empty arrays, and a self-path returns `found: true` with zero hops. Errors: `404 SERIES_NOT_FOUND`, `422 INVALID_VISIBLE_UNTIL_ORDER`, `503 DATABASE_UNAVAILABLE`.
+
+#### Markdown export
+
+`GET /api/series/{series_id}/export` renders the visible graph as Markdown (feature D-11). It accepts the same optional `visible_until_order` query parameter (defaults to 1, with the same anonymous-fixed-at-1 and progress-clamped boundary resolution as the graph read) and an optional `target_id` query parameter that narrows the export to a single visible resource and its claims. The response is `text/markdown` with a `Content-Disposition: attachment` header naming the file `spoilerless-{slug}-order-{N}.md` for a whole-series export or `spoilerless-{nodeLabel}.md` for a single-target export (labels are slugified; a target that is not visible at the boundary renders a stub note instead of failing). The Markdown is assembled from the same filtered read path as the graph GET — there is no second filter implementation. Errors: `404 SERIES_NOT_FOUND`, `422 INVALID_VISIBLE_UNTIL_ORDER`, `503 DATABASE_UNAVAILABLE`.
 
 ### Notes
 
@@ -199,7 +225,7 @@ Create a note:
 | `target_id` | 1–255 characters |
 | `content` | 1–4000 characters |
 
-The server creates `id`, `series_id`, `origin: "user"`, `visible_from_order`, `created_at`, and `updated_at`. PATCH accepts only `{"content":"..."}`. `GET /notes` requires `visible_until_order`; optional `target_type` and `target_id` filters must be supplied together.
+The server creates `id`, `series_id`, `origin: "user"`, `visible_from_order`, `created_at`, and `updated_at`. PATCH accepts only `{"content":"..."}`. `GET /notes` requires `visible_until_order`; optional `target_type` and `target_id` filters must be supplied together. Creating, updating, and deleting notes require a valid session; a note is owned by its creator, and mutating another user's note returns `403 FORBIDDEN`.
 
 ### Custom nodes
 
@@ -213,7 +239,7 @@ Create a node:
 }
 ```
 
-`node_type` is one of `Character`, `Event`, `Location`, `Organization`, or `Object`; `label` is 1–200 characters; and `episode_id` is 1–255 characters. Visibility is derived from the referenced same-series episode. PATCH accepts only `{"label":"..."}`. Deleting a node with dependent notes or user relationships returns `409 RESOURCE_CONFLICT`.
+`node_type` is one of `Character`, `Event`, `Location`, `Organization`, or `Object`; `label` is 1–200 characters; and `episode_id` is 1–255 characters. Visibility is derived from the referenced same-series episode. PATCH accepts only `{"label":"..."}`. Deleting a node with dependent notes or user relationships returns `409 RESOURCE_CONFLICT`. Create, update, and delete require a valid session and are owner-scoped (`403 FORBIDDEN` for another user's node).
 
 ### Custom relationships
 
@@ -228,7 +254,7 @@ Create a relationship:
 }
 ```
 
-The supported predicates are `PARTICIPATED_IN`, `WITNESSED`, `CAUSED`, `AFFECTED`, `TARGETED`, `MENTIONED`, `KNOWS`, `FAMILY_OF`, `WORKS_WITH`, `TRUSTS`, `DISTRUSTS`, `HELPS`, `OPPOSES`, `THREATENS`, `ATTACKS`, and `KILLS`. Source and target must exist in the same series. PATCH accepts only `{"predicate":"TRUSTS"}`.
+The supported predicates are `PARTICIPATED_IN`, `WITNESSED`, `CAUSED`, `AFFECTED`, `TARGETED`, `MENTIONED`, `KNOWS`, `FAMILY_OF`, `WORKS_WITH`, `TRUSTS`, `DISTRUSTS`, `HELPS`, `OPPOSES`, `THREATENS`, `ATTACKS`, and `KILLS`. Source and target must exist in the same series. PATCH accepts only `{"predicate":"TRUSTS"}`. Create, update, and delete require a valid session and are owner-scoped.
 
 The response uses `source`, `target`, and `type` rather than the request names `source_id`, `target_id`, and `predicate`. In `GET /graph`, user-authored relationships are edge-only records with `claim_id: null`; both endpoints must pass the same series and visibility checks as graph nodes before the edge is emitted.
 
@@ -238,7 +264,7 @@ All revision operations require `visible_until_order` as a positive query intege
 
 - `GET /revisions` accepts optional `resource_type` and `resource_id` filters and returns newest revisions first.
 - `GET /revisions/{revision_id}` returns a visible `RevisionResponse` or an indistinguishable `404 RESOURCE_NOT_FOUND`.
-- `POST /revisions/{revision_id}/revert` restores an `Updated` user resource from `before`, or recreates a `Deleted` resource. It emits a new `Reverted` revision.
+- `POST /revisions/{revision_id}/revert` restores an `Updated` user resource from `before`, or recreates a `Deleted` resource. It emits a new `Reverted` revision. The route requires a valid session and is owner-scoped: reverting a resource owned by another user returns `403 FORBIDDEN` (admins bypass the check; legacy resources with no stored owner are admin-only).
 - Reverting a `Created` revision returns `422 CANNOT_REVERT_CREATE`.
 - Reverting an `Updated` resource whose current origin is canonical or candidate returns `409 CANNOT_REVERT_CANONICAL`. The `Deleted` branch does not check the saved snapshot's origin before recreating it.
 
@@ -246,7 +272,7 @@ A revision contains `id`, `series_id`, `resource_type`, `resource_id`, `action`,
 
 ### Candidate extraction and review
 
-`POST /candidates/ingest` accepts an `ExtractionBatchEnvelope` with required extractor metadata and 1–500 claims:
+`POST /candidates/ingest` accepts an `ExtractionBatchEnvelope` with required extractor metadata and 1–500 claims, and requires a valid session:
 
 ```json
 {
@@ -275,11 +301,11 @@ A revision contains `id`, `series_id`, `resource_type`, `resource_id`, `action`,
 }
 ```
 
-Ingestion returns `200` with `created` and `errors` arrays. Candidate IDs are deterministic hashes of normalized claim content. Listing accepts an optional positive `visible_until_order`; omitting it returns candidates at all visibility levels.
+Ingestion returns `200` with `created` and `errors` arrays. Candidate IDs are deterministic hashes of normalized claim content. Per-claim failures do not fail the batch; they are reported in the 200 body's `errors` array with `code: "INGEST_ERROR"` (a body-level code, not an HTTP error). Listing accepts an optional positive `visible_until_order`; omitting it returns candidates at all visibility levels.
 
 PATCH accepts at least one of `label`, `predicate`, `claim_type`, `confidence_level`, `relationship_effect`, `valid_from_order`, `valid_until_order`, `evidence_text`, `evidence_locator`, `source_type`, or `source_locator`. Approve changes `status` to `canonical` while retaining `origin: "candidate"`; reject changes `status` to `rejected`. Candidate edit, approve, and reject operations log revisions.
 
-Edit, approve, and reject each require `RequireAdminDependency`: a valid session **and** an admin-role user, or `403 FORBIDDEN`. Ingest, list, and single-claim read remain unauthenticated.
+Edit, approve, and reject each require `RequireAdminDependency`: a valid session **and** an admin-role user, or `403 FORBIDDEN`. Ingest requires a valid session (`CurrentUserDependency`); list and single-claim read remain anonymous.
 
 ### Watch progress
 
@@ -329,6 +355,8 @@ The non-streaming response is a `MessageResponseEnvelope`:
   "proposed_change_set": null
 }
 ```
+
+LLM configuration is per-request and bring-your-own-key (BYOK): the client may override the effective provider settings by sending the `X-LLM-Api-Key`, `X-LLM-Provider`, `X-LLM-Base-URL`, and `X-LLM-Model` headers. When `X-LLM-Api-Key` is present and non-blank, the provider is built exclusively from these header values — the persisted LLM settings and the `LLM_*` environment fallback are never consulted for that request, and the backend holds no LLM secret of its own. Header values reach only the provider constructor: they never appear in a response model, a log line, or a persisted record. `X-LLM-Provider` selects the wire protocol: `gemini` uses Google's REST API (`x-goog-api-key` auth; `base_url` is optional and falls back to the official Gemini endpoint), while a missing/blank value or `openai_compatible`/`vllm`/`ollama` uses a plain OpenAI-compatible `/chat/completions` call. Without BYOK headers, resolution falls back to persisted stored settings, then the `LLM_*` environment values. A malformed BYOK `base_url` fails with `422 INVALID_REQUEST`.
 
 The server reads the spoiler boundary from persisted progress. If progress is absent on a message path, it creates a progress record at order 1. Chat-session ownership is scoped to the authenticated user and series; foreign, cross-series, and missing sessions all produce `404 RESOURCE_NOT_FOUND`.
 
@@ -407,16 +435,18 @@ Normal HTTP errors use this envelope:
 }
 ```
 
-FastAPI request-validation failures are sanitized to `422 INVALID_REQUEST`; Pydantic field details are not returned by the installed handler. Database exceptions and constraint failures are also mapped centrally. Candidate ingestion is an exception: its `INVALID_EXTRACTION_PAYLOAD` message may include batch or claim validation context.
+FastAPI request-validation failures are sanitized to `422 INVALID_REQUEST`; Pydantic field details are not returned by the installed handler. Database exceptions and constraint failures are also mapped centrally. Candidate ingestion is an exception: its `INVALID_EXTRACTION_PAYLOAD` message may include batch or claim validation context, and per-claim failures are reported in the 200 body with `INGEST_ERROR` rather than as HTTP errors.
 
-The codebase currently emits both lowercase domain codes and uppercase authentication/LLM codes. Clients should compare codes exactly as returned.
+Every code the API emits is `UPPERCASE_SNAKE_CASE`, enforced by the canonical `ERROR_CODES` registry (31 codes in `spoilerless/app/core/errors.py`): `ErrorDetail.code` must match `^[A-Z][A-Z0-9_]*$` and be registered, so a new or legacy-lowercase code fails fast instead of silently drifting. The shared envelope maps each status to a default code — `401 UNAUTHENTICATED`, `403 FORBIDDEN`, `404 RESOURCE_NOT_FOUND`, `409 RESOURCE_CONFLICT`, `422 INVALID_REQUEST`, `429 TOO_MANY_REQUESTS`, `503 DATABASE_UNAVAILABLE` — and routes override the default with the specific codes below.
 
 | Status | Code | Meaning |
 |---|---|---|
 | 401 | `AUTH_UNAUTHENTICATED` | Session cookie absent, invalid, expired, revoked, or not linked to a user |
 | 401 | `AUTH_INVALID_GOOGLE_CREDENTIAL` | Google ID-token verification failed |
 | 401 | `AUTH_DISABLED` | Google client ID or a valid session TTL is not configured |
-| 403 | `AUTH_ORIGIN_NOT_ALLOWED` | Sign-in request origin does not match configured frontend origins |
+| 403 | `FORBIDDEN` | Non-admin on an admin-gated route, or mutation of a resource owned by another user |
+| 403 | `AUTH_ORIGIN_NOT_ALLOWED` | Sign-in or logout request origin does not match configured frontend origins (fails closed when neither `Origin` nor `Referer` is present) |
+| 403 | `AUTH_EMAIL_NOT_ALLOWED` | Sign-in email is not in the `ALLOWED_EMAILS` allowlist |
 | 404 | `SERIES_NOT_FOUND` | Series lookup failed |
 | 404 | `RESOURCE_NOT_FOUND` | Resource is absent, foreign, cross-series, or hidden at the boundary |
 | 404 | `CANDIDATE_NOT_FOUND` | Candidate claim lookup failed |
@@ -431,24 +461,25 @@ The codebase currently emits both lowercase domain codes and uppercase authentic
 | 422 | `INVALID_EXTRACTION_PAYLOAD` | Candidate batch, candidate edit, approval, or rejection failed validation |
 | 422 | `CANNOT_REVERT_CREATE` | A creation revision has no prior state to restore |
 | 422 | `INVALID_ACTION` | Revision action cannot be reverted by the route |
-| 429 | `TOO_MANY_REQUESTS` | The user already has a chat generation in flight |
+| 429 | `TOO_MANY_REQUESTS` | A rate-limit window was exceeded, or a chat generation is already in flight for the user |
 | 503 | `DATABASE_UNAVAILABLE` | Neo4j is unreachable or rejects authentication |
 | 503 | `DATABASE_ERROR` | Another handled Neo4j request error occurred |
 | 503 | `AUTH_SERVICE_UNAVAILABLE` | Google verification infrastructure failed |
 | 503 | `LLM_DISABLED` | Effective LLM configuration is disabled |
 | 503 | `LLM_PROVIDER_UNAVAILABLE` | LLM configuration or provider request is unavailable |
+| 503 | `LLM_STREAM_FAILED` | The streaming LLM call failed mid-stream |
 
 An SSE response that has already sent HTTP headers cannot change its status; it uses an `event: error` frame instead.
 
 ## Rate Limits
 
-There is no general, catch-all HTTP request-rate limiter. Three route groups carry an explicit Redis-backed limiter (`spoilerless/app/services/rate_limit.py`), enforced with `pyrate-limiter`'s atomic `RedisBucket` against the shared Redis instance — correct across multiple backend workers:
+There is no general, catch-all HTTP request-rate limiter. Three route groups carry an explicit Redis-backed limiter (`spoilerless/app/services/rate_limit.py`), enforced with pyrate-limiter's atomic `RedisBucket` against the shared Redis instance — correct across multiple backend workers:
 
 | Route group | Routes | Limit | Key |
 |---|---|---|---|
 | Login | `POST /api/auth/google` | 10 requests / 300 seconds | Client IP |
 | Chat send | `POST .../chat/sessions/{session_id}/messages`, `.../messages/stream` | 20 requests / 60 seconds | Authenticated user ID |
-| Content write | `POST`/`PATCH`/`DELETE` on notes, custom nodes, and custom relationships | 30 requests / 60 seconds | Authenticated user ID, else client IP |
+| Content write | `POST`/`PATCH`/`DELETE` on notes, custom nodes, and custom relationships | 30 requests / 60 seconds | Authenticated user ID (client IP when no session is resolved) |
 
 A request that exceeds its window's limit returns `429 TOO_MANY_REQUESTS` using the same error envelope as other errors. The limiter is bound at application startup only when `REDIS_URL` is non-empty; if Redis is not configured, every `RateLimiter` dependency is a no-op and the route runs unthrottled instead of the app failing to start. This is separate from CORS and from authentication — it is enforced independently of whether the request is otherwise valid.
 
@@ -462,7 +493,23 @@ FastAPI installs `CORSMiddleware` with:
 |---|---|
 | Allowed origins | Comma-separated `FRONTEND_ORIGINS`; default `http://localhost:5173` |
 | Credentials | Allowed |
-| Methods | All |
-| Headers | All |
+| Methods | Explicit list: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS` — no wildcard |
+| Headers | Explicit list: `Content-Type`, `Authorization`, `X-LLM-Api-Key`, `X-LLM-Provider`, `X-LLM-Base-URL`, `X-LLM-Model` — no wildcard |
 
-CORS controls browser access but does not authenticate a request. Except for the explicit origin dependency on Google sign-in, state-changing routes do not perform their own general Origin/Referer or CSRF-token validation.
+CORS controls browser access but does not authenticate a request. Except for the `verify_origin` dependency on Google sign-in and logout, state-changing routes do not perform their own general Origin/Referer or CSRF-token validation; the `SameSite=Lax` session cookie is the complementary defense.
+
+## Security Headers
+
+Every response passes through `_security_headers_middleware` (`spoilerless/app/main.py`), which sets:
+
+| Header | Value |
+|---|---|
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' https://accounts.google.com; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://accounts.google.com; frame-src https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self'` |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` |
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+
+The CSP permits the Google Identity Services script (`https://accounts.google.com/gsi/client`) used by sign-in, plus hotlinked character images. A request-logging middleware logs one INFO line per request — method, path, status, duration, and a small allowlisted header set — and never logs `Cookie`, `Set-Cookie`, `Authorization`, or any `X-LLM-*` header value.
+
+

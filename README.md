@@ -17,10 +17,9 @@ Explore characters, events, locations, claims, and relationships through an inte
 
 | Location | Holds | Notes |
 |---|---|---|
-| `.env` (repo root) | Backend settings (`NEO4J_*`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`, `ADMIN_EMAILS`, `REDIS_URL`, `LLM_*`) | Read by `spoilerless/app/core/config.py` via pydantic-settings. **Never committed.** Points at the shared AuraDB by default. |
-| `frontend/.env.local` | `VITE_GOOGLE_CLIENT_ID` only | Read by Vite for local dev. `VITE_API_BASE_URL` stays commented (the dev proxy handles `/api`). **Never committed.** |
-| `scripts/env-local.sh` | Local-Docker Neo4j credentials (`localhost:7687`) | `source scripts/env-local.sh` before running the spoilerless/tests against the local Docker Neo4j — **never** edit `.env` to switch databases. |
-| `docker-compose.yml` | Local Neo4j Community container (`spoilerless-neo4j`, auth `neo4j` / `hdgraf-local-password`) | Only for local testing; production uses AuraDB. |
+| `.env` (repo root) | Backend settings (`NEO4J_*`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`, `ADMIN_EMAILS`, `REDIS_URL`, `LLM_*`) AND the frontend's `VITE_GOOGLE_CLIENT_ID` | Read by `spoilerless/app/core/config.py` via pydantic-settings; Vite reads it too via `envDir: '..'` in `frontend/vite.config.ts` (09-05 envDir consolidation — `frontend/.env.local` was deleted). **Never committed.** Points at the shared AuraDB by default. |
+| `scripts/env-local.sh` | Local-Docker Neo4j credentials (`localhost:7687`, password `hdgraf-local-password`) | `source scripts/env-local.sh` before running the spoilerless/tests against the local Docker Neo4j — **never** edit `.env` to switch databases. The password must match the running container's `NEO4J_AUTH`, not the Compose default. |
+| `docker-compose.yml` | Local Neo4j Community container (`spoilerless-neo4j`, auth `neo4j` / `${NEO4J_PASSWORD:-change-me}`) | Only for local testing; production uses AuraDB. |
 
 ### Platform environment variables
 
@@ -53,12 +52,11 @@ Build settings: Framework Preset **Vite**, Root Directory **`frontend/`**, Build
 
 ### Fresh machine checklist
 
-1. `git clone https://github.com/vinnipukh/spoilerless.git`
+1. `git clone https://github.com/vinnipukh/hdgrafcehennemi.git`
 2. `uv sync` (backend deps) and `cd frontend && npm install`
-3. `cp .env.example .env` → fill in real values (AuraDB creds, Google Client ID, emails, Redis URL)
-4. `cp frontend/.env.example frontend/.env.local` → set `VITE_GOOGLE_CLIENT_ID`
-5. Optional local DB: `docker compose up -d neo4j`, then use `source scripts/env-local.sh` before local runs
-6. Backend: `uv run uvicorn spoilerless.app.main:app --reload` · Frontend: `cd frontend && npm run dev`
+3. `cp .env.example .env` → fill in real values (AuraDB creds, Google Client ID, emails, Redis URL) — `VITE_GOOGLE_CLIENT_ID` lives in this same root `.env` (no `frontend/.env.local` anymore)
+4. Optional local DB: `docker compose up -d neo4j`, then use `source scripts/env-local.sh` before local runs
+5. Backend: `uv run uvicorn spoilerless.app.main:app --reload` · Frontend: `cd frontend && npm run dev`
 
 Full platform-specific procedures, rollback, and monitoring: [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md).
 
@@ -82,8 +80,14 @@ Coding agents should use [`docs/PROJECT-SPEC.md`](./docs/PROJECT-SPEC.md) for pr
 - **Candidate claim review** — Extraction candidates go through a review workflow before entering the canonical graph.
 - **Change sets** — Batched, confirmable edits with revision tracking and protection against conflicting changes.
 - **Google OAuth authentication** — Sign in with Google ID tokens. Sessions are managed via HttpOnly cookies with configurable TTL. A Google Cloud OAuth client is required to log in. A user's role (`admin` or `user`) is derived server-side at login from the `ADMIN_EMAILS` allowlist; the admin role gates candidate review commits, change-set commits, and the application settings endpoints.
-- **Spoiler-grounded LLM chat (optional)** — Disabled by default. When enabled, an OpenAI-compatible chat model answers questions using only the spoiler-filtered, tool-allowlisted graph context for the user's watch progress.
+- **Spoiler-grounded LLM chat (optional, BYOK)** — Disabled by default. When enabled, an OpenAI-compatible chat model answers questions using only the spoiler-filtered, tool-allowlisted graph context for the user's watch progress. The frontend sends its own key via `X-LLM-Api-Key`/`X-LLM-Provider`/`X-LLM-Base-URL`/`X-LLM-Model` headers — the backend holds no LLM secret.
 - **Redis-backed rate limiting and caching (optional)** — When `REDIS_URL` is set, login, chat-send, and content-write routes are rate-limited, and spoiler-filtered graph responses are cached. An empty `REDIS_URL` disables both features rather than failing startup.
+- **Command palette (⌘K)** — Jump to any node, episode, or action from a keyboard-first palette; `/` focuses the floating search bar.
+- **Node search + Notes & Claims search** — Zero-dependency substring search over the loaded graph payload (nodes, notes, and claims) with spoiler-safe results.
+- **Timeline view** — A chronological, episode-grouped timeline of visible events; selecting an event frames it in the graph.
+- **Series dashboard** — A dialog listing all available series with watch-progress bars; opens any series through the existing progress flow.
+- **Markdown export** — Export the visible graph (or a single resource) as Markdown from the same filtered read path (D-11).
+- **Path finder** — Pick two nodes to highlight the shortest visible path between them (server-resolved boundary, capped hops).
 
 ---
 
@@ -140,8 +144,8 @@ See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the full system breakdo
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/vinnipukh/spoilerless.git
-cd spoilerless
+git clone https://github.com/vinnipukh/hdgrafcehennemi.git
+cd hdgrafcehennemi
 cp .env.example .env
 ```
 
@@ -157,18 +161,14 @@ This application **requires** a Google OAuth 2.0 client to log in.
 3. Add `http://localhost:5173` to **Authorized JavaScript origins**
 4. Copy the **Client ID**
 
-Configure both backend and frontend:
+Configure both backend and frontend in the **root `.env`** (the frontend reads it via `envDir: '..'` — there is no `frontend/.env.local` anymore):
 
 ```bash
-# Backend
 echo "GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com" >> .env
-
-# Frontend
-cp frontend/.env.example frontend/.env.local
-# Edit frontend/.env.local and set VITE_GOOGLE_CLIENT_ID to the same client ID
+echo "VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com" >> .env
 ```
 
-> Never commit `.env` or `.env.local`. The `.gitignore` already excludes them.
+> Never commit `.env`. The `.gitignore` already excludes it.
 > `GOOGLE_CLIENT_SECRET` is **not** used and must not be added.
 
 ### 3. Start Neo4j
@@ -204,7 +204,7 @@ npm install
 npm run dev
 ```
 
-Make sure `frontend/.env.local` exists with your `VITE_GOOGLE_CLIENT_ID` (set in step 2).
+Make sure `VITE_GOOGLE_CLIENT_ID` is set in the root `.env` (set in step 2).
 
 The frontend opens at `http://localhost:5173` and immediately shows the login screen. Sign in with your Google account to access the graph.
 
@@ -262,6 +262,8 @@ The backend exposes REST endpoints grouped by area, documented via OpenAPI at `/
 | Health | `GET /health` | Service and database health check |
 | Series | `/api/series` | List/get series and episodes |
 | Graph | `/api/series/{series_id}/graph` | Spoiler-filtered graph, keyed by `visible_until_order` |
+| Graph path | `POST /api/series/{series_id}/graph/path` | Shortest visible path between two entities (server-resolved boundary, `max_hops` capped at 4) |
+| Export | `GET /api/series/{series_id}/export` | Visible graph (or `target_id` resource) as Markdown (D-11) |
 | Auth | `/api/auth` | Google sign-in, current user, logout |
 | User content | `/api/series/{series_id}/notes`, `/custom-nodes`, `/custom-relationships` | User notes and custom graph content |
 | Revisions | `/api/series/{series_id}/...` | Revision history for user edits |
@@ -314,6 +316,7 @@ Watch progress is persisted per user via `GET/POST /api/series/{series_id}/progr
 | [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md) | Local development workflow, build/lint/format commands |
 | [`docs/TESTING.md`](./docs/TESTING.md) | Test framework, running tests, coverage |
 | [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) | Deployment targets and pipeline |
+| [`docs/RUNBOOK.md`](./docs/RUNBOOK.md) | Operations runbook — zombie sweep, DB-pollution gate, CI checks |
 | [`docs/frontend-api-contract.md`](./docs/frontend-api-contract.md) | Frontend-facing API contract |
 
 ### Enabling the GraphRAG chat locally (optional)
