@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom'
 import ReactDOMClient from 'react-dom/client'
 import { useRevisions } from './useRevisions'
 import type { RevisionResponse } from '../types/revision'
+import type { ApiError } from '../api/client'
 
 // Mock the API module before any imports that use it
 vi.mock('../api/revisions', () => ({
@@ -10,6 +11,16 @@ vi.mock('../api/revisions', () => ({
 }))
 
 import { getRevisions } from '../api/revisions'
+
+// useRevisions returns a discriminated union on `status` — these helpers narrow
+// to the data/error members so tests don't need `any` (TS2339/TS18047-safe).
+type RevisionsState = NonNullable<ReturnType<typeof useRevisions>>
+function dataOf(c: RevisionsState): RevisionResponse[] {
+  return c.status === 'success' ? c.data : []
+}
+function errorOf(c: RevisionsState): ApiError | undefined {
+  return c.status === 'error' ? c.error : undefined
+}
 
 const mockRevision: RevisionResponse = {
   id: 'revision:test-1',
@@ -46,7 +57,7 @@ describe('useRevisions', () => {
       return null
     }
     const { root } = render(<TestComp />)
-    expect(captured.status).toBe('idle')
+    expect(captured!.status).toBe('idle')
     root.unmount()
   })
 
@@ -57,7 +68,7 @@ describe('useRevisions', () => {
       return null
     }
     const { root } = render(<TestComp />)
-    expect(captured.status).toBe('loading')
+    expect(captured!.status).toBe('loading')
     root.unmount()
   })
 
@@ -70,14 +81,14 @@ describe('useRevisions', () => {
       return null
     }
     const { root } = render(<TestComp />)
-    expect(captured.status).toBe('loading')
+    expect(captured!.status).toBe('loading')
 
     // Let the async effect settle
     await vi.waitFor(() => {
-      expect(captured.status).toBe('success')
+      expect(captured!.status).toBe('success')
     })
 
-    expect(captured.data).toEqual([mockRevision])
+    expect(dataOf(captured!)).toEqual([mockRevision])
     root.unmount()
   })
 
@@ -90,13 +101,13 @@ describe('useRevisions', () => {
       return null
     }
     const { root } = render(<TestComp />)
-    expect(captured.status).toBe('loading')
+    expect(captured!.status).toBe('loading')
 
     await vi.waitFor(() => {
-      expect(captured.status).toBe('error')
+      expect(captured!.status).toBe('error')
     })
 
-    expect(captured.error.message).toBe('Request failed.')
+    expect(errorOf(captured!)?.message).toBe('Request failed.')
     root.unmount()
   })
 
@@ -113,12 +124,12 @@ describe('useRevisions', () => {
 
     // Wait for success
     await vi.waitFor(() => {
-      expect(captured.status).toBe('success')
+      expect(captured!.status).toBe('success')
     })
 
     // Re-render with different seriesId
     ReactDOM.flushSync(() => { root.render(<TestComp sid="series:other" />) })
-    expect(captured.status).toBe('loading')
+    expect(captured!.status).toBe('loading')
     root.unmount()
   })
 
@@ -138,16 +149,16 @@ describe('useRevisions', () => {
 
     // Wait for initial fetch
     await vi.waitFor(() => {
-      expect(captured.status).toBe('success')
+      expect(captured!.status).toBe('success')
     })
-    expect(captured.data).toEqual([mockRevision])
+    expect(dataOf(captured!)).toEqual([mockRevision])
 
     // Call refetch — doesn't set loading (matches useNotes pattern)
-    ReactDOM.flushSync(() => { captured.refetch() })
+    ReactDOM.flushSync(() => { captured!.refetch() })
 
     // Data should update after refetch resolves
     await vi.waitFor(() => {
-      expect(captured.data).toEqual([updatedRevision])
+      expect(dataOf(captured!)).toEqual([updatedRevision])
     })
     root.unmount()
   })
