@@ -3,6 +3,7 @@ import { useRef } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { graphResponseS01E01, graphResponseS01E03 } from './test/fixtures/graphResponse'
 import {
   claimCitation,
@@ -614,6 +615,21 @@ describe('App', () => {
       // the canonical record was changed (T-06-12).
       expect(screen.getByRole('button', { name: 'Confirm changes' })).toBeInTheDocument()
       expect(screen.queryByText(/canonical record.*(updated|changed|modified)/i)).not.toBeInTheDocument()
+    })
+
+    it('renders fallback UI when ErrorBoundary catches a child render error', () => {
+      const ThrowingChild = () => {
+        throw new Error('Test crash')
+      }
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      render(
+        <ErrorBoundary fallbackTitle="Section error">
+          <ThrowingChild />
+        </ErrorBoundary>,
+      )
+      expect(screen.getByText('Section error')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Reload Section/i })).toBeInTheDocument()
+      consoleSpy.mockRestore()
     })
   })
 })

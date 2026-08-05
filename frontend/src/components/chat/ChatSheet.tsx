@@ -5,6 +5,8 @@ import { ChatPanel } from './ChatPanel'
 import type { Citation } from '../../types/chat'
 import type { ChangeSet } from '../../types/changeSet'
 
+import { ErrorBoundary } from '../ErrorBoundary'
+
 type Props = {
   open: boolean
   onClose: () => void
@@ -143,15 +145,17 @@ export function ChatSheet({
           <SheetTitle className="truncate">Chat</SheetTitle>
         </SheetHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pb-4 text-sm">
-          <ChatPanel
-            seriesId={seriesId}
-            seriesTitle={seriesTitle}
-            currentEpisodeCode={currentEpisodeCode}
-            viewAsOfOrder={viewAsOfOrder}
-            onShowInGraph={onShowInGraph}
-            onOpenDetail={onOpenDetail}
-            onApplied={onChangeSetApplied}
-          />
+          <ErrorBoundary fallbackTitle="Chat unavailable" fallbackMessage="An error occurred rendering the chat panel.">
+            <ChatPanel
+              seriesId={seriesId}
+              seriesTitle={seriesTitle}
+              currentEpisodeCode={currentEpisodeCode}
+              viewAsOfOrder={viewAsOfOrder}
+              onShowInGraph={onShowInGraph}
+              onOpenDetail={onOpenDetail}
+              onApplied={onChangeSetApplied}
+            />
+          </ErrorBoundary>
         </div>
       </SheetContent>
     </Sheet>

@@ -23,7 +23,7 @@ import type { CustomNodeResponse, CustomNodeType } from '../../types/userContent
 import { fetchExportMarkdown, downloadMarkdownBlob } from '@/api/export'
 import { renderGraphMarkdown, exportFilename } from '@/lib/exportMarkdown'
 
-console.log('[GC-MODULE] GraphCanvas module loaded')
+
 
 // Reduced motion preference detected at module scope (no DOM access during SSR).
 // The user's preference is captured once on first render — changing it mid-session
