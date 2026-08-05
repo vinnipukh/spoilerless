@@ -211,6 +211,17 @@ async def create_constraints(database: Neo4jDatabase) -> None:
         "CREATE INDEX session_expires_at_idx IF NOT EXISTS FOR (s:Session) ON (s.expires_at)"
     )
 
+    # Share token constraints and indexes
+    await database.execute_query(
+        "CREATE CONSTRAINT sharetoken_id_unique IF NOT EXISTS FOR (s:ShareToken) REQUIRE s.id IS UNIQUE"
+    )
+    await database.execute_query(
+        "CREATE CONSTRAINT sharetoken_token_hash_unique IF NOT EXISTS FOR (s:ShareToken) REQUIRE s.token_hash IS UNIQUE"
+    )
+    await database.execute_query(
+        "CREATE INDEX sharetoken_expires_at_idx IF NOT EXISTS FOR (s:ShareToken) ON (s.expires_at)"
+    )
+
     # Chat and watch-progress constraints and indexes (phase 06 GraphRAG chat)
     # UserSeriesProgress is queried by the authenticated user and by series
     # (progress repository); ChatSession denormalizes user_id onto the node

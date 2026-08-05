@@ -178,8 +178,9 @@ async def test_community_schema_creates_only_unique_and_index(
             f"Unexpected constraint type {ct['type']} on {ct['label']}"
         )
         # Every unique/node-key constraint must cover `id` (our schema invariant),
-        # except AppUser (google_sub is the identity key) and Session (token_hash).
-        if ct["label"] not in ("AppUser", "Session"):
+        # except AppUser (google_sub is the identity key), Session (token_hash),
+        # and ShareToken (token_hash).
+        if ct["label"] not in ("AppUser", "Session", "ShareToken"):
             assert "id" in ct["properties"], (
                 f"Constraint on {ct['label']} missing id property: {ct['properties']}"
             )
@@ -188,8 +189,9 @@ async def test_community_schema_creates_only_unique_and_index(
     expected_labels = {
         "Series", "Episode", "Character", "Event", "Location",
         "Organization", "Object", "Claim", "Source", "EvidenceFragment", "UserNote",
-        "AppUser", "Session", "Revision",
+        "AppUser", "Session", "Revision", "ShareToken",
     }
+
     # SUPERSET check — additive constraints (e.g. the upcoming ShareToken
     # constraint from plan 09-12) must never break this test (PROB-20/#44,
     # NO-EXACT-SEED-SETS).
