@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Download } from 'lucide-react'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { fetchExportMarkdown, downloadMarkdownBlob } from '@/api/export'
+import { renderGraphMarkdown, exportFilename } from '@/lib/exportMarkdown'
 import {
   Sheet,
   SheetContent,
@@ -584,6 +588,27 @@ export function DetailPanel({
       : undefined) ??
     'Details'
 
+  const [exported, setExported] = useState(false)
+
+  const handleExport = async () => {
+    if (!seriesId) return
+    const targetId = selectedNode?.id ?? activeClaim?.id
+    try {
+      const { text, filename } = await fetchExportMarkdown(
+        seriesId,
+        visibleUntilOrder ?? 1,
+        targetId,
+      )
+      downloadMarkdownBlob(text, filename)
+    } catch {
+      const text = renderGraphMarkdown(graph, targetId)
+      const filename = exportFilename(graph, targetId)
+      downloadMarkdownBlob(text, filename)
+    }
+    setExported(true)
+    setTimeout(() => setExported(false), 2000)
+  }
+
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onDeselect()} modal={false}>
       <SheetContent
@@ -602,15 +627,34 @@ export function DetailPanel({
         )}
       >
         <SheetHeader>
-          <div className="flex min-w-0 items-center gap-3">
-            {selectedNode?.type === 'Character' && (
-              <CharacterPortrait
-                key={selectedNode.id}
-                node={selectedNode}
-                visibleUntilOrder={visibleUntilOrder}
-              />
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              {selectedNode?.type === 'Character' && (
+                <CharacterPortrait
+                  key={selectedNode.id}
+                  node={selectedNode}
+                  visibleUntilOrder={visibleUntilOrder}
+                />
+              )}
+              <SheetTitle className="truncate">{selected ? title : 'Details'}</SheetTitle>
+            </div>
+            {selected && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Export Markdown"
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                      exported ? 'text-accent' : ''
+                    }`}
+                    onClick={handleExport}
+                  >
+                    <Download className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{exported ? 'Exported' : 'Export Markdown'}</TooltipContent>
+              </Tooltip>
             )}
-            <SheetTitle className="truncate">{selected ? title : 'Details'}</SheetTitle>
           </div>
         </SheetHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pb-4 text-sm">

@@ -71,7 +71,6 @@ export function PathFinder({ cyRef, seriesId, onExit, registerPickHandler }: Pro
   useEffect(() => {
     registerPickHandler((pick) => handlePickRef.current(pick))
     return () => registerPickHandler(null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [registerPickHandler])
 
   async function runPath(from: PathPick, to: PathPick) {

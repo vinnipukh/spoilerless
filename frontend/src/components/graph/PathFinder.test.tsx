@@ -1,5 +1,6 @@
 import { render, screen, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type cytoscape from 'cytoscape'
 import { PathFinder } from './PathFinder'
 import * as apiGraph from '@/api/graph'
 
@@ -25,7 +26,7 @@ describe('PathFinder component', () => {
     }),
   }
 
-  const cyRef = { current: mockCy as any }
+  const cyRef = { current: mockCy as unknown as cytoscape.Core }
   const onExit = vi.fn()
   let registeredPickHandler: ((pick: { id: string; label: string }) => void) | null = null
   const registerPickHandler = vi.fn((handler) => {

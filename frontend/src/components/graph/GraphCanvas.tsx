@@ -19,6 +19,8 @@ import { GraphFocusIndicator } from './GraphFocusIndicator'
 import { PathFinder, type PathPick } from './PathFinder'
 import { createCustomNode } from '../../api/userContent'
 import type { CustomNodeResponse, CustomNodeType } from '../../types/userContent'
+import { fetchExportMarkdown, downloadMarkdownBlob } from '@/api/export'
+import { renderGraphMarkdown, exportFilename } from '@/lib/exportMarkdown'
 
 console.log('[GC-MODULE] GraphCanvas module loaded')
 
@@ -301,7 +303,9 @@ export function GraphCanvas({
   // Mirrors `pathMode` for the cy tap handlers (registered once at mount —
   // they must read the live value, never the mount-time closure).
   const pathModeRef = useRef(false)
-  pathModeRef.current = pathMode
+  useEffect(() => {
+    pathModeRef.current = pathMode
+  }, [pathMode])
 
   // Re-run the layout whenever a new graph is fetched — UNLESS an external
   // `focusedElementIds` is active, in which case the graph change is an
@@ -624,6 +628,20 @@ export function GraphCanvas({
           onPathModeChange={(active) => {
             setPathMode(active)
             onPathModeChange?.(active)
+          }}
+          onExport={async () => {
+            if (!seriesId) return
+            try {
+              const { text, filename } = await fetchExportMarkdown(
+                seriesId,
+                graph.visible_until_order,
+              )
+              downloadMarkdownBlob(text, filename)
+            } catch {
+              const text = renderGraphMarkdown(graph)
+              const filename = exportFilename(graph)
+              downloadMarkdownBlob(text, filename)
+            }
           }}
         />
         {/* Floating Create Custom Node button — opens dialog */}
