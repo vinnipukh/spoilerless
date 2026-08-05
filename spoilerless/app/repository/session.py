@@ -3,16 +3,18 @@ persistent implementation.
 
 Session cleanup strategy
 ------------------------
-Expired and revoked ``Session`` nodes accumulate in the database.  A periodic
-background task (e.g. a cron job or FastAPI lifespan background task) should
-run::
+Expired and revoked ``Session`` nodes are deleted by a periodic background
+task registered in the FastAPI lifespan (``spoilerless.app.main``), which
+calls :meth:`Neo4jSessionRepository.sweep_expired` hourly::
 
     MATCH (s:Session)
-    WHERE s.expires_at < timestamp() OR s.revoked_at IS NOT NULL
+    WHERE s.expires_at < $now OR s.revoked_at IS NOT NULL
     DETACH DELETE s
 
-This is not implemented in this task — the app relies on lazy rejection of
-expired/revoked sessions at read time.
+The task is idempotent, safe to run concurrently, and skipped when the
+database is unreachable at startup. ``expires_at`` is stored as a seconds
+epoch (``time.time()``), so the sweep compares against ``$now`` in seconds —
+never the ms-based Cypher ``timestamp()``.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Protocol
+from uuid import uuid4
 
 from spoilerless.app.graph.database import Neo4jDatabase
 
@@ -75,7 +78,14 @@ class SessionRepository(Protocol):
         ...
 
     async def refresh(self, raw_token: str, ttl_seconds: int) -> None:
-        """Bump *last_seen_at* and extend expiry.  Noop on unknown/revoked."""
+        """Bump *last_seen_at* only — does NOT extend expiry (PROB-03/#9).
+
+        No slide-on-read: reading/validating a session never extends its
+        lifetime. Expiry is enforced by the ``expires_at`` check at read time
+        plus the periodic background sweep. ``ttl_seconds`` is retained in the
+        signature for protocol compatibility (ignored by the Neo4j impl).
+        Noop on unknown/revoked.
+        """
         ...
 
     async def revoke(self, raw_token: str) -> None:
@@ -134,17 +144,17 @@ class InMemorySessionRepository:
         return record
 
     async def refresh(self, raw_token: str, ttl_seconds: int) -> None:
+        """Bump *last_seen_at* only — does NOT extend expiry (PROB-03/#9)."""
         hashed = _hash_token(raw_token)
         record = self._store.get(hashed)
         if record is None or record.is_expired or record.is_revoked:
             return
-        now = time.time()
         self._store[hashed] = SessionRecord(
             hashed_token=hashed,
             user_id=record.user_id,
             created_at=record.created_at,
-            expires_at=now + ttl_seconds,
-            last_seen_at=now,
+            expires_at=record.expires_at,
+            last_seen_at=time.time(),
         )
 
     async def revoke(self, raw_token: str) -> None:
@@ -206,7 +216,10 @@ class Neo4jSessionRepository:
             MATCH (u:AppUser {{id: $user_id}})
             CREATE (u)-[:HAS_SESSION]->(s)
             """,
-            id=f"session:{user_id}:{int(now)}",
+            # PROB-03/#32: uuid4-based id — the old `session:{user_id}:{int(now)}`
+            # scheme collided for same-second double logins against the
+            # session_id unique constraint. The id no longer encodes user/time.
+            id=f"session:{uuid4()}",
             token_hash=hashed,
             user_id=user_id,
             now=now,
@@ -246,19 +259,46 @@ class Neo4jSessionRepository:
         )
 
     async def refresh(self, raw_token: str, ttl_seconds: int) -> None:
+        """Bump *last_seen_at* only — does NOT extend expiry (PROB-03/#9).
+
+        No slide-on-read: validating a session never extends its lifetime.
+        Expiry is enforced by the ``expires_at`` check at read time plus the
+        periodic background sweep (``sweep_expired``).
+        """
         hashed = _hash_token(raw_token)
         now = time.time()
         await self._database.execute_query(
             f"""\
             MATCH (s:{self.LABEL} {{token_hash: $token_hash}})
             WHERE s.revoked_at IS NULL
-            SET s.last_seen_at = $now,
-                s.expires_at = $now + $ttl
+              AND s.expires_at > $now
+            SET s.last_seen_at = $now
             """,
             token_hash=hashed,
             now=now,
-            ttl=float(ttl_seconds),
         )
+
+    async def sweep_expired(self) -> int:
+        """Delete expired or revoked sessions; return the count removed.
+
+        Idempotent and safe to run concurrently — a second concurrent sweep
+        simply finds nothing left to delete. Backs the periodic lifespan task.
+        ``expires_at`` is stored as a seconds epoch (``time.time()``), so the
+        comparison uses ``$now`` in seconds — never the ms-based Cypher
+        ``timestamp()``, which would treat every session as expired.
+        """
+        result = await self._database.execute_query(
+            f"""\
+            MATCH (s:{self.LABEL})
+            WHERE s.expires_at < $now OR s.revoked_at IS NOT NULL
+            DETACH DELETE s
+            RETURN count(s) AS removed
+            """,
+            now=time.time(),
+        )
+        if not result:
+            return 0
+        return int(result[0]["removed"])
 
     async def revoke(self, raw_token: str) -> None:
         hashed = _hash_token(raw_token)

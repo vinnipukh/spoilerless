@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -86,14 +87,39 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # redis_url so local dev without Upstash runs unthrottled instead of
         # crashing startup; RateLimiter dependencies no-op until then.
         await init_rate_limiter()
+
+    # PROB-03/#9: periodic session sweep — expired/revoked (:Session) nodes
+    # are deleted in the background (no slide-on-read keeps expiry meaningful).
+    # Guarded like the rate limiter: the task is only started when the app can
+    # reach its database, and a failed sweep iteration is logged, never fatal.
+    SESSION_SWEEP_INTERVAL_SECONDS = 3600
+
+    async def _session_sweep_loop() -> None:
+        while True:
+            try:
+                await app.state.session_repo.sweep_expired()
+            except Exception:
+                logger.exception("session sweep iteration failed; will retry")
+            await asyncio.sleep(SESSION_SWEEP_INTERVAL_SECONDS)
+
+    sweep_task: asyncio.Task[None] | None = None
     try:
         try:
             await database.verify_connection()
         except Exception:
             # Degraded startup is intentional; /health reports current connectivity.
+            # The session sweep task is skipped too (no reachable database).
             pass
+        else:
+            sweep_task = asyncio.create_task(_session_sweep_loop())
         yield
     finally:
+        if sweep_task is not None:
+            sweep_task.cancel()
+            try:
+                await sweep_task
+            except asyncio.CancelledError:
+                pass
         await database.close()
 
 

@@ -166,7 +166,8 @@ class AuthService:
     ) -> dict[str, Any] | None:
         """Validate session and return user record, or None.
 
-        Also refreshes the session's last_seen_at and expiry on valid access.
+        Refreshes the session's last_seen_at on valid access (never the
+        expiry — no slide-on-read, PROB-03/#9).
         """
         if raw_token is None:
             return None
