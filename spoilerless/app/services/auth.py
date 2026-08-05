@@ -48,6 +48,22 @@ class EmailNotAllowedError(ValueError):
         super().__init__(f"Email not allowed: {email}")
 
 
+def _sanitize_avatar_url(url: str) -> str:
+    """Reject dangerous avatar URL schemes (PROB-19/#41).
+
+    Only ``http``/``https`` survive — ``javascript:``, ``data:``, and any
+    other scheme (or scheme-less value) strip to empty, so a compromised
+    identity-provider claim can never inject an executable URL into a
+    rendered profile-image attribute.
+    """
+    if not url:
+        return ""
+    scheme = url.split(":", 1)[0].strip().lower() if ":" in url else ""
+    if scheme not in {"http", "https"}:
+        return ""
+    return url
+
+
 @dataclass(frozen=True)
 class ProductionGoogleVerifier:
     """Production verifier using the official ``google-auth`` library.
@@ -140,7 +156,7 @@ class AuthService:
         google_sub: str = info["sub"]
         email: str = info.get("email", "")
         display_name: str = info.get("name", "")
-        avatar_url: str = info.get("picture", "")
+        avatar_url: str = _sanitize_avatar_url(info.get("picture", ""))
 
         if allowed_emails and email.lower() not in allowed_emails:
             raise EmailNotAllowedError(email)
