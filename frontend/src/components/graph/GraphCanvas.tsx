@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import cytoscape from 'cytoscape'
-import coseBilkent from 'cytoscape-cose-bilkent'
 import CytoscapeComponent from 'react-cytoscapejs'
 import type { GraphNode, GraphResponse } from '../../types/graph'
 import type { EpisodeResponse } from '../../types/series'
@@ -30,45 +29,13 @@ import { renderGraphMarkdown, exportFilename } from '@/lib/exportMarkdown'
 // would require a React state/hook, but <CytoscapeComponent> doesn't re-render on
 // stylesheet changes anyway (it captures the ref once), so a static capture is
 // appropriate.
+import { layoutOptionsFor } from './layoutConfig'
+
 const prefersReducedMotion =
   typeof window !== 'undefined' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-// Registered once at module scope. `layoutName` defaults to 'cose-bilkent'
-// (D-04's primary layout) and only falls back to the built-in 'cose' if the
-// extension actually fails to register — not a preemptive dual-path switch
-// (CONTEXT.md D-04 discretion note: only fall back on an actual caught
-// build/runtime failure).
-let layoutName: 'cose-bilkent' | 'cose' = 'cose-bilkent'
-try {
-  cytoscape.use(coseBilkent)
-} catch (error) {
-  console.error(
-    'cytoscape-cose-bilkent failed to register; falling back to the built-in cose layout',
-    error,
-  )
-  layoutName = 'cose'
-}
-
-function layoutOptionsFor(name: 'cose-bilkent' | 'cose') {
-  const common = {
-    fit: true,
-    padding: 48,
-    // 08-05 user-directed declutter (graph hairball, PROBLEMS.md #57):
-    // much stronger node repulsion + longer ideal edges + weaker center
-    // gravity so low-degree nodes stop piling into an unreadable mass.
-    // Tuned for cose-bilkent; the built-in 'cose' fallback shares these
-    // keys (same names, same direction).
-    nodeRepulsion: 45000,
-    idealEdgeLength: 240,
-    edgeElasticity: 0.25,
-    gravity: 0.08,
-    animate: prefersReducedMotion ? false : ('end' as const),
-  }
-  return name === 'cose-bilkent'
-    ? { name: 'cose-bilkent', nodeDimensionsIncludeLabels: true, ...common }
-    : { name: 'cose', ...common }
-}
+let layoutName: 'fcose' | 'cose-bilkent' | 'cose' = 'fcose'
 
 // react-cytoscapejs's own declarative `layout` prop only re-applies a layout
 // when the prop's shallow-compared field values change (never true here,
