@@ -97,7 +97,7 @@ Plans:
   5. All 10 new features are live and usable: node search/jump, timeline view, newly-revealed highlight on episode advance, series dashboard, note/claim export, shortest-path relationship finder, full-text note/claim search, command palette, shareable read-only snapshot link, and a mobile-usable graph/detail panel
   6. FEAT-11 (Obsidian-style second-brain touches, small scope): node backlinks panel (reverse relationships + mentions), hover preview card on graph nodes, quick-switcher jump (⌘K fuzzy search), graph filters by node type/edge type, per-node properties (aliases, created/updated, source), and version-history surfaced via the existing Revision system — spoiler boundary preserved throughout; no free-form canvas or personal-layer rewrite in this phase
 
-**Plans**: 8/18 plans executed
+**Plans**: 9/18 plans executed
 
 - [x] 09-01-PLAN.md
 - [x] 09-02-PLAN.md
@@ -106,7 +106,7 @@ Plans:
 - [x] 09-05-PLAN.md
 - [x] 09-06-PLAN.md
 - [x] 09-07-PLAN.md
-- [ ] 09-08-PLAN.md
+- [x] 09-08-PLAN.md
 - [x] 09-09-PLAN.md
 - [ ] 09-10-PLAN.md
 - [ ] 09-11-PLAN.md
@@ -124,7 +124,7 @@ Plans:
 - [x] **09-02**: CI smoke fixes → main (08-07 UAT #4, `fixed-pending-ci-rerun`) — merge/re-verify `ci-smoke-test` branch (React-Compiler-era rules scoped to warnings, typed `catch(err)` handlers, seed-idempotency cleanup, graph-image D-14 curation); confirm GitHub Actions green on main (OPS-01)
 - [x] **09-03**: Admin role live verification (08-UAT #6, skipped) — configure `ADMIN_EMAILS`; verify candidate approve/reject/edit + ChangeSet confirm admin-gated, non-admin 403 (AUTH-03)
 - [x] **09-04**: `REDIS_URL` on Render (08-05/08-06 runtime gate) — set Upstash `rediss://`; verify live 429 rate-limit + graph-cache invalidation (SEC-03, INFRA-02)
-- [ ] **09-05**: Seed-test pollution debt (STATE.md blocker) — candidate-origin residue teardown between `test_candidate_ingest.py` and `test_seed_idempotency.py` (PROB-06)
+- [x] **09-05**: Seed-test pollution debt (STATE.md blocker) — candidate-origin residue teardown between `test_candidate_ingest.py` and `test_seed_idempotency.py` (PROB-06)
 - [x] **09-06**: Frontend lint 0-error cleanup — pre-existing 28 errors + `react-hooks/refs` stale-ref bugs in `useChatSessions.ts`/`useNotes.ts`/`useRevisions.ts` (PROB-08)
 - [x] **09-07**: Full CI/CD (deferred OPS) — dependency scanning, artifact publication, staged promotion, branch-protection enforcement (OPS-01 is minimal PR gate only)
 - [ ] **09-08**: Full observability (deferred OPS) — centralized logs, metrics dashboards, incident/rollback runbook automation (OPS-02 is single health ping only)
@@ -158,7 +158,7 @@ Plans:
 | 6. Spoiler-safe GraphRAG chat and graph-editing agent | v1.1 | 13/13 | Complete | 2026-08-02 |
 | 7. Spoiler-Safety Hardening | v1.2 | 8/8 | Complete | 2026-08-03 |
 | 8. Production Deployment & Automated CI/CD | v1.3 | 8/8 | Complete    | 2026-08-04 |
-| 9. Feature Expansion & Full Audit Remediation | v1.3 | 8/18 | In Progress|  |
+| 9. Feature Expansion & Full Audit Remediation | v1.3 | 9/18 | In Progress|  |
 | 10. Polish & Finishing Touches | v1.3 | 0/TBD | Not started | - |
 
 Full phase details archived at `.planning/milestones/v1.1-ROADMAP.md` / `.planning/milestones/v1.1-phases/` and `.planning/milestones/v1.2-ROADMAP.md` / `.planning/milestones/v1.2-phases/` (v1.2 archive supersedes the earlier v1.1 archive, which predates Phase 7).
