@@ -179,6 +179,28 @@ class CandidateRepository:
         result = await self._db.execute_write(_ingest_candidate_claims, command)
         return result
 
+    async def approve_claim(
+        self, work: Any, command: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Run an approve-claim transaction (promote candidate to canonical).
+
+        Public repository method so route layers never reach into the
+        private ``_db`` attribute (PROB-19/#41 / NO-REPO-PRIVATE-ACCESS).
+        """
+        return await self._db.execute_write(work, command)
+
+    async def reject_claim(
+        self, work: Any, command: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Run a reject-claim transaction (candidate status -> rejected)."""
+        return await self._db.execute_write(work, command)
+
+    async def edit_claim(
+        self, work: Any, command: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Run an edit-claim transaction (mutable field updates + revision)."""
+        return await self._db.execute_write(work, command)
+
     async def get_candidate_claim(
         self,
         series_id: str,

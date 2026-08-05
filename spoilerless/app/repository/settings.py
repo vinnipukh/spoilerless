@@ -2,8 +2,8 @@
 
 Follows the neo4j-data-patterns convention: the payload is a JSON string
 property (Neo4j cannot store dict values directly), serialized here at the
-repository boundary. A uniqueness constraint on ``key`` is created by the
-seed routine; the MERGE upsert is idempotent either way.
+repository boundary. There is no uniqueness constraint on ``key`` — the
+MERGE upsert keeps the node set single-row by construction and is idempotent.
 """
 
 from __future__ import annotations

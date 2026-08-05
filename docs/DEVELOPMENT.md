@@ -31,16 +31,16 @@ git remote add upstream https://github.com/vinnipukh/spoilerless.git
 
 ### Configure the backend and frontend
 
-1. Create local environment files:
+1. Create the single root environment file (PROB-30/#55 — one root `.env`, no
+   per-package copies):
 
    ```bash
    cp .env.example .env
-   cp frontend/.env.example frontend/.env.local
    ```
 
 2. In `.env`, set `NEO4J_PASSWORD=hdgraf-local-password` to match `docker-compose.yml`. Set `GOOGLE_CLIENT_ID` if you need to sign in.
-3. In `frontend/.env.local`, set `VITE_GOOGLE_CLIENT_ID` to the same Google OAuth client ID. Keep `VITE_API_BASE_URL=/api`.
-4. Do not commit either local environment file. See [CONFIGURATION.md](CONFIGURATION.md) for the complete setting reference.
+3. `VITE_GOOGLE_CLIENT_ID` also lives in the root `.env` (same Google OAuth client ID as `GOOGLE_CLIENT_ID`) — `frontend/vite.config.ts` loads the root `.env` via `envDir: '..'` and only exposes `VITE_`-prefixed vars to the browser. Keep `VITE_API_BASE_URL=/api` there too.
+4. Do not commit the local environment file. See [CONFIGURATION.md](CONFIGURATION.md) for the complete setting reference.
 
 ### Install dependencies and initialize Neo4j
 
@@ -48,7 +48,7 @@ git remote add upstream https://github.com/vinnipukh/spoilerless.git
 # Repository root
 uv sync
 docker compose up -d
-uv run python -m spoilerless.app.graph.setup
+uv run --project spoilerless python -m spoilerless.app.graph.setup
 
 # Frontend dependencies
 cd frontend

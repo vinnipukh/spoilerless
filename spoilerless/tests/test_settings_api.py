@@ -262,6 +262,50 @@ def test_get_and_update_llm_settings_roundtrip(
     assert body["api_key_masked"] == "••••7890"
 
 
+def test_update_llm_settings_rejects_whitespace_api_key_when_none_stored(
+    client: TestClient,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+) -> None:
+    """PROB-19/#41: a whitespace-only api_key cannot be stored via direct API.
+
+    With no stored key, a whitespace-only value is a 422 INVALID_REQUEST
+    (matches the frontend's client-side trim). Blank with an existing
+    stored key keeps the stored key — unchanged keep-blank semantics.
+    """
+    async def _clear() -> None:
+        clean = Neo4jDatabase()
+        clean.open()
+        try:
+            await clean.execute_query("MATCH (s:AppSetting {key: 'llm'}) DETACH DELETE s")
+        finally:
+            await clean.close()
+
+    asyncio.run(_clear())
+    _authed(client, fake_user_repo, session_repo)
+
+    # Whitespace-only key, nothing stored -> 422.
+    response = client.put(
+        "/api/settings/llm",
+        json={"provider": "gemini", "api_key": "   "},
+    )
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]["code"] == "INVALID_REQUEST"
+
+    # Store a real key, then blank (whitespace-only) keeps it (200, unchanged).
+    stored = client.put(
+        "/api/settings/llm",
+        json={"provider": "gemini", "api_key": "AIzaSyTestKey1234567890"},
+    )
+    assert stored.status_code == 200, stored.text
+    blank = client.put(
+        "/api/settings/llm",
+        json={"provider": "gemini", "api_key": " \t "},
+    )
+    assert blank.status_code == 200, blank.text
+    assert blank.json()["api_key_masked"] == "••••7890"
+
+
 def test_update_llm_settings_rejects_unknown_fields(
     client: TestClient,
     fake_user_repo: FakeUserRepo,

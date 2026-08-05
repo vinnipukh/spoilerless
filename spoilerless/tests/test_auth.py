@@ -348,6 +348,30 @@ class TestGoogleAuth:
         # google_sub is not in the response
         assert "google_sub" not in user
 
+    def test_dangerous_avatar_schemes_are_stripped(
+        self,
+        client: TestClient,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_verifier: FakeGoogleVerifier,
+    ) -> None:
+        """PROB-19/#41: javascript:/data: picture claims sanitize to empty."""
+        _set_env(monkeypatch, GOOGLE_CLIENT_ID="test-client-id", SESSION_TTL_SECONDS=3600, FRONTEND_ORIGINS="*")
+
+        fake_verifier.set_claims(picture="javascript:alert(1)")
+        response = client.post("/api/auth/google", json={"credential": "valid-token"})
+        assert response.status_code == 200
+        assert response.json()["user"]["avatar_url"] == ""
+
+        fake_verifier.set_claims(picture="data:text/html;base64,PHNjcmlwdD4=")
+        response = client.post("/api/auth/google", json={"credential": "valid-token"})
+        assert response.status_code == 200
+        assert response.json()["user"]["avatar_url"] == ""
+
+        fake_verifier.set_claims(picture="https://example.com/avatar.png")
+        response = client.post("/api/auth/google", json={"credential": "valid-token"})
+        assert response.status_code == 200
+        assert response.json()["user"]["avatar_url"] == "https://example.com/avatar.png"
+
     def test_returning_user_does_not_create_duplicate(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -821,6 +845,34 @@ class TestEmailAllowlist:
 
         assert response.status_code == 403
         assert response.json()["detail"]["code"] == "AUTH_EMAIL_NOT_ALLOWED"
+
+    def test_login_rejected_when_email_not_on_allowlist_creates_no_user(
+        self,
+        client: TestClient,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_user_repo: FakeUserRepo,
+    ) -> None:
+        """PROB-19/#41: EmailNotAllowedError raises BEFORE the user upsert.
+
+        A disallowed email must fail closed — no user row may be created
+        (auth.py raises at :145-146, ahead of user_repo.upsert).
+        """
+        _set_env(
+            monkeypatch,
+            GOOGLE_CLIENT_ID="test-client-id",
+            SESSION_TTL_SECONDS=3600,
+            FRONTEND_ORIGINS="*",
+            ALLOWED_EMAILS="alice@example.com,bob@example.com",
+        )
+
+        response = client.post(
+            "/api/auth/google",
+            json={"credential": "valid-token"},
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == "AUTH_EMAIL_NOT_ALLOWED"
+        assert fake_user_repo._store == {}
 
     def test_login_allowed_when_allowlist_empty(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch

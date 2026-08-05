@@ -156,6 +156,32 @@ def test_cors_preflight_is_explicit_no_wildcard_with_credentials(monkeypatch) ->
     assert "*" not in allow_headers
 
 
+def test_google_client_id_equality_check_fires_only_when_both_set(monkeypatch) -> None:
+    """PROB-30/#55: the equality gate raises ONLY when both ids are set and differ.
+
+    Uses a fresh Settings instance — get_settings() is lru_cached and must
+    not leak state between tests.
+    """
+    from spoilerless.app.core.config import Settings, verify_google_client_id_equality
+
+    # Both set and equal -> no raise.
+    monkeypatch.setenv("VITE_GOOGLE_CLIENT_ID", "same-client-id")
+    verify_google_client_id_equality(Settings(google_client_id="same-client-id"))
+
+    # Both set and different -> RuntimeError (the #42 audience-mismatch class).
+    monkeypatch.setenv("VITE_GOOGLE_CLIENT_ID", "other-client-id")
+    with pytest.raises(RuntimeError, match="mismatch"):
+        verify_google_client_id_equality(Settings(google_client_id="same-client-id"))
+
+    # Only the backend id set -> no raise (local runs without the frontend id).
+    monkeypatch.delenv("VITE_GOOGLE_CLIENT_ID")
+    verify_google_client_id_equality(Settings(google_client_id="same-client-id"))
+
+    # Only the frontend id set -> no raise.
+    monkeypatch.setenv("VITE_GOOGLE_CLIENT_ID", "frontend-only-id")
+    verify_google_client_id_equality(Settings(google_client_id=""))
+
+
 def test_database_module_has_no_driver_singleton(monkeypatch) -> None:
     import spoilerless.app.graph.database as database_module
 

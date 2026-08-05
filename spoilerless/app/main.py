@@ -23,7 +23,7 @@ from spoilerless.app.api.progress import router as progress_router
 from spoilerless.app.api.chat import router as chat_router
 from spoilerless.app.api.change_set import router as change_set_router
 from spoilerless.app.api.settings import router as settings_router
-from spoilerless.app.core.config import get_settings
+from spoilerless.app.core.config import get_settings, verify_google_client_id_equality
 from spoilerless.app.core.errors import install_database_error_handlers
 from spoilerless.app.graph.database import Neo4jDatabase
 from spoilerless.app.llm.provider import install_llm_error_handlers
@@ -107,6 +107,7 @@ class HealthResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
+    verify_google_client_id_equality(settings)
     database = Neo4jDatabase(settings)
     database.open()
     app.state.neo4j = database

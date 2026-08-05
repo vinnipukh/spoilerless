@@ -151,7 +151,7 @@ ORDER BY claim.visible_from_order, id
 """
 
 SOURCES_QUERY = """
-MATCH (claim:Claim {series_id: $series_id})-[ref:REFERS_TO]->(source:Source)
+MATCH (claim:Claim {series_id: $series_id})-[ref:REFERS_TO]->(source:Source {series_id: $series_id})
 MATCH (subject {id: claim.subject_id})
 MATCH (object {id: claim.object_id})
 WHERE claim.visible_from_order IS NOT NULL
@@ -180,7 +180,7 @@ ORDER BY source.visible_from_order, id
 """
 
 EVIDENCE_QUERY = """
-MATCH (claim:Claim {series_id: $series_id})-[supported:SUPPORTED_BY]->(evidence:EvidenceFragment)
+MATCH (claim:Claim {series_id: $series_id})-[supported:SUPPORTED_BY]->(evidence:EvidenceFragment {series_id: $series_id})
 MATCH (claim)-[ref:REFERS_TO]->(source:Source {id: evidence.source_id})
 MATCH (subject {id: claim.subject_id})
 MATCH (object {id: claim.object_id})

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from spoilerless.app.core.config import get_settings
+from spoilerless.app.core.errors import http_error
 from spoilerless.app.domain.settings import (
     LLMSettingsResponse,
     LLMSettingsUpdate,
@@ -49,10 +50,21 @@ class SettingsService:
 
     async def update_llm(self, update: LLMSettingsUpdate) -> LLMSettingsResponse:
         stored = await self._repository.get_llm() or {}
+        # Whitespace-only/blank api_key with NO stored key is rejected
+        # (PROB-19/#41): a direct API call must not be able to store an
+        # all-spaces key. Blank with an existing stored key keeps the stored
+        # key (the frontend's "keep-blank" semantics, test_settings_api.py).
+        if update.api_key is not None and not update.api_key.strip():
+            if not stored.get("api_key"):
+                raise http_error(
+                    422,
+                    "INVALID_REQUEST",
+                    "api_key must be a non-blank value when no key is stored.",
+                )
         merged: dict[str, Any] = dict(stored)
         merged["provider"] = update.provider
-        if update.api_key:
-            merged["api_key"] = update.api_key
+        if update.api_key is not None and update.api_key.strip():
+            merged["api_key"] = update.api_key.strip()
         if update.base_url is not None:
             if update.base_url.strip():
                 merged["base_url"] = update.base_url.strip()

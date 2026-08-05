@@ -249,7 +249,6 @@ async def approve_candidate(
 ) -> dict:
     """Approve a candidate claim, promoting it from 'candidate' to 'canonical'
     status. Admin-only since 08-03 (AUTH-03, T-08-03-01) — a non-admin gets 403."""
-    db = repo._db
 
     async def _approve(tx: Any, cmd: dict[str, Any]) -> dict[str, Any]:
         read_query = _read_claim_query()
@@ -280,7 +279,7 @@ async def approve_candidate(
         return {"id": cmd["claim_id"], "status": "canonical", "origin": "candidate", "revision_id": revision["id"]}
 
     try:
-        result = await db.execute_write(_approve, {"series_id": series_id, "claim_id": claim_id, "now": datetime.now(timezone.utc), "user_id": _admin["id"]})
+        result = await repo.approve_claim(_approve, {"series_id": series_id, "claim_id": claim_id, "now": datetime.now(timezone.utc), "user_id": _admin["id"]})
     except HTTPException:
         raise
     except Exception as exc:
@@ -306,7 +305,6 @@ async def reject_candidate(
 ) -> dict:
     """Reject a candidate claim, setting its status to 'rejected'.
     Admin-only since 08-03 (AUTH-03, T-08-03-01) — a non-admin gets 403."""
-    db = repo._db
 
     async def _reject(tx: Any, cmd: dict[str, Any]) -> dict[str, Any]:
         read_query = _read_claim_query()
@@ -333,7 +331,7 @@ async def reject_candidate(
         return {"id": cmd["claim_id"], "status": "rejected", "origin": "candidate", "revision_id": revision["id"]}
 
     try:
-        result = await db.execute_write(_reject, {"series_id": series_id, "claim_id": claim_id, "now": datetime.now(timezone.utc), "user_id": _admin["id"]})
+        result = await repo.reject_claim(_reject, {"series_id": series_id, "claim_id": claim_id, "now": datetime.now(timezone.utc), "user_id": _admin["id"]})
     except HTTPException:
         raise
     except Exception as exc:
@@ -360,7 +358,6 @@ async def edit_candidate(
 ) -> dict:
     """Edit a candidate claim's mutable fields. Creates a revision with
     before/after snapshots. Admin-only since 08-03 (AUTH-03, T-08-03-01)."""
-    db = repo._db
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
 
     async def _edit(tx: Any, cmd: dict[str, Any]) -> dict[str, Any]:
@@ -392,7 +389,7 @@ async def edit_candidate(
         return {"id": cmd["claim_id"], "status": "edited", "origin": "candidate", "revision_id": revision["id"], "updates_applied": list(cmd["updates"].keys())}
 
     try:
-        result = await db.execute_write(_edit, {"series_id": series_id, "claim_id": claim_id, "updates": updates, "now": datetime.now(timezone.utc), "user_id": _admin["id"]})
+        result = await repo.edit_claim(_edit, {"series_id": series_id, "claim_id": claim_id, "updates": updates, "now": datetime.now(timezone.utc), "user_id": _admin["id"]})
     except HTTPException:
         raise
     except ValueError as exc:

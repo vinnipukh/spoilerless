@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping
@@ -80,6 +81,7 @@ class Ontology:
             raise OntologyValidationError(f"Undeclared {kind}: {value}")
 
 
+@lru_cache(maxsize=None)
 def load_ontology(directory: Path = ONTOLOGY_DIR) -> Ontology:
     nodes = _read_yaml(directory / "node_types.yaml")
     relationships = _read_yaml(directory / "relation_types.yaml")

@@ -1,4 +1,5 @@
 from functools import lru_cache
+import os
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -146,3 +147,24 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def verify_google_client_id_equality(settings: Settings | None = None) -> None:
+    """Fail startup when both Google client ids are set but differ (PROB-30/#55).
+
+    The backend verifies ID tokens against ``GOOGLE_CLIENT_ID`` while the
+    frontend requests them with ``VITE_GOOGLE_CLIENT_ID`` (root .env via
+    vite envDir). A mismatch is the audience-mismatch 503 trigger class
+    (#42). The check fires ONLY when both are set — local runs that set
+    neither (or only the backend id) must not crash.
+    """
+    resolved = settings or get_settings()
+    backend_id = resolved.google_client_id.strip()
+    frontend_id = os.environ.get("VITE_GOOGLE_CLIENT_ID", "").strip()
+    if backend_id and frontend_id and backend_id != frontend_id:
+        raise RuntimeError(
+            "GOOGLE_CLIENT_ID and VITE_GOOGLE_CLIENT_ID mismatch: the backend "
+            "verifies Google ID tokens against a different client id than the "
+            "frontend requests (audience-mismatch 503 class, #42). Set both "
+            "to the same Google OAuth client id in the root .env."
+        )
