@@ -1050,5 +1050,7 @@ def test_auth_module_imports() -> None:
     from spoilerless.app.domain.auth import GoogleAuthRequest, UserPublic, UserResponse  # noqa: F811
     from spoilerless.app.repository.session import InMemorySessionRepository, Neo4jSessionRepository, SessionRecord  # noqa: F811
     from spoilerless.app.repository.user import UserRepository  # noqa: F811
-    from spoilerless.app.services.auth import AuthService, ProductionGoogleVerifier  # noqa: F811
+    # ProductionGoogleVerifier is deliberately NOT import-only here anymore
+    # (PROBLEMS #47): it is exercised behaviorally in test_google_verifier.py.
+    from spoilerless.app.services.auth import AuthService  # noqa: F811
     assert router.prefix == "/api/auth"
