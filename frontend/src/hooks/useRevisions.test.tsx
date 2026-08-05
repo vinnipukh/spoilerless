@@ -40,7 +40,7 @@ beforeEach(() => {
 
 describe('useRevisions', () => {
   it('starts in idle state when seriesId is null', () => {
-    let captured: any = null
+    let captured: ReturnType<typeof useRevisions> | null = null
     function TestComp() {
       captured = useRevisions({ seriesId: null, visibleUntilOrder: null })
       return null
@@ -51,7 +51,7 @@ describe('useRevisions', () => {
   })
 
   it('starts in loading state when seriesId and visibleUntilOrder are set', () => {
-    let captured: any = null
+    let captured: ReturnType<typeof useRevisions> | null = null
     function TestComp() {
       captured = useRevisions({ seriesId: 'series:dexter', visibleUntilOrder: 1 })
       return null
@@ -64,7 +64,7 @@ describe('useRevisions', () => {
   it('transitions to success state after fetch resolves', async () => {
     vi.mocked(getRevisions).mockResolvedValue([mockRevision])
 
-    let captured: any = null
+    let captured: ReturnType<typeof useRevisions> | null = null
     function TestComp() {
       captured = useRevisions({ seriesId: 'series:dexter', visibleUntilOrder: 1 })
       return null
@@ -84,7 +84,7 @@ describe('useRevisions', () => {
   it('transitions to error state on fetch failure', async () => {
     vi.mocked(getRevisions).mockRejectedValue(new Error('Network error'))
 
-    let captured: any = null
+    let captured: ReturnType<typeof useRevisions> | null = null
     function TestComp() {
       captured = useRevisions({ seriesId: 'series:dexter', visibleUntilOrder: 1 })
       return null
@@ -103,7 +103,7 @@ describe('useRevisions', () => {
   it('resets to loading when key changes', async () => {
     vi.mocked(getRevisions).mockResolvedValue([mockRevision])
 
-    let captured: any = null
+    let captured: ReturnType<typeof useRevisions> | null = null
     function TestComp({ sid }: { sid: string | null }) {
       captured = useRevisions({ seriesId: sid, visibleUntilOrder: 1 })
       return null
@@ -128,7 +128,7 @@ describe('useRevisions', () => {
       .mockResolvedValueOnce([mockRevision])
       .mockResolvedValueOnce([updatedRevision])
 
-    let captured: any = null
+    let captured: ReturnType<typeof useRevisions> | null = null
     function TestComp() {
       captured = useRevisions({ seriesId: 'series:dexter', visibleUntilOrder: 1 })
       return null

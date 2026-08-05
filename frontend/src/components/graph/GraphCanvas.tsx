@@ -168,13 +168,13 @@ function CreateCustomNodeDialog({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  // Default to the highest visible episode
-  useEffect(() => {
-    if (!episodeId && episodes.length > 0) {
-      const highest = episodes.reduce((a, b) => (a.episode_order > b.episode_order ? a : b))
-      setEpisodeId(highest.id)
-    }
-  }, [episodes, episodeId])
+  // Default to the highest visible episode via a guarded render-time
+  // adjustment (the same "adjust state when a prop changes" pattern
+  // useGraph.ts uses) — react-hooks/set-state-in-effect clean.
+  if (!episodeId && episodes.length > 0) {
+    const highest = episodes.reduce((a, b) => (a.episode_order > b.episode_order ? a : b))
+    setEpisodeId(highest.id)
+  }
 
   const handleCreate = useCallback(async () => {
     if (!seriesId || !label.trim()) return

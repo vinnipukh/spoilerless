@@ -79,7 +79,7 @@ describe('RevisionHistoryPanel', () => {
       status: 'success',
       data: [],
       refetch: vi.fn(),
-    } as any)
+    } as ReturnType<typeof useRevisions>)
 
     const { container, root } = render(<RevisionHistoryPanel {...defaultProps} />)
     expect(container.textContent).toContain('No revision history')
@@ -90,7 +90,7 @@ describe('RevisionHistoryPanel', () => {
   it('renders skeleton during loading', () => {
     vi.mocked(useRevisions).mockReturnValue({
       status: 'loading',
-    } as any)
+    } as ReturnType<typeof useRevisions>)
 
     const { container, root } = render(<RevisionHistoryPanel {...defaultProps} />)
     // Skeleton renders as empty divs with the skeleton animation class
@@ -103,7 +103,7 @@ describe('RevisionHistoryPanel', () => {
     vi.mocked(useRevisions).mockReturnValue({
       status: 'error',
       error: new Error('Failed to load'),
-    } as any)
+    } as ReturnType<typeof useRevisions>)
 
     const { container, root } = render(<RevisionHistoryPanel {...defaultProps} />)
     expect(container.textContent).toContain('Failed to load revision history')
@@ -115,7 +115,7 @@ describe('RevisionHistoryPanel', () => {
       status: 'success',
       data: [mockRevisionUpdated, mockRevisionCreated],
       refetch: vi.fn(),
-    } as any)
+    } as ReturnType<typeof useRevisions>)
 
     const { container, root } = render(<RevisionHistoryPanel {...defaultProps} />)
     expect(container.textContent).toContain('Updated')
@@ -128,7 +128,7 @@ describe('RevisionHistoryPanel', () => {
       status: 'success',
       data: [mockRevisionUpdated, mockRevisionCreated, mockRevisionReverted],
       refetch: vi.fn(),
-    } as any)
+    } as ReturnType<typeof useRevisions>)
 
     const { container, root } = render(<RevisionHistoryPanel {...defaultProps} />)
 
@@ -144,7 +144,7 @@ describe('RevisionHistoryPanel', () => {
       status: 'success',
       data: [mockRevisionUpdated],
       refetch: vi.fn(),
-    } as any)
+    } as ReturnType<typeof useRevisions>)
 
     const { container, root } = render(<RevisionHistoryPanel {...defaultProps} />)
 
@@ -166,8 +166,8 @@ describe('RevisionHistoryPanel', () => {
       status: 'success',
       data: [mockRevisionUpdated],
       refetch,
-    } as any)
-    vi.mocked(revertRevision).mockResolvedValue({} as any)
+    } as ReturnType<typeof useRevisions>)
+    vi.mocked(revertRevision).mockResolvedValue({} as RevisionResponse)
 
     const { container, root } = render(
       <RevisionHistoryPanel

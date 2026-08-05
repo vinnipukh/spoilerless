@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   Sheet,
   SheetContent,
@@ -279,12 +279,14 @@ function CreateRelationshipDialog({
   // Filter out the source node from targets
   const targetOptions = graphNodes.filter((n) => n.id !== selectedNodeId)
 
-  useEffect(() => {
-    if (!episodeId && episodes.length > 0) {
-      const highest = episodes.reduce((a, b) => a.id > b.id ? a : b)
-      setEpisodeId(highest.id)
-    }
-  }, [episodes, episodeId])
+  // Default to the highest visible episode via a guarded render-time
+  // adjustment — the same "adjust state when a prop/key changes" pattern
+  // useGraph.ts uses (react-hooks/set-state-in-effect clean: never a
+  // synchronous setState in an effect body).
+  if (!episodeId && episodes.length > 0) {
+    const highest = episodes.reduce((a, b) => a.id > b.id ? a : b)
+    setEpisodeId(highest.id)
+  }
 
   const handleCreate = useCallback(async () => {
     if (!seriesId || !selectedNodeId || !targetId) return
@@ -308,14 +310,18 @@ function CreateRelationshipDialog({
     }
   }, [seriesId, selectedNodeId, targetId, predicate, episodeId, onOpenChange, onSuccess])
 
-  // Reset form when dialog opens
-  useEffect(() => {
+  // Reset form when the dialog opens — guarded render-time adjustment with a
+  // state copy of the previous `open` value (react-hooks/set-state-in-effect
+  // clean).
+  const [prevOpen, setPrevOpen] = useState(open)
+  if (prevOpen !== open) {
+    setPrevOpen(open)
     if (open) {
       setTargetId('')
       setPredicate('KNOWS')
       setError('')
     }
-  }, [open])
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -467,6 +473,11 @@ export function DetailPanel({
   if (prevSelectionKey !== selectionKey) {
     setPrevSelectionKey(selectionKey)
     setResolved(false)
+    // Reset note editing state when the selection changes — merged into the
+    // same state-copy adjustment (was a separate ref-based copy) so no ref
+    // is read or written during render (react-hooks/refs clean).
+    setEditingNote(null)
+    setShowNewNoteForm(false)
   }
 
   useEffect(() => {
@@ -474,14 +485,6 @@ export function DetailPanel({
     const id = setTimeout(() => setResolved(true), 0)
     return () => clearTimeout(id)
   }, [resolved])
-
-  // Reset note editing state when selection changes
-  const prevSelectionKeyRef = useRef(selectionKey)
-  if (prevSelectionKeyRef.current !== selectionKey) {
-    prevSelectionKeyRef.current = selectionKey
-    setEditingNote(null)
-    setShowNewNoteForm(false)
-  }
 
   const selectedNode =
     selected?.kind === 'node' ? graph.nodes.find((node) => node.id === selected.id) : undefined
@@ -509,18 +512,34 @@ export function DetailPanel({
 
   const notes = notesState.status === 'success' ? notesState.data : []
 
-  const handleCreateNote = useCallback(async (content: string) => {
+  // The hook returns a FRESH object every render — depending on the whole
+  // object in useCallback deps would recreate the callback every render and
+  // defeat the memoization (react-hooks/preserve-manual-memoization).
+  // Destructure its stable inner callbacks instead.
+  const {
+    createNote: createNoteApi,
+    updateNote: updateNoteApi,
+    deleteNote: deleteNoteApi,
+  } = notesState
+
+  // Plain async handlers, NOT useCallback: their only non-trivial deps are
+  // hook-returned values (createNoteApi/updateNoteApi/deleteNoteApi) whose
+  // stability the React Compiler cannot prove — useCallback memoization is
+  // neither preserved nor effective here (the note components are
+  // non-memoized), so the unnecessary memoization is deleted rather than
+  // suppressed (react-hooks/preserve-manual-memoization clean).
+  const handleCreateNote = async (content: string) => {
     if (!seriesId || !selectedNode && !activeClaim) return
     setSaving(true)
     try {
       if (selectedNode) {
-        await notesState.createNote({
+        await createNoteApi({
           target_type: selectedNode.type === 'Claim' ? 'Claim' : 'Character',
           target_id: selectedNode.id,
           content,
         })
       } else if (activeClaim) {
-        await notesState.createNote({
+        await createNoteApi({
           target_type: 'Claim',
           target_id: activeClaim.id,
           content,
@@ -533,29 +552,29 @@ export function DetailPanel({
     } finally {
       setSaving(false)
     }
-  }, [seriesId, selectedNode, activeClaim, notesState, onRefetchGraph])
+  }
 
-  const handleEditNote = useCallback(async (noteId: string, content: string) => {
+  const handleEditNote = async (noteId: string, content: string) => {
     if (!seriesId) return
     setSaving(true)
     try {
-      await notesState.updateNote(noteId, { content })
+      await updateNoteApi(noteId, { content })
       setEditingNote(null)
     } catch {
       // Error handled by hook
     } finally {
       setSaving(false)
     }
-  }, [seriesId, notesState])
+  }
 
-  const handleDeleteNote = useCallback(async (noteId: string) => {
+  const handleDeleteNote = async (noteId: string) => {
     if (!seriesId) return
     try {
-      await notesState.deleteNote(noteId)
+      await deleteNoteApi(noteId)
     } catch {
       // Error handled by hook
     }
-  }, [seriesId, notesState])
+  }
 
   const title =
     selectedNode?.label ??
@@ -564,10 +583,6 @@ export function DetailPanel({
       ? graph.edges.find((edge) => edge.id === selected.id)?.type
       : undefined) ??
     'Details'
-
-  // Workaround for stale-ref callback: keep the latest delete in a ref
-  const handleDeleteNoteRef = useRef(handleDeleteNote)
-  handleDeleteNoteRef.current = handleDeleteNote
 
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onDeselect()} modal={false}>
@@ -748,7 +763,7 @@ export function DetailPanel({
                           key={note.id}
                           note={note}
                           onEdit={(n) => setEditingNote(n)}
-                          onDelete={handleDeleteNoteRef.current}
+                          onDelete={handleDeleteNote}
                         />
                       )
                     ))}

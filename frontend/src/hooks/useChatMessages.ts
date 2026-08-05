@@ -51,8 +51,16 @@ export function useChatMessages(
     setCitations([])
     setGraphFocus(EMPTY_GRAPH_FOCUS)
     setProposedChangeSet(null)
-    sendStartedRef.current = false
+    // sendStartedRef is reset in an effect below (react-hooks/refs: no ref
+    // writes during render).
   }
+
+  // Reset the send guard when the session key changes — declared BEFORE the
+  // fetch effect so it runs first (effects run in declaration order) and a
+  // key-change fetch never sees a stale true.
+  useEffect(() => {
+    sendStartedRef.current = false
+  }, [key])
 
   const abortControllerRef = useRef<AbortController | null>(null)
 

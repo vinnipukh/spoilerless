@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -34,26 +34,17 @@ function EyeOffIcon() {
 }
 
 export function SettingsPage({ onBack }: Props) {
-  const [provider, setProvider] = useState<LLMProvider>('gemini')
-  const [model, setModel] = useState('')
-  const [baseUrl, setBaseUrl] = useState('')
-  const [apiKey, setApiKey] = useState('')
-  const [showApiKey, setShowApiKey] = useState(false)
-  const [savedMessage, setSavedMessage] = useState<string | null>(null)
-
   // BYOK (AI-01/D-05): the key/base_url/model live ONLY in this browser's
   // localStorage - there is no settings-persistence endpoint anymore, so the
-  // form is populated synchronously from localStorage and saving never
-  // touches the network.
-  useEffect(() => {
-    const stored = getStoredLLMSettings()
-    if (stored) {
-      setProvider(stored.provider)
-      setModel(stored.model)
-      setBaseUrl(stored.base_url)
-      setApiKey(stored.api_key)
-    }
-  }, [])
+  // form is populated synchronously from localStorage via lazy state
+  // initializers (react-hooks/set-state-in-effect clean — no hydration
+  // effect) and saving never touches the network.
+  const [provider, setProvider] = useState<LLMProvider>(() => getStoredLLMSettings()?.provider ?? 'gemini')
+  const [model, setModel] = useState(() => getStoredLLMSettings()?.model ?? '')
+  const [baseUrl, setBaseUrl] = useState(() => getStoredLLMSettings()?.base_url ?? '')
+  const [apiKey, setApiKey] = useState(() => getStoredLLMSettings()?.api_key ?? '')
+  const [showApiKey, setShowApiKey] = useState(false)
+  const [savedMessage, setSavedMessage] = useState<string | null>(null)
 
   function handleSave() {
     saveLLMSettings({ provider, api_key: apiKey, base_url: baseUrl, model })

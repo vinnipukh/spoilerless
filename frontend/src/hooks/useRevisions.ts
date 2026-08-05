@@ -29,7 +29,13 @@ export function useRevisions({ seriesId, visibleUntilOrder, resourceType, resour
   }
 
   const fetchKeyRef = useRef(key)
-  fetchKeyRef.current = key
+  // Sync the ref from an effect, never from the render body: a render-time
+  // write is a stale-ref correctness bug under React 19 double-render
+  // (react-hooks/refs). Declared BEFORE the fetch effect below so the ref is
+  // updated before a key-change fetch fires.
+  useEffect(() => {
+    fetchKeyRef.current = key
+  }, [key])
 
   const fetchRevisions = useCallback(() => {
     if (!seriesId || visibleUntilOrder == null) return
