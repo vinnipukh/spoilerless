@@ -54,7 +54,13 @@ async def get_progress(
     Hidden-or-missing must never reveal whether the series exists — the
     generic ``resource_not_found`` envelope is used for both.
     """
-    progress = await service.get(user["id"], series_id)
+    try:
+        progress = await service.get(user["id"], series_id)
+    except InvalidVisibilityOrder as exc:
+        # PROB-16/#37: a persisted row with a null/out-of-range split field
+        # (corrupt legacy data) must fail closed to the documented 422
+        # envelope — never a bare TypeError (500) from effective_view_order.
+        raise http_error(422, "invalid_visible_until_order", str(exc))
     if progress is None:
         raise http_error(404, "resource_not_found", "Resource not found.")
     return progress

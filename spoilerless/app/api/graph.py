@@ -71,12 +71,13 @@ async def get_graph(
     if series is None:
         raise _error(404, "series_not_found", "Series not found.")
 
-    # The REQUESTED order must still identify a persisted episode (a client may
-    # request any persisted order), but the FILTERING boundary is the effective
-    # one: when the caller has a session and a persisted split progress record,
-    # effective = min(requested, view_as_of_order, watched_through_order) —
-    # a request above the selected view never raises the boundary (D-05).
-    boundary_episode = await service.resolve_boundary(series_id, visible_until_order)
+    # PROB-04/#12: the effective boundary for an ANONYMOUS reader is FIXED at
+    # order 1 — a client-chosen visible_until_order must never widen the
+    # spoiler window without a session. The persisted-episode check resolves
+    # against the effective (not the requested) order, so an anonymous client
+    # cannot even probe episode ids above boundary 1.
+    requested = 1 if user is None else visible_until_order
+    boundary_episode = await service.resolve_boundary(series_id, requested)
     if boundary_episode is None:
         raise _error(
             422,
@@ -84,7 +85,7 @@ async def get_graph(
             "visible_until_order must identify a persisted episode order.",
         )
 
-    effective = visible_until_order
+    effective = requested
     if user is not None:
         record = await progress_service.get(user["id"], series_id)
         if record is not None:

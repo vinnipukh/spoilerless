@@ -366,6 +366,53 @@ def test_post_progress_rejects_non_positive_boundary(
     assert response.status_code == 422
 
 
+def test_progress_null_persisted_split_field_fails_closed_to_422(
+    client: TestClient, authed_user: dict[str, Any]
+) -> None:
+    """PROB-16/#37: a persisted row with a NULL split field (corrupt legacy
+    data) fails closed to the documented 422 envelope on BOTH read and write
+    paths — previously an uncaught TypeError from ``effective_view_order``
+    (a 500). The corrupt row is seeded and removed via a dedicated driver."""
+    uid = authed_user["id"]
+
+    async def _seed_corrupt_row() -> None:
+        db = Neo4jDatabase()
+        db.open()
+        try:
+            await db.execute_query(
+                "MERGE (u:AppUser {id: $uid}) "
+                "MERGE (s:Series {id: $sid}) "
+                "MERGE (u)-[:HAS_PROGRESS]->(p:UserSeriesProgress "
+                "{user_id: $uid, series_id: $sid}) "
+                "SET p.id = $pid, p.watched_through_order = 3, "
+                "    p.view_as_of_order = NULL, p.visible_until_order = NULL",
+                uid=uid,
+                sid="series_dexter",
+                pid=f"progress:09-04-corrupt:{uuid4()}",
+            )
+        finally:
+            await db.close()
+
+    asyncio.run(_seed_corrupt_row())
+    try:
+        # Read path: GET must 422 via the documented envelope, never 500.
+        read = client.get("/api/series/series_dexter/progress")
+        assert read.status_code == 422, read.text
+        assert read.json()["detail"]["code"] == "invalid_visible_until_order"
+
+        # Write path: a view-only update reads the corrupt row first and must
+        # surface the same 422 envelope.
+        write = client.post(
+            "/api/series/series_dexter/progress",
+            json={"view_as_of_order": 2},
+        )
+        assert write.status_code == 422, write.text
+        assert write.json()["detail"]["code"] == "invalid_visible_until_order"
+    finally:
+        # authed_user teardown removes the AppUser + its progress rows.
+        pass
+
+
 def test_progress_never_accepts_extra_fields(
     client: TestClient, authed_user: dict[str, Any]
 ) -> None:

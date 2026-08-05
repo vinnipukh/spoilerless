@@ -179,10 +179,20 @@ class CandidateRepository:
         result = await self._db.execute_write(_ingest_candidate_claims, command)
         return result
 
-    async def get_candidate_claim(self, series_id: str, claim_id: str) -> dict[str, Any] | None:
-        """Fetch a single candidate claim by ID."""
+    async def get_candidate_claim(
+        self,
+        series_id: str,
+        claim_id: str,
+        *,
+        visible_until_order: int,
+    ) -> dict[str, Any] | None:
+        """Fetch a single candidate claim by ID, filtered by the spoiler
+        boundary (PROB-05/#13): an above-boundary claim reads as missing
+        (D-15 — hidden and missing are indistinguishable).
+        """
         query = """
         MATCH (claim:Claim {id: $claim_id, series_id: $series_id, origin: 'candidate'})
+        WHERE claim.visible_from_order <= $visible_until_order
         OPTIONAL MATCH (claim)-[:SUPPORTED_BY]->(evidence:EvidenceFragment)
         OPTIONAL MATCH (evidence)-[:REFERS_TO]->(source:Source)
         RETURN claim.id AS id,
@@ -212,7 +222,12 @@ class CandidateRepository:
                    visible_from_order: source.visible_from_order
                }) AS sources
         """
-        result = await self._db.execute_query(query, series_id=series_id, claim_id=claim_id)
+        result = await self._db.execute_query(
+            query,
+            series_id=series_id,
+            claim_id=claim_id,
+            visible_until_order=visible_until_order,
+        )
         return result[0] if result else None
 
     async def list_candidate_claims(

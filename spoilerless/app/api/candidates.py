@@ -15,6 +15,7 @@ from spoilerless.app.domain.user_content import Identifier
 from spoilerless.app.graph.candidates import CandidateRepository
 from spoilerless.app.graph.database import Neo4jDatabase, get_database
 from spoilerless.app.revisions import RevisionRepository
+from spoilerless.app.services.graph import GraphService
 
 router = APIRouter(prefix="/api/series/{series_id}/candidates", tags=["candidates"])
 
@@ -23,12 +24,45 @@ async def get_candidate_repo(db: Neo4jDatabase = Depends(get_database)) -> Candi
     return CandidateRepository(db)
 
 
+async def get_graph_service(db: Neo4jDatabase = Depends(get_database)) -> GraphService:
+    return GraphService(db)
+
+
 CandidateRepoDependency = Annotated[CandidateRepository, Depends(get_candidate_repo)]
+GraphServiceDependency = Annotated[GraphService, Depends(get_graph_service)]
 SeriesId = Annotated[Identifier, Path(description="Series identifier.")]
 ClaimId = Annotated[Identifier, Path(description="Candidate claim identifier.", examples=["extracted:a1b2c3d4e5f6g7h8"])]
 
 
 # --- Shared helpers ---
+
+
+async def _require_resolved_boundary(
+    graph_service: GraphService, series_id: str, visible_until_order: int | None
+) -> None:
+    """PROB-05/#13: a candidate read requires a RESOLVED spoiler boundary.
+
+    An omitted boundary never defaults to everything — the server rejects it
+    with the 422 envelope. A present boundary must identify a persisted
+    episode of the series, mirroring the graph read path (D-09); the
+    visibility filter is then applied by the repository query.
+    """
+    if visible_until_order is None:
+        raise http_error(
+            422,
+            "invalid_request",
+            "visible_until_order is required to read candidates — an omitted "
+            "boundary must never default to every visibility level.",
+        )
+    boundary_episode = await graph_service.resolve_boundary(
+        series_id, visible_until_order
+    )
+    if boundary_episode is None:
+        raise http_error(
+            422,
+            "invalid_visible_until_order",
+            "visible_until_order must identify a persisted episode order.",
+        )
 
 
 def _read_claim_query() -> str:
@@ -132,36 +166,63 @@ async def ingest_candidates(
 @router.get(
     "",
     response_model=list[dict],
-    summary="List all candidate claims for a series",
+    summary="List candidate claims for a series within a spoiler boundary",
     responses={
         200: {"description": "List of candidate claims with evidence and source details."},
+        422: error_responses(422)[422],
     },
 )
 async def list_candidates(
     series_id: SeriesId,
     repo: CandidateRepoDependency,
-    visible_until_order: int | None = Query(default=None, ge=1, description="Spoiler boundary for filtering."),
+    graph_service: GraphServiceDependency,
+    visible_until_order: int | None = Query(
+        default=None,
+        ge=1,
+        description="Spoiler boundary for filtering (REQUIRED since PROB-05/#13).",
+    ),
 ) -> list[dict]:
-    """List all candidate claims for a series, optionally filtered by spoiler boundary."""
+    """List candidate claims for a series, filtered by a RESOLVED boundary.
+
+    PROB-05/#13: the boundary is resolved server-side — an omitted
+    ``visible_until_order`` returns 422 (never a default-to-everything dump),
+    and a present boundary must identify a persisted episode of the series.
+    """
+    await _require_resolved_boundary(graph_service, series_id, visible_until_order)
     return await repo.list_candidate_claims(series_id, visible_until_order)
 
 
 @router.get(
     "/{claim_id}",
     response_model=dict | None,
-    summary="Get a single candidate claim by ID",
+    summary="Get a single candidate claim by ID within a spoiler boundary",
     responses={
         200: {"description": "Candidate claim details with evidence and source."},
-        404: {"description": "Candidate claim not found."},
+        404: {"description": "Candidate claim not found (or hidden above the boundary)."},
+        422: error_responses(422)[422],
     },
 )
 async def get_candidate(
     series_id: SeriesId,
     claim_id: ClaimId,
     repo: CandidateRepoDependency,
+    graph_service: GraphServiceDependency,
+    visible_until_order: int | None = Query(
+        default=None,
+        ge=1,
+        description="Spoiler boundary for filtering (REQUIRED since PROB-05/#13).",
+    ),
 ) -> dict | None:
-    """Get a single candidate claim by ID."""
-    claim = await repo.get_candidate_claim(series_id, claim_id)
+    """Get a single candidate claim by ID, within the resolved boundary.
+
+    PROB-05/#13: like the list endpoint, the boundary is required and
+    validated against a persisted episode; an above-boundary claim reads as
+    missing (D-15 — hidden and missing are indistinguishable).
+    """
+    await _require_resolved_boundary(graph_service, series_id, visible_until_order)
+    claim = await repo.get_candidate_claim(
+        series_id, claim_id, visible_until_order=visible_until_order
+    )
     if claim is None:
         raise http_error(404, "candidate_not_found", f"Candidate claim not found: {claim_id}")
     return claim

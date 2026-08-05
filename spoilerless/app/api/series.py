@@ -80,7 +80,11 @@ async def list_episodes(
             detail={"code": "series_not_found", "message": "Series not found."},
         )
 
-    effective = visible_until_order
+    # PROB-04/#12: an anonymous reader's effective boundary is FIXED at
+    # order 1 — the client-chosen visible_until_order is ignored without a
+    # session (fail-closed). Authenticated callers keep the D-05 fail-closed
+    # min against their persisted split progress record.
+    effective = 1 if user is None else visible_until_order
     if user is not None:
         record = await progress_service.get(user["id"], series_id)
         if record is not None:

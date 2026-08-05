@@ -47,6 +47,13 @@ def test_validate_visibility_order_rejects_zero_and_negative() -> None:
         validate_visibility_order(-3)
 
 
+def test_validate_visibility_order_rejects_none_as_invalid_input() -> None:
+    """PROB-16/#37: None is INVALID input, raising the documented validation
+    error (mapped to 422 by the API layer) — never a bare TypeError (500)."""
+    with pytest.raises(InvalidVisibilityOrder):
+        validate_visibility_order(None)
+
+
 # ---------------------------------------------------------------------------
 # is_visible — D-03 fail-closed rule
 # ---------------------------------------------------------------------------

@@ -109,16 +109,24 @@ def test_boundary_one_masks_spoiler_sensitive_titles(live_client: TestClient) ->
 
 
 def test_high_boundary_returns_real_titles(live_client: TestClient) -> None:
-    response = live_client.get(
-        "/api/series/series_dexter/episodes", params={"visible_until_order": 3}
-    )
-    assert response.status_code == 200, response.text
-    episodes = {e["episode_order"]: e for e in response.json()}
+    # PROB-04/#12: anonymous readers are clamped to boundary 1, so the
+    # high-boundary probe authenticates with a matching progress record.
+    raw = asyncio.run(_prepare_progress_fixture(watched=3, view=3))
+    try:
+        response = live_client.get(
+            "/api/series/series_dexter/episodes",
+            params={"visible_until_order": 3},
+            headers={"Cookie": f"session={raw}"},
+        )
+        assert response.status_code == 200, response.text
+        episodes = {e["episode_order"]: e for e in response.json()}
 
-    assert episodes[1]["display_title"] == "Dexter"
-    assert episodes[2]["display_title"] == "Crocodile"
-    assert episodes[3]["display_title"] == "Popping Cherry"
-    assert all(e["is_unlocked"] is True for e in episodes.values())
+        assert episodes[1]["display_title"] == "Dexter"
+        assert episodes[2]["display_title"] == "Crocodile"
+        assert episodes[3]["display_title"] == "Popping Cherry"
+        assert all(e["is_unlocked"] is True for e in episodes.values())
+    finally:
+        asyncio.run(_clean_progress_fixture(raw))
 
 
 def test_unknown_series_episodes_returns_404(live_client: TestClient) -> None:
@@ -253,15 +261,16 @@ def test_request_above_persisted_view_is_fail_closed(live_client: TestClient) ->
         assert episodes[2]["is_unlocked"] is False
         assert episodes[3]["is_unlocked"] is False
 
-        # Anonymous caller keeps the backward-compatible behavior (no persisted
-        # record to clamp against): request 3 resolves to effective 3.
+        # Anonymous caller gets the FIXED boundary 1 (PROB-04/#12) — the
+        # client-chosen request must never widen the spoiler window without
+        # a session: request 3 resolves to effective 1.
         anon = live_client.get(
             "/api/series/series_dexter/episodes",
             params={"visible_until_order": 3},
         )
         anon_episodes = {e["episode_order"]: e for e in anon.json()}
-        assert anon_episodes[2]["display_title"] == "Crocodile"
-        assert anon_episodes[3]["is_unlocked"] is True
+        assert anon_episodes[2]["display_title"] == "S01E02 — Episode 2"
+        assert anon_episodes[3]["is_unlocked"] is False
     finally:
         asyncio.run(_clean_progress_fixture(raw))
 

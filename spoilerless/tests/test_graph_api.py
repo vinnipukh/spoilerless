@@ -212,15 +212,30 @@ def test_graph_error_shapes(live_client: TestClient) -> None:
     malformed = live_client.get(
         "/api/series/series_dexter/graph?visible_until_order=not-a-number"
     )
-    nonpersisted = live_client.get(
+    # PROB-04/#12: an ANONYMOUS order-4 probe is clamped to boundary 1 (200),
+    # never a probe failure — so the non-persisted 422 must be exercised with
+    # an authenticated session (requested order is honored for logged-in users).
+    anon_nonpersisted = live_client.get(
         "/api/series/series_dexter/graph?visible_until_order=4"
     )
+    raw = asyncio.run(_prepare_boundary_session(3))
+    try:
+        nonpersisted = live_client.get(
+            "/api/series/series_dexter/graph?visible_until_order=4",
+            headers=_boundary_headers(raw),
+        )
+    finally:
+        asyncio.run(_clean_boundary_session(3))
 
     assert unknown.status_code == 404
     assert unknown.json()["detail"]["code"] == "series_not_found"
     for response in (missing, malformed):
         assert response.status_code == 422
         assert response.json()["detail"]["code"] == "invalid_request"
+    # Anonymous clamp: boundary 4 request yields boundary-1 content (200).
+    assert anon_nonpersisted.status_code == 200
+    assert anon_nonpersisted.json()["effective_view_order"] == 1
+    # Authenticated non-persisted order stays fail-closed 422.
     assert nonpersisted.status_code == 422
     assert nonpersisted.json()["detail"]["code"] == "invalid_visible_until_order"
 
@@ -269,9 +284,21 @@ def test_graph_boundaries_have_full_json_sentinels(
     forbidden: list[str],
     present: list[str],
 ) -> None:
-    response = live_client.get(
-        f"/api/series/series_dexter/graph?visible_until_order={boundary}"
-    )
+    # PROB-04/#12 clamps ANONYMOUS readers to boundary 1, so boundaries 2/3
+    # are probed with an authenticated session whose persisted progress
+    # matches the requested boundary.
+    headers: dict[str, str] = {}
+    if boundary > 1:
+        raw = asyncio.run(_prepare_boundary_session(boundary))
+        headers = _boundary_headers(raw)
+    try:
+        response = live_client.get(
+            f"/api/series/series_dexter/graph?visible_until_order={boundary}",
+            headers=headers,
+        )
+    finally:
+        if boundary > 1:
+            asyncio.run(_clean_boundary_session(boundary))
     payload = response.json()
     serialized = json.dumps(payload, sort_keys=True)
 
@@ -352,9 +379,16 @@ def test_claim_validity_is_independent_of_visibility(live_client: TestClient) ->
     order_one = live_client.get(
         "/api/series/series_dexter/graph?visible_until_order=1"
     ).json()
-    order_two = live_client.get(
-        "/api/series/series_dexter/graph?visible_until_order=2"
-    ).json()
+    # PROB-04/#12: boundary 2 is probed with an authenticated session whose
+    # persisted progress matches (anonymous readers are clamped to boundary 1).
+    raw = asyncio.run(_prepare_boundary_session(2))
+    try:
+        order_two = live_client.get(
+            "/api/series/series_dexter/graph?visible_until_order=2",
+            headers=_boundary_headers(raw),
+        ).json()
+    finally:
+        asyncio.run(_clean_boundary_session(2))
     claim_id = "dexter:claim:s01e01:temporary_trust"
 
     assert claim_id in {claim["id"] for claim in order_one["claims"]}
@@ -439,12 +473,17 @@ def test_user_relationship_projection_is_edge_only_closed_and_fail_closed(
     live_client: TestClient,
 ) -> None:
     asyncio.run(_prepare_user_projection_fixture())
+    # PROB-04/#12: boundary 3 is probed with an authenticated session whose
+    # persisted progress matches (anonymous readers are clamped to boundary 1).
+    raw = asyncio.run(_prepare_boundary_session(3))
     try:
         order_one_response = live_client.get(
             "/api/series/series_dexter/graph", params={"visible_until_order": 1}
         )
         order_three_response = live_client.get(
-            "/api/series/series_dexter/graph", params={"visible_until_order": 3}
+            "/api/series/series_dexter/graph",
+            params={"visible_until_order": 3},
+            headers=_boundary_headers(raw),
         )
         assert order_one_response.status_code == order_three_response.status_code == 200
         order_one = order_one_response.json()
@@ -492,6 +531,7 @@ def test_user_relationship_projection_is_edge_only_closed_and_fail_closed(
             "plan03:candidate-no-evidence",
         }.isdisjoint(non_edge_ids)
     finally:
+        asyncio.run(_clean_boundary_session(3))
         asyncio.run(_clean_user_projection_fixture())
 
 
@@ -512,6 +552,84 @@ ABOVE_VIEW_USER_CLEANUP_QUERY = """
 MATCH (u:AppUser {id: $uid})
 DETACH DELETE u
 """
+
+BOUNDARY_SESSION_SETUP_QUERY = """
+MERGE (u:AppUser {id: $uid})
+SET u.google_sub = $sub, u.email = $email, u.display_name = 'Boundary Test'
+MERGE (s:Series {id: 'series_dexter'})
+MERGE (u)-[:HAS_PROGRESS]->(p:UserSeriesProgress {user_id: $uid, series_id: 'series_dexter'})
+SET p.id = $pid, p.created_at = $now, p.updated_at = $now,
+    p.watched_through_order = $watched, p.view_as_of_order = $watched,
+    p.visible_until_order = $watched
+WITH u
+CREATE (sess:Session {
+    id: $session_id,
+    token_hash: $token_hash,
+    created_at: $now,
+    expires_at: $now + $ttl,
+    last_seen_at: $now,
+    revoked_at: NULL
+})
+CREATE (u)-[:HAS_SESSION]->(sess)
+"""
+
+BOUNDARY_SESSION_CLEANUP_QUERY = """
+MATCH (u:AppUser {id: $uid})
+OPTIONAL MATCH (u)-[:HAS_PROGRESS]->(p:UserSeriesProgress)
+OPTIONAL MATCH (u)-[:HAS_SESSION]->(s:Session)
+DETACH DELETE u, p, s
+"""
+
+
+async def _prepare_boundary_session(watched_through: int) -> str:
+    """Create a user whose persisted progress is watched=view=*watched_through*
+    plus a live session; returns the raw session token.
+
+    PROB-04/#12 clamps ANONYMOUS readers to boundary 1, so tests that probe
+    boundary 2/3 must authenticate with a matching progress record — mirroring
+    the ABOVE_VIEW fixture (fresh random token so the Session token_hash
+    uniqueness constraint can never collide with a leftover node).
+    """
+    raw = f"09-04-boundary-{secrets.token_hex(8)}"
+    uid = f"user:09-04-boundary-{watched_through}"
+    database = Neo4jDatabase()
+    database.open()
+    try:
+        await database.execute_query(
+            BOUNDARY_SESSION_CLEANUP_QUERY, uid=uid
+        )
+        await database.execute_query(
+            BOUNDARY_SESSION_SETUP_QUERY,
+            uid=uid,
+            sub=f"09-04-boundary-sub-{watched_through}",
+            email=f"boundary-{watched_through}@test.local",
+            pid=f"progress:{uid}",
+            session_id=f"session:{uid}:test",
+            token_hash=hashlib.sha256(raw.encode()).hexdigest(),
+            now=time.time(),
+            ttl=float(3600),
+            watched=watched_through,
+        )
+    finally:
+        await database.close()
+    return raw
+
+
+async def _clean_boundary_session(watched_through: int) -> None:
+    database = Neo4jDatabase()
+    database.open()
+    try:
+        await database.execute_query(
+            BOUNDARY_SESSION_CLEANUP_QUERY,
+            uid=f"user:09-04-boundary-{watched_through}",
+        )
+    finally:
+        await database.close()
+
+
+def _boundary_headers(raw_token: str) -> dict[str, str]:
+    return {"Cookie": f"session={raw_token}"}
+
 
 ABOVE_VIEW_SETUP_QUERY = """
 MERGE (u:AppUser {id: $uid})
@@ -599,19 +717,61 @@ def test_graph_request_above_persisted_view_is_fail_closed(live_client: TestClie
         # Paul Bennett is visible_from_order 2 — must NOT appear at effective 1.
         assert "dexter:character:paul_bennett" not in node_ids
 
-        # Anonymous caller keeps the backward-compatible behavior (no persisted
-        # record to clamp against): request 3 resolves to effective 3.
+        # Anonymous caller gets the FIXED boundary 1 (PROB-04/#12) — the
+        # client-chosen request must never widen the spoiler window without
+        # a session: request 3 resolves to effective 1.
         anon = live_client.get(
             "/api/series/series_dexter/graph",
             params={"visible_until_order": 3},
         )
         assert anon.status_code == 200
         anon_payload = anon.json()
-        assert anon_payload["effective_view_order"] == 3
+        assert anon_payload["effective_view_order"] == 1
+        assert anon_payload["visible_until_order"] == 1
         anon_ids = {node["id"] for node in anon_payload["nodes"]}
-        assert "dexter:character:paul_bennett" in anon_ids
+        assert "dexter:character:paul_bennett" not in anon_ids
     finally:
         asyncio.run(_clean_above_view_fixture(raw))
+
+
+def test_anonymous_graph_boundary_is_fixed_at_one(live_client: TestClient) -> None:
+    """PROB-04/#12: an anonymous reader can never request an arbitrary
+    client-chosen boundary — the effective boundary is fixed at order 1 and
+    the cache key flows it, so anonymous cache entries are boundary-1 only.
+
+    A client-chosen ``visible_until_order`` above boundary 1 must yield
+    boundary-1 content (server-enforced), never above-boundary nodes.
+    """
+    for requested in (2, 3, 999):
+        response = live_client.get(
+            "/api/series/series_dexter/graph",
+            params={"visible_until_order": requested},
+        )
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["effective_view_order"] == 1, requested
+        assert payload["visible_until_order"] == 1, requested
+        node_ids = {node["id"] for node in payload["nodes"]}
+        # Paul Bennett is visible_from_order 2 — must never appear anonymously.
+        assert "dexter:character:paul_bennett" not in node_ids, requested
+
+
+def test_anonymous_episode_list_boundary_is_fixed_at_one(
+    live_client: TestClient,
+) -> None:
+    """PROB-04/#12: the anonymous episode listing is boundary-1-enforced —
+    an above-boundary request returns the same masked list as boundary 1."""
+    baseline = live_client.get("/api/series/series_dexter/episodes?visible_until_order=1")
+    assert baseline.status_code == 200
+
+    widened = live_client.get(
+        "/api/series/series_dexter/episodes?visible_until_order=999"
+    )
+    assert widened.status_code == 200
+    assert widened.json() == baseline.json()
+    for episode in widened.json():
+        if episode["episode_order"] > 1:
+            assert episode["is_unlocked"] is False
 
 
 def test_boundary_one_responses_carry_no_future_signals(live_client: TestClient) -> None:
@@ -693,38 +853,46 @@ def test_graph_hidden_character_image_urls_never_serialized(
     for hidden_fragment in ("Paul_Bennett_7.PNG", "Brianmoser1.png", "HarryFace.jpg"):
         assert hidden_fragment not in one_text, hidden_fragment
 
-    # Boundary 2: Paul is revealed. Per D-14 curation (07-06) Paul, Rudy and
-    # Harry carry NO seed portrait (future characters), so their serialized
-    # image fields must be null — the fragment may never appear at any
-    # boundary. Only the order-1 characters' portraits exist.
-    two = live_client.get("/api/series/series_dexter/graph?visible_until_order=2")
-    assert two.status_code == 200
-    two_payload = two.json()
-    for hidden_fragment in ("Paul_Bennett_7.PNG", "Brianmoser1.png", "HarryFace.jpg"):
-        assert hidden_fragment not in json.dumps(two_payload, sort_keys=True), hidden_fragment
-    paul = next(
-        node
-        for node in two_payload["nodes"]
-        if node["id"] == "dexter:character:paul_bennett"
-    )
-    assert paul["image_url"] is None
-    assert paul["image_source_url"] is None
-    # The order-1 revealed characters keep their portraits.
-    two_text = json.dumps(two_payload, sort_keys=True)
-    assert "Dexter_Morgan" in two_text or "Season_7_Photo_Promo" in two_text
+    # PROB-04/#12: boundaries 2/3 are probed with an authenticated session
+    # whose persisted progress matches (anonymous readers are clamped to 1).
+    raw = asyncio.run(_prepare_boundary_session(3))
+    try:
+        two = live_client.get(
+            "/api/series/series_dexter/graph?visible_until_order=2",
+            headers=_boundary_headers(raw),
+        )
+        assert two.status_code == 200
+        two_payload = two.json()
+        for hidden_fragment in ("Paul_Bennett_7.PNG", "Brianmoser1.png", "HarryFace.jpg"):
+            assert hidden_fragment not in json.dumps(two_payload, sort_keys=True), hidden_fragment
+        paul = next(
+            node
+            for node in two_payload["nodes"]
+            if node["id"] == "dexter:character:paul_bennett"
+        )
+        assert paul["image_url"] is None
+        assert paul["image_source_url"] is None
+        # The order-1 revealed characters keep their portraits.
+        two_text = json.dumps(two_payload, sort_keys=True)
+        assert "Dexter_Morgan" in two_text or "Season_7_Photo_Promo" in two_text
 
-    # Boundary 3: everything is revealed — Harry's serialized image fields
-    # are still null (no future-character portraits in seed, D-14).
-    three = live_client.get("/api/series/series_dexter/graph?visible_until_order=3")
-    assert three.status_code == 200
-    three_payload = three.json()
-    harry = next(
-        node
-        for node in three_payload["nodes"]
-        if node["id"] == "dexter:character:harry_morgan"
-    )
-    assert harry["image_url"] is None
-    assert harry["image_source_url"] is None
+        # Boundary 3: everything is revealed — Harry's serialized image fields
+        # are still null (no future-character portraits in seed, D-14).
+        three = live_client.get(
+            "/api/series/series_dexter/graph?visible_until_order=3",
+            headers=_boundary_headers(raw),
+        )
+        assert three.status_code == 200
+        three_payload = three.json()
+        harry = next(
+            node
+            for node in three_payload["nodes"]
+            if node["id"] == "dexter:character:harry_morgan"
+        )
+        assert harry["image_url"] is None
+        assert harry["image_source_url"] is None
+    finally:
+        asyncio.run(_clean_boundary_session(3))
 
 
 # ===================================================================

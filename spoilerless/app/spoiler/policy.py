@@ -65,10 +65,14 @@ def validate_visibility_order(order: int) -> int:
     The non-persisted-order check (an order that is not a real episode's
     global publication order in this series) lives in the calling service,
     which has database access; this function owns the numeric invariant only.
+
+    PROB-16/#37: ``None`` is treated as INVALID input (raises the documented
+    ``InvalidVisibilityOrder``, mapped to 422 by the API layer) — never a
+    bare ``TypeError`` (which surfaces as an uncaught 500).
     """
-    if order < 1:
+    if order is None or order < 1:
         raise InvalidVisibilityOrder(
-            f"Visibility order must be >= 1, got {order}."
+            f"Visibility order must be >= 1, got {order!r}."
         )
     return order
 
