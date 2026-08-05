@@ -10,6 +10,7 @@ an ``event: done`` SSE event carrying the full ``MessageResponseEnvelope``
 from __future__ import annotations
 
 import json
+import logging
 from typing import Annotated, Any, AsyncIterator
 
 from fastapi import APIRouter, Depends, Response
@@ -35,6 +36,8 @@ from spoilerless.app.services.progress import ProgressNotFoundError
 from spoilerless.app.services.rate_limit import chat_send_rate_limiter
 
 router = APIRouter(prefix="/api/series/{series_id}/chat", tags=["chat"])
+
+logger = logging.getLogger(__name__)
 
 
 def get_chat_service(database: DatabaseDependency) -> ChatService:
@@ -229,19 +232,38 @@ async def stream_message(
                 "message": "Too many concurrent requests.",
             }
             yield f"event: error\ndata: {json.dumps(error_payload)}\n\n"
-        except LLMProviderUnavailable:
+        except LLMProviderUnavailable as exc:
             # Provider failures happen mid-stream, after the 200 status line
-            # has gone out — surface them as a structured `event: error` chunk
-            # instead of silently dropping the connection (which would leave
-            # the client's streaming state stuck forever).
+            # has gone out — LOG the real failure first (no silent stream
+            # failures, PROB-13/#35), then surface it as a structured
+            # `event: error` chunk instead of silently dropping the
+            # connection (which would leave the client's streaming state
+            # stuck forever). The persisted user message has already been
+            # marked failed by ChatService.answer_stream.
+            logger.exception(
+                "Chat stream provider failure (session=%s): %s",
+                session_id,
+                exc,
+            )
             error_payload = {
                 "code": "LLM_PROVIDER_UNAVAILABLE",
                 "message": "The LLM provider is unavailable. Check your API key and model in Settings, then try again.",
             }
             yield f"event: error\ndata: {json.dumps(error_payload)}\n\n"
-        except Exception:
-            # Never leak internals; the client must always receive a terminal
-            # event so it can leave the streaming state.
+        except Exception as exc:  # noqa: BLE001 — see below
+            # Never leak internals to the client — but the server MUST log
+            # the real exception class + message BEFORE emitting the generic
+            # LLM_STREAM_FAILED event (PROB-13/#35, #39's spirit): a silent
+            # stream failure hides provider/SSRF issues and leaves the turn
+            # unexplained. The client always receives a terminal event so it
+            # can leave the streaming state; the persisted user message has
+            # already been marked failed by ChatService.answer_stream.
+            logger.exception(
+                "Chat stream failed mid-turn (session=%s): %s: %s",
+                session_id,
+                type(exc).__name__,
+                exc,
+            )
             error_payload = {
                 "code": "LLM_STREAM_FAILED",
                 "message": "The response ended unexpectedly. Please try again.",

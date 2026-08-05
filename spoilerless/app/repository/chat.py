@@ -15,10 +15,12 @@ from uuid import uuid4
 from spoilerless.app.domain.chat import (
     ChatMessageResponse,
     ChatSessionResponse,
+    MessageStatus,
 )
 from spoilerless.app.graph.chat import (
     CHAT_MESSAGE_CREATE_QUERY,
     CHAT_MESSAGE_LIST_QUERY,
+    CHAT_MESSAGE_STATUS_UPDATE_QUERY,
     CHAT_SESSION_CREATE_QUERY,
     CHAT_SESSION_DELETE_QUERY,
     CHAT_SESSION_GET_QUERY,
@@ -131,6 +133,7 @@ class ChatRepository:
         role: str,
         content: str,
         visible_until_order_snapshot: int,
+        status: MessageStatus = MessageStatus.COMPLETED,
         citations: list[dict[str, Any]] | None = None,
         graph_focus: dict[str, Any] | None = None,
     ) -> ChatMessageResponse:
@@ -149,7 +152,7 @@ class ChatRepository:
             content=content,
             created_at=datetime.now(timezone.utc),
             visible_until_order_snapshot=visible_until_order_snapshot,
-            status="completed",
+            status=status,
             citations_json=json.dumps(citations or []),
             graph_focus_json=json.dumps(graph_focus or {}),
         )
@@ -158,6 +161,30 @@ class ChatRepository:
                 f"Chat session {session_id} not found for this user."
             )
         return ChatMessageResponse.model_validate(_normalize(records[0]))
+
+    async def update_message_status(
+        self,
+        user_id: str,
+        series_id: str,
+        session_id: str,
+        message_id: str,
+        status: MessageStatus,
+    ) -> None:
+        """Flip one persisted message's status (owner-scoped SET, PROB-13/#35).
+
+        Used by the service to mark a turn's user message ``failed`` when
+        the generation dies mid-stream (never an orphaned pending message)
+        or ``completed`` once the done envelope is delivered. A foreign or
+        missing message simply matches zero rows — no error, no disclosure.
+        """
+        await self._database.execute_query(
+            CHAT_MESSAGE_STATUS_UPDATE_QUERY,
+            user_id=user_id,
+            series_id=series_id,
+            session_id=session_id,
+            message_id=message_id,
+            status=status,
+        )
 
     async def _list_messages(
         self,

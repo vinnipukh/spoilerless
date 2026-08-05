@@ -25,6 +25,7 @@ from spoilerless.app.domain.chat import (
     Citation,
     GraphFocus,
     MessageResponseEnvelope,
+    MessageStatus,
 )
 from spoilerless.app.domain.settings import DEFAULT_GEMINI_BASE_URL, LLMSettingsUpdate
 from spoilerless.app.graph.database import Neo4jDatabase
@@ -298,18 +299,25 @@ class ChatService:
         so the slot never leaks (T-06-13).
         """
         self.acquire_generation_slot(user_id)
+        user_message: ChatMessageResponse | None = None
+        turn_completed = False
         try:
             boundary = await self._resolve_or_create_progress(user_id, series_id)
             history = await self._repository.list_messages_for_context(
                 user_id, series_id, chat_session_id, boundary
             )
-            await self._repository.create_message(
+            # Persist the user message BEFORE generation, marked pending —
+            # the turn's outcome (completed/failed) is written back at the
+            # end so a mid-stream failure never leaves an orphaned message
+            # with no status (PROB-13/#35).
+            user_message = await self._repository.create_message(
                 user_id,
                 series_id,
                 chat_session_id,
                 role="user",
                 content=question,
                 visible_until_order_snapshot=boundary,
+                status=MessageStatus.PENDING,
             )
 
             # The Settings "Assistant language" choice selects which system
@@ -334,6 +342,16 @@ class ChatService:
                 elif event.kind == "done":
                     final_done = event
 
+            if final_done is None:
+                # A stream that ends without a done event is a broken turn —
+                # fail loudly (the API layer logs and emits the generic
+                # error event) instead of raising AttributeError on
+                # ``final_done.citations`` below (PROB-13/#35).
+                raise LLMProviderUnavailable(
+                    "The LLM provider returned no answer (the stream ended "
+                    "without a done event)."
+                )
+
             citations = [
                 Citation.model_validate(citation)
                 for citation in (final_done.citations or [])
@@ -352,13 +370,42 @@ class ChatService:
                 citations=[citation.model_dump() for citation in citations],
                 graph_focus=graph_focus.model_dump(),
             )
+            await self._repository.update_message_status(
+                user_id,
+                series_id,
+                chat_session_id,
+                user_message.id,
+                MessageStatus.COMPLETED,
+            )
             envelope = MessageResponseEnvelope(
                 message=assistant_message,
                 citations=citations,
                 graph_focus=graph_focus,
                 proposed_change_set=final_done.proposed_change_set,
             )
+            turn_completed = True
             yield {"type": "done", "envelope": envelope.model_dump(mode="json")}
+        except BaseException:
+            # PROB-13/#35: a turn that dies before its done envelope must not
+            # leave an orphaned pending user message — mark it failed so the
+            # history shows the turn broke, then propagate (the API layer
+            # logs the real exception before emitting the generic error
+            # event; never a silent swallow). ``BaseException`` also covers
+            # the GeneratorExit Starlette raises on client disconnect
+            # mid-turn. The status write must never mask the original
+            # failure, so its own errors are swallowed.
+            if user_message is not None and not turn_completed:
+                try:
+                    await self._repository.update_message_status(
+                        user_id,
+                        series_id,
+                        chat_session_id,
+                        user_message.id,
+                        MessageStatus.FAILED,
+                    )
+                except Exception:  # noqa: BLE001 — see above
+                    pass
+            raise
         finally:
             self.release_generation_slot(user_id)
 

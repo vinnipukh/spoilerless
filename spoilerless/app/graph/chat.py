@@ -62,7 +62,8 @@ RETURN message.id AS id,
        message.role AS role,
        message.content AS content,
        message.created_at AS created_at,
-       message.visible_until_order_snapshot AS visible_until_order_snapshot
+       message.visible_until_order_snapshot AS visible_until_order_snapshot,
+       message.status AS status
 ORDER BY message.created_at, message.id
 """
 
@@ -83,7 +84,17 @@ RETURN message.id AS id,
        message.role AS role,
        message.content AS content,
        message.created_at AS created_at,
-       message.visible_until_order_snapshot AS visible_until_order_snapshot
+       message.visible_until_order_snapshot AS visible_until_order_snapshot,
+       message.status AS status
+"""
+
+# Owner-scoped status flip for one persisted message (PROB-13/#35): only the
+# session's authenticated user can mark their own message failed/completed.
+CHAT_MESSAGE_STATUS_UPDATE_QUERY = """\
+MATCH (u:AppUser {id: $user_id})-[:HAS_CHAT_SESSION]->(session:ChatSession {id: $session_id, series_id: $series_id})-[:HAS_MESSAGE]->(message:ChatMessage {id: $message_id})
+SET message.status = $status
+RETURN message.id AS id,
+       message.status AS status
 """
 
 # Hard-deletes the user's session and every message it owns.  A single

@@ -85,6 +85,24 @@ class TimeoutLLMProvider:
         yield  # pragma: no cover — unreachable; marks this as an async generator
 
 
+class MidStreamCrashProvider:
+    """Yields one text delta, then dies mid-generation (PROB-13/#35).
+
+    Simulates a provider that breaks after the stream already started —
+    the failure mode that used to orphan the persisted user message and
+    vanish from the logs.
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    async def stream_chat(self, **kwargs: Any) -> AsyncIterator[LLMEvent]:
+        self.calls.append(kwargs)
+        yield LLMEvent.text_delta("partial answer")
+        raise RuntimeError("simulated mid-stream provider crash")
+        yield  # pragma: no cover — unreachable; marks this as an async generator
+
+
 @pytest.fixture
 def database() -> Iterator[Neo4jDatabase]:
     db = Neo4jDatabase()
@@ -390,6 +408,10 @@ def test_streaming_answer_citations_validated_against_this_turn_context(
         "Dexter and Debra are siblings.",
     ]
     assert all(m["visible_until_order_snapshot"] == 1 for m in messages)
+    # Both messages of a successfully delivered turn are status-completed —
+    # the user message was flipped from pending once the done envelope was
+    # produced (PROB-13/#35).
+    assert all(m["status"] == "completed" for m in messages)
 
 
 # ---------------------------------------------------------------------------
@@ -541,6 +563,57 @@ def test_stream_provider_failure_emits_error_event_never_silent_close(
         assert errors, "expected an event: error chunk, got a silent close"
         assert errors[0]["code"] == "LLM_PROVIDER_UNAVAILABLE"
         assert "done" not in [kind for kind, _ in _parse_sse(response.text)]
+
+
+def test_mid_stream_failure_marks_user_message_failed_logs_and_emits_error(
+    database: Neo4jDatabase,
+    fake_user_repo: FakeUserRepo,
+    session_repo: InMemorySessionRepository,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """PROB-13/#35: a provider that dies mid-generation must (a) leave the
+    stored user message marked ``failed`` — never an orphaned pending
+    message, (b) log the real exception class + message before the generic
+    event, and (c) emit the generic ``LLM_STREAM_FAILED`` error event to the
+    client — no silent swallow."""
+    app = _build_app(
+        database, fake_user_repo, session_repo, provider=MidStreamCrashProvider()
+    )
+    with TestClient(app, raise_server_exceptions=False) as client:
+        _authed(client, fake_user_repo, session_repo, progress=1)
+        session = _create_session(client)
+
+        response = client.post(
+            f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}/messages/stream",
+            json={"question": "Who is Dexter related to?"},
+        )
+        assert response.status_code == 200
+        assert "text/event-stream" in response.headers["content-type"]
+
+        # (c) The client receives the generic terminal error event — the
+        # partial text delta streamed before the crash, then the error.
+        errors = [
+            payload
+            for kind, payload in _parse_sse(response.text)
+            if kind == "error"
+        ]
+        assert errors, "expected an event: error chunk, got a silent close"
+        assert errors[0]["code"] == "LLM_STREAM_FAILED"
+        assert "done" not in [kind for kind, _ in _parse_sse(response.text)]
+
+        # (a) The stored user message is marked failed — the turn is
+        # visible in history as broken, never an orphaned pending message.
+        detail = client.get(f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}")
+        assert detail.status_code == 200
+        messages = detail.json()["messages"]
+        assert [m["role"] for m in messages] == ["user"]
+        assert all(m["status"] == "failed" for m in messages)
+        assert all(m["content"] == "Who is Dexter related to?" for m in messages)
+
+        # (b) The real exception class + message were logged — the generic
+        # client event is not a silent swallow of the underlying failure.
+        assert "RuntimeError" in caplog.text
+        assert "simulated mid-stream provider crash" in caplog.text
 
 
 # ---------------------------------------------------------------------------

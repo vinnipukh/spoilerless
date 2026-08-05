@@ -11,12 +11,29 @@ format both the SSE final event and the non-streaming endpoint return.
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Any
 
 from pydantic import Field
 
 from spoilerless.app.domain.change_set import ChangeSetResponse
 from spoilerless.app.domain.user_content import Identifier, StrictModel
+
+
+class MessageStatus(StrEnum):
+    """Lifecycle status of one persisted chat message (PROB-13/#35).
+
+    A turn's user message is persisted as ``pending`` before generation
+    starts; the service flips it to ``completed`` when the final done
+    envelope is delivered, or to ``failed`` when the turn dies mid-stream —
+    a failed turn is never an orphaned pending message. ``completed``
+    matches the value historically persisted for every message, so legacy
+    rows keep validating.
+    """
+
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class Citation(StrictModel):
@@ -54,6 +71,14 @@ class ChatMessageResponse(StrictModel):
     visible_until_order_snapshot: int = Field(
         ge=1,
         description="The exact persisted boundary used to generate this message.",
+    )
+    status: MessageStatus = Field(
+        default=MessageStatus.COMPLETED,
+        description=(
+            "Turn outcome for this message: pending while generating, "
+            "completed on a delivered done envelope, failed when the turn "
+            "died mid-stream (PROB-13/#35)."
+        ),
     )
 
 
