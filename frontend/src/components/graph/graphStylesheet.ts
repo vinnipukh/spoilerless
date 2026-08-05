@@ -216,6 +216,31 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
         'overlay-padding': 10,
       },
     },
+    // FEAT-06 (09-11) path finder: source/target endpoints get a violet
+    // #7C3AED border (width 3); path elements get a violet overlay + thicker
+    // edges; everything else fades via the existing `.faded` class.
+    {
+      selector: 'node.path-source, node.path-target',
+      style: {
+        'border-color': '#7C3AED',
+        'border-width': 3,
+      },
+    },
+    {
+      selector: 'node.on-path',
+      style: {
+        'overlay-color': '#7C3AED',
+        'overlay-opacity': 0.3,
+      },
+    },
+    {
+      selector: 'edge.on-path',
+      style: {
+        'width': 3.5,
+        'line-color': '#7C3AED',
+        'target-arrow-color': '#7C3AED',
+      },
+    },
   ]
 }
 

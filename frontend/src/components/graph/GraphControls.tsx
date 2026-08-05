@@ -1,5 +1,5 @@
 import type cytoscape from 'cytoscape'
-import { ZoomIn, ZoomOut, Maximize2, RotateCcw } from 'lucide-react'
+import { ZoomIn, ZoomOut, Maximize2, RotateCcw, Waypoints, Download } from 'lucide-react'
 import {
   Tooltip,
   TooltipTrigger,
@@ -9,9 +9,21 @@ import {
 type Props = {
   cyRef: React.RefObject<cytoscape.Core | null>
   onReset: () => void
+  pathModeActive?: boolean
+  onPathModeChange?: (active: boolean) => void
+  onExport?: () => void
+  exporting?: boolean
+  exported?: boolean
 }
 
-export function GraphControls({ cyRef, onReset }: Props) {
+export function GraphControls({
+  cyRef,
+  onReset,
+  pathModeActive = false,
+  onPathModeChange,
+  onExport,
+  exported = false,
+}: Props) {
   function zoomIn() {
     const cy = cyRef.current
     if (!cy) return
@@ -93,6 +105,43 @@ export function GraphControls({ cyRef, onReset }: Props) {
         </TooltipTrigger>
         <TooltipContent side="left">Reset zoom</TooltipContent>
       </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label="Show path"
+            className={`flex h-11 w-11 cursor-pointer items-center justify-center rounded-md shadow-sm ring-1 ring-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              pathModeActive
+                ? 'bg-accent text-accent-foreground'
+                : 'bg-card text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => onPathModeChange?.(!pathModeActive)}
+          >
+            <Waypoints className="h-4 w-4" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="left">Show path</TooltipContent>
+      </Tooltip>
+
+      {onExport && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label="Export Markdown"
+              className={`flex h-11 w-11 cursor-pointer items-center justify-center rounded-md bg-card shadow-sm ring-1 ring-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                exported ? 'text-accent' : 'text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={onExport}
+            >
+              <Download className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left">{exported ? 'Exported' : 'Export Markdown'}</TooltipContent>
+        </Tooltip>
+      )}
     </div>
   )
 }
+

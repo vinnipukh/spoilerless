@@ -77,3 +77,11 @@ export type GraphResponse = {
   sources: GraphSource[]
   evidence: GraphEvidence[]
 }
+
+// FEAT-06 (09-11): shortest-path response from POST /graph/path.
+export type PathResponse = {
+  found: boolean
+  path: string[]
+  edges: string[]
+  hops: number
+}

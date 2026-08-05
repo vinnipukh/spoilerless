@@ -16,6 +16,7 @@ import {
 import { GraphLegend } from './GraphLegend'
 import { GraphControls } from './GraphControls'
 import { GraphFocusIndicator } from './GraphFocusIndicator'
+import { PathFinder, type PathPick } from './PathFinder'
 import { createCustomNode } from '../../api/userContent'
 import type { CustomNodeResponse, CustomNodeType } from '../../types/userContent'
 
@@ -139,6 +140,9 @@ type Props = {
   // existing assertions) keeps compiling and rendering unmodified.
   newlyRevealedIds?: FocusedElementIds | null
   onNewlyRevealedDone?: () => void
+  // FEAT-06 (09-11): path-finder mode toggle (driven from GraphControls).
+  // While active, node taps route to the PathFinder instead of select.
+  onPathModeChange?: (active: boolean) => void
 }
 
 const ALLOWED_NODE_TYPES: { value: CustomNodeType; label: string }[] = [
@@ -278,6 +282,7 @@ export function GraphCanvas({
   onRevealDone,
   newlyRevealedIds = null,
   onNewlyRevealedDone,
+  onPathModeChange,
 }: Props) {
   const elements = useMemo(() => graphToElements(graph), [graph])
   const wiredCyRef = useRef<cytoscape.Core | null>(null)
@@ -289,6 +294,14 @@ export function GraphCanvas({
   const [localReveal, setLocalReveal] = useState<FocusedElementIds | null>(null)
   // Pending reveal target (external prop wins over the local custom-node one).
   const revealTarget = revealElementIds ?? localReveal
+  // FEAT-06 (09-11): path-finder mode. Node taps route to the PathFinder's
+  // registered pick handler while active.
+  const [pathMode, setPathMode] = useState(false)
+  const pathPickHandlerRef = useRef<((pick: PathPick) => void) | null>(null)
+  // Mirrors `pathMode` for the cy tap handlers (registered once at mount —
+  // they must read the live value, never the mount-time closure).
+  const pathModeRef = useRef(false)
+  pathModeRef.current = pathMode
 
   // Re-run the layout whenever a new graph is fetched — UNLESS an external
   // `focusedElementIds` is active, in which case the graph change is an
@@ -529,6 +542,15 @@ export function GraphCanvas({
 
             cy.on('tap', 'node', (evt) => {
               const node = evt.target
+              // FEAT-06 (09-11): while path mode is active, node taps become
+              // path picks (first/second endpoint) — never tap-to-select.
+              if (pathModeRef.current) {
+                pathPickHandlerRef.current?.({
+                  id: node.id(),
+                  label: node.data('label'),
+                })
+                return
+              }
               const neighborhood = node.closedNeighborhood()
               cy.elements().difference(neighborhood).addClass('faded')
               neighborhood.removeClass('faded')
@@ -560,7 +582,13 @@ export function GraphCanvas({
 
             cy.on('tap', (evt) => {
               if (evt.target === cy) {
-                cy.elements().removeClass('faded selected-dominant edge-active')
+                // FEAT-06 (09-11): an empty-canvas tap during path mode
+                // clears the mode entirely (Clear/Esc/empty-tap exits).
+                if (pathModeRef.current) {
+                  setPathMode(false)
+                  onPathModeChange?.(false)
+                }
+                cy.elements().removeClass('faded selected-dominant edge-active on-path path-source path-target')
                 onSelect(null)
               }
             })
@@ -572,12 +600,30 @@ export function GraphCanvas({
             onClear={() => onClearFocus?.()}
           />
         )}
+        {pathMode && (
+          <PathFinder
+            cyRef={cyInstanceRef}
+            seriesId={seriesId}
+            onExit={() => {
+              setPathMode(false)
+              onPathModeChange?.(false)
+            }}
+            registerPickHandler={(handler) => {
+              pathPickHandlerRef.current = handler
+            }}
+          />
+        )}
         <GraphLegend />
         <GraphControls
           cyRef={cyInstanceRef}
           onReset={() => {
             const cy = cyInstanceRef.current
             if (cy) runLayout(cy)
+          }}
+          pathModeActive={pathMode}
+          onPathModeChange={(active) => {
+            setPathMode(active)
+            onPathModeChange?.(active)
           }}
         />
         {/* Floating Create Custom Node button — opens dialog */}
