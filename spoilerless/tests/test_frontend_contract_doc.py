@@ -62,6 +62,13 @@ EXPECTED_OPERATIONS: set[tuple[str, str]] = {
     # Settings (LLM provider configuration)
     ("get", "/api/settings/llm"),
     ("put", "/api/settings/llm"),
+    # Phase 9: Path, Export, Share
+    ("post", "/api/series/{series_id}/graph/path"),
+    ("get", "/api/series/{series_id}/export"),
+    ("post", "/api/share"),
+    ("get", "/api/share"),
+    ("get", "/api/share/{token}/graph"),
+    ("delete", "/api/share/{token}"),
 }
 EXPECTED_TEMPLATES = {path for _, path in EXPECTED_OPERATIONS}
 
@@ -95,8 +102,8 @@ def test_document_and_openapi_have_exact_locked_inventory() -> None:
     assert generated == EXPECTED_OPERATIONS
     assert {path for _, path in documented} == EXPECTED_TEMPLATES
     assert set(app.openapi()["paths"]) == EXPECTED_TEMPLATES
-    assert len(documented) == len(generated) == 44
-    assert len(EXPECTED_TEMPLATES) == 32
+    assert len(documented) == len(generated) == 50
+    assert len(EXPECTED_TEMPLATES) == 37
     assert all("?" not in path for path in EXPECTED_TEMPLATES)
 
 

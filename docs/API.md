@@ -7,7 +7,7 @@ The backend is a FastAPI application defined by `spoilerless.app.main:app`. Its 
 - Swagger UI: `/docs`
 - ReDoc: `/redoc`
 - API version: `0.1.0`
-- Registered surface: **46 method/path operations over 34 path templates**
+- Registered surface: **50 method/path operations over 37 path templates**
 
 All paths below are relative to the backend origin. JSON field names use `snake_case`. No production base URL is defined in the repository. <!-- VERIFY: deployed backend base URL -->
 

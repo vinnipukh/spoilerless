@@ -257,8 +257,8 @@ Testing commands and live-Neo4j safety are in [TESTING.md](TESTING.md).
 ## 8. Known gaps and unresolved risks
 
 1. **Candidate spoiler boundary:** list boundary optional; candidate detail has none.
-2. **Authorization:** many user-content, revision, and candidate routes are currently unauthenticated and not owner-scoped.
-3. **CSRF:** origin checking is not consistently applied to all cookie-authenticated state mutations.
+2. **Authorization:** Google Sign-In, HttpOnly session cookies, and `admin` role-based access control for settings, candidates, and ChangeSets shipped in Phase 8/9 (PROB-18/PROB-19/AUTH-01); per-user owner isolation for ordinary notes/custom nodes remains future work.
+3. **CSRF:** Origin verification via `verify_origin` dependency guards authentication POST routes; additional CSRF token checks for non-auth cookie routes remain a future hardening goal.
 4. **Source navigation:** detail UI shows plain-text source metadata/locators, not navigable source links.
 5. **Automatic ingestion:** no subtitle/script downloader, parser, extractor, entity linker, or production review pipeline exists.
 6. **Review UI:** candidate workflow is API-level; comprehensive human review UX remains future work.
