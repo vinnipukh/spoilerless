@@ -35,26 +35,46 @@ function formatUTCDate(iso: string): string {
   }) + ' UTC'
 }
 
-// ── Diff summary: show which fields changed ──
-function diffFields(before: Record<string, unknown> | null, after: Record<string, unknown> | null): string[] {
+export type DiffDetail = {
+  field: string
+  before: string
+  after: string
+}
+
+// ── Diff summary: show which fields changed with before/after values ──
+export function diffFields(
+  before: Record<string, unknown> | null,
+  after: Record<string, unknown> | null,
+): DiffDetail[] {
   if (!before && !after) return []
-  if (!before && after) return Object.keys(after).map(k => `${k} set`)
-  if (before && !after) return Object.keys(before).map(k => `${k} removed`)
+  if (!before && after) {
+    return Object.entries(after).map(([k, v]) => ({
+      field: k,
+      before: '(none)',
+      after: String(v ?? ''),
+    }))
+  }
+  if (before && !after) {
+    return Object.entries(before).map(([k, v]) => ({
+      field: k,
+      before: String(v ?? ''),
+      after: '(none)',
+    }))
+  }
   const allKeys = new Set([...Object.keys(before!), ...Object.keys(after!)])
-  const changed: string[] = []
+  const details: DiffDetail[] = []
   for (const k of allKeys) {
     const bv = JSON.stringify(before![k])
     const av = JSON.stringify(after![k])
     if (bv !== av) {
-      if (k === 'content') {
-        const preview = (after![k] as string ?? '').slice(0, 40)
-        changed.push(`content: "${preview}${preview.length >= 40 ? '…' : ''}"`)
-      } else {
-        changed.push(`${k} changed`)
-      }
+      details.push({
+        field: k,
+        before: String(before![k] ?? '(none)'),
+        after: String(after![k] ?? '(none)'),
+      })
     }
   }
-  return changed
+  return details
 }
 
 // ── Revert confirm dialog ──
@@ -148,11 +168,13 @@ function RevisionItem({
         </p>
       )}
       {changed.length > 0 && (
-        <div className="mt-1 flex flex-wrap gap-1">
+        <div className="mt-1.5 space-y-1">
           {changed.map((diff, i) => (
-            <span key={i} className="inline-flex items-center rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground font-mono">
-              {diff}
-            </span>
+            <div key={i} className="rounded bg-muted/60 p-1.5 text-xs font-mono">
+              <span className="font-medium text-foreground">{diff.field}:</span>{' '}
+              <span className="text-muted-foreground">Before: {diff.before}</span>{' '}
+              <span className="text-foreground font-semibold">→ After: {diff.after}</span>
+            </div>
           ))}
         </div>
       )}

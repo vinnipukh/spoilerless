@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import cytoscape from 'cytoscape'
 import coseBilkent from 'cytoscape-cose-bilkent'
 import CytoscapeComponent from 'react-cytoscapejs'
-import type { GraphResponse } from '../../types/graph'
+import type { GraphNode, GraphResponse } from '../../types/graph'
 import type { EpisodeResponse } from '../../types/series'
 import { graphToElements } from './graphElements'
 import { buildGraphStylesheet } from './graphStylesheet'
@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { NodeHoverCard } from './NodeHoverCard'
 import { GraphLegend } from './GraphLegend'
 import { GraphControls } from './GraphControls'
 import { GraphFocusIndicator } from './GraphFocusIndicator'
@@ -53,9 +54,15 @@ function layoutOptionsFor(name: 'cose-bilkent' | 'cose') {
   const common = {
     fit: true,
     padding: 48,
-    nodeRepulsion: 8000,
-    idealEdgeLength: 100,
-    edgeElasticity: 0.45,
+    // 08-05 user-directed declutter (graph hairball, PROBLEMS.md #57):
+    // much stronger node repulsion + longer ideal edges + weaker center
+    // gravity so low-degree nodes stop piling into an unreadable mass.
+    // Tuned for cose-bilkent; the built-in 'cose' fallback shares these
+    // keys (same names, same direction).
+    nodeRepulsion: 45000,
+    idealEdgeLength: 240,
+    edgeElasticity: 0.25,
+    gravity: 0.08,
     animate: prefersReducedMotion ? false : ('end' as const),
   }
   return name === 'cose-bilkent'
@@ -521,9 +528,17 @@ export function GraphCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newlyRevealedIds])
 
+  const [hoveredNodeInfo, setHoveredNodeInfo] = useState<{ node: GraphNode; pos: { x: number; y: number } } | null>(null)
+
   return (
     <TooltipProvider>
       <div className="relative h-full w-full graph-canvas-backdrop">
+        <NodeHoverCard
+          node={hoveredNodeInfo?.node ?? null}
+          claims={graph.claims}
+          position={hoveredNodeInfo?.pos ?? null}
+          onDismiss={() => setHoveredNodeInfo(null)}
+        />
         <CytoscapeComponent
           elements={elements}
           layout={layoutOptionsFor(layoutName)}
@@ -541,11 +556,22 @@ export function GraphCanvas({
               cy.container()?.setAttribute('title', evt.target.data('label'))
               evt.target.addClass('hovered')
               evt.target.connectedEdges().addClass('hovered')
+
+              const nodeId = evt.target.id()
+              const matchedNode = graph.nodes.find((n) => n.id === nodeId)
+              if (matchedNode) {
+                const renderedPos = evt.target.renderedPosition()
+                const containerRect = cy.container()?.getBoundingClientRect()
+                const x = (containerRect?.left ?? 0) + renderedPos.x
+                const y = (containerRect?.top ?? 0) + renderedPos.y
+                setHoveredNodeInfo({ node: matchedNode, pos: { x, y } })
+              }
             })
             cy.on('mouseout', 'node', (evt) => {
               cy.container()?.removeAttribute('title')
               evt.target.removeClass('hovered')
               evt.target.connectedEdges().removeClass('hovered')
+              setHoveredNodeInfo(null)
             })
             cy.on('mouseover', 'edge', (evt) => {
               evt.target.addClass('hovered')

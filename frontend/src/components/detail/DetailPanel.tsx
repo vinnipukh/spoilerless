@@ -24,6 +24,7 @@ import { useNotes } from '../../hooks/useNotes'
 import type { CustomRelationshipResponse, NoteResponse } from '../../types/userContent'
 import { createCustomRelationship } from '../../api/userContent'
 import { RevisionHistoryPanel } from './RevisionHistoryPanel'
+import { BacklinksTab } from './BacklinksTab'
 
 // Reused by CitationChip.tsx (06-09-PLAN.md Task 2) so claim/evidence citation
 // accents are never redefined as a second, drifting hex literal — the exact
@@ -135,6 +136,7 @@ type Props = {
    * Create Relationship action and all note write affordances (add/edit/
    * delete). The inspector stays fully browsable. */
   readOnly?: boolean
+  onSelectNode?: (nodeId: string) => void
 }
 
 type ResolvedEvidence = {
@@ -471,6 +473,7 @@ export function DetailPanel({
   open,
   onDeselect,
   readOnly = false,
+  onSelectNode,
 }: Props) {
   // Selection-aware state
   const [editingNote, setEditingNote] = useState<NoteResponse | null>(null)
@@ -678,8 +681,9 @@ export function DetailPanel({
           {!selected && <p>Select a node to see details.</p>}
           {selected && (
             <Tabs defaultValue="overview">
-              <TabsList>
+              <TabsList className="overflow-x-auto flex-nowrap">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
+                {selectedNode && <TabsTrigger value="backlinks">Backlinks</TabsTrigger>}
                 {noteTargetType && <TabsTrigger value="notes">Notes</TabsTrigger>}
                 {(selectedNode || activeClaim) && <TabsTrigger value="history">History</TabsTrigger>}
                 <TabsTrigger value="claims">Claims</TabsTrigger>
@@ -688,14 +692,14 @@ export function DetailPanel({
 
               <TabsContent value="overview" className="flex flex-col gap-1 pt-2">
                 {selected.kind === 'node' && selectedNode && (
-                  <dl className="flex flex-col gap-1">
+                  <dl className="flex flex-col gap-1.5 text-xs">
                     <div className="flex items-center justify-between">
                       <dt className="text-muted-foreground">Node Type</dt>
-                      <dd>{selectedNode.type}</dd>
+                      <dd className="font-medium">{selectedNode.type}</dd>
                     </div>
                     <div className="flex items-center justify-between">
                       <dt className="text-muted-foreground">Name</dt>
-                      <dd>{selectedNode.label}</dd>
+                      <dd className="font-medium">{selectedNode.label}</dd>
                     </div>
                     <div className="flex items-center justify-between">
                       <dt className="text-muted-foreground">Origin</dt>
@@ -712,6 +716,43 @@ export function DetailPanel({
                         )}
                       </dd>
                     </div>
+                    <div className="flex items-center justify-between">
+                      <dt className="text-muted-foreground">Revealed in</dt>
+                      <dd className="font-medium">
+                        {selectedNode.visible_from_order != null
+                          ? `Episode #${selectedNode.visible_from_order}`
+                          : '-'}
+                      </dd>
+                    </div>
+                    {selectedNode.episode_id && (
+                      <div className="flex items-center justify-between">
+                        <dt className="text-muted-foreground">Episode ID</dt>
+                        <dd className="font-medium">{selectedNode.episode_id}</dd>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <dt className="text-muted-foreground">Claims count</dt>
+                      <dd className="font-medium">{relevantClaims.length}</dd>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <dt className="text-muted-foreground">Notes count</dt>
+                      <dd className="font-medium">{notes.length}</dd>
+                    </div>
+                    {selectedNode.image_source_url && (
+                      <div className="flex items-center justify-between">
+                        <dt className="text-muted-foreground">Image source</dt>
+                        <dd className="font-medium truncate max-w-[180px]">
+                          <a
+                            href={selectedNode.image_source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary underline hover:text-primary/80"
+                          >
+                            Source link
+                          </a>
+                        </dd>
+                      </div>
+                    )}
                   </dl>
                 )}
                 {selected.kind === 'node' && selectedNode && !readOnly && (
@@ -762,6 +803,18 @@ export function DetailPanel({
                     </p>
                   </div>
                 )}
+              </TabsContent>
+
+              <TabsContent value="backlinks" className="pt-2">
+                <BacklinksTab
+                  selectedElement={selected}
+                  graph={graph}
+                  userNotes={notes}
+                  onSelectNode={(nodeId) => {
+                    if (onSelectNode) onSelectNode(nodeId)
+                    else onDeselect()
+                  }}
+                />
               </TabsContent>
 
               <TabsContent value="notes" className="flex flex-col gap-2 pt-2">

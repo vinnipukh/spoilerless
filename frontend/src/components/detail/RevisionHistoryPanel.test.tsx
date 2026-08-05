@@ -182,4 +182,17 @@ describe('RevisionHistoryPanel', () => {
     expect(revertBtn?.textContent).toContain('Revert')
     root.unmount()
   })
+
+  it('renders before and after diff values', () => {
+    vi.mocked(useRevisions).mockReturnValue({
+      status: 'success',
+      data: [mockRevisionUpdated],
+      refetch: vi.fn(),
+    } as ReturnType<typeof useRevisions>)
+
+    const { container, root } = render(<RevisionHistoryPanel {...defaultProps} />)
+    expect(container.textContent).toContain('Before: old content')
+    expect(container.textContent).toContain('After: new content')
+    root.unmount()
+  })
 })
