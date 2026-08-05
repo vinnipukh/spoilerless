@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Production Deployment & Access Hardening
-current_phase: 9
-current_phase_name: Feature Expansion & Full Audit Remediation
+current_phase: 09
+current_phase_name: feature-expansion-full-audit-remediation
 status: executing
 stopped_at: Phase 9 context gathered
-last_updated: "2026-08-05T06:03:29.320Z"
+last_updated: "2026-08-05T17:06:25.015Z"
 last_activity: 2026-08-05
-last_activity_desc: Phase 9 execution started
+last_activity_desc: Phase 09 execution started
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 26
-  completed_plans: 10
+  completed_plans: 18
   percent: 33
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-04)
 
 **Core value:** Users can safely explore a TV-series knowledge graph — and chat about it — without ever seeing information beyond their selected watch progress; the backend filters before data reaches the frontend, the LLM, or any tool call.
-**Current focus:** Phase 9 — Feature Expansion & Full Audit Remediation
+**Current focus:** Phase 09 — feature-expansion-full-audit-remediation
 
 ## Current Position
 
-Phase: 9 (Feature Expansion & Full Audit Remediation) — EXECUTING
+Phase: 09 (feature-expansion-full-audit-remediation) — EXECUTING
 Plan: 1 of 18
-Status: Executing Phase 9
-Last activity: 2026-08-05 — Phase 9 execution started
+Status: Executing Phase 09
+Last activity: 2026-08-05 — Completed quick task 260805-te3: visitor (misafir) read-only login
 
 Progress: [███░░░░░░░] 33% (v1.3, 1/3 phases); 7 phases complete across v1.0–v1.2
 
@@ -80,6 +80,12 @@ None yet.
 - Pre-existing test-pollution debt in `test_seed_idempotency.py` (untorn-down candidate-origin fixture from `test_candidate_ingest.py`; 8 candidate nodes currently in the shared live DB) — now mapped to Phase 9 carry-over **09-05** (PROB-06)
 - Pre-existing frontend lint debt (28 errors, none newly introduced in v1.1) — now mapped to Phase 9 carry-over **09-06** (PROB-08; CI fix branch `ci-smoke-test` scoped 3 React-Compiler-era rules to warnings, 0 lint errors verified locally)
 - Deploy-time: REDIS_URL (Upstash rediss:// from 08-01 user_setup) must be set on Render for rate limiting to activate; empty = rate limiting disabled (by design, 08-05) — mapped to Phase 9 carry-over **09-04**
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260805-te3 | Visitor (misafir) read-only login — browse the graph, no node/note writes (backend anon writes already 401; fixed DetailPanel TooltipProvider crash) | 2026-08-05 | 73b87a7 | [260805-te3-add-a-visitor-misafir-read-only-login-vi](./quick/260805-te3-add-a-visitor-misafir-read-only-login-vi/) |
 
 ## Deferred Items
 
