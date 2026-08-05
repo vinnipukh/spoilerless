@@ -52,4 +52,12 @@ describe('graphToElements', () => {
       expect(find('char_dexter_morgan')?.data).not.toHaveProperty('simple')
     })
   })
+
+  it('flags the Episode-1 cluster with areaScale 3 (3x area expansion)', () => {
+    const elements = graphToElements(graphResponseS01E01)
+    const ep1 = elements.find((el) => el.data.id === 'cluster:Ep #1')
+
+    expect(ep1?.data.isCluster).toBe(true)
+    expect(ep1?.data.areaScale).toBe(3)
+  })
 })

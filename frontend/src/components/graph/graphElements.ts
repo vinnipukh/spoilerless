@@ -92,6 +92,10 @@ export function graphToElements(graph: GraphResponse): ElementDefinition[] {
         id,
         label,
         isCluster: true,
+        // 08-05 (product owner): the Episode-1 band occupies ~3x the layout
+        // area. The stylesheet turns this into a bigger cluster box via
+        // padding on the `Ep #1` parent (graphStylesheet.ts).
+        ...(label === 'Ep #1' ? { areaScale: 3 } : {}),
       },
     }),
   )

@@ -50,6 +50,18 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
       },
     },
     {
+      // 08-05 (product owner): the Episode-1 band gets ~3x the area.
+      // Compound-node padding grows the box on all sides — with the base
+      // 24px and a typical episode cluster spanning ~700px, ~300px padding
+      // scales the bounding box ~1.73x linearly, i.e. ~3x the area
+      // (√3 ≈ 1.73). Same specificity as `node[isCluster]` and declared
+      // AFTER it, so it wins for the `Ep #1` parent.
+      selector: 'node[areaScale = 3]',
+      style: {
+        padding: '300px',
+      },
+    },
+    {
       selector: 'node',
       style: {
         label: 'data(label)',

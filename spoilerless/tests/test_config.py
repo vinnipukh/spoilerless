@@ -14,8 +14,24 @@ import pytest
 from spoilerless.app.core.config import Settings, get_settings
 
 
+def _settings(**kwargs: object) -> Settings:
+    """Build a Settings instance without touching the ambient .env.
+
+    The Neo4j credential fields are required (no defaults) — pass dummy
+    values, mirroring test_database.py::_settings.
+    """
+    base: dict[str, object] = {
+        "_env_file": None,
+        "neo4j_uri": "bolt://localhost:7687",
+        "neo4j_username": "u",
+        "neo4j_password": "p",
+    }
+    base.update(kwargs)
+    return Settings(**base)  # type: ignore[arg-type]
+
+
 def test_settings_production_safe_defaults() -> None:
-    settings = Settings(_env_file=None)  # no .env — pure defaults
+    settings = _settings()  # no .env — pure defaults
     assert settings.session_cookie_secure is True
     assert settings.session_cookie_samesite == "lax"
     assert settings.redis_url == ""
@@ -30,8 +46,7 @@ def test_settings_parses_allowed_emails() -> None:
 
     with patch(
         "spoilerless.app.api.auth.get_settings",
-        return_value=Settings(
-            _env_file=None,
+        return_value=_settings(
             allowed_emails="a@example.com, b@example.com , C@EXAMPLE.com",
         ),
     ):
@@ -43,7 +58,7 @@ def test_settings_parses_allowed_emails() -> None:
 
     with patch(
         "spoilerless.app.api.auth.get_settings",
-        return_value=Settings(_env_file=None, allowed_emails=""),
+        return_value=_settings(allowed_emails=""),
     ):
         assert _allowed_emails() == frozenset()  # empty = unrestricted
 
@@ -60,13 +75,13 @@ def test_google_client_id_equality_check_fires_only_when_both_set() -> None:
     # Both unset / both set-and-equal → no raise.
     with patch.dict(os.environ, {}, clear=False):
         verify_google_client_id_equality(
-            Settings(_env_file=None, google_client_id="", frontend_origins="x")
+            _settings(google_client_id="", frontend_origins="x")
         )
     with patch.dict(
         os.environ, {"VITE_GOOGLE_CLIENT_ID": "client-123"}, clear=False
     ):
         verify_google_client_id_equality(
-            Settings(_env_file=None, google_client_id="client-123", frontend_origins="x")
+            _settings(google_client_id="client-123", frontend_origins="x")
         )
 
     # Both set but MISMATCHED → RuntimeError (the 01N52-class drift guard).
@@ -75,8 +90,7 @@ def test_google_client_id_equality_check_fires_only_when_both_set() -> None:
     ):
         with pytest.raises(RuntimeError):
             verify_google_client_id_equality(
-                Settings(
-                    _env_file=None,
+                _settings(
                     google_client_id="client-123",
                     frontend_origins="x",
                 )
@@ -86,8 +100,7 @@ def test_google_client_id_equality_check_fires_only_when_both_set() -> None:
     # VITE var must not crash).
     with patch.dict(os.environ, {}, clear=False):
         verify_google_client_id_equality(
-            Settings(
-                _env_file=None,
+            _settings(
                 google_client_id="client-123",
                 frontend_origins="x",
             )

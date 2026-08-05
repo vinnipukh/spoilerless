@@ -42,23 +42,60 @@ Alternatively, delete and re-create the service from the Blueprint (`render.yaml
 
 ## Backend Tests — Break Up Strategy
 
-The full `uv run pytest` suite takes too long to run synchronously, which means broken backend code ships without being caught. Break into targeted runs:
+The full `uv run pytest` suite takes too long to run synchronously, which
+means broken backend code ships without being caught. The suite is split
+into **10 named chunks** — every file in `spoilerless/tests/` appears in
+exactly one chunk, and each chunk is a bounded run that finishes in seconds
+to a few minutes.
+
+**Preferred entry point** — the chunk runner (strips the Hermes-terminal
+`PYTHONPATH` that shadows the venv, so `import spoilerless` works):
 
 ```powershell
-# Group 1: Core domain & models (~fast)
-uv run pytest spoilerless/tests/test_models.py spoilerless/tests/test_domain*.py -q
-
-# Group 2: API routes (~medium)
-uv run pytest spoilerless/tests/test_api*.py -q
-
-# Group 3: Graph/Neo4j services (~slow, needs fixtures)
-uv run pytest spoilerless/tests/test_graph*.py -q
-
-# Group 4: Auth & middleware
-uv run pytest spoilerless/tests/test_auth*.py spoilerless/tests/test_middleware*.py -q
-
-# Group 5: Contract & doc tests
-uv run pytest spoilerless/tests/test_frontend_contract*.py spoilerless/tests/test_export*.py -q
+uv run python scripts/run_backend_tests.py          # all 10 chunks
+uv run python scripts/run_backend_tests.py --list   # show chunk/file mapping
+uv run python scripts/run_backend_tests.py --chunk 7
+uv run python scripts/run_backend_tests.py --chunk auth
 ```
 
-Run these as parallel async tasks. If any group fails, you catch it in seconds instead of waiting for the full suite.
+Equivalent raw pytest invocations (chunk → files):
+
+| # | Chunk | Files | Rough profile |
+|---|---|---|---|
+| 1 | `core` | `test_config.py` `test_deps.py` `test_database.py` `test_main_lifespan.py` `test_setup_schema_check.py` `test_ontology.py` `test_visibility.py` `test_series_service.py` | unit, ~fast |
+| 2 | `domain-models` | `test_revision_models.py` `test_user_content_models.py` `test_extraction_models.py` `test_episode_ordering.py` `test_episode_masking.py` `test_spoiler_policy.py` `test_conversational_tone.py` `test_s01e01_enrichment.py` | unit/domain, ~fast |
+| 3 | `series-api` | `test_api_series.py` `test_progress_api.py` | API, ~medium |
+| 4 | `graph` | `test_graph_api.py` `test_citations.py` `test_seed_idempotency.py` | Graph/Neo4j, ~slow |
+| 5 | `change-set` | `test_change_set_api.py` `test_change_set_confirmation.py` `test_change_set_protection.py` `test_change_set_revision.py` `test_revisions.py` | API + repo, ~medium |
+| 6 | `candidates` | `test_candidate_ingest.py` `test_candidate_review.py` | API + live Neo4j, ~medium |
+| 7 | `auth` | `test_auth.py` `test_google_verifier.py` `test_session_repository.py` `test_settings_api.py` | auth + middleware, ~medium |
+| 8 | `user-content` | `test_user_content_api.py` `test_user_content_repository.py` | API + repo, ~medium |
+| 9 | `chat-llm` | `test_chat_api.py` `test_chat_persistence.py` `test_retrieval_pipeline.py` `test_retrieval_tools.py` `test_prompt_injection.py` `test_llm_provider.py` | chat/LLM, ~slow |
+| 10 | `contract-ops` | `test_frontend_contract_doc.py` `test_openapi_contract.py` `test_share_api.py` `test_error_handlers.py` `test_rate_limit.py` | contract/doc, ~medium |
+
+Run chunks as parallel background tasks when verifying a branch. If any
+chunk fails, you catch it in seconds instead of waiting for the full suite.
+
+**Measured (2026-08-05):** launching all 10 chunks at once against the
+**shared live AuraDB** is *counterproductive* — 10 driver pools contend on
+the free instance's connection budget (plus production traffic), and the
+parallel wall time exceeded 27 minutes without completing, i.e. slower than
+the sequential run. The sequential run also takes 15–20 min. Parallelism
+only pays off against an **isolated** Neo4j (the CI job's ephemeral docker
+container, or a local docker Neo4j via `source scripts/env-local.sh`) —
+that is the path for fast full-suite verification. Against live Aura, use
+single chunks (`--chunk <name>`) for bounded agent verification.
+
+**Environment pitfall (why agents historically "could not run" the suite):**
+the Hermes terminal exports `PYTHONPATH` pointing at the hermes-agent
+package dir, which shadows the venv and breaks `import spoilerless` (and
+`backend`-root imports). Always run with `PYTHONPATH` unset:
+
+```powershell
+$env:PYTHONPATH = ""   # PowerShell — then run the commands above
+```
+
+The suite runs against the shared live AuraDB instance (root `.env` →
+`NEO4J_URI=neo4j+s://<instance>.databases.neo4j.io`); scratch-series
+isolation + teardown in `conftest.py` protects `series_dexter`, and the CI
+DB-pollution gate asserts zero residue after the run.

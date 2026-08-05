@@ -253,6 +253,12 @@ async def audit_visibility_integrity(database: Neo4jDatabase, series_id: str) ->
     ``visible_until_order``) and chat sessions carry a
     ``visible_until_order_snapshot``, neither of which is a story reveal-point.
     Including them would fail the gate on every real user's rows (07-02).
+
+    ``ChangeSet`` nodes are excluded for the same reason: they are user
+    review-action records (proposed candidate edits), not story content, and
+    the domain contract explicitly forbids them from ever declaring
+    ``visible_from_order`` (``spoilerless/app/domain/change_set.py``). A real
+    user ChangeSet on the seeded series must not trip the seed gate.
     """
     records = await database.execute_query(
         """
@@ -260,6 +266,7 @@ async def audit_visibility_integrity(database: Neo4jDatabase, series_id: str) ->
         WHERE node.visible_from_order IS NULL
           AND NOT node:UserSeriesProgress
           AND NOT node:ChatSession
+          AND NOT node:ChangeSet
         RETURN labels(node) AS labels, node.id AS id
         ORDER BY id
         """,
