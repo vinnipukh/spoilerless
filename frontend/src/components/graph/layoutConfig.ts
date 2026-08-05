@@ -32,12 +32,12 @@ export function layoutOptionsFor(
       quality: 'default',
       randomize: false,
       nodeRepulsion: (node: { isParent?: () => boolean }) =>
-        node.isParent?.() ? 50000 : 8000,
-      idealEdgeLength: 100,
-      edgeElasticity: 0.45,
-      gravity: 0.25,
-      tilingPaddingVertical: 20,
-      tilingPaddingHorizontal: 20,
+        node.isParent?.() ? 120000 : 55000,
+      idealEdgeLength: 220,
+      edgeElasticity: 0.35,
+      gravity: 0.08,
+      tilingPaddingVertical: 35,
+      tilingPaddingHorizontal: 35,
     }
   }
 

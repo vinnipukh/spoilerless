@@ -60,10 +60,15 @@ let layoutName: 'fcose' | 'cose-bilkent' | 'cose' = 'fcose'
 // `graph` object, so the canvas actually reflows on every boundary change.
 // Guarded so it never throws into an effect that a test double's fake `cy`
 // (no real `.layout()` method) might pass in.
-function runLayout(cy: cytoscape.Core, seriesId?: string | null, visibleUntilOrder?: number | null) {
+function runLayout(
+  cy: cytoscape.Core,
+  seriesId?: string | null,
+  visibleUntilOrder?: number | null,
+  forceRelayout: boolean = false,
+) {
   if (typeof cy.layout !== 'function') return
 
-  if (seriesId && visibleUntilOrder != null) {
+  if (!forceRelayout && seriesId && visibleUntilOrder != null) {
     const cached = getCachedPositions(seriesId, visibleUntilOrder)
     if (cached && cached.size > 0) {
       const applyPos = () => {
@@ -705,7 +710,7 @@ export function GraphCanvas({
           cyRef={cyInstanceRef}
           onReset={() => {
             const cy = cyInstanceRef.current
-            if (cy) runLayout(cy, seriesId, graph.visible_until_order)
+            if (cy) runLayout(cy, seriesId, graph.visible_until_order, true)
           }}
           pathModeActive={pathMode}
           onPathModeChange={(active) => {
