@@ -17,6 +17,7 @@ from spoilerless.app.core.config import get_settings
 from spoilerless.app.core.errors import http_error
 from spoilerless.app.graph.database import Neo4jDatabase, get_database
 from spoilerless.app.repository.session import SessionRepository
+from spoilerless.app.repository.share import ShareRepository
 from spoilerless.app.repository.user import UserRepository
 from spoilerless.app.services.auth import AuthService
 
@@ -110,3 +111,16 @@ async def require_admin(user: CurrentUserDependency) -> dict[str, Any]:
 
 
 RequireAdminDependency = Annotated[dict[str, Any], Depends(require_admin)]
+
+
+def get_share_repo(request: Request, database: DatabaseDependency) -> ShareRepository:
+    from spoilerless.app.repository.share import Neo4jShareRepository
+
+    repo = getattr(request.app.state, "share_repo", None)
+    if repo is not None:
+        return repo
+    return Neo4jShareRepository(database)
+
+
+ShareRepoDependency = Annotated[ShareRepository, Depends(get_share_repo)]
+

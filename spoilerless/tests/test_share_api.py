@@ -1,9 +1,17 @@
 from __future__ import annotations
 
-import time
+import asyncio
+from collections.abc import Iterator
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from spoilerless.app.api import deps
+from spoilerless.app.api.share import router as share_router
+from spoilerless.app.core.errors import install_database_error_handlers
 from spoilerless.app.domain.share import ShareTokenCreate, ShareTokenRecord
+from spoilerless.app.graph.database import Neo4jDatabase
+from spoilerless.app.graph.seed import setup_database
 from spoilerless.app.repository.share import (
     InMemoryShareRepository,
     _hash_token,
@@ -102,3 +110,119 @@ async def test_share_repository_list_active_and_sweep() -> None:
     # Sweep
     swept = await repo.sweep_expired()
     assert swept == 1  # rec1 was revoked
+
+
+# ── Integration tests for Share API routes ──
+
+
+async def _seed_database() -> None:
+    database = Neo4jDatabase()
+    database.open()
+    try:
+        await database.verify_connection()
+        await setup_database(database)
+    finally:
+        await database.close()
+
+
+@pytest.fixture
+def database() -> Iterator[Neo4jDatabase]:
+    asyncio.run(_seed_database())
+    db = Neo4jDatabase()
+    db.open()
+    yield db
+
+
+def test_share_api_create_read_revoke_flow(database: Neo4jDatabase) -> None:
+    app = FastAPI()
+    repo = InMemoryShareRepository()
+    install_database_error_handlers(app)
+    app.include_router(share_router)
+
+    mock_user = {
+        "id": "user:share_tester",
+        "email": "tester@example.com",
+        "display_name": "Share Tester",
+        "role": "user",
+    }
+
+    app.dependency_overrides[deps.get_database] = lambda: database
+    app.dependency_overrides[deps.get_share_repo] = lambda: repo
+    app.dependency_overrides[deps.require_current_user] = lambda: mock_user
+
+    with TestClient(app) as client:
+        # 1. Create a share link for boundary 2
+        res = client.post(
+            "/api/share",
+            json={"series_id": "series_dexter", "visible_until_order": 2},
+        )
+        assert res.status_code == 201, res.text
+        data = res.json()
+        assert "token" in data
+        raw_token = data["token"]
+        assert data["series_id"] == "series_dexter"
+        assert data["visible_until_order"] == 2
+        assert data["url"] == f"/share/{raw_token}"
+
+        # 2. GET unauthenticated snapshot graph via share token
+        graph_res = client.get(f"/api/share/{raw_token}/graph")
+        assert graph_res.status_code == 200, graph_res.text
+        graph_data = graph_res.json()
+        assert "nodes" in graph_data
+        assert "edges" in graph_data
+        assert graph_data["series"]["id"] == "series_dexter"
+        assert graph_data["visible_until_order"] == 2
+
+        # 3. GET list active share links for user
+        list_res = client.get("/api/share")
+        assert list_res.status_code == 200
+        items = list_res.json()
+        assert len(items) == 1
+        assert items[0]["visible_until_order"] == 2
+
+        # 4. Revoke token
+        revoke_res = client.delete(f"/api/share/{raw_token}")
+        assert revoke_res.status_code == 200
+        assert revoke_res.json()["status"] == "revoked"
+
+        # 5. GET snapshot graph after revocation -> 404
+        revoked_graph_res = client.get(f"/api/share/{raw_token}/graph")
+        assert revoked_graph_res.status_code == 404
+        err = revoked_graph_res.json()
+        assert err["detail"]["code"] == "TOKEN_NOT_FOUND"
+
+
+def test_share_api_invalid_boundary_and_forbidden_revoke(database: Neo4jDatabase) -> None:
+    app = FastAPI()
+    repo = InMemoryShareRepository()
+    install_database_error_handlers(app)
+    app.include_router(share_router)
+
+    user1 = {"id": "user:owner", "role": "user"}
+    user2 = {"id": "user:other", "role": "user"}
+
+    app.dependency_overrides[deps.get_database] = lambda: database
+    app.dependency_overrides[deps.get_share_repo] = lambda: repo
+
+    with TestClient(app) as client:
+        # Invalid episode order
+        app.dependency_overrides[deps.require_current_user] = lambda: user1
+        bad_res = client.post(
+            "/api/share",
+            json={"series_id": "series_dexter", "visible_until_order": 999999},
+        )
+        assert bad_res.status_code == 422
+        assert bad_res.json()["detail"]["code"] == "INVALID_VISIBLE_UNTIL_ORDER"
+
+        # Valid create by user1
+        create_res = client.post(
+            "/api/share",
+            json={"series_id": "series_dexter", "visible_until_order": 1},
+        )
+        token = create_res.json()["token"]
+
+        # Attempt revoke by user2 -> 403 FORBIDDEN
+        app.dependency_overrides[deps.require_current_user] = lambda: user2
+        forbidden_res = client.delete(f"/api/share/{token}")
+        assert forbidden_res.status_code == 403
+        assert forbidden_res.json()["detail"]["code"] == "FORBIDDEN"

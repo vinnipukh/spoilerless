@@ -23,11 +23,13 @@ from spoilerless.app.api.progress import router as progress_router
 from spoilerless.app.api.chat import router as chat_router
 from spoilerless.app.api.change_set import router as change_set_router
 from spoilerless.app.api.settings import router as settings_router
+from spoilerless.app.api.share import router as share_router
 from spoilerless.app.core.config import get_settings, verify_google_client_id_equality
 from spoilerless.app.core.errors import install_database_error_handlers
 from spoilerless.app.graph.database import Neo4jDatabase
 from spoilerless.app.llm.provider import install_llm_error_handlers
 from spoilerless.app.repository.session import Neo4jSessionRepository
+from spoilerless.app.repository.share import Neo4jShareRepository
 from spoilerless.app.services.rate_limit import init_rate_limiter
 
 SERVICE_NAME = "spoilerless-backend"
@@ -112,6 +114,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     database.open()
     app.state.neo4j = database
     app.state.session_repo = Neo4jSessionRepository(database)
+    app.state.share_repo = Neo4jShareRepository(database)
     if settings.redis_url:
         # Redis-backed rate limiting (08-05). Guarded on a non-empty
         # redis_url so local dev without Upstash runs unthrottled instead of
@@ -128,9 +131,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         while True:
             try:
                 await app.state.session_repo.sweep_expired()
+                await app.state.share_repo.sweep_expired()
             except Exception:
-                logger.exception("session sweep iteration failed; will retry")
+                logger.exception("session/share sweep iteration failed; will retry")
             await asyncio.sleep(SESSION_SWEEP_INTERVAL_SECONDS)
+
 
     sweep_task: asyncio.Task[None] | None = None
     try:
@@ -169,6 +174,8 @@ app.include_router(progress_router)
 app.include_router(chat_router)
 app.include_router(change_set_router)
 app.include_router(settings_router)
+app.include_router(share_router)
+
 
 settings = get_settings()
 _allowed_origins = [

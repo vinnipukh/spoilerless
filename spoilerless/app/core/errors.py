@@ -37,7 +37,7 @@ ERROR_CODES: frozenset[str] = frozenset({
     "DATABASE_ERROR",
     "CONSTRAINT_VIOLATION",
     # Route-level codes (api/graph.py, api/series.py, api/candidates.py,
-    # api/change_set.py, api/revisions.py, api/progress.py, graph/candidates.py)
+    # api/change_set.py, api/revisions.py, api/progress.py, graph/candidates.py, api/share.py)
     "SERIES_NOT_FOUND",
     "INVALID_VISIBLE_UNTIL_ORDER",
     "INVALID_EXTRACTION_PAYLOAD",
@@ -49,6 +49,8 @@ ERROR_CODES: frozenset[str] = frozenset({
     "CANNOT_REVERT_CANONICAL",
     "RESOURCE_ALREADY_EXISTS",
     "INGEST_ERROR",
+    "TOKEN_NOT_FOUND",
+
     # Auth codes (api/auth.py)
     "AUTH_INVALID_GOOGLE_CREDENTIAL",
     "AUTH_UNAUTHENTICATED",
