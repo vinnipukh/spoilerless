@@ -5,6 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
 
+from spoilerless.app.api.deps import CurrentUserDependency
 from spoilerless.app.core.errors import error_responses, http_error
 from spoilerless.app.domain.revision import RevisionAction, RevisionResponse
 from spoilerless.app.graph.database import Neo4jDatabase, get_database
@@ -127,8 +128,11 @@ async def revert_revision(
     revision_id: str,
     visible_until_order: Boundary,
     database: DatabaseDependency,
+    user: CurrentUserDependency,
 ) -> RevisionResponse:
     now = datetime.now(timezone.utc)
+    actor_id = user["id"]
+    is_admin = user.get("role") == "admin"
 
     async def _revert_work(tx: Any, _cmd: dict[str, Any]) -> dict[str, Any]:
         """Execute revert inside a single write transaction."""
@@ -178,6 +182,18 @@ async def revert_revision(
                     "Cannot revert a canonical or candidate resource.",
                 )
 
+            # Owner check (PROB-02, #4): a user-origin resource owned by a
+            # different user cannot be reverted by that other user — only
+            # the owner or an admin. Legacy resources created before owner
+            # binding (no stored user_id) are admin-only, fail-closed.
+            stored_owner = resource_props.get("user_id")
+            if stored_owner is not None and stored_owner != _cmd["user_id"] and not _cmd["is_admin"]:
+                raise http_error(
+                    403,
+                    "forbidden",
+                    "This resource belongs to another user.",
+                )
+
             old_snapshot = RevisionRepository.take_snapshot(resource_props)
 
             # Restore mutable fields from before snapshot
@@ -204,6 +220,17 @@ async def revert_revision(
             new_snapshot = RevisionRepository.take_snapshot(new_props)
 
         elif action == RevisionAction.DELETED:
+            # Owner check from the stored before-snapshot (the resource is
+            # gone, so the snapshot's user_id is the only owner evidence).
+            # Revisions logged before owner binding carry no user_id — those
+            # are admin-only, fail-closed (PROB-02, #4).
+            snapshot_owner = before_snapshot.get("user_id")
+            if snapshot_owner is not None and snapshot_owner != _cmd["user_id"] and not _cmd["is_admin"]:
+                raise http_error(
+                    403,
+                    "forbidden",
+                    "This resource belongs to another user.",
+                )
             # Check if resource was already re-created (idempotency guard)
             result = await tx.run(
                 "MATCH (r {id: $rid, series_id: $sid}) RETURN properties(r) AS props",
@@ -275,6 +302,8 @@ async def revert_revision(
         "revision_id": revision_id,
         "visible_until_order": visible_until_order,
         "now": now,
+        "user_id": actor_id,
+        "is_admin": is_admin,
     }
     result = await database.execute_write(_revert_work, command)
     return RevisionResponse.model_validate(result)

@@ -4,12 +4,15 @@ import asyncio
 import importlib
 from collections.abc import Callable, Iterator
 from typing import Any, Protocol
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 
 from spoilerless.app.graph.database import Neo4jDatabase, get_database
 from spoilerless.app.graph.seed import setup_database
+from spoilerless.app.repository.session import Neo4jSessionRepository
+from spoilerless.app.repository.user import UserRepository
 
 
 TEST_SERIES_ID = "test-series:user-content"
@@ -95,6 +98,54 @@ async def _create_second_series(database: Neo4jDatabase) -> None:
 
 async def _cleanup_second_series(database: Neo4jDatabase) -> None:
     await database.execute_query(SECOND_SERIES_CLEANUP_QUERY, series_id=TEST_SERIES_ID)
+
+
+def _create_user_with_session(role: str) -> tuple[str, str, str]:
+    """Create an :AppUser (with *role*) + :Session row via a fresh driver/loop.
+
+    Returns ``(google_sub, user_id, raw_token)``. The app's
+    ``require_current_user`` resolves the same rows from the shared live DB
+    at request time, so the cookie set from the returned raw token
+    authenticates the request. A fresh driver/loop is used so the app's
+    portal-loop driver is never touched from another loop (same two-loop
+    rule as test_chat_api.py / test_candidate_review.py).
+    """
+
+    async def _run() -> tuple[str, str, str]:
+        db = Neo4jDatabase()
+        db.open()
+        try:
+            google_sub = f"test-user-content-{role}-{uuid4()}"
+            user = await UserRepository(db).upsert(
+                google_sub=google_sub,
+                email=f"{google_sub}@example.com",
+                display_name="User Content Test User",
+                avatar_url="",
+                role=role,
+            )
+            raw_token = await Neo4jSessionRepository(db).create(
+                user["id"], ttl_seconds=3600
+            )
+            return google_sub, user["id"], raw_token
+        finally:
+            await db.close()
+
+    return asyncio.run(_run())
+
+
+async def _delete_test_user(google_sub: str) -> None:
+    """Remove only the test-created AppUser + its session rows."""
+    db = Neo4jDatabase()
+    db.open()
+    try:
+        await db.execute_query(
+            "MATCH (u:AppUser {google_sub: $sub}) "
+            "OPTIONAL MATCH (u)-[:HAS_SESSION]->(s:Session) "
+            "DETACH DELETE u, s",
+            sub=google_sub,
+        )
+    finally:
+        await db.close()
 
 
 async def database_snapshot(query: str, **parameters: Any) -> list[dict[str, Any]]:
@@ -335,6 +386,119 @@ def test_custom_routes_return_503_when_database_is_unavailable(
     assert client.get("/api/series/series_dexter/custom-relationships/user-rel:x", params={"visible_until_order": 1}).status_code == 503
 
 
+def test_anonymous_mutations_are_rejected_with_401(
+    live_client: TestClient, second_series: str
+) -> None:
+    """PROB-01 (#1): every mutation route rejects anonymous callers with 401."""
+    live_client.cookies.clear()
+    base = f"/api/series/{second_series}"
+    episode_id = f"{second_series}:episode:1"
+    anonymous_calls = [
+        ("post", f"{base}/notes", {"target_type": "Character", "target_id": "scratch:character:x", "content": "x"}),
+        ("patch", f"{base}/notes/user-note:x", {"content": "x"}),
+        ("delete", f"{base}/notes/user-note:x", None),
+        ("post", f"{base}/custom-nodes", {"node_type": "Object", "label": "x", "episode_id": episode_id}),
+        ("patch", f"{base}/custom-nodes/user-node:x", {"label": "x"}),
+        ("delete", f"{base}/custom-nodes/user-node:x", None),
+        ("post", f"{base}/custom-relationships", {"source_id": "scratch:a", "target_id": "scratch:b", "predicate": "KNOWS", "episode_id": episode_id}),
+        ("patch", f"{base}/custom-relationships/user-rel:x", {"predicate": "TRUSTS"}),
+        ("delete", f"{base}/custom-relationships/user-rel:x", None),
+    ]
+    for method, url, body in anonymous_calls:
+        if body is not None:
+            response = getattr(live_client, method)(url, json=body)
+        else:
+            response = getattr(live_client, method)(url)
+        assert response.status_code == 401, f"{method.upper()} {url} -> {response.status_code}: {response.text}"
+        assert response.json()["detail"]["code"] == "AUTH_UNAUTHENTICATED"
+
+
+def test_user_content_is_owner_bound_and_cross_owner_mutations_rejected(
+    live_client: TestClient,
+    second_series: str,
+    user_session: dict[str, str],
+) -> None:
+    """PROB-02 (#4): records carry the owner user_id; only the owner (or an
+    admin) can update/delete them; cross-owner attempts get 403 forbidden."""
+    base = f"/api/series/{second_series}"
+    episode_id = f"{second_series}:episode:1"
+    owner_id = user_session["user_id"]
+    owner_token = user_session["token"]
+
+    # --- Owner creates a Character node, an Object node, a relationship,
+    # and a note targeting the Character ---
+    char = live_client.post(f"{base}/custom-nodes", json={
+        "node_type": "Character", "label": "owner character", "episode_id": episode_id,
+    })
+    assert char.status_code == 201, char.text
+    char_id = char.json()["id"]
+    assert char.json()["user_id"] == owner_id
+
+    obj = live_client.post(f"{base}/custom-nodes", json={
+        "node_type": "Object", "label": "owner object", "episode_id": episode_id,
+    })
+    assert obj.status_code == 201, obj.text
+    obj_id = obj.json()["id"]
+
+    rel = live_client.post(f"{base}/custom-relationships", json={
+        "source_id": char_id, "target_id": obj_id, "predicate": "KNOWS",
+        "episode_id": episode_id,
+    })
+    assert rel.status_code == 201, rel.text
+    rel_id = rel.json()["id"]
+    assert rel.json()["user_id"] == owner_id
+
+    note = live_client.post(f"{base}/notes", json={
+        "target_type": "Character", "target_id": char_id, "content": "owner note",
+    })
+    assert note.status_code == 201, note.text
+    note_id = note.json()["id"]
+    assert note.json()["user_id"] == owner_id
+
+    # --- A different regular user cannot mutate any of it (403 forbidden) ---
+    google_sub_b, _user_b_id, token_b = _create_user_with_session("user")
+    try:
+        live_client.cookies.set("session", token_b)
+        for method, url, body in [
+            ("patch", f"{base}/notes/{note_id}", {"content": "hijacked"}),
+            ("delete", f"{base}/notes/{note_id}", None),
+            ("patch", f"{base}/custom-nodes/{char_id}", {"label": "hijacked"}),
+            ("delete", f"{base}/custom-nodes/{char_id}", None),
+            ("patch", f"{base}/custom-relationships/{rel_id}", {"predicate": "TRUSTS"}),
+            ("delete", f"{base}/custom-relationships/{rel_id}", None),
+        ]:
+            if body is not None:
+                response = getattr(live_client, method)(url, json=body)
+            else:
+                response = getattr(live_client, method)(url)
+            assert response.status_code == 403, (
+                f"{method.upper()} {url} -> {response.status_code}: {response.text}"
+            )
+            assert response.json()["detail"]["code"] == "forbidden"
+    finally:
+        asyncio.run(_delete_test_user(google_sub_b))
+
+    # --- Admin bypasses the owner check (documented branch) ---
+    google_sub_admin, _admin_id, token_admin = _create_user_with_session("admin")
+    try:
+        live_client.cookies.set("session", token_admin)
+        patched = live_client.patch(f"{base}/custom-nodes/{char_id}", json={"label": "admin renamed"})
+        assert patched.status_code == 200, patched.text
+        assert patched.json()["label"] == "admin renamed"
+        assert live_client.delete(f"{base}/notes/{note_id}").status_code == 204
+        assert live_client.delete(f"{base}/custom-relationships/{rel_id}").status_code == 204
+    finally:
+        asyncio.run(_delete_test_user(google_sub_admin))
+
+    # --- The owner can still update/delete own content ---
+    live_client.cookies.set("session", owner_token)
+    updated = live_client.patch(f"{base}/custom-nodes/{char_id}", json={"label": "owner renamed"})
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["user_id"] == owner_id
+    assert live_client.delete(f"{base}/custom-nodes/{char_id}").status_code == 204
+    assert live_client.delete(f"{base}/custom-nodes/{obj_id}").status_code == 204
+
+
 @pytest.fixture(scope="module")
 def live_client() -> Iterator[TestClient]:
     _run(_with_database(_seed_and_clean))
@@ -347,10 +511,31 @@ def live_client() -> Iterator[TestClient]:
 @pytest.fixture
 def user_content_client(live_client: TestClient) -> Iterator[TestClient]:
     _run(_with_database(_cleanup_user_content))
+    google_sub, _user_id, raw_token = _create_user_with_session("user")
+    live_client.cookies.set("session", raw_token)
     try:
         yield live_client
     finally:
+        asyncio.run(_delete_test_user(google_sub))
         _run(_with_database(_cleanup_user_content))
+
+
+@pytest.fixture
+def user_session(live_client: TestClient) -> Iterator[dict[str, str]]:
+    """Authenticate ``live_client`` as a regular (non-admin) user."""
+    google_sub, user_id, raw_token = _create_user_with_session("user")
+    live_client.cookies.set("session", raw_token)
+    yield {"google_sub": google_sub, "user_id": user_id, "token": raw_token}
+    asyncio.run(_delete_test_user(google_sub))
+
+
+@pytest.fixture
+def admin_session(live_client: TestClient) -> Iterator[dict[str, str]]:
+    """Authenticate ``live_client`` as an admin user."""
+    google_sub, user_id, raw_token = _create_user_with_session("admin")
+    live_client.cookies.set("session", raw_token)
+    yield {"google_sub": google_sub, "user_id": user_id, "token": raw_token}
+    asyncio.run(_delete_test_user(google_sub))
 
 
 @pytest.fixture

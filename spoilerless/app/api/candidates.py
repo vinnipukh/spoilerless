@@ -7,7 +7,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from spoilerless.app.api.deps import RequireAdminDependency
+from spoilerless.app.api.deps import CurrentUserDependency, RequireAdminDependency
 from spoilerless.app.cache.graph_cache import invalidate_series
 from spoilerless.app.core.errors import error_responses, http_error
 from spoilerless.app.domain.extraction import ExtractionBatchEnvelope
@@ -108,8 +108,17 @@ async def ingest_candidates(
     series_id: SeriesId,
     envelope: ExtractionBatchEnvelope,
     repo: CandidateRepoDependency,
+    user: CurrentUserDependency,
 ) -> dict:
-    """Ingest a batch of candidate claims from a future extractor."""
+    """Ingest a batch of candidate claims from a future extractor.
+
+    Auth-gated since 09-03 (PROB-01, #1) — anonymous ingestion is the
+    first half of the graph-poisoning chain (#2) and is now forbidden.
+    ``user`` is intentionally unused beyond the gate: candidate claims
+    are review-workflow artifacts whose lifecycle (approve/reject/edit)
+    stays admin-gated; actor attribution lands on the revisions those
+    actions log (PROB-33, #33).
+    """
     try:
         result = await repo.ingest_batch(series_id, envelope)
         return result

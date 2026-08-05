@@ -518,6 +518,17 @@ class TestRevertCanonicalResource:
         assert resp.json()["detail"]["code"] == "cannot_revert_canonical"
 
 
+class TestRevertAuthentication:
+    """PROB-01 (#1/#3): revert requires an authenticated user (and the
+    acting user must own the target resource once revisions carry owners)."""
+
+    def test_revert_anonymous_returns_401(self, live_client: TestClient) -> None:
+        live_client.cookies.clear()
+        resp = _revert_revision(live_client, "revision:does-not-exist")
+        assert resp.status_code == 401
+        assert resp.json()["detail"]["code"] == "AUTH_UNAUTHENTICATED"
+
+
 class TestRevertTwiceChain:
     """Prove D-14: chained reverts grow revision history."""
 

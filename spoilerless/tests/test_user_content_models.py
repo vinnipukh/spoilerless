@@ -225,6 +225,7 @@ def test_model_responses_are_graph_compatible_and_use_typed_origin() -> None:
         target_id="character:dexter",
         content="Remember this",
         origin="user",
+        user_id="user:test",
         visible_from_order=1,
         created_at=NOW,
         updated_at=NOW,
@@ -237,6 +238,7 @@ def test_model_responses_are_graph_compatible_and_use_typed_origin() -> None:
         episode_id="episode:1",
         visible_from_order=1,
         origin="user",
+        user_id="user:test",
         created_at=NOW,
         updated_at=NOW,
     )
@@ -249,6 +251,7 @@ def test_model_responses_are_graph_compatible_and_use_typed_origin() -> None:
         episode_id="episode:1",
         visible_from_order=1,
         origin="user",
+        user_id="user:test",
         created_at=NOW,
         updated_at=NOW,
     )

@@ -131,6 +131,10 @@ class NoteUpdate(StrictModel):
 class NoteResponse(UserResponseModel):
     id: Identifier
     series_id: Identifier
+    user_id: Identifier = Field(
+        description="The authenticated AppUser id that owns this note (PROB-02/#4).",
+        examples=["user:2a1f4c7e"],
+    )
     target_type: NoteTargetType
     target_id: Identifier
     content: PlainText
@@ -147,6 +151,7 @@ class NoteResponse(UserResponseModel):
                 {
                     "id": "user-note:2a1f4c7e",
                     "series_id": "series:dexter",
+                    "user_id": "user:2a1f4c7e",
                     "target_type": "Character",
                     "target_id": "character:dexter",
                     "content": "Remember this detail.",
@@ -191,6 +196,10 @@ class CustomNodeUpdate(StrictModel):
 class CustomNodeResponse(UserResponseModel):
     id: Identifier
     series_id: Identifier
+    user_id: Identifier = Field(
+        description="The authenticated AppUser id that owns this custom node (PROB-02/#4).",
+        examples=["user:2a1f4c7e"],
+    )
     type: CustomNodeType
     label: Label
     visible_from_order: VisibilityOrder
@@ -207,6 +216,7 @@ class CustomNodeResponse(UserResponseModel):
                 {
                     "id": "user-node:2a1f4c7e",
                     "series_id": "series:dexter",
+                    "user_id": "user:2a1f4c7e",
                     "type": "Object",
                     "label": "Blood slide",
                     "visible_from_order": 1,
@@ -259,6 +269,10 @@ class CustomRelationshipUpdate(StrictModel):
 class CustomRelationshipResponse(UserResponseModel):
     id: Identifier
     series_id: Identifier
+    user_id: Identifier = Field(
+        description="The authenticated AppUser id that owns this custom relationship (PROB-02/#4).",
+        examples=["user:2a1f4c7e"],
+    )
     source: Identifier
     target: Identifier
     type: CustomRelationshipType
@@ -276,6 +290,7 @@ class CustomRelationshipResponse(UserResponseModel):
                 {
                     "id": "user-rel:2a1f4c7e",
                     "series_id": "series:dexter",
+                    "user_id": "user:2a1f4c7e",
                     "source": "character:dexter",
                     "target": "character:debra",
                     "type": "FAMILY_OF",

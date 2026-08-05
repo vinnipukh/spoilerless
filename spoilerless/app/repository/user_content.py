@@ -39,6 +39,16 @@ class UserContentNotFound(LookupError):
     pass
 
 
+class UserContentForbidden(RuntimeError):
+    """The resource exists but is owned by a different user (PROB-02, #4).
+
+    Mapped to the API layer's 403 ``forbidden`` envelope. Distinct from
+    ``UserContentNotFound`` so a cross-owner mutation attempt is explicit
+    and testable — a resource that exists but is not the acting user's is
+    not the same as a resource that does not exist.
+    """
+
+
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -68,6 +78,28 @@ async def _run_create(tx: Any, query: str, error_msg: str, **params: Any) -> dic
     return _native(record.data())
 
 
+def _raise_on_ownership_conflict(
+    ownership: Any, actor_user_id: str, is_admin: bool, not_found_msg: str
+) -> None:
+    """Classify a failed owner-scoped mutation (PROB-02, #4).
+
+    ``ownership`` is the single Neo4j record from ``OWNERSHIP_QUERY`` (or
+    None). A record whose stored ``origin`` is not ``'user'`` is the
+    pre-existing canonical/candidate-tamper conflict (409); a record whose
+    stored ``user_id`` differs from the acting user's id is a cross-owner
+    mutation attempt (403, admin bypass); anything else is a genuine
+    not-found (404).
+    """
+    if ownership is None:
+        raise UserContentNotFound(not_found_msg)
+    origin = ownership.data().get("origin")
+    if origin != "user":
+        raise UserContentConflict("resource ownership conflict")
+    if ownership.data().get("user_id") != actor_user_id and not is_admin:
+        raise UserContentForbidden("resource owned by another user")
+    raise UserContentNotFound(not_found_msg)
+
+
 def _namespace(value: str, prefix: str) -> None:
     if (
         not isinstance(value, str)
@@ -90,6 +122,7 @@ def _series(value: str) -> None:
 class NoteCreateCommand:
     id: str
     series_id: str
+    user_id: str
     target_type: NoteTargetType
     target_id: str
     content: str
@@ -101,14 +134,17 @@ class NoteCreateCommand:
 class NoteUpdateCommand:
     id: str
     series_id: str
+    user_id: str
     content: str
     updated_at: datetime
+    is_admin: bool = False
 
 
 @dataclass(frozen=True)
 class CustomNodeCreateCommand:
     id: str
     series_id: str
+    user_id: str
     node_type: CustomNodeType
     label: str
     episode_id: str
@@ -120,6 +156,7 @@ class CustomNodeCreateCommand:
 class CustomRelationshipCreateCommand:
     id: str
     series_id: str
+    user_id: str
     source_id: str
     target_id: str
     predicate: CustomRelationshipType
@@ -132,8 +169,10 @@ class CustomRelationshipCreateCommand:
 class CustomUpdateCommand:
     id: str
     series_id: str
+    user_id: str
     value: str
     updated_at: datetime
+    is_admin: bool = False
 
 
 NOTE_CREATE_QUERIES: Mapping[NoteTargetType, str] = {
@@ -142,14 +181,15 @@ NOTE_CREATE_QUERIES: Mapping[NoteTargetType, str] = {
         MATCH (target:Character {id: $target_id, series_id: $series_id})
         WHERE target.origin IN ['canonical', 'candidate', 'user']
           AND target.visible_from_order IS NOT NULL AND target.visible_from_order >= 1
-        CREATE (note:UserNote {id: $id, series_id: $series_id,
+        CREATE (note:UserNote {id: $id, series_id: $series_id, user_id: $user_id,
           target_type: $target_type, target_id: $target_id, content: $content,
           visible_from_order: target.visible_from_order, origin: 'user',
           created_at: $created_at, updated_at: $updated_at})
         CREATE (note)-[:REFERS_TO {id: $id + ':refers_to', series_id: $series_id,
           visible_from_order: target.visible_from_order, origin: 'user'}]->(target)
-        RETURN note.id AS id, note.series_id AS series_id, note.target_type AS target_type,
-          note.target_id AS target_id, note.content AS content, note.origin AS origin,
+        RETURN note.id AS id, note.series_id AS series_id, note.user_id AS user_id,
+          note.target_type AS target_type, note.target_id AS target_id,
+          note.content AS content, note.origin AS origin,
           note.visible_from_order AS visible_from_order, note.created_at AS created_at,
           note.updated_at AS updated_at
     """,
@@ -158,14 +198,15 @@ NOTE_CREATE_QUERIES: Mapping[NoteTargetType, str] = {
         MATCH (target:Claim {id: $target_id, series_id: $series_id})
         WHERE target.origin IN ['canonical', 'candidate', 'user']
           AND target.visible_from_order IS NOT NULL AND target.visible_from_order >= 1
-        CREATE (note:UserNote {id: $id, series_id: $series_id,
+        CREATE (note:UserNote {id: $id, series_id: $series_id, user_id: $user_id,
           target_type: $target_type, target_id: $target_id, content: $content,
           visible_from_order: target.visible_from_order, origin: 'user',
           created_at: $created_at, updated_at: $updated_at})
         CREATE (note)-[:REFERS_TO {id: $id + ':refers_to', series_id: $series_id,
           visible_from_order: target.visible_from_order, origin: 'user'}]->(target)
-        RETURN note.id AS id, note.series_id AS series_id, note.target_type AS target_type,
-          note.target_id AS target_id, note.content AS content, note.origin AS origin,
+        RETURN note.id AS id, note.series_id AS series_id, note.user_id AS user_id,
+          note.target_type AS target_type, note.target_id AS target_id,
+          note.content AS content, note.origin AS origin,
           note.visible_from_order AS visible_from_order, note.created_at AS created_at,
           note.updated_at AS updated_at
     """,
@@ -175,11 +216,11 @@ CUSTOM_NODE_CREATE_QUERIES: Mapping[CustomNodeType, str] = {
     node_type: f"""
         MATCH (episode:Episode {{id: $episode_id, series_id: $series_id}})
         WHERE episode.episode_order IS NOT NULL AND episode.episode_order >= 1
-        CREATE (node:{node_type.value} {{id: $id, series_id: $series_id, label: $label,
-          episode_id: $episode_id, visible_from_order: episode.episode_order,
+        CREATE (node:{node_type.value} {{id: $id, series_id: $series_id, user_id: $user_id,
+          label: $label, episode_id: $episode_id, visible_from_order: episode.episode_order,
           origin: 'user', created_at: $created_at, updated_at: $updated_at}})
-        RETURN node.id AS id, node.series_id AS series_id, '{node_type.value}' AS type,
-          node.label AS label,
+        RETURN node.id AS id, node.series_id AS series_id, node.user_id AS user_id,
+          '{node_type.value}' AS type, node.label AS label,
           node.episode_id AS episode_id, node.visible_from_order AS visible_from_order,
           node.origin AS origin, node.created_at AS created_at, node.updated_at AS updated_at
     """ for node_type in CustomNodeType
@@ -192,18 +233,18 @@ CUSTOM_RELATIONSHIP_CREATE_QUERY = """
     WHERE source.visible_from_order IS NOT NULL AND source.visible_from_order >= 1
       AND target.visible_from_order IS NOT NULL AND target.visible_from_order >= 1
       AND episode.episode_order IS NOT NULL AND episode.episode_order >= 1
-    CREATE (claim:Claim {id: $id, series_id: $series_id, subject_id: $source_id,
-      object_id: $target_id, predicate: $predicate, claim_type: 'user_authored',
-      episode_id: $episode_id, visible_from_order:
+    CREATE (claim:Claim {id: $id, series_id: $series_id, user_id: $user_id,
+      subject_id: $source_id, object_id: $target_id, predicate: $predicate,
+      claim_type: 'user_authored', episode_id: $episode_id, visible_from_order:
         CASE WHEN source.visible_from_order > target.visible_from_order
           AND source.visible_from_order > episode.episode_order THEN source.visible_from_order
           WHEN target.visible_from_order > episode.episode_order THEN target.visible_from_order
           ELSE episode.episode_order END,
       origin: 'user', created_at: $created_at, updated_at: $updated_at})
-        RETURN claim.id AS id, claim.series_id AS series_id, claim.subject_id AS source,
-      claim.object_id AS target, claim.predicate AS type, claim.episode_id AS episode_id,
-      claim.visible_from_order AS visible_from_order, claim.origin AS origin,
-      claim.created_at AS created_at, claim.updated_at AS updated_at
+        RETURN claim.id AS id, claim.series_id AS series_id, claim.user_id AS user_id,
+      claim.subject_id AS source, claim.object_id AS target, claim.predicate AS type,
+      claim.episode_id AS episode_id, claim.visible_from_order AS visible_from_order,
+      claim.origin AS origin, claim.created_at AS created_at, claim.updated_at AS updated_at
 """
 
 CUSTOM_NODE_READ_QUERIES: Mapping[CustomNodeType, str] = {
@@ -212,7 +253,8 @@ CUSTOM_NODE_READ_QUERIES: Mapping[CustomNodeType, str] = {
         WHERE node.origin = 'user' AND node.id STARTS WITH 'user-node:'
           AND node.visible_from_order IS NOT NULL AND node.visible_from_order >= 1
           AND node.visible_from_order <= $visible_until_order
-        RETURN node.id AS id, node.series_id AS series_id, '{node_type.value}' AS type,
+        RETURN node.id AS id, node.series_id AS series_id, node.user_id AS user_id,
+          '{node_type.value}' AS type,
           node.label AS label, node.visible_from_order AS visible_from_order,
           node.origin AS origin, node.episode_id AS episode_id,
           node.created_at AS created_at, node.updated_at AS updated_at
@@ -223,8 +265,10 @@ CUSTOM_NODE_UPDATE_QUERIES: Mapping[CustomNodeType, str] = {
     node_type: f"""
         MATCH (node:{node_type.value} {{id: $id, series_id: $series_id}})
         WHERE node.origin = 'user' AND node.id STARTS WITH 'user-node:'
+          AND ($is_admin = true OR node.user_id = $user_id)
         SET node.label = $label, node.updated_at = $updated_at
-        RETURN node.id AS id, node.series_id AS series_id, '{node_type.value}' AS type,
+        RETURN node.id AS id, node.series_id AS series_id, node.user_id AS user_id,
+          '{node_type.value}' AS type,
           node.label AS label, node.visible_from_order AS visible_from_order,
           node.origin AS origin, node.episode_id AS episode_id,
           node.created_at AS created_at, node.updated_at AS updated_at
@@ -235,6 +279,7 @@ CUSTOM_NODE_DELETE_QUERIES: Mapping[CustomNodeType, str] = {
     node_type: f"""
         MATCH (node:{node_type.value} {{id: $id, series_id: $series_id}})
         WHERE node.origin = 'user' AND node.id STARTS WITH 'user-node:'
+          AND ($is_admin = true OR node.user_id = $user_id)
         OPTIONAL MATCH (note:UserNote {{origin: 'user', target_id: node.id}})
         OPTIONAL MATCH (claim:Claim {{origin: 'user', claim_type: 'user_authored'}})
         WHERE claim.subject_id = node.id OR claim.object_id = node.id
@@ -249,7 +294,8 @@ CUSTOM_RELATIONSHIP_READ_QUERY = """
     MATCH (claim:Claim {id: $id, series_id: $series_id, origin: 'user', claim_type: 'user_authored'})
     WHERE claim.id STARTS WITH 'user-rel:' AND claim.visible_from_order IS NOT NULL
       AND claim.visible_from_order >= 1 AND claim.visible_from_order <= $visible_until_order
-    RETURN claim.id AS id, claim.series_id AS series_id, claim.subject_id AS source,
+    RETURN claim.id AS id, claim.series_id AS series_id, claim.user_id AS user_id,
+      claim.subject_id AS source,
       claim.object_id AS target, claim.predicate AS type,
       claim.visible_from_order AS visible_from_order, claim.origin AS origin,
       claim.episode_id AS episode_id, claim.created_at AS created_at,
@@ -259,8 +305,10 @@ CUSTOM_RELATIONSHIP_READ_QUERY = """
 CUSTOM_RELATIONSHIP_UPDATE_QUERY = """
     MATCH (claim:Claim {id: $id, series_id: $series_id, origin: 'user', claim_type: 'user_authored'})
     WHERE claim.id STARTS WITH 'user-rel:'
+      AND ($is_admin = true OR claim.user_id = $user_id)
     SET claim.predicate = $predicate, claim.updated_at = $updated_at
-    RETURN claim.id AS id, claim.series_id AS series_id, claim.subject_id AS source,
+    RETURN claim.id AS id, claim.series_id AS series_id, claim.user_id AS user_id,
+      claim.subject_id AS source,
       claim.object_id AS target, claim.predicate AS type,
       claim.visible_from_order AS visible_from_order, claim.origin AS origin,
       claim.episode_id AS episode_id, claim.created_at AS created_at,
@@ -270,20 +318,22 @@ CUSTOM_RELATIONSHIP_UPDATE_QUERY = """
 CUSTOM_RELATIONSHIP_DELETE_QUERY = """
     MATCH (claim:Claim {id: $id, series_id: $series_id, origin: 'user', claim_type: 'user_authored'})
     WHERE claim.id STARTS WITH 'user-rel:'
+      AND ($is_admin = true OR claim.user_id = $user_id)
     DELETE claim RETURN $id AS id
 """
 
 OWNERSHIP_QUERY = """
     MATCH (resource {id: $id, series_id: $series_id})
-    RETURN resource.origin AS origin, resource.id AS id LIMIT 1
+    RETURN resource.origin AS origin, resource.user_id AS user_id, resource.id AS id LIMIT 1
 """
 
 NOTE_UPDATE_QUERY = """
     MATCH (note:UserNote {id: $id, series_id: $series_id, origin: 'user'})
     WHERE note.visible_from_order IS NOT NULL AND note.visible_from_order >= 1
+      AND ($is_admin = true OR note.user_id = $user_id)
     SET note.content = $content, note.updated_at = $updated_at
     RETURN note.id AS id, note.series_id AS series_id,
-      note.target_type AS target_type, note.target_id AS target_id,
+      note.user_id AS user_id, note.target_type AS target_type, note.target_id AS target_id,
       note.content AS content, note.origin AS origin,
       note.visible_from_order AS visible_from_order,
       note.created_at AS created_at, note.updated_at AS updated_at
@@ -302,7 +352,7 @@ NOTE_LIST_QUERIES: Mapping[NoteTargetType, str] = {
           AND note.visible_from_order <= $visible_until_order
           AND target.visible_from_order <= $visible_until_order
           AND ($target_id IS NULL OR note.target_id = $target_id)
-        RETURN note.id AS id, note.series_id AS series_id,
+        RETURN note.id AS id, note.series_id AS series_id, note.user_id AS user_id,
           note.target_type AS target_type, note.target_id AS target_id,
           note.content AS content, note.origin AS origin,
           note.visible_from_order AS visible_from_order,
@@ -315,6 +365,7 @@ NOTE_GET_QUERIES = NOTE_LIST_QUERIES
 
 NOTE_DELETE_QUERY = """
     MATCH (note:UserNote {id: $id, series_id: $series_id, origin: 'user'})
+    WHERE $is_admin = true OR note.user_id = $user_id
     MATCH (note)-[attachment:REFERS_TO {origin: 'user', series_id: $series_id}]->()
     WITH note.id AS deleted_id, attachment, note
     DELETE attachment, note
@@ -336,30 +387,32 @@ class UserContentRepository:
         self.database = database
 
     @staticmethod
-    def note_command(series_id: str, request: NoteCreate) -> NoteCreateCommand:
+    def note_command(series_id: str, user_id: str, request: NoteCreate) -> NoteCreateCommand:
         _series(series_id)
         return NoteCreateCommand(
-            f"user-note:{uuid4()}", series_id, request.target_type, request.target_id,
-            request.content, (now := _utc_now()), now
+            f"user-note:{uuid4()}", series_id, user_id, request.target_type,
+            request.target_id, request.content, (now := _utc_now()), now
         )
 
-    async def create_note(self, series_id: str, request: NoteCreate) -> Any:
-        command = self.note_command(series_id, request)
+    async def create_note(self, series_id: str, user_id: str, request: NoteCreate) -> Any:
+        command = self.note_command(series_id, user_id, request)
         query = NOTE_CREATE_QUERIES.get(command.target_type)
         if query is None:
             raise UserContentValidationError("Unsupported note target")
         return await self.database.execute_write(self._create_note, (command, query))
 
     @staticmethod
-    def custom_node_command(series_id: str, request: CustomNodeCreate) -> CustomNodeCreateCommand:
+    def custom_node_command(
+        series_id: str, user_id: str, request: CustomNodeCreate
+    ) -> CustomNodeCreateCommand:
         _series(series_id)
         return CustomNodeCreateCommand(
-            f"user-node:{uuid4()}", series_id, request.node_type, request.label,
-            request.episode_id, (now := _utc_now()), now
+            f"user-node:{uuid4()}", series_id, user_id, request.node_type,
+            request.label, request.episode_id, (now := _utc_now()), now
         )
 
-    async def create_custom_node(self, series_id: str, request: CustomNodeCreate) -> Any:
-        command = self.custom_node_command(series_id, request)
+    async def create_custom_node(self, series_id: str, user_id: str, request: CustomNodeCreate) -> Any:
+        command = self.custom_node_command(series_id, user_id, request)
         query = CUSTOM_NODE_CREATE_QUERIES.get(command.node_type)
         if query is None:
             raise UserContentValidationError("Unsupported custom node type")
@@ -371,6 +424,7 @@ class UserContentRepository:
         result = await _run_create(tx, query,
             "episode not found",
             id=command.id, series_id=command.series_id,
+            user_id=command.user_id,
             label=command.label, episode_id=command.episode_id,
             created_at=command.created_at, updated_at=command.updated_at)
         snapshot = RevisionRepository.take_snapshot(result)
@@ -385,18 +439,19 @@ class UserContentRepository:
 
     @staticmethod
     def custom_relationship_command(
-        series_id: str, request: CustomRelationshipCreate
+        series_id: str, user_id: str, request: CustomRelationshipCreate
     ) -> CustomRelationshipCreateCommand:
         _series(series_id)
         return CustomRelationshipCreateCommand(
-            f"user-rel:{uuid4()}", series_id, request.source_id, request.target_id,
-            request.predicate, request.episode_id, (now := _utc_now()), now
+            f"user-rel:{uuid4()}", series_id, user_id, request.source_id,
+            request.target_id, request.predicate, request.episode_id,
+            (now := _utc_now()), now
         )
 
     async def create_custom_relationship(
-        self, series_id: str, request: CustomRelationshipCreate
+        self, series_id: str, user_id: str, request: CustomRelationshipCreate
     ) -> Any:
-        command = self.custom_relationship_command(series_id, request)
+        command = self.custom_relationship_command(series_id, user_id, request)
         return await self.database.execute_write(self._create_custom_relationship, command)
 
     @staticmethod
@@ -405,7 +460,8 @@ class UserContentRepository:
             "relationship endpoint not found",
             id=command.id, series_id=command.series_id, source_id=command.source_id,
             target_id=command.target_id, predicate=command.predicate.value,
-            episode_id=command.episode_id, created_at=command.created_at,
+            episode_id=command.episode_id, user_id=command.user_id,
+            created_at=command.created_at,
             updated_at=command.updated_at)
         snapshot = RevisionRepository.take_snapshot(result)
         await RevisionRepository.log_revision(
@@ -431,9 +487,14 @@ class UserContentRepository:
         _resource_id(node_id)
         return await self._custom_read(series_id, node_id, boundary, list(CUSTOM_NODE_READ_QUERIES.values()))
 
-    async def update_custom_node(self, series_id: str, node_id: str, request: CustomNodeUpdate) -> Any:
+    async def update_custom_node(
+        self, series_id: str, node_id: str, user_id: str,
+        request: CustomNodeUpdate, *, is_admin: bool = False,
+    ) -> Any:
         _series(series_id); _resource_id(node_id)
-        command = CustomUpdateCommand(node_id, series_id, request.label, _utc_now())
+        command = CustomUpdateCommand(
+            node_id, series_id, user_id, request.label, _utc_now(), is_admin
+        )
         return await self.database.execute_write(self._update_custom_node, command)
 
     @staticmethod
@@ -444,14 +505,17 @@ class UserContentRepository:
             "RETURN node.id AS id, node.series_id AS series_id, "
             "labels(node)[0] AS type, node.label AS label, "
             "node.visible_from_order AS visible_from_order, "
-            "node.origin AS origin, node.episode_id AS episode_id",
+            "node.origin AS origin, node.episode_id AS episode_id, "
+            "node.user_id AS user_id",
             id=command.id, series_id=command.series_id)).single()
         old_state = _native(old_row.data()) if old_row else None
         resource_type = old_state.get("type", "?") if old_state else "?"
 
         for query in CUSTOM_NODE_UPDATE_QUERIES.values():
             record = await (await tx.run(query, id=command.id, series_id=command.series_id,
-                                         label=command.value, updated_at=command.updated_at)).single()
+                                         label=command.value, updated_at=command.updated_at,
+                                         user_id=command.user_id,
+                                         is_admin=command.is_admin)).single()
             if record is not None:
                 result_data = _native(record.data())
                 before = RevisionRepository.take_snapshot(old_state) if old_state else None
@@ -465,34 +529,40 @@ class UserContentRepository:
                     created_at=command.updated_at)
                 return result_data
         ownership = await (await tx.run(OWNERSHIP_QUERY, id=command.id, series_id=command.series_id)).single()
-        if ownership is not None and ownership.data().get("origin") != "user":
-            raise UserContentConflict("resource ownership conflict")
-        raise UserContentNotFound("node not found")
+        _raise_on_ownership_conflict(ownership, command.user_id, command.is_admin, "node not found")
 
-    async def delete_custom_node(self, series_id: str, node_id: str) -> None:
+    async def delete_custom_node(
+        self, series_id: str, node_id: str, user_id: str, *, is_admin: bool = False
+    ) -> None:
         _series(series_id); _resource_id(node_id)
-        result = await self.database.execute_write(self._delete_custom_node, (series_id, node_id))
+        result = await self.database.execute_write(
+            self._delete_custom_node, (series_id, node_id, user_id, is_admin)
+        )
         if result == "conflict":
             raise UserContentConflict("resource in use")
         if result is None:
             raise UserContentNotFound("node not found")
 
     @staticmethod
-    async def _delete_custom_node(tx: Any, payload: tuple[str, str]) -> Any:
-        series_id, node_id = payload
+    async def _delete_custom_node(tx: Any, payload: tuple[str, str, str, bool]) -> Any:
+        series_id, node_id, user_id, is_admin = payload
         # Capture state before deletion
         old_row = await (await tx.run(
             "MATCH (node {id: $id, series_id: $series_id}) "
             "RETURN node.id AS id, node.series_id AS series_id, "
             "labels(node)[0] AS type, node.label AS label, "
             "node.visible_from_order AS visible_from_order, "
-            "node.origin AS origin, node.episode_id AS episode_id",
+            "node.origin AS origin, node.episode_id AS episode_id, "
+            "node.user_id AS user_id",
             id=node_id, series_id=series_id)).single()
         old_state = _native(old_row.data()) if old_row else None
         resource_type = old_state.get("type", "?") if old_state else "?"
 
         for query in CUSTOM_NODE_DELETE_QUERIES.values():
-            record = await (await tx.run(query, id=node_id, series_id=series_id)).single()
+            record = await (await tx.run(
+                query, id=node_id, series_id=series_id,
+                user_id=user_id, is_admin=is_admin,
+            )).single()
             if record is not None:
                 data = record.data()
                 if data.get("dependencies", 0):
@@ -509,18 +579,20 @@ class UserContentRepository:
                         created_at=_utc_now())
                 return deleted_id
         ownership = await (await tx.run(OWNERSHIP_QUERY, id=node_id, series_id=series_id)).single()
-        if ownership is not None and ownership.data().get("origin") != "user":
-            raise UserContentConflict("resource ownership conflict")
-        return None
+        _raise_on_ownership_conflict(ownership, user_id, is_admin, "node not found")
 
     async def get_custom_relationship(self, series_id: str, relationship_id: str, boundary: int) -> Any:
         _resource_id(relationship_id)
         return await self._custom_read(series_id, relationship_id, boundary, [CUSTOM_RELATIONSHIP_READ_QUERY])
 
-    async def update_custom_relationship(self, series_id: str, relationship_id: str,
-                                         request: CustomRelationshipUpdate) -> Any:
+    async def update_custom_relationship(
+        self, series_id: str, relationship_id: str, user_id: str,
+        request: CustomRelationshipUpdate, *, is_admin: bool = False,
+    ) -> Any:
         _series(series_id); _resource_id(relationship_id)
-        command = CustomUpdateCommand(relationship_id, series_id, request.predicate.value, _utc_now())
+        command = CustomUpdateCommand(
+            relationship_id, series_id, user_id, request.predicate.value, _utc_now(), is_admin
+        )
         return await self.database.execute_write(self._update_custom_relationship, command)
 
     @staticmethod
@@ -532,19 +604,21 @@ class UserContentRepository:
             "claim.subject_id AS source, claim.object_id AS target, "
             "claim.predicate AS type, claim.episode_id AS episode_id, "
             "claim.visible_from_order AS visible_from_order, "
-            "claim.origin AS origin",
+            "claim.origin AS origin, claim.user_id AS user_id",
             id=command.id, series_id=command.series_id)).single()
         old_state = _native(old_row.data()) if old_row else None
         before = RevisionRepository.take_snapshot(old_state) if old_state else None
 
         record = await (await tx.run(CUSTOM_RELATIONSHIP_UPDATE_QUERY, id=command.id,
                                      series_id=command.series_id, predicate=command.value,
-                                     updated_at=command.updated_at)).single()
+                                     updated_at=command.updated_at,
+                                     user_id=command.user_id,
+                                     is_admin=command.is_admin)).single()
         if record is None:
             ownership = await (await tx.run(OWNERSHIP_QUERY, id=command.id, series_id=command.series_id)).single()
-            if ownership is not None and ownership.data().get("origin") != "user":
-                raise UserContentConflict("resource ownership conflict")
-            raise UserContentNotFound("relationship not found")
+            _raise_on_ownership_conflict(
+                ownership, command.user_id, command.is_admin, "relationship not found"
+            )
         result_data = _native(record.data())
         after = RevisionRepository.take_snapshot(result_data)
 
@@ -556,15 +630,19 @@ class UserContentRepository:
             created_at=command.updated_at)
         return result_data
 
-    async def delete_custom_relationship(self, series_id: str, relationship_id: str) -> None:
+    async def delete_custom_relationship(
+        self, series_id: str, relationship_id: str, user_id: str, *, is_admin: bool = False
+    ) -> None:
         _series(series_id); _resource_id(relationship_id)
-        result = await self.database.execute_write(self._delete_custom_relationship, (series_id, relationship_id))
+        result = await self.database.execute_write(
+            self._delete_custom_relationship, (series_id, relationship_id, user_id, is_admin)
+        )
         if result is None:
             raise UserContentNotFound("relationship not found")
 
     @staticmethod
-    async def _delete_custom_relationship(tx: Any, payload: tuple[str, str]) -> Any:
-        series_id, relationship_id = payload
+    async def _delete_custom_relationship(tx: Any, payload: tuple[str, str, str, bool]) -> Any:
+        series_id, relationship_id, user_id, is_admin = payload
         # Capture state before deletion
         old_row = await (await tx.run(
             "MATCH (claim:Claim {id: $id, series_id: $series_id}) "
@@ -572,12 +650,13 @@ class UserContentRepository:
             "claim.subject_id AS source, claim.object_id AS target, "
             "claim.predicate AS type, claim.episode_id AS episode_id, "
             "claim.visible_from_order AS visible_from_order, "
-            "claim.origin AS origin",
+            "claim.origin AS origin, claim.user_id AS user_id",
             id=relationship_id, series_id=series_id)).single()
         old_state = _native(old_row.data()) if old_row else None
 
         record = await (await tx.run(CUSTOM_RELATIONSHIP_DELETE_QUERY, id=relationship_id,
-                                     series_id=series_id)).single()
+                                     series_id=series_id, user_id=user_id,
+                                     is_admin=is_admin)).single()
         deleted_id = None if record is None else record.data().get("id")
 
         if old_state and deleted_id:
@@ -591,8 +670,7 @@ class UserContentRepository:
 
         if record is None:
             ownership = await (await tx.run(OWNERSHIP_QUERY, id=relationship_id, series_id=series_id)).single()
-            if ownership is not None and ownership.data().get("origin") != "user":
-                raise UserContentConflict("resource ownership conflict")
+            _raise_on_ownership_conflict(ownership, user_id, is_admin, "relationship not found")
         return deleted_id
 
     @staticmethod
@@ -601,6 +679,7 @@ class UserContentRepository:
         result = await _run_create(tx, query,
             "note target not found",
             id=command.id, series_id=command.series_id,
+            user_id=command.user_id,
             target_type=command.target_type.value, target_id=command.target_id,
             content=command.content, created_at=command.created_at,
             updated_at=command.updated_at)
@@ -613,9 +692,12 @@ class UserContentRepository:
             created_at=command.created_at)
         return result
 
-    async def update_note(self, series_id: str, note_id: str, request: NoteUpdate) -> Any:
+    async def update_note(
+        self, series_id: str, note_id: str, user_id: str,
+        request: NoteUpdate, *, is_admin: bool = False,
+    ) -> Any:
         _series(series_id); _namespace(note_id, "user-note:")
-        command = NoteUpdateCommand(note_id, series_id, request.content, _utc_now())
+        command = NoteUpdateCommand(note_id, series_id, user_id, request.content, _utc_now(), is_admin)
         return await self.database.execute_write(self._update_note, command)
 
     @staticmethod
@@ -627,16 +709,21 @@ class UserContentRepository:
             "note.target_type AS target_type, note.target_id AS target_id, "
             "note.content AS content, note.origin AS origin, "
             "note.visible_from_order AS visible_from_order, "
-            "note.created_at AS created_at, note.updated_at AS updated_at",
+            "note.created_at AS created_at, note.updated_at AS updated_at, "
+            "note.user_id AS user_id",
             id=command.id, series_id=command.series_id)).single()
         before = RevisionRepository.take_snapshot(
             _native(old_row.data())) if old_row else None
 
         result = await tx.run(NOTE_UPDATE_QUERY, id=command.id, series_id=command.series_id,
-            content=command.content, updated_at=command.updated_at)
+            content=command.content, updated_at=command.updated_at,
+            user_id=command.user_id, is_admin=command.is_admin)
         record = await result.single()
         if record is None:
-            raise UserContentNotFound("note not found")
+            ownership = await (await tx.run(
+                OWNERSHIP_QUERY, id=command.id, series_id=command.series_id
+            )).single()
+            _raise_on_ownership_conflict(ownership, command.user_id, command.is_admin, "note not found")
         result_data = _native(record.data())
         after = RevisionRepository.take_snapshot(result_data)
 
@@ -648,31 +735,48 @@ class UserContentRepository:
             created_at=command.updated_at)
         return result_data
 
-    async def delete_note(self, series_id: str, note_id: str) -> None:
+    async def delete_note(
+        self, series_id: str, note_id: str, user_id: str, *, is_admin: bool = False
+    ) -> None:
         _series(series_id)
         _namespace(note_id, "user-note:")
         result = await self.database.execute_write(
-            self._delete_note, (series_id, note_id)
+            self._delete_note, (series_id, note_id, user_id, is_admin)
         )
         if result is None:
             raise UserContentNotFound("note not found")
 
     @staticmethod
-    async def _delete_note(tx: Any, payload: tuple[str, str]) -> Any:
-        series_id, note_id = payload
-        # Capture state before deletion — log FIRST
+    async def _delete_note(tx: Any, payload: tuple[str, str, str, bool]) -> Any:
+        series_id, note_id, user_id, is_admin = payload
+        # Capture state before deletion
         old_row = await (await tx.run(
             "MATCH (note:UserNote {id: $id, series_id: $series_id}) "
             "RETURN note.id AS id, note.series_id AS series_id, "
             "note.target_type AS target_type, note.target_id AS target_id, "
             "note.content AS content, note.origin AS origin, "
             "note.visible_from_order AS visible_from_order, "
-            "note.created_at AS created_at, note.updated_at AS updated_at",
+            "note.created_at AS created_at, note.updated_at AS updated_at, "
+            "note.user_id AS user_id",
             id=note_id, series_id=series_id)).single()
         if old_row is None:
             return None
 
         old_state = _native(old_row.data())
+        # Owner-scoped delete — a cross-owner or legacy-non-admin attempt
+        # yields zero rows and is classified via OWNERSHIP_QUERY below.
+        result = await tx.run(
+            NOTE_DELETE_QUERY, id=note_id, series_id=series_id,
+            user_id=user_id, is_admin=is_admin,
+        )
+        record = await result.single()
+        if record is None:
+            ownership = await (await tx.run(
+                OWNERSHIP_QUERY, id=note_id, series_id=series_id
+            )).single()
+            _raise_on_ownership_conflict(ownership, user_id, is_admin, "note not found")
+        # Log the DELETED revision only after the owner-scoped delete
+        # actually matched — no ghost revisions for failed cross-owner deletes.
         before = RevisionRepository.take_snapshot(old_state)
         await RevisionRepository.log_revision(
             tx, series_id=series_id, resource_type="UserNote",
@@ -680,11 +784,7 @@ class UserContentRepository:
             before=before, after=None,
             visible_from_order=old_state["visible_from_order"],
             created_at=_utc_now())
-
-        # Now actually delete
-        result = await tx.run(NOTE_DELETE_QUERY, id=note_id, series_id=series_id)
-        record = await result.single()
-        return None if record is None else record.data().get("id")
+        return record.data().get("id")
 
     @staticmethod
     def validate_boundary(visible_until_order: int) -> int:

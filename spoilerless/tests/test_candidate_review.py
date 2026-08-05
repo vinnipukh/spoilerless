@@ -46,7 +46,20 @@ def live_client() -> Iterator[TestClient]:
 
 
 @pytest.fixture
-def ingested_claim_id(live_client: TestClient) -> str:
+def ingest_session(live_client: TestClient) -> Iterator[str]:
+    """Authenticate ``live_client`` as a regular user for candidate ingest.
+
+    Ingest is auth-gated since 09-03 (PROB-01, #1) — any authenticated
+    user may submit a batch; approve/reject/edit stay admin-gated.
+    """
+    google_sub, raw_token = _create_user_with_session("user")
+    live_client.cookies.set("session", raw_token)
+    yield google_sub
+    asyncio.run(_delete_test_user(google_sub))
+
+
+@pytest.fixture
+def ingested_claim_id(live_client: TestClient, ingest_session: str) -> str:
     """Ingest the fixture and return the first claim ID."""
     with open(FIXTURE_PATH) as f:
         fixture = json.load(f)
@@ -55,6 +68,19 @@ def ingested_claim_id(live_client: TestClient) -> str:
         json=fixture,
     )
     return response.json()["created"][0]
+
+
+def test_ingest_anonymous_returns_401(live_client: TestClient) -> None:
+    """PROB-01 (#1/#2): anonymous candidate ingestion is forbidden."""
+    live_client.cookies.clear()
+    with open(FIXTURE_PATH) as f:
+        fixture = json.load(f)
+    response = live_client.post(
+        "/api/series/series_dexter/candidates/ingest",
+        json=fixture,
+    )
+    assert response.status_code == 401, response.text
+    assert response.json()["detail"]["code"] == "AUTH_UNAUTHENTICATED"
 
 
 def _create_user_with_session(role: str) -> tuple[str, str]:

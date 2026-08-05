@@ -99,6 +99,7 @@ class RevisionRepository:
         keys = [
             "id",
             "series_id",
+            "user_id",
             "type",
             "label",
             "content",

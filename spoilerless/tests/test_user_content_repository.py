@@ -104,7 +104,7 @@ async def test_note_command_id_and_utc_timestamps_survive_callback_retry():
     repository = UserContentRepository(database)
 
     result = await repository.create_note(
-        "series_dexter",
+        "series_dexter", "user:test-owner",
         NoteCreate(target_type="Character", target_id="character:dexter", content="text"),
     )
     command = database.driver.sessions[0].commands[0][0]
@@ -134,9 +134,12 @@ async def test_unsafe_series_or_ownership_input_rejects_before_query_selection()
     request = NoteCreate(target_type="Character", target_id="character:one", content="x")
 
     with pytest.raises(UserContentValidationError):
-        await repository.create_note("series bad label", request)
+        await repository.create_note("series bad label", "user:test-owner", request)
     with pytest.raises(UserContentValidationError):
-        await repository.update_note("series_dexter", "canonical:note", request.model_copy(update={"content": "y"}))
+        await repository.update_note(
+            "series_dexter", "canonical:note", "user:test-owner",
+            request.model_copy(update={"content": "y"}),
+        )
     assert database.driver.sessions == []
 
 
@@ -158,11 +161,11 @@ async def test_custom_node_and_relationship_writes_use_static_queries_and_parame
     database._settings = type("Settings", (), {"neo4j_database": "story-db"})()
     repository = UserContentRepository(database)
     await repository.create_custom_node(
-        "series_dexter",
+        "series_dexter", "user:test-owner",
         CustomNodeCreate(node_type="Object", label="Blood slide", episode_id="dexter_s01e01"),
     )
     await repository.create_custom_relationship(
-        "series_dexter",
+        "series_dexter", "user:test-owner",
         CustomRelationshipCreate(
             source_id="character:dexter", target_id="character:debra",
             predicate="FAMILY_OF", episode_id="dexter_s01e01",
