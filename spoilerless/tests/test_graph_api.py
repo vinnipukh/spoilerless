@@ -1131,3 +1131,93 @@ def test_graph_endpoint_cache_hit_matches_miss_byte_for_byte(
     assert miss.json() == hit.json()
     assert json.dumps(miss.json(), sort_keys=True) == json.dumps(hit.json(), sort_keys=True)
     assert any(key.startswith("graph:series_dexter:1:anon") for key in fake._store)
+
+
+# --- FEAT-06 / FEAT-05 routes (plan 09-11) --------------------------------
+
+DEXTER = "dexter:character:dexter_morgan"
+DEBRA = "dexter:character:debra_morgan"
+
+
+def test_path_route_finds_shortest_visible_path(live_client: TestClient) -> None:
+    response = live_client.post(
+        "/api/series/series_dexter/graph/path",
+        json={
+            "source_entity_id": DEXTER,
+            "target_entity_id": DEBRA,
+            "max_hops": 4,
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["found"] is True
+    assert body["path"] == [DEXTER, DEBRA]
+    assert body["hops"] == 1
+    assert len(body["edges"]) == 1
+
+
+def test_path_route_unconnected_pair_returns_no_path(live_client: TestClient) -> None:
+    response = live_client.post(
+        "/api/series/series_dexter/graph/path",
+        json={
+            "source_entity_id": DEXTER,
+            "target_entity_id": "dexter:character:rudy_cooper",
+            "max_hops": 4,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["found"] is False
+
+
+def test_path_route_rejects_max_hops_above_ceiling(live_client: TestClient) -> None:
+    response = live_client.post(
+        "/api/series/series_dexter/graph/path",
+        json={
+            "source_entity_id": DEXTER,
+            "target_entity_id": DEBRA,
+            "max_hops": 99,
+        },
+    )
+    # Server ceiling MAX_PATH_HOPS=4 — the strict model rejects >4 (422).
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "INVALID_REQUEST"
+
+
+def test_export_returns_markdown_with_visible_content(
+    live_client: TestClient,
+) -> None:
+    response = live_client.get(
+        "/api/series/series_dexter/export", params={"visible_until_order": 1}
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/markdown")
+    assert "Content-Disposition" in response.headers
+    assert "spoilerless-dexter-" in response.headers["content-disposition"]
+    text = response.text
+    assert "# Dexter" in text
+    assert "## Episodes" in text
+    assert "S01E01" in text
+    # Boundary-respecting: episode 2's spoiler title must NOT leak.
+    assert "Crocodile" not in text
+
+
+def test_export_target_id_renders_resource_section(
+    live_client: TestClient,
+) -> None:
+    response = live_client.get(
+        "/api/series/series_dexter/export",
+        params={"visible_until_order": 1, "target_id": DEXTER},
+    )
+    assert response.status_code == 200
+    text = response.text
+    assert "## Dexter" in text
+    assert "- Type: `Character`" in text
+    assert "### Claims" in text
+
+
+def test_export_unknown_series_returns_404(live_client: TestClient) -> None:
+    response = live_client.get(
+        "/api/series/unknown-series/export", params={"visible_until_order": 1}
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "SERIES_NOT_FOUND"
