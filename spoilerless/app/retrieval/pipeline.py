@@ -50,7 +50,6 @@ from spoilerless.app.retrieval.tools import (
 )
 from spoilerless.app.llm.fallbacks import (
     DEFAULT_FALLBACKS,
-    detect_language,
     INSUFFICIENT_EVIDENCE_FALLBACK_EN,
 )
 from spoilerless.app.domain.change_set import ChangeSetCreateRequest, ChangeSetOperation
@@ -99,6 +98,28 @@ CONTEXT_SECTIONS = (
     "notes",
     "chat_history",
 )
+
+
+# Cap on the serialized tool-result content replayed into the conversation
+# messages on every round (PROB-28/#52): the full rows still accumulate in
+# ``retrieved`` for citation validation and context assembly — only the
+# model-visible replay copy is bounded, so the final provider call does not
+# carry several full copies of the same large context.
+_MAX_TOOL_RESULT_CHARS = 4000
+
+
+def _bounded_tool_result(result: Any) -> str:
+    """Serialize a tool result for the model, capped to a length bound.
+
+    The JSON head keeps citation-relevant ids (claim_id / evidence_id /
+    source_id) intact; a result that trips the cap is truncated with an
+    ellipsis marker so the model still sees the ids while the message list
+    stays bounded across tool rounds.
+    """
+    content = json.dumps(result, default=str)
+    if len(content) > _MAX_TOOL_RESULT_CHARS:
+        content = content[:_MAX_TOOL_RESULT_CHARS] + "...[truncated]"
+    return content
 
 
 def _tag(name: str) -> str:
@@ -703,7 +724,12 @@ class RetrievalPipeline:
                     {
                         "role": "tool",
                         "tool_call_id": f"call_{len(executed)}",
-                        "content": json.dumps(result, default=str),
+                        # Bounded replay (PROB-28/#52): the full result stays
+                        # in ``retrieved`` for citation validation and
+                        # context assembly; only this model-visible copy is
+                        # capped so later rounds (and the final call) do not
+                        # re-send several full copies of the same context.
+                        "content": _bounded_tool_result(result),
                     }
                 )
 

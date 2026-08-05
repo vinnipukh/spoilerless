@@ -16,7 +16,12 @@ import pytest
 
 from spoilerless.app.core.config import get_settings
 from spoilerless.app.llm.provider import FakeLLMProvider, LLMEvent
-from spoilerless.app.retrieval.pipeline import CONTEXT_SECTIONS, RetrievalPipeline, assemble_context
+from spoilerless.app.retrieval.pipeline import (
+    CONTEXT_SECTIONS,
+    RetrievalPipeline,
+    _MAX_TOOL_RESULT_CHARS,
+    assemble_context,
+)
 
 # The eight documented context sections in their exact documented sequence
 # (06-CONTEXT.md RAG-05: series context, current watched boundary, relevant
@@ -678,3 +683,84 @@ async def test_pipeline_notes_tool_with_no_rows_renders_empty_notes_section() ->
     assert NOTE_N1["content"] not in context
     done_events = [event for event in events if event.kind == "done"]
     assert done_events[0].content == "no notes"
+
+
+# ---------------------------------------------------------------------------
+# PROB-28/#52: replayed tool results are bounded (length-capped)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_pipeline_bounds_replayed_tool_results_but_keeps_citations() -> None:
+    """PROB-28/#52: tool results replayed into the conversation messages on
+    later rounds are length-capped — the full rows still feed context
+    assembly and citation validation (which reads ``retrieved``, not the
+    replay), so the final provider call carries a bounded copy while
+    citations still validate against this turn's retrieved set."""
+    huge_evidence = {
+        "id": "dexter:evidence:s01e01:huge",
+        "label": "S01E01",
+        "text": "x" * 6000,
+        "visible_from_order": 1,
+    }
+    database = _StubDatabase(
+        evidence_rows=[huge_evidence],
+        node_rows=[NODE_N1, NODE_N2],
+        claim_rows=[CLAIM_C1],
+        source_rows=[SOURCE_S1],
+    )
+    provider = _CallScriptedProvider(
+        [
+            [
+                LLMEvent.tool_call(
+                    "get_neighborhood", {"entity_id": NODE_N1["id"], "depth": 1}
+                )
+            ],
+            [
+                LLMEvent.done(
+                    "bounded replay",
+                    citations=[
+                        {
+                            "claim_id": CLAIM_C1["id"],
+                            "evidence_id": huge_evidence["id"],
+                            "source_id": SOURCE_S1["id"],
+                        }
+                    ],
+                )
+            ],
+        ]
+    )
+    pipeline = RetrievalPipeline(
+        database=database, progress_service=_StubProgressService(boundary=1)
+    )
+    events = [
+        event
+        async for event in pipeline.answer(
+            user_id="user:test",
+            series_id="series_dexter",
+            chat_session_id="chat-session:test",
+            question="Who is Debra?",
+            history=[],
+            provider=provider,
+        )
+    ]
+
+    # The final provider call replays the tool result — bounded.
+    final_call_messages = provider.calls[-1]["messages"]
+    tool_messages = [
+        message for message in final_call_messages if message.get("role") == "tool"
+    ]
+    assert tool_messages, "expected a replayed tool message in the final call"
+    replayed = tool_messages[0]["content"]
+    assert len(replayed) <= _MAX_TOOL_RESULT_CHARS + len("...[truncated]")
+    assert replayed.endswith("...[truncated]")
+    assert huge_evidence["id"] in replayed  # citation-relevant ids stay intact
+
+    # The full rows still reached context assembly…
+    context = _final_context(provider)
+    assert "x" * 6000 in context
+    # …and citation validation still passes against this turn's set.
+    done_events = [event for event in events if event.kind == "done"]
+    assert done_events[0].content == "bounded replay"
+    assert len(done_events[0].citations) == 1
+    assert done_events[0].citations[0]["evidence_id"] == huge_evidence["id"]

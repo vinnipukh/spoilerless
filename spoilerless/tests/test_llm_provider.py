@@ -125,6 +125,30 @@ async def test_openai_provider_streams_text_deltas_then_done() -> None:
 
 
 @pytest.mark.asyncio
+async def test_openai_provider_skips_malformed_sse_chunks() -> None:
+    """PROB-28/#52: a malformed SSE chunk (truncated/foreign payload) must
+    not escape as an uncaught ``JSONDecodeError`` — parity with
+    GeminiProvider's defensive parsing. The stream skips the bad chunk and
+    still completes with the accumulated text."""
+    body = (
+        "data: "
+        + json.dumps(_chunk({"content": "Dexter "}))
+        + "\n\n"
+        + "data: {this is not valid json\n\n"
+        + "data: [DONE]\n\n"
+    )
+    provider = _provider(
+        httpx.MockTransport(lambda request: httpx.Response(200, text=body))
+    )
+
+    events = [event async for event in provider.stream_chat(**_stream_kwargs())]
+
+    assert [event.kind for event in events] == ["text_delta", "done"]
+    assert events[0].text == "Dexter "
+    assert events[-1].content == "Dexter "
+
+
+@pytest.mark.asyncio
 async def test_openai_provider_accumulates_streamed_tool_call_arguments() -> None:
     provider = _provider(
         _transport(

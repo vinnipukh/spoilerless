@@ -188,7 +188,14 @@ class OpenAICompatibleProvider:
                     data = line[len("data: "):]
                     if data == "[DONE]":
                         break
-                    chunk = json.loads(data)
+                    try:
+                        chunk = json.loads(data)
+                    except json.JSONDecodeError:
+                        # Parity with GeminiProvider: a malformed/truncated
+                        # SSE chunk (keep-alive noise, proxy artifacts,
+                        # foreign payload) must never crash the stream —
+                        # skip it and continue (PROB-28/#52).
+                        continue
                     choices = chunk.get("choices") or []
                     if not choices:
                         continue

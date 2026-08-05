@@ -18,7 +18,6 @@ import pytest
 
 from spoilerless.app.llm.fallbacks import (
     DEFAULT_FALLBACKS,
-    detect_language,
     INSUFFICIENT_EVIDENCE_FALLBACK_EN,
     INSUFFICIENT_EVIDENCE_FALLBACK_TR,
 )
@@ -145,18 +144,8 @@ def _final_done(events: list[LLMEvent]) -> LLMEvent:
 
 
 # ---------------------------------------------------------------------------
-# Language detection and fallback selection
+# Fallback selection
 # ---------------------------------------------------------------------------
-
-
-def test_detect_language_english() -> None:
-    assert detect_language("How do you feel about Dexter's future?") == "en"
-    assert detect_language("Why does Doakes distrust Dexter?") == "en"
-
-
-def test_detect_language_turkish() -> None:
-    assert detect_language("Sence Dexter'ın işleri iyiye mi kötüye mi gidiyor?") == "tr"
-    assert detect_language("Doakes neden Dexter'a güvenmiyor olabilir?") == "tr"
 
 
 def test_fallback_templates_are_friendly_and_localized() -> None:

@@ -5,10 +5,11 @@ information to answer that.") with warm, friendly, language-matched text per
 the product brief: the fallback must follow the user's language, must not
 mention "the graph", and must remain a guess rather than a confirmed fact.
 
-Language detection is a simple Turkish-character heuristic — the seed corpus
-and chat traffic are EN/TR, and the Turkish alphabet's distinctive characters
-(ç ğ ı ö ş ü) are unambiguous. The fallback text is overridable via
-``LLM_FALLBACK_EN`` / ``LLM_FALLBACK_TR`` (see core/config.py).
+The reply language follows the selected prompt language (the Settings
+"Assistant language" choice) — the fallback text is overridable via
+``LLM_FALLBACK_EN`` / ``LLM_FALLBACK_TR`` (see core/config.py). The old
+Turkish-character language-detection helper was deleted: it is dead code
+superseded by that prompt-language rule (PROB-28/#52).
 """
 
 from __future__ import annotations
@@ -31,10 +32,3 @@ DEFAULT_FALLBACKS: dict[str, str] = {
     "en": INSUFFICIENT_EVIDENCE_FALLBACK_EN,
     "tr": INSUFFICIENT_EVIDENCE_FALLBACK_TR,
 }
-
-_TURKISH_CHARS = "çğıöşüÇĞİÖŞÜ"
-
-
-def detect_language(text: str) -> str:
-    """Return ``'tr'`` when *text* contains Turkish-specific characters, else ``'en'``."""
-    return "tr" if any(char in _TURKISH_CHARS for char in text) else "en"
