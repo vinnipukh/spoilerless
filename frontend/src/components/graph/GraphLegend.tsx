@@ -8,13 +8,16 @@ import {
 import { ChevronDown } from 'lucide-react'
 
 // --- Node-type metadata (D-24 table) ---
-type NodeTypeMeta = {
+// Exported so NodeSearch/CommandPalette can reuse the exact swatch + type
+// colors for search rows (plan 09-09, UI-SPEC §10.3: "each row = NodeSwatch
+// (existing, from GraphLegend's NODE_TYPES)"). Export-only change.
+export type NodeTypeMeta = {
   type: string
   shape: 'ellipse' | 'round-rect' | 'diamond' | 'tag' | 'star' | 'rect'
   color: string
 }
 
-const NODE_TYPES: NodeTypeMeta[] = [
+export const NODE_TYPES: NodeTypeMeta[] = [
   { type: 'Character', shape: 'ellipse', color: '#38BDF8' },
   { type: 'Event', shape: 'round-rect', color: '#2DD4BF' },
   { type: 'Location', shape: 'round-rect', color: '#60A5FA' },
@@ -53,7 +56,9 @@ const FORWARD_COMPATIBLE_EDGE_TYPES = new Set([
   'REVERTS_TO',
 ])
 
-function NodeSwatch({ shape, color }: { shape: string; color: string }) {
+// Exported for NodeSearch/CommandPalette search rows (plan 09-09) — same
+// swatch the GraphLegend uses, so search rows and the legend agree visually.
+export function NodeSwatch({ shape, color }: { shape: string; color: string }) {
   const base =
     'inline-block shrink-0 border border-white/10'
   switch (shape) {
