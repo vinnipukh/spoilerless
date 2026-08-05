@@ -16,7 +16,7 @@ type Props = {
 export function GraphFocusIndicator({ count, onClear }: Props) {
   return (
     <div className="fixed top-4 left-4 z-[60] flex items-center gap-2 rounded-md bg-card px-2.5 py-1.5 text-xs text-muted-foreground shadow-sm ring-1 ring-border">
-      <span>Highlighting {count} from chat</span>
+      <span>Highlighting {count}</span>
       <button
         type="button"
         className="font-medium text-muted-foreground transition-colors hover:text-foreground"

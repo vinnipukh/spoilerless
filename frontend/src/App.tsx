@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { AuthProvider } from './providers/AuthProvider'
 import { useAuth } from './providers/useAuth'
 import { LoginPage } from './components/auth/LoginPage'
@@ -8,6 +8,8 @@ import { SeriesSelect } from './components/episode/SeriesSelect'
 import { EpisodeSelector } from './components/episode/EpisodeSelector'
 import { ConfirmAdvanceModal } from './components/episode/ConfirmAdvanceModal'
 import { GraphCanvas, type FocusedElementIds, type SelectedElement } from './components/graph/GraphCanvas'
+import { NodeSearch } from './components/graph/NodeSearch'
+import { CommandPalette, type CommandPaletteSelection } from './components/palette/CommandPalette'
 import { GraphLoadingState, GraphErrorState, GraphEmptyState } from './components/graph/GraphStatus'
 import { DetailPanel } from './components/detail/DetailPanel'
 import { StructuralEdgeCard } from './components/detail/StructuralEdgeCard'
@@ -17,7 +19,9 @@ import { SettingsPage } from './components/settings/SettingsPage'
 import { useSeries } from './hooks/useSeries'
 import { useEpisodes } from './hooks/useEpisodes'
 import { useGraph } from './hooks/useGraph'
+import { useNotes } from './hooks/useNotes'
 import { useWatchProgress } from './hooks/useWatchProgress'
+import { useHotkey } from './hooks/useHotkey'
 import type { CustomRelationshipResponse } from './types/userContent'
 import type { Citation } from './types/chat'
 import type { ChangeSet } from './types/changeSet'
@@ -54,6 +58,11 @@ function AuthenticatedApp() {
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(watchProgress.seriesId)
   const episodesState = useEpisodes(selectedSeriesId, watchProgress.viewAsOfOrder)
   const graphState = useGraph(watchProgress.seriesId, watchProgress.confirmedOrder)
+  // FEAT-07 (09-09): raw notes for the current series, fed to NodeSearch's
+  // Notes & Claims mode (search is payload-local over already-filtered
+  // data — the hook already exposes the raw list via `data`).
+  const notesState = useNotes({ seriesId: watchProgress.seriesId, visibleUntilOrder: watchProgress.confirmedOrder })
+  const notes = notesState.status === 'success' ? notesState.data : []
   const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null)
 
   // ChatSheet's `open` state, lifted here per 06-UI-SPEC.md "Chat & Panel
@@ -279,6 +288,53 @@ function AuthenticatedApp() {
     watchProgress.cancelChange()
   }
 
+  // FEAT-08 (09-09): command palette open state — toggled by ⌘K/Ctrl+K (the
+  // App-level hotkey below) or the AppShell topBar Command icon trigger.
+  const [paletteOpen, setPaletteOpen] = useState(false)
+
+  // FEAT-01 (09-09): '/' (graph view, no input focused) focuses the
+  // NodeSearch input; NodeSearch registers its input element here.
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+
+  // FEAT-01/08 (09-09): the shared jump-to-node selection path. Search and
+  // palette rows select through the EXISTING mechanisms — onSelect opens
+  // DetailPanel exactly like a canvas tap, and graphFocus frames the node
+  // via GraphCanvas's existing focus effect (cy.getElementById +
+  // .selected-dominant + fade + cy.fit(node, 48)). Never a second selection
+  // implementation (plan 09-09 NO-SECOND-SELECTION-MECHANISM).
+  function handleJumpToNode(selection: CommandPaletteSelection) {
+    setSelectedElement({ kind: 'node', id: selection.id, label: selection.label, nodeType: selection.nodeType })
+    setGraphFocus({ nodeIds: [selection.id], edgeIds: [] })
+  }
+
+  // FEAT-02 timeline / FEAT-04 dashboard / FEAT-05 export land in later
+  // Phase 9 plans; the palette's Actions rows are wired through these seams
+  // so 09-09 compiles and runs standalone (plan 09-09 Task 2: "prefer a
+  // seam so this plan compiles standalone").
+  const handleOpenTimeline = () => {
+    // FEAT-02 timeline view (later phase-9 plan) fills this seam.
+  }
+  const handleOpenDashboard = () => {
+    // FEAT-04 series dashboard (later phase-9 plan) fills this seam.
+  }
+  const handleExportGraph = () => {
+    // FEAT-05 markdown export (plan 09-11) fills this seam.
+  }
+
+  // FEAT-08 (09-09): global keydown wiring (T-09-09-03 — '/' skips while an
+  // input is focused; Esc closes the palette).
+  useHotkey('mod+k', () => setPaletteOpen((open) => !open))
+  useHotkey('escape', () => setPaletteOpen(false))
+  useHotkey(
+    '/',
+    () => {
+      if (view === 'graph' && graphState.status === 'success' && !paletteOpen) {
+        searchInputRef.current?.focus()
+      }
+    },
+    { skipWhenInputFocused: true },
+  )
+
   const episodeSelectorValue = watchProgress.pendingChange
     ? watchProgress.pendingChange.nextOrder
     : selectedSeriesId === watchProgress.seriesId
@@ -289,6 +345,7 @@ function AuthenticatedApp() {
     <AppShell
       user={user}
       onLogout={logout}
+      onOpenPalette={() => setPaletteOpen((open) => !open)}
       topBar={
         <>
           <SeriesSelect series={series} value={selectedSeriesId} onSelect={handleSeriesSelect} />
@@ -343,6 +400,15 @@ function AuthenticatedApp() {
             newlyRevealedIds={newlyRevealedIds}
             onNewlyRevealedDone={() => setNewlyRevealedIds(null)}
           />
+          {/* FEAT-01/07 (09-09): floating search bar over the canvas — the
+              '/' hotkey focuses it via searchInputRef; rows select through
+              handleJumpToNode (existing onSelect + graphFocus paths). */}
+          <NodeSearch
+            graph={graphState.data}
+            notes={notes}
+            onSelect={handleJumpToNode}
+            inputRef={searchInputRef}
+          />
           {selectedElement?.kind === 'edge' &&
           graphState.data.edges.find((edge) => edge.id === selectedElement.id)?.claim_id == null &&
           graphState.data.edges.find((edge) => edge.id === selectedElement.id)?.origin !== 'user' ? (
@@ -379,6 +445,23 @@ function AuthenticatedApp() {
       {graphState.status === 'idle' && <GraphEmptyState />}
         </>
       )}
+      {/* FEAT-08 (09-09): ⌘K command palette — available in every view;
+          node rows reuse handleJumpToNode, episode rows ride
+          handleEpisodeSelect (watchProgress.requestChange — locked episodes
+          route to the unlock dialog per PROB-31). */}
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        graph={graphState.status === 'success' ? graphState.data : null}
+        episodes={episodes}
+        onSelectNode={handleJumpToNode}
+        onRequestChange={handleEpisodeSelect}
+        onOpenChat={() => setChatOpen(true)}
+        onOpenTimeline={handleOpenTimeline}
+        onOpenSettings={() => setView('settings')}
+        onOpenDashboard={handleOpenDashboard}
+        onExportGraph={handleExportGraph}
+      />
     </AppShell>
   )
 }

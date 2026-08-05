@@ -373,7 +373,7 @@ describe('GraphCanvas', () => {
   })
 
   describe('GraphFocusIndicator (06-10, RAG-17)', () => {
-    it('renders "Highlighting {N} from chat" only when a focus is active, with a working Clear action', async () => {
+    it('renders "Highlighting {N}" only when a focus is active, with a working Clear action', async () => {
       const user = userEvent.setup()
       const onClearFocus = vi.fn()
       const { rerender } = render(
@@ -400,7 +400,7 @@ describe('GraphCanvas', () => {
         />,
       )
 
-      expect(screen.getByText('Highlighting 3 from chat')).toBeInTheDocument()
+      expect(screen.getByText('Highlighting 3')).toBeInTheDocument()
 
       await user.click(screen.getByRole('button', { name: 'Clear' }))
       expect(onClearFocus).toHaveBeenCalledTimes(1)

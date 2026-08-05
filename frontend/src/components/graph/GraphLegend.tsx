@@ -6,27 +6,7 @@ import {
   type EdgeColorFamily,
 } from './relationshipStyles'
 import { ChevronDown } from 'lucide-react'
-
-// --- Node-type metadata (D-24 table) ---
-// Exported so NodeSearch/CommandPalette can reuse the exact swatch + type
-// colors for search rows (plan 09-09, UI-SPEC §10.3: "each row = NodeSwatch
-// (existing, from GraphLegend's NODE_TYPES)"). Export-only change.
-export type NodeTypeMeta = {
-  type: string
-  shape: 'ellipse' | 'round-rect' | 'diamond' | 'tag' | 'star' | 'rect'
-  color: string
-}
-
-export const NODE_TYPES: NodeTypeMeta[] = [
-  { type: 'Character', shape: 'ellipse', color: '#38BDF8' },
-  { type: 'Event', shape: 'round-rect', color: '#2DD4BF' },
-  { type: 'Location', shape: 'round-rect', color: '#60A5FA' },
-  { type: 'Organization', shape: 'diamond', color: '#FB7185' },
-  { type: 'Episode', shape: 'tag', color: '#FBBF24' },
-  { type: 'Series', shape: 'star', color: '#131936' },
-  { type: 'UserNote', shape: 'round-rect', color: '#131936' },
-  { type: 'Object', shape: 'ellipse', color: '#131936' },
-]
+import { NODE_TYPES } from '@/lib/nodeTypes'
 
 // --- Relationship-family metadata ---
 type FamilyMeta = {

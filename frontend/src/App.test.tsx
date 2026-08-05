@@ -407,7 +407,7 @@ describe('App', () => {
       // claimCitation: related_node_ids (2) + related_edge_ids (1) = 3.
       await user.click(screen.getByRole('button', { name: 'Show in graph' }))
 
-      expect(await screen.findByText('Highlighting 3 from chat')).toBeInTheDocument()
+      expect(await screen.findByText('Highlighting 3')).toBeInTheDocument()
       // "Show in graph" only sets the highlight — it never touches the chat
       // sheet (and never opens the inspector).
       expect(screen.getByRole('heading', { name: 'Chat' })).toBeInTheDocument()
@@ -487,7 +487,7 @@ describe('App', () => {
       await waitFor(() => expect(graphFetchCalls().some(([url]) => String(url).includes('visible_until_order=3'))).toBe(true))
       await user.click(await screen.findByRole('button', { name: 'Open chat' }))
       await user.click(await screen.findByRole('button', { name: 'Show in graph' }))
-      expect(await screen.findByText('Highlighting 1 from chat')).toBeInTheDocument()
+      expect(await screen.findByText('Highlighting 1')).toBeInTheDocument()
 
       await decreaseProgressToS01E01(user)
 
@@ -507,12 +507,12 @@ describe('App', () => {
       await waitFor(() => expect(graphFetchCalls().some(([url]) => String(url).includes('visible_until_order=3'))).toBe(true))
       await user.click(await screen.findByRole('button', { name: 'Open chat' }))
       await user.click(await screen.findByRole('button', { name: 'Show in graph' }))
-      expect(await screen.findByText('Highlighting 3 from chat')).toBeInTheDocument()
+      expect(await screen.findByText('Highlighting 3')).toBeInTheDocument()
 
       await decreaseProgressToS01E01(user)
 
       await waitFor(() => expect(graphFetchCalls().some(([url]) => String(url).includes('visible_until_order=1'))).toBe(true))
-      expect(screen.getByText('Highlighting 3 from chat')).toBeInTheDocument()
+      expect(screen.getByText('Highlighting 3')).toBeInTheDocument()
     })
   })
 
@@ -575,7 +575,7 @@ describe('App', () => {
 
       // 06-10 focus mechanism reused: the created resource (create_note →
       // char_dexter_morgan) gets the selected-dominant focus treatment.
-      expect(await screen.findByText('Highlighting 1 from chat')).toBeInTheDocument()
+      expect(await screen.findByText('Highlighting 1')).toBeInTheDocument()
 
       // Regression: the graph still renders its elements after the refresh —
       // image/episode-filtering mapping (graphElements.ts) untouched.

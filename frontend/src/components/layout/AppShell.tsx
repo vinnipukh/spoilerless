@@ -2,13 +2,19 @@ import type { ReactNode } from 'react'
 import { Card } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
+import { Command } from 'lucide-react'
 import type { User } from '@/types/auth'
+import { HeaderNavAction } from './HeaderNavAction'
+import { modLabel } from '@/hooks/useHotkey'
 
 type Props = {
   user?: User
   onLogout?: () => void
   topBar: ReactNode
   children: ReactNode
+  /** FEAT-08 (09-09): AppShell's ⌘K palette trigger (Command icon, topBar
+   * contract — UI-SPEC §10.10). */
+  onOpenPalette?: () => void
 }
 
 const avatarUrl = (user?: User): string | null => {
@@ -36,7 +42,7 @@ function UserIcon() {
   )
 }
 
-export function AppShell({ user, onLogout, topBar, children }: Props) {
+export function AppShell({ user, onLogout, topBar, children, onOpenPalette }: Props) {
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       {/* z-[60] keeps the header above the always-open Details sheet (fixed, z-50, inset-y-0 right-0), which otherwise covers the account/logout controls */}
@@ -46,6 +52,15 @@ export function AppShell({ user, onLogout, topBar, children }: Props) {
             <h1 className="font-heading text-2xl">Spoilerless</h1>
             {topBar}
           </div>
+          {onOpenPalette && (
+            <HeaderNavAction
+              icon={<Command className="size-4 shrink-0" />}
+              label={`${modLabel()}K`}
+              ariaLabel="Open command palette"
+              active={false}
+              onClick={onOpenPalette}
+            />
+          )}
           {user && (
             <div className="flex items-center gap-3 shrink-0 hover:bg-elevated">
               <span className="hidden sm:inline text-sm text-muted-foreground">

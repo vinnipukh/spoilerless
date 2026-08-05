@@ -19,7 +19,8 @@ import { cn } from '@/lib/utils'
 import type { GraphResponse } from '../../types/graph'
 import type { NoteResponse } from '../../types/userContent'
 import { searchIndex, type SearchCollection, type SearchResult } from '../../lib/searchIndex'
-import { NODE_TYPES, NodeSwatch } from './GraphLegend'
+import { NodeSwatch } from './GraphLegend'
+import { NODE_TYPES } from '@/lib/nodeTypes'
 
 export type NodeSearchSelection = {
   id: string
