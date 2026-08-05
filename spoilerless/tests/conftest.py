@@ -45,9 +45,10 @@ def bootstrap_scratch_series(
             await db.verify_connection()
             await db.execute_query(
                 "MERGE (s:Series {id: $series_id}) "
-                "SET s.title = $title, s.origin = 'test'",
+                "SET s.title = $title, s.slug = $slug, s.origin = 'test'",
                 series_id=series_id,
                 title=f"Scratch series {series_id}",
+                slug=series_id.replace("series_scratch_", "scratch-"),
             )
             for order in episode_orders:
                 await db.execute_query(
