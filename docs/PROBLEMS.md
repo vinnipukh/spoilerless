@@ -283,6 +283,7 @@ Consolidated index of all 45 problems: the causing file:method and what it break
 | 53 | `spoiler/filter.py` SOURCES/EVIDENCE endpoint MATCH (no `series_id`), `DetailPanel.tsx`/`GraphCanvas.tsx` size, `docs/DEVELOPMENT.md:50` command | Cross-series collision risk; god-files; doc command drift |
 | 54 | (context) ChangeSet path + `spoiler/filter.py` = strongest code; live DB has 0 notes/nodes/revisions/ChangeSets | Product surface unexercised; prototype = seed + 3,855 zombie users |
 | 55 | `backend/.env` (NEO4J dup), `frontend/.env.local` (`VITE_GOOGLE_CLIENT_ID` empty), missing `envDir` in `vite.config.ts` | Credential drift; Google sign-in shows "not configured"; 3 files for one config |
+| 56 | `frontend/src/hooks/useWatchProgress.ts::requestChange` (lines 133, 139 — silent no-op + PROG-01 view-only swallow) + mount-time `getProgress` hydration race (lines 104-129) | Clicking a locked episode above the current view sometimes opens no unlock dialog and never loads the episode (user-reported, live) |
 
 ---
 
@@ -332,6 +333,20 @@ Current state (2026-08-04, key names only): root `.env` holds the backend runtim
 
 ---
 
+## FIFTH PASS — user-reported live findings (post-deploy, 2026-08-04)
+
+### 56. HIGH — Episode selector silently no-ops: clicking a locked episode above the current view sometimes neither opens the unlock dialog nor loads it
+User-reported against the live deploy (`app.spoilerless.net`): from episode 1, clicking episode 3 "doesn't ask me anything and doesn't load episode 3" — intermittent. Two silent-swallow branches in `frontend/src/hooks/useWatchProgress.ts::requestChange` (lines 131-151):
+
+- **Line 133** `if (nextOrder === currentView) return` — a hard silent no-op: if `viewAsOfOrder` already equals the clicked order (state drift between the selector's displayed value and the hook's `currentView`), the click is swallowed with no modal, no state change, no refetch.
+- **Line 139** `if (watched != null && nextOrder <= watched)` — the PROG-01 view-only branch: when the backend's `watched_through_order` (hydrated on mount, `useEffect` lines 104-129) is already ≥ the clicked order while the selector still renders an older episode, the click is treated as view-only: it sets `viewAsOfOrder` locally and fires a view-only POST but **never opens `ConfirmAdvanceModal`**. If the view-only POST fails (network/401/422) the catch swallows it and the graph never refetches — the UI shows nothing happening.
+
+Race: the mount-time `getProgress` hydration (`useEffect` deps `[]`, lines 104-129) resolves **after** the user clicks; the backend response then overwrites `watchedThroughOrder`/`viewAsOfOrder` via `setState`, clobbering the just-committed local boundary — the graph key (`App.tsx:55` `useGraph(watchProgress.seriesId, watchProgress.confirmedOrder)`) never changes to the clicked order, so "episode 3 doesn't load". Intermittent because it only triggers when hydration lands in the click window or the backend already holds a higher `watched_through_order`.
+
+**Fix:** (a) in `requestChange`, never silently return — surface the no-op or reconcile `currentView`; (b) make the view-only branch await the POST and refetch the graph on failure (or optimistically refetch); (c) serialize the mount-time hydration against user clicks (skip hydration if a click already occurred, or merge backend values without clobbering a newer local change). Add a regression test: select above `watchedThroughOrder` with a failing view-only POST → dialog still opens / graph refetches.
+
+---
+
 ## What to fix first (a survival order, not a wish list)
 
 1. **Never run the Compose recipe as-is** — it exposes Neo4j to the internet with a hardcoded password (#31, #36). DB ports must be private, credentials forced, TLS on.
@@ -345,3 +360,27 @@ Current state (2026-08-04, key names only): root `.env` holds the backend runtim
 9. **Decide the deployment shape** — Dockerfiles, TLS, backups, monitoring, security headers, logging (#26, #27, #38, #39) — before any public traffic.
 
 Every item above is verifiable in under five minutes against the live repo. None of it requires rewriting the project; most of it is closing the gap between what the docs say and what the code does — the gap that makes this codebase feel hallucinated even where the features are real.
+
+---
+
+## SIXTH PASS — graph visualization is unusable at real content density (2026-08-05)
+
+### 57. HIGH — The graph canvas is a spaghetti hairball: one flat force layout, zero clustering/filtering, and claims-as-edges explode the edge count
+Once Episode 1 is enriched to real density (source-grounded S01E01 = **32 Characters, 39 Events, 17 Objects, 5 Organizations, 22 Locations, 132 Claims** → the graph API renders ~90 visible nodes and a dense mat of edges at boundary 1), `GraphCanvas.tsx` becomes visually unusable — verified against the live app: overlapping labels, crossing edges, a Dexter hub-star, and no way to focus or reduce. Root causes, all in `frontend/src/components/graph/GraphCanvas.tsx`:
+
+- **One global force layout, nothing else.** `layoutOptionsFor` (lines 49-60) runs a single `cose-bilkent` pass over *every* element (`nodeRepulsion: 8000`, `idealEdgeLength: 100`, `padding: 48`). No compound/parent nodes, no per-subplot clustering, no community grouping, no seeded/deterministic positions — so the layout is a different hairball on every load and cannot separate the Donovan / Jaworski / Miami-Metro / Rita / truck / doll clusters that the data actually forms.
+- **Claims are reified as edges** (subject→predicate→object) so *every atomic fact is a drawn edge*. 132 claims ⇒ ~132 relationship lines on top of `OCCURRED_IN`/`PART_OF`. Event nodes were meant to be bridges, but the protagonist still participates in ~every scene ⇒ Dexter is a ~40-edge hub. There is no edge bundling and no edge-type toggle.
+- **No filtering / level-of-detail.** No node-type visibility toggles (can't hide Objects/Claims/Events), no edge-type filter, no neighborhood/focus mode, no collapse-expand of clusters, no zoom-based label culling. Every label renders at every zoom ⇒ the text overlaps into noise.
+- **God-file, already flagged (#18/#53):** `GraphCanvas.tsx` (530 lines) mixes registration, layout, styling, and interaction; adding clustering/filter UI here compounds the problem.
+
+Evidence: the two live screenshots (pre- and post-orphan-wiring) show the same hairball; before wiring, ~30 Object/Org nodes floated as a disconnected grid because nothing connected them (now fixed in seed, but the *layout* problem is independent of that data fix). Also note **`GraphCanvas.test.tsx:200` asserts `toHaveLength(11)`** for S01E01 — locked to the old 11-node seed; it will fail against the enriched graph and must be updated to the new count or made count-independent.
+
+**Fix (layout + interaction, not data):**
+1. Swap the flat `cose-bilkent` pass for a **cluster-aware layout** — `fcose` (same Bilkent family, supports `relativePlacement`/constraints and compound nodes) or `cytoscape-cola` with grouping — and drive grouping from a stable key the data already carries (`Event.sequence_in_episode` bands, or a subplot/cluster tag per node). Compound parent nodes per subplot give visual separation for free.
+2. Add **node-type and edge-type filter toggles** (Characters / Events / Objects / Locations / Claims) and a **focus/neighborhood mode** (click a node → fade all but its N-hop neighborhood; the code already has `faded`/`selected-dominant` classes — wire a real focus reducer).
+3. **Zoom-based label culling** (hide labels below a zoom threshold; show on hover) and **edge bundling** or opacity falloff to kill the mat.
+4. **Deterministic layout** (seed positions or cache computed positions per boundary) so the graph doesn't re-scramble every load.
+5. Optionally cap default on-canvas density: render Characters + Events + Locations by default, reveal Objects/Claims on demand or in the inspector (the frontend already keeps Claims/Evidence in the DetailPanel — extend that contract to Objects when density is high).
+6. Update/relax `GraphCanvas.test.tsx` node-count assertions (currently `11`) to the enriched counts or to count-independent checks.
+
+This is a rendering/interaction problem, not a data problem — the enriched seed is correct and validated; the canvas just has no strategy for showing more than a toy graph.
