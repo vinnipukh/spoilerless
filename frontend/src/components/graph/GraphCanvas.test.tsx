@@ -4,6 +4,19 @@ import userEvent from '@testing-library/user-event'
 import { GraphCanvas } from './GraphCanvas'
 import { graphResponseS01E01, graphResponseS01E03 } from '../../test/fixtures/graphResponse'
 
+// 08-06: graphToElements prunes isolated (degree-0) nodes — these
+// expectations mirror that topology filter: every CONNECTED fixture node
+// must render, every isolated one must not. The pass-through guarantee
+// (never filter by visible_from_order) is untouched by the prune.
+const connectedNodeIds = (graph: typeof graphResponseS01E01): Set<string> => {
+  const ids = new Set<string>()
+  for (const edge of graph.edges) {
+    ids.add(edge.source)
+    ids.add(edge.target)
+  }
+  return ids
+}
+
 // react-cytoscapejs renders to a <canvas> with no real hit-testing under
 // jsdom. This component test only needs to assert what GraphCanvas.tsx
 // passes as its `elements` prop at each boundary (must_haves truth: element
@@ -196,7 +209,17 @@ describe('GraphCanvas', () => {
     const renderedNodeIds = nodeElements(capturedElements).map((n) => n.data.id)
     const renderedEdgeIds = edgeElements(capturedElements).map((e) => e.data.id)
 
-    expect(graphResponseS01E01.nodes.every((n) => renderedNodeIds.includes(n.id))).toBe(true)
+    const connected = connectedNodeIds(graphResponseS01E01)
+    expect(
+      graphResponseS01E01.nodes
+        .filter((n) => connected.has(n.id))
+        .every((n) => renderedNodeIds.includes(n.id)),
+    ).toBe(true)
+    expect(
+      graphResponseS01E01.nodes
+        .filter((n) => !connected.has(n.id))
+        .every((n) => !renderedNodeIds.includes(n.id)),
+    ).toBe(true)
     expect(graphResponseS01E01.edges.every((e) => renderedEdgeIds.includes(e.id))).toBe(true)
   })
 
@@ -204,7 +227,12 @@ describe('GraphCanvas', () => {
     render(<GraphCanvas graph={graphResponseS01E03} onSelect={() => {}} seriesId="series:dexter" episodes={[]} />)
 
     const renderedNodeIds = nodeElements(capturedElements).map((n) => n.data.id)
-    expect(graphResponseS01E03.nodes.every((n) => renderedNodeIds.includes(n.id))).toBe(true)
+    const connected = connectedNodeIds(graphResponseS01E03)
+    expect(
+      graphResponseS01E03.nodes
+        .filter((n) => connected.has(n.id))
+        .every((n) => renderedNodeIds.includes(n.id)),
+    ).toBe(true)
   })
 
   it('maps every node to a data(nodeType), including Episode and Series (no default-ellipse fallthrough)', () => {
@@ -219,7 +247,15 @@ describe('GraphCanvas', () => {
     render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} />)
 
     const nodeIds = nodeElements(capturedElements).map((node) => node.data.id)
-    expect(nodeIds).toEqual(expect.arrayContaining(graphResponseS01E01.nodes.map((node) => node.id)))
+    // The pass-through guarantee is about visible_from_order (never filtered
+    // client-side); the 08-06 isolated-node prune is topology-only and must
+    // not remove connected nodes.
+    const connected = connectedNodeIds(graphResponseS01E01)
+    expect(nodeIds).toEqual(
+      expect.arrayContaining(
+        graphResponseS01E01.nodes.filter((n) => connected.has(n.id)).map((node) => node.id),
+      ),
+    )
   })
 
   it('passes minZoom={0.3} and maxZoom={2.5} to CytoscapeComponent', () => {
