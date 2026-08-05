@@ -122,7 +122,7 @@ export function GraphLegend() {
     <Collapsible
       open={open}
       onOpenChange={setOpen}
-      className="fixed bottom-4 left-20 z-[60] max-w-56 pb-[env(safe-area-inset-bottom)]"
+      className="fixed bottom-4 left-20 z-[40] max-w-56 pb-[env(safe-area-inset-bottom)]"
     >
       <CollapsibleTrigger
         aria-expanded={open}

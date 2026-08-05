@@ -162,3 +162,11 @@
     100% 100%,
     24px 24px;
 }
+
+/* Utility: overflow-wrap: anywhere — Tailwind v4 ships break-words
+   (word-break: break-word) but not overflow-wrap: anywhere, which is the
+   CSS-spec replacement.  Used by the DetailPanel metadata grid to ensure
+   long node titles wrap cleanly inside their grid cell. */
+.overflow-wrap-anywhere {
+  overflow-wrap: anywhere;
+}

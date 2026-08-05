@@ -1,7 +1,7 @@
 // Canvas overlay pill announcing an active chat-driven `graph_focus`
 // highlight (RAG-17). Same `bg-card`/`ring-border`/`text-xs`/`rounded-md`/
 // `shadow-sm` visual treatment as GraphLegend.tsx's collapsed trigger pill,
-// positioned `fixed top-4 left-4 z-[60]` — the one unclaimed canvas-overlay
+// positioned `fixed top-4 left-4 z-[40]` — the one unclaimed canvas-overlay
 // corner (bottom-left: GraphLegend + Create Custom Node FAB + GraphControls;
 // top-right: intentionally left clear per 06-UI-SPEC.md
 // "Spacing Scale" exceptions).
@@ -15,7 +15,7 @@ type Props = {
 
 export function GraphFocusIndicator({ count, onClear }: Props) {
   return (
-    <div className="fixed top-4 left-4 z-[60] flex items-center gap-2 rounded-md bg-card px-2.5 py-1.5 text-xs text-muted-foreground shadow-sm ring-1 ring-border">
+    <div className="fixed top-4 left-4 z-[40] flex items-center gap-2 rounded-md bg-card px-2.5 py-1.5 text-xs text-muted-foreground shadow-sm ring-1 ring-border">
       <span>Highlighting {count}</span>
       <button
         type="button"

@@ -740,7 +740,7 @@ export function GraphCanvas({
         {!readOnly && (
           <button
             type="button"
-            className="absolute bottom-4 left-65 z-[60] flex items-center justify-center rounded-full bg-primary p-3 text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors min-h-[44px] min-w-[44px]"
+            className="absolute bottom-4 left-65 z-[40] flex items-center justify-center rounded-full bg-primary p-3 text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors min-h-[44px] min-w-[44px]"
             onClick={() => setDialogOpen(true)}
             aria-label="Create custom node"
           >

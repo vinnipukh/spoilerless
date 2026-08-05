@@ -31,7 +31,7 @@ export function GraphFilterPanel({
   const [open, setOpen] = useState(false)
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="fixed top-16 left-1/2 -translate-x-1/2 z-[60] w-72">
+    <Collapsible open={open} onOpenChange={setOpen} className="fixed top-16 left-1/2 -translate-x-1/2 z-[40] w-72">
       <CollapsibleTrigger asChild>
         <Button
           variant="outline"

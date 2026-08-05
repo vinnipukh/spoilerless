@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Download } from 'lucide-react'
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { SpoilerGuard } from '@/components/ui/SpoilerGuard'
 import { fetchExportMarkdown, downloadMarkdownBlob } from '@/api/export'
 import { renderGraphMarkdown, exportFilename } from '@/lib/exportMarkdown'
 import {
@@ -644,9 +645,12 @@ export function DetailPanel({
         onEscapeKeyDown={(event) => event.preventDefault()}
         className={cn(
           'mt-0 max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!h-auto max-sm:!w-full max-sm:!border-t max-sm:!border-l-0 max-sm:max-h-[70vh] lg:max-w-md',
+          // Fix 3: explicit left-border + shadow prevents canvas bleed-through
+          'border-r border-border shadow-lg',
         )}
       >
-        <SheetHeader>
+        {/* Fix 2/3: flex-col layout with sticky header + tab bar, scrollable body */}
+        <SheetHeader className="shrink-0">
           <div className="flex min-w-0 items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               {selectedNode?.type === 'Character' && (
@@ -656,7 +660,17 @@ export function DetailPanel({
                   visibleUntilOrder={visibleUntilOrder}
                 />
               )}
-              <SheetTitle className="truncate">{selected ? title : 'Details'}</SheetTitle>
+              <SheetTitle className="min-w-0 break-words">
+                {selected ? (
+                  <SpoilerGuard
+                    text={title}
+                    revealedOrder={selectedNode?.visible_from_order ?? 0}
+                    currentOrder={visibleUntilOrder}
+                  />
+                ) : (
+                  'Details'
+                )}
+              </SheetTitle>
             </div>
             {selected && (
               <Tooltip>
@@ -664,7 +678,7 @@ export function DetailPanel({
                   <button
                     type="button"
                     aria-label="Export Markdown"
-                    className={`inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    className={`shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                       exported ? 'text-accent' : ''
                     }`}
                     onClick={handleExport}
@@ -677,11 +691,13 @@ export function DetailPanel({
             )}
           </div>
         </SheetHeader>
-        <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pb-4 text-sm">
-          {!selected && <p>Select a node to see details.</p>}
+        <div className="flex min-h-0 flex-1 flex-col text-sm">
+          {!selected && <p className="px-4 pb-4">Select a node to see details.</p>}
           {selected && (
-            <Tabs defaultValue="overview">
-              <TabsList className="overflow-x-auto flex-nowrap">
+            <Tabs defaultValue="overview" className="flex min-h-0 flex-1 flex-col">
+              {/* Fix 2: sticky tab bar with opaque bg and relative z-10 prevents
+                  canvas control overlays from bleeding through */}
+              <TabsList className="sticky top-0 z-10 shrink-0 overflow-x-auto flex-nowrap bg-popover mx-4">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 {selectedNode && <TabsTrigger value="backlinks">Backlinks</TabsTrigger>}
                 {noteTargetType && <TabsTrigger value="notes">Notes</TabsTrigger>}
@@ -690,58 +706,63 @@ export function DetailPanel({
                 <TabsTrigger value="evidence">Evidence</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="overview" className="flex flex-col gap-1 pt-2">
+              {/* Fix 3: overflow-y-auto ONLY on the tab content body — header
+                  and tab bar stay fixed at top via shrink-0 + sticky */}
+              <TabsContent value="overview" className="flex flex-col gap-1 overflow-y-auto px-4 pb-4 pt-2">
                 {selected.kind === 'node' && selectedNode && (
-                  <dl className="flex flex-col gap-1.5 text-xs">
-                    <div className="flex items-center justify-between">
-                      <dt className="text-muted-foreground">Node Type</dt>
-                      <dd className="font-medium">{selectedNode.type}</dd>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <dt className="text-muted-foreground">Name</dt>
-                      <dd className="font-medium">{selectedNode.label}</dd>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <dt className="text-muted-foreground">Origin</dt>
-                      <dd>
-                        {selectedNode.origin === 'user' ? (
-                          <span className="inline-flex items-center gap-1 rounded border-2 border-dashed border-primary/50 px-1.5 py-0.5 text-xs font-medium">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3 w-3" aria-hidden="true">
-                              <path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                            </svg>
-                            User
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">{selectedNode.origin}</span>
-                        )}
-                      </dd>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <dt className="text-muted-foreground">Revealed in</dt>
-                      <dd className="font-medium">
-                        {selectedNode.visible_from_order != null
-                          ? `Episode #${selectedNode.visible_from_order}`
-                          : '-'}
-                      </dd>
-                    </div>
+                  /* Fix 1: CSS Grid with fixed label column prevents text collision.
+                     word-break + overflow-wrap ensure long values wrap cleanly. */
+                  <dl className="grid grid-cols-[minmax(110px,130px)_1fr] gap-x-3 gap-y-1.5 text-xs">
+                    <dt className="text-muted-foreground shrink-0">Node Type</dt>
+                    <dd className="font-medium break-words overflow-wrap-anywhere">{selectedNode.type}</dd>
+
+                    <dt className="text-muted-foreground shrink-0">Name</dt>
+                    <dd className="font-medium break-words overflow-wrap-anywhere">
+                      <SpoilerGuard
+                        text={selectedNode.label}
+                        revealedOrder={selectedNode.visible_from_order}
+                        currentOrder={visibleUntilOrder}
+                      />
+                    </dd>
+
+                    <dt className="text-muted-foreground shrink-0">Origin</dt>
+                    <dd className="break-words overflow-wrap-anywhere">
+                      {selectedNode.origin === 'user' ? (
+                        <span className="inline-flex items-center gap-1 rounded border-2 border-dashed border-primary/50 px-1.5 py-0.5 text-xs font-medium">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3 w-3" aria-hidden="true">
+                            <path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                          </svg>
+                          User
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">{selectedNode.origin}</span>
+                      )}
+                    </dd>
+
+                    <dt className="text-muted-foreground shrink-0">Revealed in</dt>
+                    <dd className="font-medium break-words overflow-wrap-anywhere">
+                      {selectedNode.visible_from_order != null
+                        ? `Episode #${selectedNode.visible_from_order}`
+                        : '-'}
+                    </dd>
+
                     {selectedNode.episode_id && (
-                      <div className="flex items-center justify-between">
-                        <dt className="text-muted-foreground">Episode ID</dt>
-                        <dd className="font-medium">{selectedNode.episode_id}</dd>
-                      </div>
+                      <>
+                        <dt className="text-muted-foreground shrink-0">Episode ID</dt>
+                        <dd className="font-medium break-words overflow-wrap-anywhere">{selectedNode.episode_id}</dd>
+                      </>
                     )}
-                    <div className="flex items-center justify-between">
-                      <dt className="text-muted-foreground">Claims count</dt>
-                      <dd className="font-medium">{relevantClaims.length}</dd>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <dt className="text-muted-foreground">Notes count</dt>
-                      <dd className="font-medium">{notes.length}</dd>
-                    </div>
+
+                    <dt className="text-muted-foreground shrink-0">Claims count</dt>
+                    <dd className="font-medium">{relevantClaims.length}</dd>
+
+                    <dt className="text-muted-foreground shrink-0">Notes count</dt>
+                    <dd className="font-medium">{notes.length}</dd>
+
                     {selectedNode.image_source_url && (
-                      <div className="flex items-center justify-between">
-                        <dt className="text-muted-foreground">Image source</dt>
-                        <dd className="font-medium truncate max-w-[180px]">
+                      <>
+                        <dt className="text-muted-foreground shrink-0">Image source</dt>
+                        <dd className="font-medium">
                           <a
                             href={selectedNode.image_source_url}
                             target="_blank"
@@ -751,7 +772,7 @@ export function DetailPanel({
                             Source link
                           </a>
                         </dd>
-                      </div>
+                      </>
                     )}
                   </dl>
                 )}
@@ -769,23 +790,18 @@ export function DetailPanel({
                   </button>
                 )}
                 {selected.kind === 'edge' && activeClaim && (
-                  <dl className="flex flex-col gap-1">
-                    <div className="flex items-center justify-between">
-                      <dt className="text-muted-foreground">Relationship</dt>
-                      <dd>{activeClaim.predicate}</dd>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <dt className="text-muted-foreground">Claim Type</dt>
-                      <dd>{activeClaim.claim_type}</dd>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <dt className="text-muted-foreground">Status</dt>
-                      <dd>{activeClaim.status}</dd>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <dt className="text-muted-foreground">Confidence</dt>
-                      <dd>{activeClaim.confidence_level}</dd>
-                    </div>
+                  <dl className="grid grid-cols-[minmax(110px,130px)_1fr] gap-x-3 gap-y-1.5 text-xs">
+                    <dt className="text-muted-foreground shrink-0">Relationship</dt>
+                    <dd className="break-words overflow-wrap-anywhere">{activeClaim.predicate}</dd>
+
+                    <dt className="text-muted-foreground shrink-0">Claim Type</dt>
+                    <dd className="break-words overflow-wrap-anywhere">{activeClaim.claim_type}</dd>
+
+                    <dt className="text-muted-foreground shrink-0">Status</dt>
+                    <dd className="break-words overflow-wrap-anywhere">{activeClaim.status}</dd>
+
+                    <dt className="text-muted-foreground shrink-0">Confidence</dt>
+                    <dd className="break-words overflow-wrap-anywhere">{activeClaim.confidence_level}</dd>
                   </dl>
                 )}
                 {selected.kind === 'edge' && !activeClaim && selectedEdge && (
@@ -805,7 +821,7 @@ export function DetailPanel({
                 )}
               </TabsContent>
 
-              <TabsContent value="backlinks" className="pt-2">
+              <TabsContent value="backlinks" className="overflow-y-auto px-4 pb-4 pt-2">
                 <BacklinksTab
                   selectedElement={selected}
                   graph={graph}
@@ -817,7 +833,7 @@ export function DetailPanel({
                 />
               </TabsContent>
 
-              <TabsContent value="notes" className="flex flex-col gap-2 pt-2">
+              <TabsContent value="notes" className="flex flex-col gap-2 overflow-y-auto px-4 pb-4 pt-2">
                 {/* Read-only (visitor) mode: the notes routes are auth-gated
                     (GET /notes → 401 anonymous), so the whole tab degrades to
                     a sign-in hint instead of an error state. */}
@@ -896,7 +912,7 @@ export function DetailPanel({
                 )}
               </TabsContent>
 
-              <TabsContent value="claims" className="flex flex-col gap-2 pt-2">
+              <TabsContent value="claims" className="flex flex-col gap-2 overflow-y-auto px-4 pb-4 pt-2">
                 {!resolved && <Skeleton className="h-16 w-full" />}
                 {resolved && relevantClaims.length === 0 && (
                   <p>No claims recorded for this node yet</p>
@@ -908,7 +924,13 @@ export function DetailPanel({
                       className="rounded-md border border-border p-2"
                       style={{ borderLeft: `4px solid ${CLAIM_ACCENT_COLOR}` }}
                     >
-                      <p className="font-medium">{claim.label}</p>
+                      <p className="font-medium break-words overflow-wrap-anywhere">
+                        <SpoilerGuard
+                          text={claim.label}
+                          revealedOrder={claim.visible_from_order}
+                          currentOrder={visibleUntilOrder}
+                        />
+                      </p>
                       <p className="text-muted-foreground">
                         {claim.predicate} · {claim.status} · {claim.confidence_level}
                       </p>
@@ -916,7 +938,7 @@ export function DetailPanel({
                   ))}
               </TabsContent>
 
-              <TabsContent value="evidence" className="flex flex-col gap-2 pt-2">
+              <TabsContent value="evidence" className="flex flex-col gap-2 overflow-y-auto px-4 pb-4 pt-2">
                 {!resolved && <Skeleton className="h-16 w-full" />}
                 {resolved && evidenceEntries.length === 0 && (
                   <p>No evidence recorded for this claim yet</p>
@@ -936,7 +958,7 @@ export function DetailPanel({
                   ))}
               </TabsContent>
 
-              <TabsContent value="history" className="flex flex-col gap-1 pt-2">
+              <TabsContent value="history" className="flex flex-col gap-1 overflow-y-auto px-4 pb-4 pt-2">
                 <RevisionHistoryPanel
                   seriesId={seriesId}
                   visibleUntilOrder={visibleUntilOrder}
@@ -948,6 +970,7 @@ export function DetailPanel({
             </Tabs>
           )}
         </div>
+        {/* end scrollable tab content wrapper */}
         <CreateRelationshipDialog
           open={relDialogOpen}
           onOpenChange={setRelDialogOpen}
