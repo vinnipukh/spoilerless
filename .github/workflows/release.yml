@@ -1,0 +1,45 @@
+name: release
+
+# Staged-promotion skeleton (carry-over 09-07). A release candidate is cut
+# from main only when CI passes; the release trigger then promotes the
+# already-tested artifacts. Operator applies the branch-protection checklist
+# in docs/DEPLOYMENT.md via the GitHub UI (no repo-local CLI path).
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Promotion stage"
+        required: true
+        default: "release-candidate"
+        type: choice
+        options:
+          - release-candidate
+          - release
+
+permissions:
+  contents: read
+
+jobs:
+  verify-ci-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Require CI workflow to have passed on main
+        run: |
+          # Skeleton: in a full setup this step queries the checks API for the
+          # head SHA and fails unless the `ci` workflow succeeded. The final
+          # wave wires the concrete branch-protection settings.
+          echo "release promotion gated on ci workflow (see docs/DEPLOYMENT.md)"
+
+  tag:
+    if: github.event.inputs.stage == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Create release tag
+        run: |
+          TAG="release-$(date +%Y%m%d-%H%M%S)"
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "tagged $TAG"

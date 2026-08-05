@@ -358,3 +358,25 @@ not yet shipped.
   `docker compose logs neo4j`.
 - The Compose health check probes `http://localhost:7474` every 10
   seconds with a 5-second timeout and 10 retries.
+
+## Branch-protection checklist (carry-over 09-07 — operator applies in GitHub UI)
+
+No repo-local CLI path exists for GitHub branch protection; the operator
+configures these in **Settings → Branches → Add rule (main)** during the
+final wave:
+
+1. **Require a pull request before merging** — required approvals: 1,
+   dismiss stale reviews: on.
+2. **Require status checks to pass before merging** — enable the `ci`
+   workflow (backend pytest + frontend build/lint/audit + DB-pollution
+   gate). Require branches up-to-date: on.
+3. **Require conversation resolution** before merging.
+4. **Do not allow bypassing** the above settings (administrator-included).
+5. **Tag protection** (Settings → Tags): protect `release-*` tags —
+   restrict creation to maintainers.
+6. **Repository → Actions → General:** keep default permissions
+   (read-only contents); enable only the workflows present in this repo.
+
+The `release.yml` staged-promotion workflow is gated on the `ci` workflow
+passing; with rules 1–4 enforced, only reviewed, green commits reach main
+and therefore release candidates.

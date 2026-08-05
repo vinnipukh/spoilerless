@@ -23,6 +23,41 @@ jobs:
       - run: uv sync --frozen
       - run: uv run --project spoilerless python -m spoilerless.app.graph.setup
       - run: uv run pytest
+      # DB-pollution gate (PROB-22): the suite must leave no scratch-series
+      # or candidate-origin residue behind on the CI container.
+      - name: Assert no scratch/candidate residue after suite
+        run: |
+          residue=$(uv run --project spoilerless python - <<'PY'
+          import asyncio, os
+          from spoilerless.app.graph.database import Neo4jDatabase
+
+          async def main() -> int:
+              db = Neo4jDatabase()
+              db.open()
+              try:
+                  rows = await db.execute_query(
+                      "MATCH (n) WHERE n.series_id STARTS WITH 'series_scratch' "
+                      "OR n.origin = 'candidate' RETURN count(n) AS n"
+                  )
+                  return int(rows[0]["n"]) if rows else 0
+              finally:
+                  await db.close()
+
+          print(asyncio.run(main()))
+          PY
+          )
+          if [ "$residue" != "0" ]; then
+            echo "::error::DB pollution: $residue scratch/candidate rows left by the suite"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: pytest-report
+          path: |
+            .pytest_cache/v/cache/lastfailed
+            **/*.xml
+          retention-days: 7
 
   frontend:
     runs-on: ubuntu-latest
@@ -39,3 +74,4 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run lint
+      - run: npm audit --audit-level=high
