@@ -233,7 +233,7 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
       style: {
         label: 'data(label)',
         'font-size': 9,
-        color: '#94A3B8', // --muted-foreground
+        color: '#E2E8F0',
         width: 1.5,
         'line-color': (ele) => edgeColorFor(ele.data('edgeType')),
         'target-arrow-color': (ele) => edgeColorFor(ele.data('edgeType')),
@@ -241,6 +241,12 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
         'curve-style': 'bezier',
         'text-max-width': '80px',
         'text-wrap': 'ellipsis',
+        // 08-06: dark pill behind every edge label so overlapping labels
+        // (dense hubs) stay legible instead of blending into text-on-text.
+        'text-background-color': '#0B1120',
+        'text-background-opacity': 0.85,
+        'text-background-padding': '3px',
+        'text-background-shape': 'roundrectangle',
         'transition-property': 'line-color, target-arrow-color, width, opacity',
         'transition-duration': transitionMs,
       },

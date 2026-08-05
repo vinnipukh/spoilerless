@@ -58,7 +58,9 @@ export function layoutOptionsFor(
     return {
       ...common,
       name: 'fcose',
-      quality: 'default',
+      // 'proof' = high-quality mode: more iterations + better crossing
+      // minimization (08-06: dense graph, long edges were colliding).
+      quality: 'proof',
       randomize: false,
       // 08-06 (product owner): nodes need ~2.5cm of clearance between them
       // (~95px at 96dpi). fcose has no hard min-gap parameter, so the gap is
@@ -68,7 +70,9 @@ export function layoutOptionsFor(
       // tight or too loose.
       nodeRepulsion: nodeRepulsionFor,
       idealEdgeLength: 320,
-      edgeElasticity: 0.35,
+      // 08-06: stiffer springs keep connected pairs at ideal length ->
+      // straighter, shorter edges -> fewer long-range crossings.
+      edgeElasticity: 0.5,
       gravity: 0.04,
       tilingPaddingVertical: 35,
       tilingPaddingHorizontal: 35,
