@@ -35,8 +35,6 @@ describe('graphToElements', () => {
     it('marks pictureless nodes with < 3 edges as simple', () => {
       // char_angel_batista: no portrait, degree 1 → simple dot
       expect(find('char_angel_batista')?.data.simple).toBe(true)
-      // char_ice_truck_killer: no portrait, degree 0 → simple dot
-      expect(find('char_ice_truck_killer')?.data.simple).toBe(true)
       // series_dexter / dexter_s01e01: degree 1 → simple dot
       expect(find('series_dexter')?.data.simple).toBe(true)
     })
@@ -59,5 +57,68 @@ describe('graphToElements', () => {
 
     expect(ep1?.data.isCluster).toBe(true)
     expect(ep1?.data.areaScale).toBe(3)
+  })
+
+  describe('isolated-node pruning (08-06)', () => {
+    const ids = () =>
+      new Set(graphToElements(graphResponseS01E01).map((el) => el.data.id))
+
+    it('drops nodes with zero edges', () => {
+      const present = ids()
+      // Degree 0 in the fixture: james_doakes, rita_bennett,
+      // ice_truck_killer, loc_dexters_apartment
+      expect(present.has('char_james_doakes')).toBe(false)
+      expect(present.has('char_rita_bennett')).toBe(false)
+      expect(present.has('char_ice_truck_killer')).toBe(false)
+      expect(present.has('loc_dexters_apartment')).toBe(false)
+    })
+
+    it('keeps nodes with at least one edge', () => {
+      const present = ids()
+      expect(present.has('char_dexter_morgan')).toBe(true)
+      expect(present.has('char_debra_morgan')).toBe(true)
+      expect(present.has('loc_miami_metro')).toBe(true)
+      expect(present.has('event_first_kill')).toBe(true)
+    })
+
+    it('drops a cluster whose members are all isolated', () => {
+      const elements = graphToElements({
+        series: { id: 's', title: 'S', slug: 's' },
+        nodes: [
+          {
+            id: 'a', type: 'Character', label: 'A', visible_from_order: 1,
+            origin: 'canonical', episode_id: null, image_url: null,
+            image_source_url: null,
+          },
+          {
+            id: 'b', type: 'Character', label: 'B', visible_from_order: 1,
+            origin: 'canonical', episode_id: null, image_url: null,
+            image_source_url: null,
+          },
+          {
+            id: 'loner', type: 'Character', label: 'Loner', visible_from_order: 2,
+            origin: 'canonical', episode_id: null, image_url: null,
+            image_source_url: null,
+          },
+        ],
+        edges: [
+          {
+            id: 'e1', source: 'a', target: 'b', type: 'KNOWS',
+            visible_from_order: 1, origin: 'canonical', claim_id: null,
+          },
+        ],
+        claims: [],
+        visible_until_order: 1,
+        sources: [],
+        evidence: [],
+      })
+
+      const present = new Set(elements.map((el) => el.data.id))
+      expect(present.has('cluster:Ep #1')).toBe(true)
+      expect(present.has('cluster:Ep #2')).toBe(false)
+      expect(present.has('loner')).toBe(false)
+      expect(present.has('a')).toBe(true)
+      expect(present.has('b')).toBe(true)
+    })
   })
 })

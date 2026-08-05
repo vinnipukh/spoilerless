@@ -31,11 +31,17 @@ export function layoutOptionsFor(
       name: 'fcose',
       quality: 'default',
       randomize: false,
+      // 08-06 (product owner): nodes need ~2.5cm of clearance between them
+      // (~95px at 96dpi). fcose has no hard min-gap parameter, so the gap is
+      // enforced via strong node repulsion (all pairs) + long ideal edges
+      // (connected pairs); gravity is lowered so clusters don't collapse
+      // back together. Tune these constants if the live graph reads too
+      // tight or too loose.
       nodeRepulsion: (node: { isParent?: () => boolean }) =>
-        node.isParent?.() ? 120000 : 55000,
-      idealEdgeLength: 220,
+        node.isParent?.() ? 450000 : 220000,
+      idealEdgeLength: 320,
       edgeElasticity: 0.35,
-      gravity: 0.08,
+      gravity: 0.04,
       tilingPaddingVertical: 35,
       tilingPaddingHorizontal: 35,
     }
@@ -45,10 +51,10 @@ export function layoutOptionsFor(
     return {
       ...common,
       name: 'cose-bilkent',
-      nodeRepulsion: 45000,
-      idealEdgeLength: 240,
+      nodeRepulsion: 120000,
+      idealEdgeLength: 320,
       edgeElasticity: 0.25,
-      gravity: 0.08,
+      gravity: 0.04,
       tile: true,
     }
   }
@@ -57,9 +63,9 @@ export function layoutOptionsFor(
     ...common,
     name: 'cose',
     nodeRepulsion: (node: { isParent?: () => boolean }) =>
-      node.isParent?.() ? 50000 : 45000,
-    idealEdgeLength: 240,
+      node.isParent?.() ? 150000 : 120000,
+    idealEdgeLength: 320,
     edgeElasticity: 0.25,
-    gravity: 0.08,
+    gravity: 0.04,
   }
 }

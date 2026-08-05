@@ -41,6 +41,18 @@ export function graphToElements(graph: GraphResponse): ElementDefinition[] {
     degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1)
   }
 
+  // 08-06 (product owner): isolated nodes — zero edges in the
+  // backend-filtered edge list — are dropped from the view. They render as
+  // noise with no connections. The backend has already applied the
+  // spoiler-safe visible_from_order filter; this is a pure topology
+  // decision over the already-filtered lists (D-16 layout rule permits any
+  // computation that consumes only the filtered node/edge lists).
+  const connected = new Set<string>()
+  for (const edge of graph.edges) {
+    connected.add(edge.source)
+    connected.add(edge.target)
+  }
+
   // Build a lookup so each edge can quickly find its claim (if any).
   const claimById = new Map(graph.claims.map((c) => [c.id, c]))
 
@@ -48,7 +60,9 @@ export function graphToElements(graph: GraphResponse): ElementDefinition[] {
   // Compound parent key = subplot/cluster tag if present, else episode band from visible_from_order
   const clusters = new Map<string, string>()
 
-  const nodeElements: ElementDefinition[] = graph.nodes.map((node) => {
+  const nodeElements: ElementDefinition[] = graph.nodes
+    .filter((node) => connected.has(node.id))
+    .map((node) => {
     // Only Character nodes ever carry a portrait — other node types must
     // never pick up the background-image selector even if a future node
     // happens to have image_url set. The `imageUrl` key is omitted entirely
