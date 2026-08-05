@@ -6,15 +6,15 @@ current_phase: 9
 current_phase_name: feature-expansion-full-audit-remediation
 status: executing
 stopped_at: Phase 9 context gathered
-last_updated: "2026-08-04T23:05:56.733Z"
+last_updated: "2026-08-05T05:14:19.559Z"
 last_activity: 2026-08-04
 last_activity_desc: Phase 9 execution started
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 26
-  completed_plans: 8
-  percent: 31
+  completed_plans: 10
+  percent: 33
 ---
 
 # HD Graf Cehennemi — Project State
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-08-04)
 ## Current Position
 
 Phase: 9 (feature-expansion-full-audit-remediation) — EXECUTING
-Plan: 1 of 18
-Status: Executing Phase 9
+Plan: 2 of 18
+Status: Ready to execute
 Last activity: 2026-08-04 — Phase 9 execution started
 
 Progress: [███░░░░░░░] 33% (v1.3, 1/3 phases); 7 phases complete across v1.0–v1.2
@@ -49,7 +49,8 @@ Progress: [███░░░░░░░] 33% (v1.3, 1/3 phases); 7 phases comp
 | 1–6 (v1.0/v1.1) | 27 | See `.planning/milestones/v1.1-ROADMAP.md` for per-plan durations |
 | 7 (v1.2 Spoiler-Safety Hardening) | 8 | See `.planning/milestones/v1.2-phases/07-spoiler-safety-hardening/` SUMMARY.md files |
 | 8 (v1.3 Production Deployment) | 8 | Phase complete — VERIFICATION.md passed 2026-08-05; 2 items carried to Phase 9 (09-02, 09-03) |
-| 9–10 (v1.3) | TBD | Phase 9 pending planning — carries 8 Phase 8 carry-over plans (09-01..09-08) |
+| 9–10 (v1.3) | 2/18 | Phase 9 in progress — 09-01 rename + 09-02 regression nets done |
+| 09-02 (Phase 9) | 45min | Verifier + progress wire-shape regression nets; #42 fix (a36676a) |
 
 **Recent Trend:** v1.3 — Phase 8 (Production Deployment & Automated CI/CD) complete and verified 2026-08-05; Phase 9 planning next.
 
@@ -68,6 +69,7 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - [v1.3 requirements]: Stack additions locked for this milestone only — Upstash Redis (caching) and a hosted target (Vercel/Render/AuraDB); no other new stack components (no second graph DB, no JWT auth, no frontend rewrite)
 - [v1.3 roadmap]: AUTH-01 (email allowlist) and AUTH-02 (`/api/auth/dev` removal) landed ahead of formal planning; mapped to Phase 8 for traceability as verification/regression work, not new build work
 - [v1.3 roadmap]: Phases sequenced access-control/security (8) → data+hosting infra migration (9) → CI/monitoring/docs (10), since exposing the app publicly (Phase 9) should follow session/CORS/rate-limit hardening (Phase 8), and monitoring/docs (Phase 10) need a real deployed target to point at
+- [09-02]: #42 NameError was LIVE (plan premise wrong) — fixed in a36676a; verifier + progress regression nets red-capable
 
 ### Pending Todos
 
@@ -94,7 +96,7 @@ Items acknowledged and carried forward, not in v1.3 scope:
 
 ## Session Continuity
 
-Last session: 2026-08-04T21:56:30.048Z
+Last session: 2026-08-05T05:13:49.458Z
 Stopped at: Phase 9 context gathered
 Resume file: .planning/phases/09-feature-expansion-full-audit-remediation/09-CONTEXT.md
 
