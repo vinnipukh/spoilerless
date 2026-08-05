@@ -340,6 +340,8 @@ function AuthenticatedApp() {
             onClearFocus={handleClearFocus}
             revealElementIds={revealIds}
             onRevealDone={() => setRevealIds(null)}
+            newlyRevealedIds={newlyRevealedIds}
+            onNewlyRevealedDone={() => setNewlyRevealedIds(null)}
           />
           {selectedElement?.kind === 'edge' &&
           graphState.data.edges.find((edge) => edge.id === selectedElement.id)?.claim_id == null &&

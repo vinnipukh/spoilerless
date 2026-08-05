@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { GraphCanvas } from './GraphCanvas'
 import { graphResponseS01E01, graphResponseS01E03 } from '../../test/fixtures/graphResponse'
@@ -404,6 +404,87 @@ describe('GraphCanvas', () => {
 
       await user.click(screen.getByRole('button', { name: 'Clear' }))
       expect(onClearFocus).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('newlyRevealedIds (FEAT-03, 09-07)', () => {
+    it('applies .newly-revealed to every named node/edge and auto-clears after 4000ms', () => {
+      vi.useFakeTimers()
+      try {
+        const onNewlyRevealedDone = vi.fn()
+        const { rerender } = render(
+          <GraphCanvas
+            graph={graphResponseS01E01}
+            onSelect={() => {}}
+            seriesId="series:dexter"
+            episodes={[]}
+            newlyRevealedIds={null}
+          />,
+        )
+
+        rerender(
+          <GraphCanvas
+            graph={graphResponseS01E01}
+            onSelect={() => {}}
+            seriesId="series:dexter"
+            episodes={[]}
+            newlyRevealedIds={{ nodeIds: ['char_dexter_morgan'], edgeIds: ['edge_1'] }}
+            onNewlyRevealedDone={onNewlyRevealedDone}
+          />,
+        )
+
+        expect(classesFor('char_dexter_morgan').has('newly-revealed')).toBe(true)
+        expect(classesFor('edge_1').has('newly-revealed')).toBe(true)
+        // Purely additive glow — elements outside the revealed set are
+        // untouched (no .faded, no .selected-dominant side effects).
+        expect(classesFor('char_debra_morgan').has('newly-revealed')).toBe(false)
+        expect(classesFor('char_debra_morgan').has('faded')).toBe(false)
+
+        act(() => {
+          vi.advanceTimersByTime(4000)
+        })
+
+        expect(classesFor('char_dexter_morgan').has('newly-revealed')).toBe(false)
+        expect(classesFor('edge_1').has('newly-revealed')).toBe(false)
+        expect(onNewlyRevealedDone).toHaveBeenCalledTimes(1)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('a second advance replaces the first glow and never re-runs the layout', () => {
+      vi.useFakeTimers()
+      try {
+        const { rerender } = render(
+          <GraphCanvas
+            graph={graphResponseS01E01}
+            onSelect={() => {}}
+            seriesId="series:dexter"
+            episodes={[]}
+            newlyRevealedIds={{ nodeIds: ['char_dexter_morgan'], edgeIds: [] }}
+          />,
+        )
+        expect(classesFor('char_dexter_morgan').has('newly-revealed')).toBe(true)
+
+        rerender(
+          <GraphCanvas
+            graph={graphResponseS01E01}
+            onSelect={() => {}}
+            seriesId="series:dexter"
+            episodes={[]}
+            newlyRevealedIds={{ nodeIds: ['char_angel_batista'], edgeIds: [] }}
+          />,
+        )
+        expect(classesFor('char_dexter_morgan').has('newly-revealed')).toBe(false)
+        expect(classesFor('char_angel_batista').has('newly-revealed')).toBe(true)
+
+        // FEAT-03 must not re-run the layout: the glow effect never calls
+        // cy.fit/cy.layout — fitCalls stays empty (GraphControls/runLayout
+        // are the only fit/layout callers in this test harness).
+        expect(fitCalls).toHaveLength(0)
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 })

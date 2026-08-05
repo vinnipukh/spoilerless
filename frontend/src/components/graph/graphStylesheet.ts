@@ -201,6 +201,21 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
       selector: 'edge.faded',
       style: { opacity: 0.15 },
     },
+    // FEAT-03 (09-07): transient glow on elements newly revealed by a forward
+    // episode advance (UI-SPEC §10.5) — #7C3AED overlay at 0.45, padding 10,
+    // applied for 4000ms by GraphCanvas then auto-cleared. The 2-cycle pulse
+    // (overlay-opacity 0.45→0.15→0.45) is driven imperatively by GraphCanvas
+    // via element.animate — Cytoscape JSON stylesheets cannot express
+    // keyframes; under prefers-reduced-motion the base transitions are 0ms so
+    // the glow is static with no pulse.
+    {
+      selector: 'node.newly-revealed, edge.newly-revealed',
+      style: {
+        'overlay-color': '#7C3AED',
+        'overlay-opacity': 0.45,
+        'overlay-padding': 10,
+      },
+    },
   ]
 }
 

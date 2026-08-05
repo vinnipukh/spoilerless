@@ -132,6 +132,13 @@ type Props = {
   // right of the viewport under the chat sheet).
   revealElementIds?: FocusedElementIds | null
   onRevealDone?: () => void
+  // FEAT-03 (09-07): ids of nodes/edges newly revealed by a forward episode
+  // advance (UI-SPEC §10.5) — a transient 4000ms `.newly-revealed` glow,
+  // then auto-clear via onNewlyRevealedDone. Optional/nullable like
+  // focusedElementIds so every pre-existing caller (and GraphCanvas.test.tsx's
+  // existing assertions) keeps compiling and rendering unmodified.
+  newlyRevealedIds?: FocusedElementIds | null
+  onNewlyRevealedDone?: () => void
 }
 
 const ALLOWED_NODE_TYPES: { value: CustomNodeType; label: string }[] = [
@@ -269,6 +276,8 @@ export function GraphCanvas({
   onClearFocus,
   revealElementIds = null,
   onRevealDone,
+  newlyRevealedIds = null,
+  onNewlyRevealedDone,
 }: Props) {
   const elements = useMemo(() => graphToElements(graph), [graph])
   const wiredCyRef = useRef<cytoscape.Core | null>(null)
@@ -411,6 +420,79 @@ export function GraphCanvas({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revealTarget, revealElementIds])
+
+  // FEAT-03 (09-07): transient glow on elements newly revealed by a forward
+  // episode advance (UI-SPEC §10.5). Applies `.newly-revealed` (stylesheet:
+  // overlay #7C3AED at 0.45, padding 10) for 4000ms then auto-clears — a
+  // pure additive glow: no layout re-run (the same defensive guards the
+  // reveal effect uses) and no fade of other elements. Under
+  // prefers-reduced-motion the glow is static (0ms stylesheet transitions,
+  // no pulse animation).
+  useEffect(() => {
+    const cy = cyInstanceRef.current
+    if (!cy || !newlyRevealedIds) return
+    if (
+      typeof cy.elements !== 'function' ||
+      typeof cy.getElementById !== 'function' ||
+      typeof cy.collection !== 'function'
+    ) {
+      return
+    }
+
+    // A second advance replaces the first glow — never leave the class on
+    // elements that are no longer in the new set.
+    cy.elements().removeClass('newly-revealed')
+
+    const requestedIds = [...newlyRevealedIds.nodeIds, ...newlyRevealedIds.edgeIds]
+    const revealed = cy.collection()
+    for (const id of requestedIds) {
+      const element = cy.getElementById(id)
+      if (element && element.length > 0) revealed.merge(element)
+    }
+    if (revealed.length === 0) return
+
+    revealed.addClass('newly-revealed')
+
+    let cancelled = false
+
+    // 2-cycle pulse (UI-SPEC §10.5: overlay-opacity 0.45→0.15→0.45 over
+    // 4000ms). Timeout-scheduled animate steps (cytoscape's collection
+    // typings expose `promiseOn`, not `promise`, so no promise chaining);
+    // guarded so a test double's fake cy (no `.animate`) degrades to the
+    // static glow, and reduced motion skips the pulse entirely.
+    const pulseTimers: number[] = []
+    if (!prefersReducedMotion && typeof revealed.animate === 'function') {
+      const pulseSteps = [
+        { opacity: 0.15, at: 0 },
+        { opacity: 0.45, at: 1000 },
+        { opacity: 0.15, at: 2000 },
+        { opacity: 0.45, at: 3000 },
+      ]
+      for (const step of pulseSteps) {
+        pulseTimers.push(
+          window.setTimeout(() => {
+            if (cancelled) return
+            revealed.animate({ style: { 'overlay-opacity': step.opacity }, duration: 1000, easing: 'ease-in-out' })
+          }, step.at),
+        )
+      }
+    }
+
+    const timer = window.setTimeout(() => {
+      revealed.removeClass('newly-revealed')
+      onNewlyRevealedDone?.()
+    }, 4000)
+    return () => {
+      cancelled = true
+      for (const pulseTimer of pulseTimers) window.clearTimeout(pulseTimer)
+      window.clearTimeout(timer)
+    }
+    // onNewlyRevealedDone is an inline App arrow (fresh identity per render);
+    // including it would re-run this effect (and reset the 4000ms timer) on
+    // every App re-render — the reveal effect excludes onRevealDone the same
+    // way.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newlyRevealedIds])
 
   return (
     <TooltipProvider>
