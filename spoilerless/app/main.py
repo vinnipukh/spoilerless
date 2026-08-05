@@ -39,6 +39,35 @@ _DENIED_HEADER_PREFIXES = ("x-llm-",)
 _DENIED_HEADER_NAMES = {"cookie", "set-cookie", "authorization"}
 
 
+_SECURITY_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'self'; script-src 'self' https://accounts.google.com; "
+        "img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; "
+        "font-src 'self'; connect-src 'self' https://accounts.google.com; "
+        "frame-src https://accounts.google.com; object-src 'none'; "
+        "base-uri 'self'; form-action 'self'"
+    ),
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+}
+
+
+async def _security_headers_middleware(request: Request, call_next) -> Response:
+    """Attach baseline security headers to every response (PROB-17/#38).
+
+    CSP is tuned to the app's needs: the Google Identity Services script
+    (frontend/index.html) plus self-hosted fonts/scripts and hotlinked
+    character images (img-src 'self' data: https:). HSTS is only meaningful
+    over HTTPS but is harmless locally.
+    """
+    response = await call_next(request)
+    for name, value in _SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    return response
+
+
 async def _request_logging_middleware(request: Request, call_next) -> Response:
     """Log one INFO line per request: method, path, status, duration (ms).
 
@@ -151,9 +180,20 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # Explicit method/header lists — never wildcards combined with
+    # allow_credentials=True (PROB-17/#38). Header list covers the BYOK
+    # X-LLM-* headers the frontend sends (frontend/src/lib/byok.ts).
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "X-LLM-Api-Key",
+        "X-LLM-Provider",
+        "X-LLM-Base-URL",
+        "X-LLM-Model",
+    ],
 )
+app.middleware("http")(_security_headers_middleware)
 app.middleware("http")(_request_logging_middleware)
 install_database_error_handlers(app)
 install_llm_error_handlers(app)

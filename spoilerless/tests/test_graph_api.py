@@ -103,6 +103,59 @@ def test_app_starts_degraded_and_docs_remain_available(monkeypatch) -> None:
     assert docs.status_code == 200
 
 
+def test_security_headers_on_every_response(monkeypatch) -> None:
+    """PROB-17/#38: every response carries the five baseline security headers."""
+    main_module = importlib.import_module("spoilerless.app.main")
+    monkeypatch.setattr(main_module, "Neo4jDatabase", UnavailableDatabase)
+
+    with TestClient(main_module.app) as client:
+        for path in ("/health", "/docs", "/api/series/unknown/graph?visible_until_order=1"):
+            response = client.get(path)
+            headers = response.headers
+            assert headers.get("Content-Security-Policy", "").startswith("default-src 'self'")
+            assert headers.get("Strict-Transport-Security") == "max-age=31536000; includeSubDomains"
+            assert headers.get("X-Content-Type-Options") == "nosniff"
+            assert headers.get("X-Frame-Options") == "DENY"
+            assert headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
+
+
+def test_cors_preflight_is_explicit_no_wildcard_with_credentials(monkeypatch) -> None:
+    """PROB-17/#38: preflight for an allowed origin lists explicit methods/headers.
+
+    No wildcard may be combined with allow_credentials=True.
+    """
+    main_module = importlib.import_module("spoilerless.app.main")
+    monkeypatch.setattr(main_module, "Neo4jDatabase", UnavailableDatabase)
+
+    with TestClient(main_module.app) as client:
+        response = client.options(
+            "/api/series/series_dexter/graph",
+            headers={
+                "Origin": "http://localhost:5173",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers.get("access-control-allow-origin") == "http://localhost:5173"
+    assert response.headers.get("access-control-allow-credentials") == "true"
+    allow_methods = response.headers.get("access-control-allow-methods", "")
+    allow_headers = response.headers.get("access-control-allow-headers", "")
+    for method in ("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"):
+        assert method in allow_methods, f"expected {method} in {allow_methods}"
+    assert "*" not in allow_methods
+    for header in (
+        "Content-Type",
+        "Authorization",
+        "X-LLM-Api-Key",
+        "X-LLM-Provider",
+        "X-LLM-Base-URL",
+        "X-LLM-Model",
+    ):
+        assert header.lower() in allow_headers.lower(), f"expected {header} in {allow_headers}"
+    assert "*" not in allow_headers
+
+
 def test_database_module_has_no_driver_singleton(monkeypatch) -> None:
     import spoilerless.app.graph.database as database_module
 
@@ -263,7 +316,7 @@ def test_graph_database_unavailable_is_sanitized(live_client: TestClient) -> Non
 # visible node. Harry Morgan is intentionally visible from order 1 (the Buddy
 # flashback) and is therefore no longer forbidden at boundary 2.
 @pytest.mark.parametrize(
-    ("boundary", "FORBIDDEN", "present"),
+    ("boundary", "forbidden", "present"),
     [
         (
             1,
