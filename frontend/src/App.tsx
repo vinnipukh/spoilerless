@@ -10,6 +10,8 @@ import { ConfirmAdvanceModal } from './components/episode/ConfirmAdvanceModal'
 import { GraphCanvas, type FocusedElementIds, type SelectedElement } from './components/graph/GraphCanvas'
 import { NodeSearch } from './components/graph/NodeSearch'
 import { CommandPalette, type CommandPaletteSelection } from './components/palette/CommandPalette'
+import { TimelineView } from './components/timeline/TimelineView'
+import { SeriesDashboard } from './components/series/SeriesDashboard'
 import { GraphLoadingState, GraphErrorState, GraphEmptyState } from './components/graph/GraphStatus'
 import { DetailPanel } from './components/detail/DetailPanel'
 import { StructuralEdgeCard } from './components/detail/StructuralEdgeCard'
@@ -49,6 +51,57 @@ function SettingsIcon() {
   )
 }
 
+// Inline SVG calendar-clock icon for the topBar Timeline toggle (FEAT-02).
+function CalendarClockIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-4 shrink-0"
+    >
+      <path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5" />
+      <path d="M16 2v4" />
+      <path d="M8 2v4" />
+      <path d="M3 10h5" />
+      <path d="M17.8 11.2a2 2 0 1 0 2.4 3.2" />
+      <path d="M18 16v-2.5" />
+      <path d="M18 22a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
+      <path d="M18 16.5v1.5l1 1" />
+    </svg>
+  )
+}
+
+// Inline SVG layout-grid icon for the topBar Series Dashboard toggle
+// (FEAT-04).
+function LayoutGridIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-4 shrink-0"
+    >
+      <rect width="7" height="7" x="3" y="3" rx="1" />
+      <rect width="7" height="7" x="14" y="3" rx="1" />
+      <rect width="7" height="7" x="14" y="14" rx="1" />
+      <rect width="7" height="7" x="3" y="14" rx="1" />
+    </svg>
+  )
+}
+
 function AuthenticatedApp() {
   const { state, logout } = useAuth()
   const user = state.status === 'authenticated' ? state.user : undefined
@@ -74,11 +127,14 @@ function AuthenticatedApp() {
   // inspector left), which the old single-panel mode toggle made impossible.
   const [chatOpen, setChatOpen] = useState(false)
 
-  // Top-level view switch: the graph workspace or the settings page (no
-  // router in this app — navigation is state-driven, mirroring the existing
-  // auth/series state pattern). Entering settings unmounts the graph view
-  // (including the chat sheet); chat history survives server-side.
-  const [view, setView] = useState<'graph' | 'settings'>('graph')
+  // Top-level view switch: the graph workspace, the timeline, or the
+  // settings page (no router in this app — navigation is state-driven,
+  // mirroring the existing auth/series state pattern). Entering settings
+  // unmounts the graph view (including the chat sheet); chat history
+  // survives server-side.
+  const [view, setView] = useState<'graph' | 'timeline' | 'settings'>('graph')
+  // FEAT-04 (09-10): series dashboard dialog open state.
+  const [dashboardOpen, setDashboardOpen] = useState(false)
 
   // Chat-driven graph_focus highlight (RAG-17, 06-10-PLAN.md) — set by a
   // citation chip's "Show in graph" action, cleared by GraphFocusIndicator's
@@ -312,13 +368,27 @@ function AuthenticatedApp() {
   // so 09-09 compiles and runs standalone (plan 09-09 Task 2: "prefer a
   // seam so this plan compiles standalone").
   const handleOpenTimeline = () => {
-    // FEAT-02 timeline view (later phase-9 plan) fills this seam.
+    setView('timeline')
   }
   const handleOpenDashboard = () => {
-    // FEAT-04 series dashboard (later phase-9 plan) fills this seam.
+    setDashboardOpen(true)
   }
   const handleExportGraph = () => {
     // FEAT-05 markdown export (plan 09-11) fills this seam.
+  }
+  const handleOpenSeries = (seriesId: string) => {
+    setSelectedSeriesId(seriesId)
+    setDashboardOpen(false)
+    // Reset the episode selector to that series' watched boundary through
+    // the existing watchProgress flow (T-09-10-02 — never a second
+    // boundary mechanism).
+    setView('graph')
+  }
+  // FEAT-02 (09-10): a timeline row click selects the node through the
+  // existing onSelect path and switches to the graph view so it is framed.
+  const handleTimelineSelect = (selection: { id: string; label: string; nodeType: string }) => {
+    handleJumpToNode(selection)
+    setView('graph')
   }
 
   // FEAT-08 (09-09): global keydown wiring (T-09-09-03 — '/' skips while an
@@ -358,6 +428,20 @@ function AuthenticatedApp() {
           />
           <ChatLauncher active={chatOpen} onClick={handleChatLauncherClick} />
           <HeaderNavAction
+            icon={<CalendarClockIcon />}
+            label={view === 'timeline' ? 'Graph' : 'Timeline'}
+            ariaLabel={view === 'timeline' ? 'Back to graph' : 'Timeline'}
+            active={view === 'timeline'}
+            onClick={() => setView((current) => (current === 'timeline' ? 'graph' : 'timeline'))}
+          />
+          <HeaderNavAction
+            icon={<LayoutGridIcon />}
+            label="Series"
+            ariaLabel="Series dashboard"
+            active={false}
+            onClick={handleOpenDashboard}
+          />
+          <HeaderNavAction
             icon={<SettingsIcon />}
             label={view === 'settings' ? 'Graph' : 'Settings'}
             ariaLabel={view === 'settings' ? 'Back to graph' : 'Settings'}
@@ -367,7 +451,15 @@ function AuthenticatedApp() {
         </>
       }
     >
-      {view === 'settings' ? (
+      {view === 'timeline' ? (
+        <TimelineView
+          nodes={graphState.status === 'success' ? graphState.data.nodes : []}
+          claims={graphState.status === 'success' ? graphState.data.claims : []}
+          episodes={episodes}
+          selectedId={selectedElement?.kind === 'node' ? selectedElement.id : null}
+          onSelect={handleTimelineSelect}
+        />
+      ) : view === 'settings' ? (
         <SettingsPage onBack={() => setView('graph')} />
       ) : (
         <>
@@ -461,6 +553,16 @@ function AuthenticatedApp() {
         onOpenSettings={() => setView('settings')}
         onOpenDashboard={handleOpenDashboard}
         onExportGraph={handleExportGraph}
+      />
+      {/* FEAT-04 (09-10): series dashboard dialog — augments the dropdown,
+          never replaces it. */}
+      <SeriesDashboard
+        open={dashboardOpen}
+        onOpenChange={setDashboardOpen}
+        series={series}
+        selectedSeriesId={selectedSeriesId}
+        watchedThroughOrder={watchProgress.watchedThroughOrder}
+        onOpenSeries={handleOpenSeries}
       />
     </AppShell>
   )
