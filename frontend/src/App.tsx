@@ -21,6 +21,7 @@ import { useWatchProgress } from './hooks/useWatchProgress'
 import type { CustomRelationshipResponse } from './types/userContent'
 import type { Citation } from './types/chat'
 import type { ChangeSet } from './types/changeSet'
+import type { GraphResponse } from './types/graph'
 
 // Inline SVG gear icon for the topBar Settings toggle (matches the inline
 // icon pattern used by AppShell's UserIcon and ChatLauncher).
@@ -215,6 +216,41 @@ function AuthenticatedApp() {
   const series = seriesState.status === 'success' ? seriesState.data : []
   const episodes = episodesState.status === 'success' ? episodesState.data : []
 
+  // FEAT-03 (09-07): newly-revealed highlight on episode advance. When a
+  // FORWARD advance changes watchProgress.confirmedOrder, diff the node/edge
+  // id sets of the previous and current graph payloads and pass the
+  // newly-appeared ids to GraphCanvas for a transient 4000ms glow. Uses the
+  // established "adjust state when a key changes" pattern (state copies,
+  // never refs) so it lints clean; only fires on an actual forward advance
+  // (a first load, backward view-only move, or in-place refresh never
+  // glows).
+  const [prevGraphSnapshot, setPrevGraphSnapshot] = useState<{
+    payload: GraphResponse | null
+    order: number | null
+  } | null>(null)
+  const [newlyRevealedIds, setNewlyRevealedIds] = useState<FocusedElementIds | null>(null)
+  if (graphState.status === 'success' && graphState.data !== prevGraphSnapshot?.payload) {
+    const prevOrder = prevGraphSnapshot?.order ?? null
+    const nextOrder = watchProgress.confirmedOrder
+    const prevPayload = prevGraphSnapshot?.payload ?? null
+    const advancedForward =
+      prevPayload != null && prevOrder !== nextOrder && (nextOrder ?? 0) > (prevOrder ?? 0)
+    if (advancedForward) {
+      const prevNodeIds = new Set(prevPayload.nodes.map((node) => node.id))
+      const prevEdgeIds = new Set(prevPayload.edges.map((edge) => edge.id))
+      const nodeIds = graphState.data.nodes
+        .filter((node) => !prevNodeIds.has(node.id))
+        .map((node) => node.id)
+      const edgeIds = graphState.data.edges
+        .filter((edge) => !prevEdgeIds.has(edge.id))
+        .map((edge) => edge.id)
+      if (nodeIds.length > 0 || edgeIds.length > 0) {
+        setNewlyRevealedIds({ nodeIds, edgeIds })
+      }
+    }
+    setPrevGraphSnapshot({ payload: graphState.data, order: nextOrder })
+  }
+
   const pendingEpisode = watchProgress.pendingChange
     ? episodes.find((episode) => episode.episode_order === watchProgress.pendingChange?.nextOrder)
     : null
@@ -226,7 +262,12 @@ function AuthenticatedApp() {
 
   function handleEpisodeSelect(episodeOrder: number) {
     if (!selectedSeriesId) return
-    watchProgress.requestChange(selectedSeriesId, episodeOrder)
+    void watchProgress.requestChange(selectedSeriesId, episodeOrder).then((persisted) => {
+      // A failed view-only POST (network/401/422) must not look like a
+      // silent no-op — re-issue the graph fetch so the UI re-syncs to the
+      // chosen boundary (PROB-31/#56).
+      if (!persisted) graphState.refresh()
+    })
   }
 
   function handleConfirm() {

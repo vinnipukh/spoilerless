@@ -249,4 +249,132 @@ describe('useWatchProgress', () => {
     expect(result.current.confirmedOrder).toBe(2)
     expect(result.current.seriesId).toBe('series_dexter')
   })
+
+  it('a confirm committed during mount hydration is not clobbered by the late hydration response (PROB-31 race)', async () => {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
+    // Hold the mount-time getProgress open so hydration is still in flight
+    // when the user clicks + confirms.
+    let resolveHydration!: (record: ReturnType<typeof progressRecord>) => void
+    mockedGetProgress.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveHydration = resolve
+      }),
+    )
+
+    const { result } = renderHook(() => useWatchProgress())
+
+    // User clicks a locked episode and confirms while hydration is pending.
+    act(() => {
+      void result.current.requestChange('series_dexter', 2)
+    })
+    await act(async () => {
+      await result.current.confirmChange()
+    })
+    expect(result.current.viewAsOfOrder).toBe(2)
+    expect(result.current.watchedThroughOrder).toBe(2)
+
+    // The backend record (older boundary) resolves LATE — it must NOT roll
+    // back the just-committed click.
+    await act(async () => {
+      resolveHydration(progressRecord('series_dexter', 1))
+    })
+
+    expect(result.current.viewAsOfOrder).toBe(2)
+    expect(result.current.watchedThroughOrder).toBe(2)
+    expect(result.current.pendingChange).toBeNull()
+  })
+
+  it('a modal opened during mount hydration survives a late hydration response (PROB-31 race)', async () => {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
+    let resolveHydration!: (record: ReturnType<typeof progressRecord>) => void
+    mockedGetProgress.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveHydration = resolve
+      }),
+    )
+
+    const { result } = renderHook(() => useWatchProgress())
+
+    act(() => {
+      void result.current.requestChange('series_dexter', 2)
+    })
+    expect(result.current.pendingChange).toEqual({
+      seriesId: 'series_dexter',
+      nextOrder: 2,
+      direction: 'forward',
+    })
+
+    await act(async () => {
+      resolveHydration(progressRecord('series_dexter', 1))
+    })
+
+    // The unlock dialog is still open — the late hydration never swallowed
+    // the click.
+    expect(result.current.pendingChange).toEqual({
+      seriesId: 'series_dexter',
+      nextOrder: 2,
+      direction: 'forward',
+    })
+  })
+
+  it('a same-order re-click is reconciled, never silently dropped: view-only POST re-affirms the current episode (PROB-31)', async () => {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 2 }))
+
+    const { result } = renderHook(() => useWatchProgress())
+    expect(result.current.confirmedOrder).toBe(2)
+
+    act(() => {
+      void result.current.requestChange('series_dexter', 2)
+    })
+
+    // No modal, view unchanged — but the click was NOT swallowed: it
+    // re-affirmed the current view with an awaited view-only POST.
+    expect(result.current.pendingChange).toBeNull()
+    expect(result.current.confirmedOrder).toBe(2)
+    expect(mockedUpdateProgress).toHaveBeenCalledWith('series_dexter', 2, { viewAsOfOrder: 2 })
+  })
+
+  it('a view-only POST failure is surfaced to the caller (resolves false) so the graph can refetch (PROB-31)', async () => {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 3 }))
+    mockedUpdateProgress.mockRejectedValueOnce(new Error('network error'))
+
+    const { result } = renderHook(() => useWatchProgress())
+
+    let persisted = true
+    await act(async () => {
+      persisted = await result.current.requestChange('series_dexter', 1)
+    })
+
+    // The episode still loads locally (optimistic view move)...
+    expect(result.current.viewAsOfOrder).toBe(1)
+    expect(result.current.pendingChange).toBeNull()
+    // ...but the caller is told the persist failed so it can refetch.
+    expect(persisted).toBe(false)
+  })
+
+  it('a locked-episode click above watchedThroughOrder still opens the unlock dialog after a failing view-only POST (PROB-31 regression)', async () => {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 3 }))
+    // First: a view-only click below the watched boundary fires a POST that
+    // fails (network error) — the click is NOT swallowed.
+    mockedUpdateProgress.mockRejectedValueOnce(new Error('network error'))
+
+    const { result } = renderHook(() => useWatchProgress())
+
+    await act(async () => {
+      await expect(result.current.requestChange('series_dexter', 2)).resolves.toBe(false)
+    })
+    expect(result.current.viewAsOfOrder).toBe(2)
+    expect(result.current.pendingChange).toBeNull()
+
+    // Then: the locked-episode click ABOVE watchedThroughOrder ALWAYS opens
+    // the unlock dialog — a failed view-only POST never blocks the modal.
+    act(() => {
+      void result.current.requestChange('series_dexter', 4)
+    })
+    expect(result.current.pendingChange).toEqual({
+      seriesId: 'series_dexter',
+      nextOrder: 4,
+      direction: 'forward',
+    })
+  })
 })

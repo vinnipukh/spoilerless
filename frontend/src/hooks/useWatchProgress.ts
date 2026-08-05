@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getProgress, updateProgress } from '../api/progress'
 
 // D-01/D-02/D-03: sessionStorage-backed watch-progress state, now also
@@ -29,6 +29,14 @@ import { getProgress, updateProgress } from '../api/progress'
 // watchedThroughOrder. Only selecting ABOVE watchedThroughOrder goes through
 // the pendingChange/confirmChange modal flow, whose copy states Episodes
 // 1 through N will be considered watched.
+//
+// PROB-31 / #56 (09-07): requestChange NEVER silently returns. A same-order
+// click reconciles the view to the selector's displayed value (idempotent —
+// never a bare `return`); the view-only branch AWAITS its POST and reports
+// failure to the caller (App refetches the graph) so a failed persist never
+// looks like "nothing happened"; and the mount-time hydration effect is
+// serialized against user clicks (a late backend response can never clobber
+// a just-committed click).
 
 const STORAGE_KEY = 'spoilerless.watchProgress'
 
@@ -101,6 +109,14 @@ function initialState(): State {
 export function useWatchProgress() {
   const [state, setState] = useState<State>(initialState)
 
+  // Set by the first user-initiated interaction (requestChange/
+  // confirmChange/cancelChange). The mount-time hydration response checks it
+  // and SKIPS applying the backend record once the user has taken over —
+  // serializing hydration against clicks so a late getProgress() response
+  // can never clobber a just-committed click (PROB-31/#56 race). Written
+  // only from event handlers/effects, never during render.
+  const userInteractedRef = useRef(false)
+
   // Mount-time hydration reconciliation: if sessionStorage remembered a
   // seriesId, fetch the backend's authoritative progress record for it and
   // override the split fields from that response — even if it disagrees with
@@ -108,14 +124,16 @@ export function useWatchProgress() {
   // placeholder). Intentionally mount-only (the seriesId captured here is
   // read once, from the initial render's closure) — confirmChange's own
   // await already keeps subsequent changes backend-authoritative without
-  // needing this effect to re-run on every seriesId change.
+  // needing this effect to re-run on every seriesId change. Skipped entirely
+  // once the user has clicked (userInteractedRef) so hydration never rolls
+  // back a committed selection (PROB-31).
   useEffect(() => {
     const seriesId = state.seriesId
     if (!seriesId) return
     let cancelled = false
     getProgress(seriesId)
       .then((progress) => {
-        if (cancelled) return
+        if (cancelled || userInteractedRef.current) return
         writeStored(progress.series_id, progress.effective_view_order)
         setState((prev) => ({
           ...prev,
@@ -136,29 +154,54 @@ export function useWatchProgress() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function requestChange(seriesId: string, nextOrder: number) {
+  // Resolves true when the click's intent is surfaced (dialog opened, or the
+  // view-only POST persisted); resolves false when a view-only POST failed —
+  // the caller must refetch the graph so the UI never shows "nothing
+  // happened" (PROB-31). Never silently returns.
+  function requestChange(seriesId: string, nextOrder: number): Promise<boolean> {
+    userInteractedRef.current = true
     const currentView = state.seriesId === seriesId ? state.viewAsOfOrder : null
-    if (nextOrder === currentView) return
     const watched = state.seriesId === seriesId ? state.watchedThroughOrder : null
+
+    // Same-order click (PROB-31): reconcile the view to the selector's
+    // displayed value — an idempotent write, never a silent return. When the
+    // clicked episode is already-watched this also re-affirms it to the
+    // backend with the awaited view-only POST so state, selector and backend
+    // agree.
+    if (nextOrder === currentView) {
+      setState((prev) => ({ ...prev, viewAsOfOrder: nextOrder }))
+      if (watched != null && nextOrder <= watched) {
+        return updateProgress(seriesId, nextOrder, { viewAsOfOrder: nextOrder })
+          .then(() => true)
+          .catch(() => false)
+      }
+      return Promise.resolve(true)
+    }
 
     // Already-watched selection = view-only change (PROG-01, D-06): update
     // the temporary boundary immediately, persist with a view-only POST, and
     // never open the unlock confirmation. Never lowers watchedThroughOrder.
+    // The POST is AWAITED and failure is surfaced to the caller (App refetches
+    // the graph) — a failed persist must never look like a silent no-op
+    // (PROB-31/#56).
     if (watched != null && nextOrder <= watched) {
       setState((prev) => ({ ...prev, viewAsOfOrder: nextOrder }))
-      updateProgress(seriesId, nextOrder, { viewAsOfOrder: nextOrder }).catch(() => {
-        // View-only persistence failed (network error) — the local boundary
-        // stays; the next forward confirm re-syncs from the backend.
-      })
-      return
+      return updateProgress(seriesId, nextOrder, { viewAsOfOrder: nextOrder })
+        .then(() => true)
+        .catch(() => false)
     }
 
+    // Above watchedThroughOrder (or no progress record yet) = the unlock
+    // flow: a forward locked-episode click ALWAYS opens ConfirmAdvanceModal
+    // (PROB-31).
     const baseline = currentView ?? 0
     const direction: WatchProgressDirection = nextOrder > baseline ? 'forward' : 'backward'
     setState((prev) => ({ ...prev, pendingChange: { seriesId, nextOrder, direction } }))
+    return Promise.resolve(true)
   }
 
   async function confirmChange() {
+    userInteractedRef.current = true
     const pending = state.pendingChange
     if (!pending) return
     const { seriesId, nextOrder } = pending
@@ -201,6 +244,7 @@ export function useWatchProgress() {
   }
 
   function cancelChange() {
+    userInteractedRef.current = true
     setState((prev) => ({ ...prev, pendingChange: null }))
   }
 
