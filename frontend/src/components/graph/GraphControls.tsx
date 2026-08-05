@@ -52,7 +52,7 @@ export function GraphControls({
   }
 
   return (
-    <div className="fixed bottom-20 left-4 z-[60] flex flex-col gap-2">
+    <div className="fixed bottom-20 left-4 z-[60] flex flex-col gap-2 pb-[env(safe-area-inset-bottom)]">
       <Tooltip>
         <TooltipTrigger asChild>
           <button

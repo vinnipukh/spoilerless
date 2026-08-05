@@ -51,8 +51,8 @@ export function AppShell({ user, onLogout, visitor, onSignIn, topBar, children, 
     <div className="flex h-screen flex-col bg-background text-foreground">
       {/* z-[60] keeps the header above the always-open Details sheet (fixed, z-50, inset-y-0 right-0), which otherwise covers the account/logout controls */}
       <Card size="sm" className="relative z-[60] rounded-none">
-        <div className="flex items-center justify-between gap-4 px-4">
-          <div className="flex min-w-0 items-center gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-1.5 sm:py-0 md:gap-4">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 md:gap-4">
             <h1 className="font-heading text-2xl">Spoilerless</h1>
             {topBar}
           </div>
