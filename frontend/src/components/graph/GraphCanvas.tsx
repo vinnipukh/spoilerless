@@ -145,7 +145,13 @@ type Props = {
   // FEAT-06 (09-11): path-finder mode toggle (driven from GraphControls).
   // While active, node taps route to the PathFinder instead of select.
   onPathModeChange?: (active: boolean) => void
+  // FEAT-09 (09-12): read-only mode for ShareView — hides FAB/edit affordances
+  readOnly?: boolean
+  // FEAT-09 (09-12): Share snapshot link trigger (opens ShareDialog)
+  onShareLink?: () => void
 }
+
+
 
 const ALLOWED_NODE_TYPES: { value: CustomNodeType; label: string }[] = [
   { value: 'Character', label: 'Character' },
@@ -285,7 +291,11 @@ export function GraphCanvas({
   newlyRevealedIds = null,
   onNewlyRevealedDone,
   onPathModeChange,
+  readOnly = false,
+  onShareLink,
 }: Props) {
+
+
   const elements = useMemo(() => graphToElements(graph), [graph])
   const wiredCyRef = useRef<cytoscape.Core | null>(null)
   const cyInstanceRef = useRef<cytoscape.Core | null>(null)
@@ -643,33 +653,35 @@ export function GraphCanvas({
               downloadMarkdownBlob(text, filename)
             }
           }}
+          onShareLink={readOnly ? undefined : onShareLink}
         />
-        {/* Floating Create Custom Node button — opens dialog */}
-        <button
-          type="button"
-          className="absolute bottom-4 left-65 z-[60] flex items-center justify-center rounded-full bg-primary p-3 text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors min-h-[44px] min-w-[44px]"
-          onClick={() => setDialogOpen(true)}
-          aria-label="Create custom node"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5" aria-hidden="true">
-            <path d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-        </button>
-        {dialogOpen && (
-        <CreateCustomNodeDialog
-          open={dialogOpen}
-          onOpenChange={setDialogOpen}
-          seriesId={seriesId}
-          episodes={episodes}
-          onSuccess={(node) => {
-            // In-place refresh (no destructive loading unmount) then reveal
-            // the freshly created node so it is framed on screen instead of
-            // landing out of view.
-            ;(onRefreshGraph ?? onRefetchGraph)?.()
-            setLocalReveal({ nodeIds: [node.id], edgeIds: [] })
-          }}
-        />
+
+        {/* Floating Create Custom Node button — opens dialog (hidden in read-only mode) */}
+        {!readOnly && (
+          <button
+            type="button"
+            className="absolute bottom-4 left-65 z-[60] flex items-center justify-center rounded-full bg-primary p-3 text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors min-h-[44px] min-w-[44px]"
+            onClick={() => setDialogOpen(true)}
+            aria-label="Create custom node"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5" aria-hidden="true">
+              <path d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+          </button>
         )}
+        {!readOnly && dialogOpen && (
+          <CreateCustomNodeDialog
+            open={dialogOpen}
+            onOpenChange={setDialogOpen}
+            seriesId={seriesId}
+            episodes={episodes}
+            onSuccess={(node) => {
+              ;(onRefreshGraph ?? onRefetchGraph)?.()
+              setLocalReveal({ nodeIds: [node.id], edgeIds: [] })
+            }}
+          />
+        )}
+
       </div>
     </TooltipProvider>
   )

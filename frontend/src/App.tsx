@@ -18,6 +18,9 @@ import { StructuralEdgeCard } from './components/detail/StructuralEdgeCard'
 import { ChatLauncher } from './components/chat/ChatLauncher'
 import { ChatSheet } from './components/chat/ChatSheet'
 import { SettingsPage } from './components/settings/SettingsPage'
+import { ShareDialog } from './components/share/ShareDialog'
+import { ShareView } from './components/share/ShareView'
+
 import { useSeries } from './hooks/useSeries'
 import { useEpisodes } from './hooks/useEpisodes'
 import { useGraph } from './hooks/useGraph'
@@ -135,6 +138,9 @@ function AuthenticatedApp() {
   const [view, setView] = useState<'graph' | 'timeline' | 'settings'>('graph')
   // FEAT-04 (09-10): series dashboard dialog open state.
   const [dashboardOpen, setDashboardOpen] = useState(false)
+  // FEAT-09 (09-12): share dialog open state.
+  const [shareDialogOpen, setShareDialogOpen] = useState(false)
+
 
   // Chat-driven graph_focus highlight (RAG-17, 06-10-PLAN.md) — set by a
   // citation chip's "Show in graph" action, cleared by GraphFocusIndicator's
@@ -491,7 +497,9 @@ function AuthenticatedApp() {
             onRevealDone={() => setRevealIds(null)}
             newlyRevealedIds={newlyRevealedIds}
             onNewlyRevealedDone={() => setNewlyRevealedIds(null)}
+            onShareLink={() => setShareDialogOpen(true)}
           />
+
           {/* FEAT-01/07 (09-09): floating search bar over the canvas — the
               '/' hotkey focuses it via searchInputRef; rows select through
               handleJumpToNode (existing onSelect + graphFocus paths). */}
@@ -564,12 +572,31 @@ function AuthenticatedApp() {
         watchedThroughOrder={watchProgress.watchedThroughOrder}
         onOpenSeries={handleOpenSeries}
       />
+      {/* FEAT-09 (09-12): share dialog — create & manage shareable snapshot links */}
+      {watchProgress.seriesId && (
+        <ShareDialog
+          open={shareDialogOpen}
+          onOpenChange={setShareDialogOpen}
+          seriesId={watchProgress.seriesId}
+          seriesTitle={series.find((s) => s.id === watchProgress.seriesId)?.title}
+          visibleUntilOrder={watchProgress.confirmedOrder ?? 1}
+
+        />
+      )}
     </AppShell>
   )
 }
 
 function AppContent() {
   const { state } = useAuth()
+
+  // FEAT-09 (09-12): Route snapshot links BEFORE the auth gate
+  const shareMatch = typeof window !== 'undefined'
+    ? window.location.pathname.match(/^\/share\/([A-Za-z0-9_-]+)$/)
+    : null
+  if (shareMatch) {
+    return <ShareView token={shareMatch[1]} />
+  }
 
   if (state.status === 'loading') {
     return (
@@ -585,6 +612,7 @@ function AppContent() {
 
   return <AuthenticatedApp />
 }
+
 
 function App() {
   return (

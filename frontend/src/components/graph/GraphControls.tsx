@@ -1,5 +1,5 @@
 import type cytoscape from 'cytoscape'
-import { ZoomIn, ZoomOut, Maximize2, RotateCcw, Waypoints, Download } from 'lucide-react'
+import { ZoomIn, ZoomOut, Maximize2, RotateCcw, Waypoints, Download, Share2 } from 'lucide-react'
 import {
   Tooltip,
   TooltipTrigger,
@@ -14,6 +14,7 @@ type Props = {
   onExport?: () => void
   exporting?: boolean
   exported?: boolean
+  onShareLink?: () => void
 }
 
 export function GraphControls({
@@ -23,7 +24,9 @@ export function GraphControls({
   onPathModeChange,
   onExport,
   exported = false,
+  onShareLink,
 }: Props) {
+
   function zoomIn() {
     const cy = cyRef.current
     if (!cy) return
@@ -141,7 +144,24 @@ export function GraphControls({
           <TooltipContent side="left">{exported ? 'Exported' : 'Export Markdown'}</TooltipContent>
         </Tooltip>
       )}
+
+      {onShareLink && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label="Share snapshot"
+              className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md bg-card text-muted-foreground shadow-sm ring-1 ring-border hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={onShareLink}
+            >
+              <Share2 className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left">Share snapshot</TooltipContent>
+        </Tooltip>
+      )}
     </div>
   )
 }
+
 
