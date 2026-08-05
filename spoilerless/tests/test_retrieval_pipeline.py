@@ -52,6 +52,13 @@ SOURCE_S1 = {
     "locator": "S01E01",
     "visible_from_order": 1,
 }
+NOTE_N1 = {
+    "id": "user-note:1",
+    "target_type": "Character",
+    "target_id": "dexter:character:dexter_morgan",
+    "content": "Dexter hides his dark passenger.",
+    "visible_from_order": 1,
+}
 
 
 class _StubProgressService:
@@ -92,6 +99,7 @@ class _StubDatabase:
         source_rows: list[dict[str, Any]] | None = None,
         series_rows: list[dict[str, Any]] | None = None,
         search_rows: list[dict[str, Any]] | None = None,
+        note_rows: list[dict[str, Any]] | None = None,
     ) -> None:
         self._rows = {
             # Routed by distinctive Cypher fragments of the actual query
@@ -101,6 +109,10 @@ class _StubDatabase:
             "node.id = $entity_id": entity_rows or node_rows or [],
             "claim.claim_type": claim_rows or [],
             "node.id IN $node_ids": node_rows or [],
+            # USER_NOTES_QUERY's owner predicate is distinctive enough to
+            # route before the shared REFERS_TO fragment (which the
+            # SOURCES_FOR_CLAIMS_QUERY also contains).
+            "note.user_id = $user_id": note_rows or [],
             "SUPPORTED_BY": evidence_rows or [],
             "REFERS_TO": source_rows or [],
             "episode.id IN $episode_ids": [],
@@ -569,3 +581,100 @@ async def test_pipeline_search_context_contains_no_hidden_entity() -> None:
     assert "Harry Morgan" not in context
     done_events = [event for event in events if event.kind == "done"]
     assert done_events[0].content == "search answered"
+
+
+# ---------------------------------------------------------------------------
+# PROB-24/#48: get_user_notes results enter the assembled context
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_pipeline_notes_tool_results_enter_assembled_context() -> None:
+    """PROB-24/#48: ``get_user_notes`` results must land in the notes
+    accumulator bucket and render inside the ``<notes>`` section of the
+    assembled context — never stay an empty section, never leak into the
+    entities bucket (a bare note-row list used to be mis-bucketed as node
+    rows)."""
+    database = _StubDatabase(note_rows=[NOTE_N1])
+    provider = _CallScriptedProvider(
+        [
+            [
+                LLMEvent.tool_call(
+                    "get_user_notes",
+                    {"entity_or_claim_ids": [NODE_N1["id"]]},
+                )
+            ],
+            [LLMEvent.done("notes answered")],
+        ]
+    )
+    pipeline = RetrievalPipeline(
+        database=database, progress_service=_StubProgressService(boundary=1)
+    )
+    events = [
+        event
+        async for event in pipeline.answer(
+            user_id="user:test",
+            series_id="series_dexter",
+            chat_session_id="chat-session:test",
+            question="What do I think about Dexter?",
+            history=[],
+            provider=provider,
+        )
+    ]
+    context = _final_context(provider)
+
+    # The note's content renders inside the <notes> section…
+    notes_section = context[
+        context.index("<notes>") : context.index("</notes>")
+    ]
+    assert NOTE_N1["content"] in notes_section
+    # …and the note row was NOT mis-bucketed into the entities section
+    # (where its id would render as an entity line).
+    entities_section = context[
+        context.index("<entities>") : context.index("</entities>")
+    ]
+    assert NOTE_N1["id"] not in entities_section
+
+    done_events = [event for event in events if event.kind == "done"]
+    assert done_events[0].content == "notes answered"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_notes_tool_with_no_rows_renders_empty_notes_section() -> None:
+    """PROB-24: a user with no notes on the requested targets (anonymous or
+    empty) gets an empty ``<notes>`` section — never an error, never a leak
+    of someone else's notes."""
+    database = _StubDatabase()  # no note rows for this user
+    provider = _CallScriptedProvider(
+        [
+            [
+                LLMEvent.tool_call(
+                    "get_user_notes",
+                    {"entity_or_claim_ids": [NODE_N1["id"]]},
+                )
+            ],
+            [LLMEvent.done("no notes")],
+        ]
+    )
+    pipeline = RetrievalPipeline(
+        database=database, progress_service=_StubProgressService(boundary=1)
+    )
+    events = [
+        event
+        async for event in pipeline.answer(
+            user_id="user:test",
+            series_id="series_dexter",
+            chat_session_id="chat-session:test",
+            question="What do I think about Dexter?",
+            history=[],
+            provider=provider,
+        )
+    ]
+    context = _final_context(provider)
+    notes_section = context[
+        context.index("<notes>") : context.index("</notes>")
+    ]
+    assert "(none)" in notes_section
+    assert NOTE_N1["content"] not in context
+    done_events = [event for event in events if event.kind == "done"]
+    assert done_events[0].content == "no notes"

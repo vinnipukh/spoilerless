@@ -618,6 +618,7 @@ class RetrievalPipeline:
             "claims": [],
             "evidence": [],
             "sources": [],
+            "notes": [],
         }
         messages: list[dict[str, Any]] = [
             {"role": "user", "content": question}
@@ -760,13 +761,17 @@ class RetrievalPipeline:
         except ValidationError:
             return {"error": f"invalid arguments for {name}"}
         if name == "get_user_notes":
-            result = await get_user_notes(
+            notes = await get_user_notes(
                 self._database,
                 **parsed.model_dump(),
                 user_id=user_id,
                 series_id=series_id,
                 visible_until_order=boundary,
             )
+            # Wrap the bare note-row list under a ``notes`` key so the
+            # accumulator routes it into the notes bucket (PROB-24/#48) —
+            # a bare list would otherwise be mis-bucketed as node rows.
+            result: dict[str, Any] = {"notes": notes}
         else:
             result = await executor(
                 self._database,
@@ -853,6 +858,11 @@ class RetrievalPipeline:
             if row["id"] not in seen_edges:
                 retrieved["edges"].append(row)
                 seen_edges.add(row["id"])
+        seen_notes = {row["id"] for row in retrieved["notes"]}
+        for row in result.get("notes") or []:
+            if row["id"] not in seen_notes:
+                retrieved["notes"].append(row)
+                seen_notes.add(row["id"])
         if retrieved["entity"] is None and result.get("entity") is not None:
             retrieved["entity"] = result["entity"]
 
@@ -877,7 +887,7 @@ class RetrievalPipeline:
             claims=retrieved["claims"],
             evidence=retrieved["evidence"],
             sources=retrieved["sources"],
-            notes=[],
+            notes=retrieved["notes"],
             history=history,
             boundary=boundary,
             max_items=settings.llm_max_context_items,
