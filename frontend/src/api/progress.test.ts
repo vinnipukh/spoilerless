@@ -84,3 +84,62 @@ describe('progress api client', () => {
     await expect(getProgress('series_dexter')).rejects.toBeInstanceOf(ApiError)
   })
 })
+
+// Wire-shape contract for the three progress payload shapes (PROB-23/#43,
+// PROB-15): assertions are against the JSON-parsed body of the captured
+// fetch call. The API client is NEVER vi.mock'd here — a client-module mock
+// is exactly the pattern that enshrined the 08-01 chat-422 / 08-04
+// progress-422 shipping-green bugs (Pitfall 4).
+describe('updateProgress wire shape — parsed request body (no client mock)', () => {
+  const progressUrl = `${import.meta.env.VITE_API_BASE_URL ?? ''}/api/series/series_dexter/progress`
+
+  function parsedBody(): Record<string, number> {
+    const [, init] = vi.mocked(globalThis.fetch).mock.calls[0]
+    expect(init?.body).toEqual(expect.any(String))
+    return JSON.parse(init?.body as string) as Record<string, number>
+  }
+
+  it('forward confirm posts watched_through_order + view_as_of_order — visible_until_order ABSENT', async () => {
+    mockFetchJson(200, { ...sampleProgress, watched_through_order: 4, view_as_of_order: 3 })
+
+    await updateProgress('series_dexter', 4, { watchedThroughOrder: 4, viewAsOfOrder: 3 })
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      progressUrl,
+      expect.objectContaining({ method: 'POST', credentials: 'include' }),
+    )
+    const body = parsedBody()
+    expect(body).toEqual({ watched_through_order: 4, view_as_of_order: 3 })
+    expect(body).not.toHaveProperty('visible_until_order')
+  })
+
+  it('view-only posts view_as_of_order ALONE — visible_until_order and watched_through_order ABSENT', async () => {
+    mockFetchJson(200, { ...sampleProgress, view_as_of_order: 2 })
+
+    await updateProgress('series_dexter', 1, { viewAsOfOrder: 2 })
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      progressUrl,
+      expect.objectContaining({ method: 'POST', credentials: 'include' }),
+    )
+    const body = parsedBody()
+    expect(body).toEqual({ view_as_of_order: 2 })
+    expect(body).not.toHaveProperty('visible_until_order')
+    expect(body).not.toHaveProperty('watched_through_order')
+  })
+
+  it('plain legacy confirm posts visible_until_order alone', async () => {
+    mockFetchJson(200, { ...sampleProgress, visible_until_order: 5 })
+
+    await updateProgress('series_dexter', 5)
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      progressUrl,
+      expect.objectContaining({ method: 'POST', credentials: 'include' }),
+    )
+    const body = parsedBody()
+    expect(body).toEqual({ visible_until_order: 5 })
+    expect(body).not.toHaveProperty('watched_through_order')
+    expect(body).not.toHaveProperty('view_as_of_order')
+  })
+})
