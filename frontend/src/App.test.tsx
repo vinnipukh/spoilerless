@@ -213,6 +213,21 @@ describe('App', () => {
     expect(screen.getByText(/spoiler-safe graph browser/i)).toBeInTheDocument()
   })
 
+  it('enters read-only visitor (misafir) mode from the login page', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await screen.findByText('Spoilerless')
+    await user.click(screen.getByRole('button', { name: 'Continue as visitor' }))
+
+    // Visitor badge replaces the account block…
+    await waitFor(() => {
+      expect(screen.getByText('Visitor')).toBeInTheDocument()
+    })
+    // …and chat is hidden entirely (chat is auth-gated and costs LLM tokens).
+    expect(screen.queryByRole('button', { name: 'Open chat' })).not.toBeInTheDocument()
+  })
+
   it('shows loading then transitions from login to graph when authenticated', async () => {
     // Start unauthenticated, then after a brief delay become authenticated
     currentAuthState = 'authenticated'

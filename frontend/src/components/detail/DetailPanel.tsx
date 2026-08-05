@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Download } from 'lucide-react'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { fetchExportMarkdown, downloadMarkdownBlob } from '@/api/export'
 import { renderGraphMarkdown, exportFilename } from '@/lib/exportMarkdown'
 import {
@@ -131,6 +131,10 @@ type Props = {
   // once.
   open: boolean
   onDeselect: () => void
+  /** Quick task 260805-te3: read-only visitor (misafir) mode — hides the
+   * Create Relationship action and all note write affordances (add/edit/
+   * delete). The inspector stays fully browsable. */
+  readOnly?: boolean
 }
 
 type ResolvedEvidence = {
@@ -183,10 +187,13 @@ function NoteItem({
   note,
   onEdit,
   onDelete,
+  readOnly = false,
 }: {
   note: NoteResponse
   onEdit: (note: NoteResponse) => void
   onDelete: (noteId: string) => void
+  /** Quick task 260805-te3: read-only (visitor) mode hides edit/delete. */
+  readOnly?: boolean
 }) {
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -194,6 +201,7 @@ function NoteItem({
   return (
     <div className="rounded-md border border-border p-2 text-sm">
       <p className="whitespace-pre-wrap break-words">{note.content}</p>
+      {!readOnly && (
       <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
         <button
           type="button"
@@ -245,6 +253,7 @@ function NoteItem({
           </button>
         )}
       </div>
+      )}
     </div>
   )
 }
@@ -461,6 +470,7 @@ export function DetailPanel({
   episodes,
   open,
   onDeselect,
+  readOnly = false,
 }: Props) {
   // Selection-aware state
   const [editingNote, setEditingNote] = useState<NoteResponse | null>(null)
@@ -610,6 +620,13 @@ export function DetailPanel({
   }
 
   return (
+    // Self-contained provider (same pattern as GraphCanvas.tsx:531) — the
+    // Export Markdown Tooltip in the header renders on every selection, and
+    // DetailPanel is a sibling of GraphCanvas (App renders both), so without
+    // this Radix throws "Tooltip must be used within TooltipProvider" and
+    // selecting any node crashes the app (2026-08-05, caught by the
+    // DetailPanel/App test reds).
+    <TooltipProvider>
     <Sheet open={open} onOpenChange={(next) => !next && onDeselect()} modal={false}>
       <SheetContent
         side="left"
@@ -697,7 +714,7 @@ export function DetailPanel({
                     </div>
                   </dl>
                 )}
-                {selected.kind === 'node' && selectedNode && (
+                {selected.kind === 'node' && selectedNode && !readOnly && (
                   <button
                     type="button"
                     className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors min-h-[44px]"
@@ -748,6 +765,15 @@ export function DetailPanel({
               </TabsContent>
 
               <TabsContent value="notes" className="flex flex-col gap-2 pt-2">
+                {/* Read-only (visitor) mode: the notes routes are auth-gated
+                    (GET /notes → 401 anonymous), so the whole tab degrades to
+                    a sign-in hint instead of an error state. */}
+                {readOnly ? (
+                  <p className="text-xs text-muted-foreground py-2">
+                    Sign in to view and manage notes.
+                  </p>
+                ) : (
+                  <>
                 {/* Create note form */}
                 {showNewNoteForm ? (
                   <NoteEditor
@@ -812,6 +838,8 @@ export function DetailPanel({
                       )
                     ))}
                   </div>
+                )}
+                  </>
                 )}
               </TabsContent>
 
@@ -882,5 +910,6 @@ export function DetailPanel({
         />
       </SheetContent>
     </Sheet>
+    </TooltipProvider>
   )
 }

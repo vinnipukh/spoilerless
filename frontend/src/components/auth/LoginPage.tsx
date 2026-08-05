@@ -28,7 +28,7 @@ declare global {
 }
 
 export function LoginPage() {
-  const { login, state } = useAuth()
+  const { login, state, enterVisitor } = useAuth()
   const buttonContainerRef = useRef<HTMLDivElement>(null)
   const initRef = useRef(false)
 
@@ -108,6 +108,18 @@ export function LoginPage() {
         )}
 
         <div ref={buttonContainerRef} className="min-h-[40px]" />
+
+        {/* Quick task 260805-te3: read-only visitor (misafir) entry — browse
+            the graph without an account. All writes stay backend-blocked
+            (anonymous → 401 since 09-03); the UI hides write affordances. */}
+        <div className="flex w-full flex-col items-center gap-1">
+          <Button variant="outline" size="lg" onClick={enterVisitor} type="button" className="w-[280px]">
+            Continue as visitor
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Browse the graph without an account — read-only.
+          </p>
+        </div>
 
         {state.status === 'loading' && (
           <p className="text-sm text-muted-foreground">Signing in…</p>

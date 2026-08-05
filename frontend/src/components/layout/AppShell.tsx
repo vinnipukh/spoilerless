@@ -10,6 +10,10 @@ import { modLabel } from '@/hooks/useHotkey'
 type Props = {
   user?: User
   onLogout?: () => void
+  // Quick task 260805-te3: read-only visitor (misafir) mode — a muted badge
+  // replaces the account block and a "Sign in" action exits back to LoginPage.
+  visitor?: boolean
+  onSignIn?: () => void
   topBar: ReactNode
   children: ReactNode
   /** FEAT-08 (09-09): AppShell's ⌘K palette trigger (Command icon, topBar
@@ -42,7 +46,7 @@ function UserIcon() {
   )
 }
 
-export function AppShell({ user, onLogout, topBar, children, onOpenPalette }: Props) {
+export function AppShell({ user, onLogout, visitor, onSignIn, topBar, children, onOpenPalette }: Props) {
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       {/* z-[60] keeps the header above the always-open Details sheet (fixed, z-50, inset-y-0 right-0), which otherwise covers the account/logout controls */}
@@ -61,29 +65,42 @@ export function AppShell({ user, onLogout, topBar, children, onOpenPalette }: Pr
               onClick={onOpenPalette}
             />
           )}
-          {user && (
-            <div className="flex items-center gap-3 shrink-0 hover:bg-elevated">
-              <span className="hidden sm:inline text-sm text-muted-foreground">
-                {user.display_name}
+          {visitor ? (
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+                Visitor
               </span>
-              {avatarUrl(user) ? (
-                <img
-                  src={avatarUrl(user)!}
-                  alt={user.display_name}
-                  className="size-7 rounded-full object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="size-7 rounded-full bg-muted flex items-center justify-center">
-                  <UserIcon />
-                </div>
-              )}
-              {onLogout && (
-                <Button variant="ghost" size="sm" onClick={onLogout} type="button">
-                  Logout
+              {onSignIn && (
+                <Button variant="outline" size="sm" onClick={onSignIn} type="button">
+                  Sign in
                 </Button>
               )}
             </div>
+          ) : (
+            user && (
+              <div className="flex items-center gap-3 shrink-0 hover:bg-elevated">
+                <span className="hidden sm:inline text-sm text-muted-foreground">
+                  {user.display_name}
+                </span>
+                {avatarUrl(user) ? (
+                  <img
+                    src={avatarUrl(user)!}
+                    alt={user.display_name}
+                    className="size-7 rounded-full object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="size-7 rounded-full bg-muted flex items-center justify-center">
+                    <UserIcon />
+                  </div>
+                )}
+                {onLogout && (
+                  <Button variant="ghost" size="sm" onClick={onLogout} type="button">
+                    Logout
+                  </Button>
+                )}
+              </div>
+            )
           )}
         </div>
       </Card>

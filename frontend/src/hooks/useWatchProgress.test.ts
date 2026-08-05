@@ -378,3 +378,38 @@ describe('useWatchProgress', () => {
     })
   })
 })
+
+describe('useWatchProgress persist:false (visitor / misafir read-only mode)', () => {
+  it('applies order changes purely locally — never POSTs, never opens the modal', async () => {
+    const { result } = renderHook(() => useWatchProgress({ persist: false }))
+
+    await act(async () => {
+      const ok = await result.current.requestChange('series_dexter', 3)
+      expect(ok).toBe(true)
+    })
+
+    expect(result.current.seriesId).toBe('series_dexter')
+    expect(result.current.viewAsOfOrder).toBe(3)
+    expect(result.current.pendingChange).toBeNull()
+    expect(mockedUpdateProgress).not.toHaveBeenCalled()
+  })
+
+  it('never calls the backend hydration GET on mount', () => {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 2 }))
+
+    renderHook(() => useWatchProgress({ persist: false }))
+
+    expect(mockedGetProgress).not.toHaveBeenCalled()
+  })
+
+  it('confirmChange is a no-op (visitor mode never sets a pendingChange)', async () => {
+    const { result } = renderHook(() => useWatchProgress({ persist: false }))
+
+    await act(async () => {
+      await result.current.confirmChange()
+    })
+
+    expect(result.current.pendingChange).toBeNull()
+    expect(mockedUpdateProgress).not.toHaveBeenCalled()
+  })
+})

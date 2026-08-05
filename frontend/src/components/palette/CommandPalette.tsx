@@ -59,7 +59,9 @@ type Props = {
   /** App wires this to watchProgress.requestChange — locked episodes route
    * to the unlock dialog per the PROB-31 fix (09-07). */
   onRequestChange: (episodeOrder: number) => void
-  onOpenChat: () => void
+  /** Quick task 260805-te3: optional so visitor mode (read-only, no chat)
+   * can hide the chat action row entirely. */
+  onOpenChat?: () => void
   onOpenTimeline: () => void
   onOpenSettings: () => void
   onOpenDashboard: () => void
@@ -108,7 +110,8 @@ export function CommandPalette({
   // Action rows are static; filtering happens against the query below.
   const actions: ActionDef[] = useMemo(
     () => [
-      { id: 'chat', label: 'Open chat', icon: MessageSquare, run: onOpenChat },
+      // Visitor mode (read-only, no chat) drops the chat row entirely.
+      ...(onOpenChat ? [{ id: 'chat', label: 'Open chat', icon: MessageSquare, run: onOpenChat }] : []),
       { id: 'timeline', label: 'Open timeline', icon: CalendarClock, run: onOpenTimeline },
       { id: 'settings', label: 'Open settings', icon: Settings, run: onOpenSettings },
       { id: 'dashboard', label: 'Open dashboard', icon: LayoutGrid, run: onOpenDashboard },

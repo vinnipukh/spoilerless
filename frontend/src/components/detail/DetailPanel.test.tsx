@@ -1,9 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { ReactElement } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { DetailPanel } from './DetailPanel'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { graphResponseS01E01 } from '../../test/fixtures/graphResponse'
 import type { SelectedElement } from '../graph/GraphCanvas'
+
+// The panel header carries a Tooltip (Export Markdown, FEAT-05) that renders
+// whenever a node is selected — every selected-node render must sit inside a
+// TooltipProvider or Radix throws "Tooltip must be used within
+// TooltipProvider" (root cause of the 2026-08-05 DetailPanel test reds).
+function renderPanel(ui: ReactElement) {
+  return render(<TooltipProvider>{ui}</TooltipProvider>)
+}
 
 // ChatPanel (mounted only when mode === 'chat') calls the real chat API
 // client on mount via useChatSessions — stub it so mode-toggle tests that
@@ -46,7 +56,7 @@ const defaultProps = {
 
 describe('DetailPanel', () => {
   it('renders the locked no-selection placeholder with no Tabs', async () => {
-    render(<DetailPanel selected={null} {...defaultProps} />)
+    renderPanel(<DetailPanel selected={null} {...defaultProps} />)
 
     expect(await screen.findByText('Select a node to see details.')).toBeInTheDocument()
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
@@ -55,7 +65,7 @@ describe('DetailPanel', () => {
   it('renders all three tabs for a node with claims/evidence, including the exact evidence copy', async () => {
     const user = userEvent.setup()
     const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
-    render(<DetailPanel selected={selected} {...defaultProps} />)
+    renderPanel(<DetailPanel selected={selected} {...defaultProps} />)
 
     expect(await screen.findByRole('heading', { name: 'Dexter Morgan' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument()
@@ -83,7 +93,7 @@ describe('DetailPanel', () => {
       source: 'char_dexter_morgan',
       target: 'loc_miami_metro',
     }
-    render(<DetailPanel selected={selected} {...defaultProps} />)
+    renderPanel(<DetailPanel selected={selected} {...defaultProps} />)
 
     expect(await screen.findByRole('heading', { name: 'Dexter works at Miami Metro' })).toBeInTheDocument()
     expect(await screen.findByText('Relationship')).toBeInTheDocument()
@@ -101,7 +111,7 @@ describe('DetailPanel', () => {
       label: 'The Ice Truck Killer',
       nodeType: 'Character',
     }
-    render(<DetailPanel selected={selected} {...defaultProps} />)
+    renderPanel(<DetailPanel selected={selected} {...defaultProps} />)
 
     await user.click(await screen.findByRole('tab', { name: 'Claims' }))
     expect(await screen.findByText('No claims recorded for this node yet')).toBeInTheDocument()
@@ -114,7 +124,7 @@ describe('DetailPanel', () => {
     // char_dexter_morgan carries a seeded image_url/image_source_url pair
     // (test/fixtures/graphResponse.ts).
     const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
-    render(<DetailPanel selected={selected} {...defaultProps} />)
+    renderPanel(<DetailPanel selected={selected} {...defaultProps} />)
 
     const portrait = await screen.findByAltText('Dexter Morgan')
     expect(portrait).toBeInTheDocument()
@@ -132,7 +142,7 @@ describe('DetailPanel', () => {
   it('shows an initials fallback avatar for a Character with no image_url, with no <img>', async () => {
     // char_debra_morgan has image_url: null in the fixture.
     const selected: SelectedElement = { kind: 'node', id: 'char_debra_morgan', label: 'Debra Morgan', nodeType: 'Character' }
-    render(<DetailPanel selected={selected} {...defaultProps} />)
+    renderPanel(<DetailPanel selected={selected} {...defaultProps} />)
 
     expect(await screen.findByRole('heading', { name: 'Debra Morgan' })).toBeInTheDocument()
     expect(screen.getByText('DM')).toBeInTheDocument()
@@ -142,7 +152,7 @@ describe('DetailPanel', () => {
 
   it('falls back to the initials avatar when the portrait image fails to load', async () => {
     const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
-    render(<DetailPanel selected={selected} {...defaultProps} />)
+    renderPanel(<DetailPanel selected={selected} {...defaultProps} />)
 
     const portrait = await screen.findByAltText('Dexter Morgan')
     portrait.dispatchEvent(new Event('error'))
@@ -154,7 +164,7 @@ describe('DetailPanel', () => {
   it('renders the identical initials placeholder for null and failed images (D-14)', async () => {
     // Missing image: image_url null -> initials placeholder.
     const nullSelected: SelectedElement = { kind: 'node', id: 'char_debra_morgan', label: 'Debra Morgan', nodeType: 'Character' }
-    const { unmount } = render(<DetailPanel selected={nullSelected} {...defaultProps} />)
+    const { unmount } = renderPanel(<DetailPanel selected={nullSelected} {...defaultProps} />)
     const nullPlaceholder = await screen.findByTestId('character-avatar')
     expect(nullPlaceholder).toBeInTheDocument()
     const nullDom = nullPlaceholder.outerHTML
@@ -164,7 +174,7 @@ describe('DetailPanel', () => {
     // placeholder DOM (identical testid + classes), no distinct error UI,
     // no retry affordance, no presence inference.
     const failSelected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
-    render(<DetailPanel selected={failSelected} {...defaultProps} />)
+    renderPanel(<DetailPanel selected={failSelected} {...defaultProps} />)
     const portrait = await screen.findByAltText('Dexter Morgan')
     portrait.dispatchEvent(new Event('error'))
 
@@ -176,7 +186,7 @@ describe('DetailPanel', () => {
 
   it('uses the safe visible label as alt text, never a filename or URL (D-14)', async () => {
     const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
-    render(<DetailPanel selected={selected} {...defaultProps} />)
+    renderPanel(<DetailPanel selected={selected} {...defaultProps} />)
 
     const portrait = await screen.findByAltText('Dexter Morgan')
     const alt = portrait.getAttribute('alt')
@@ -201,7 +211,7 @@ describe('DetailPanel', () => {
     }
     const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
     // defaultProps visibleUntilOrder is 1; the node is visible_from_order 2.
-    render(<DetailPanel selected={selected} {...defaultProps} graph={graphWithHiddenImage} />)
+    renderPanel(<DetailPanel selected={selected} {...defaultProps} graph={graphWithHiddenImage} />)
 
     expect(await screen.findByTestId('character-avatar')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Image source' })).not.toBeInTheDocument()
@@ -212,7 +222,7 @@ describe('DetailPanel', () => {
     const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
     // An unknown/null boundary must fail closed — no source link, even though
     // the backend would have returned a valid URL for this visible node.
-    render(<DetailPanel selected={selected} {...defaultProps} visibleUntilOrder={null} />)
+    renderPanel(<DetailPanel selected={selected} {...defaultProps} visibleUntilOrder={null} />)
 
     expect(await screen.findByAltText('Dexter Morgan')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Image source' })).not.toBeInTheDocument()
@@ -226,7 +236,7 @@ describe('DetailPanel', () => {
       source: 'char_dexter_morgan',
       target: 'loc_miami_metro',
     }
-    render(<DetailPanel selected={selected} {...defaultProps} />)
+    renderPanel(<DetailPanel selected={selected} {...defaultProps} />)
 
     expect(await screen.findByRole('heading', { name: 'Dexter works at Miami Metro' })).toBeInTheDocument()
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
@@ -234,7 +244,7 @@ describe('DetailPanel', () => {
 
   it('shows the Notes tab when a Character node is selected', async () => {
     const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
-    render(<DetailPanel selected={selected} {...defaultProps} />)
+    renderPanel(<DetailPanel selected={selected} {...defaultProps} />)
 
     expect(await screen.findByRole('tab', { name: 'Notes' })).toBeInTheDocument()
   })
@@ -247,7 +257,7 @@ describe('DetailPanel', () => {
       ),
     }
     const selected: SelectedElement = { kind: 'node', id: 'char_ice_truck_killer', label: 'The Ice Truck Killer', nodeType: 'Character' }
-    render(<DetailPanel selected={selected} {...defaultProps} graph={graphWithUserNode} />)
+    renderPanel(<DetailPanel selected={selected} {...defaultProps} graph={graphWithUserNode} />)
 
     expect(await screen.findByText('User')).toBeInTheDocument()
     // The badge should have dashed border styling
@@ -258,7 +268,7 @@ describe('DetailPanel', () => {
 
   it('shows canonical origin text (not badge) for a canonical node', async () => {
     const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
-    render(<DetailPanel selected={selected} {...defaultProps} />)
+    renderPanel(<DetailPanel selected={selected} {...defaultProps} />)
 
     expect(await screen.findByText('canonical')).toBeInTheDocument()
   })
@@ -266,7 +276,7 @@ describe('DetailPanel', () => {
   describe('collapsible left inspector Sheet (06-09/06-12)', () => {
     it('renders no Sheet content at all when open is false', () => {
       const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
-      render(<DetailPanel selected={selected} {...defaultProps} open={false} />)
+      renderPanel(<DetailPanel selected={selected} {...defaultProps} open={false} />)
 
       expect(screen.queryByRole('heading', { name: 'Dexter Morgan' })).not.toBeInTheDocument()
       expect(screen.queryByText('Select a node to see details.')).not.toBeInTheDocument()
@@ -275,7 +285,7 @@ describe('DetailPanel', () => {
 
     it('renders the inspector content (never the chat surface) when open', async () => {
       const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
-      render(<DetailPanel selected={selected} {...defaultProps} />)
+      renderPanel(<DetailPanel selected={selected} {...defaultProps} />)
 
       expect(await screen.findByRole('heading', { name: 'Dexter Morgan' })).toBeInTheDocument()
       expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument()
@@ -288,7 +298,7 @@ describe('DetailPanel', () => {
     const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
     const onRefreshGraph = vi.fn()
     const user = userEvent.setup()
-    render(
+    renderPanel(
       <DetailPanel
         selected={selected}
         {...defaultProps}
@@ -313,5 +323,25 @@ describe('DetailPanel', () => {
     // appears without a manual reload (and without a destructive remount).
     expect(onRefreshGraph).toHaveBeenCalledTimes(1)
   })
+  })
+})
+
+describe('DetailPanel readOnly (visitor / misafir read-only mode)', () => {
+  it('hides the Create Relationship action', async () => {
+    const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
+    renderPanel(<DetailPanel selected={selected} {...defaultProps} readOnly />)
+
+    await screen.findByRole('heading', { name: 'Dexter Morgan' })
+    expect(screen.queryByRole('button', { name: 'Create relationship' })).not.toBeInTheDocument()
+  })
+
+  it('shows a sign-in hint instead of note write affordances', async () => {
+    const user = userEvent.setup()
+    const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
+    renderPanel(<DetailPanel selected={selected} {...defaultProps} readOnly />)
+
+    await user.click(await screen.findByRole('tab', { name: 'Notes' }))
+    expect(await screen.findByText('Sign in to view and manage notes.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add note' })).not.toBeInTheDocument()
   })
 })

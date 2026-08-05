@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AuthProvider } from './providers/AuthProvider'
 import { useAuth } from './providers/useAuth'
 import { LoginPage } from './components/auth/LoginPage'
@@ -108,9 +108,13 @@ function LayoutGridIcon() {
 function AuthenticatedApp() {
   const { state, logout } = useAuth()
   const user = state.status === 'authenticated' ? state.user : undefined
+  // Quick task 260805-te3: read-only visitor (misafir) mode — the graph
+  // stays fully browsable (all GET routes are anonymous) but every write
+  // affordance is hidden and progress changes stay purely local.
+  const isVisitor = state.status === 'visitor'
 
   const seriesState = useSeries()
-  const watchProgress = useWatchProgress()
+  const watchProgress = useWatchProgress({ persist: !isVisitor })
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(watchProgress.seriesId)
   const episodesState = useEpisodes(selectedSeriesId, watchProgress.viewAsOfOrder)
   const graphState = useGraph(watchProgress.seriesId, watchProgress.confirmedOrder)
@@ -120,6 +124,28 @@ function AuthenticatedApp() {
   const notesState = useNotes({ seriesId: watchProgress.seriesId, visibleUntilOrder: watchProgress.confirmedOrder })
   const notes = notesState.status === 'success' ? notesState.data : []
   const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null)
+
+  // Quick task 260805-te3: a visitor has no persisted progress record (the
+  // progress GET/POST routes are auth-gated → 401 anonymous) — seed the
+  // first series at order 1 with a purely local view so the canvas renders
+  // immediately instead of an empty state. Guarded by a ref so a later
+  // series change (dropdown) never re-seeds.
+  const visitorSeededRef = useRef(false)
+  useEffect(() => {
+    if (
+      !isVisitor ||
+      visitorSeededRef.current ||
+      watchProgress.seriesId != null ||
+      seriesState.status !== 'success' ||
+      seriesState.data.length === 0
+    ) {
+      return
+    }
+    visitorSeededRef.current = true
+    const firstSeries = seriesState.data[0]
+    setSelectedSeriesId(firstSeries.id)
+    void watchProgress.requestChange(firstSeries.id, 1)
+  }, [isVisitor, watchProgress, seriesState])
 
   // ChatSheet's `open` state, lifted here per 06-UI-SPEC.md "Chat & Panel
   // Architecture" — `ChatLauncher` lives in AppShell's topBar slot, outside
@@ -421,6 +447,8 @@ function AuthenticatedApp() {
     <AppShell
       user={user}
       onLogout={logout}
+      visitor={isVisitor}
+      onSignIn={isVisitor ? logout : undefined}
       onOpenPalette={() => setPaletteOpen((open) => !open)}
       topBar={
         <>
@@ -432,7 +460,7 @@ function AuthenticatedApp() {
             onSelect={handleEpisodeSelect}
             disabled={!selectedSeriesId}
           />
-          <ChatLauncher active={chatOpen} onClick={handleChatLauncherClick} />
+          {!isVisitor && <ChatLauncher active={chatOpen} onClick={handleChatLauncherClick} />}
           <HeaderNavAction
             icon={<CalendarClockIcon />}
             label={view === 'timeline' ? 'Graph' : 'Timeline'}
@@ -497,7 +525,8 @@ function AuthenticatedApp() {
             onRevealDone={() => setRevealIds(null)}
             newlyRevealedIds={newlyRevealedIds}
             onNewlyRevealedDone={() => setNewlyRevealedIds(null)}
-            onShareLink={() => setShareDialogOpen(true)}
+            readOnly={isVisitor}
+            onShareLink={isVisitor ? undefined : () => setShareDialogOpen(true)}
           />
 
           {/* FEAT-01/07 (09-09): floating search bar over the canvas — the
@@ -527,19 +556,21 @@ function AuthenticatedApp() {
               onDeselect={() => setSelectedElement(null)}
             />
           )}
-          <ChatSheet
-            open={chatOpen}
-            onClose={() => setChatOpen(false)}
-            seriesId={watchProgress.seriesId}
-            seriesTitle={graphState.data.series.title}
-            viewAsOfOrder={watchProgress.viewAsOfOrder}
-            currentEpisodeCode={
-              episodes.find((episode) => episode.episode_order === watchProgress.confirmedOrder)?.code ?? null
-            }
-            onShowInGraph={handleShowInGraph}
-            onOpenDetail={handleOpenDetail}
-            onChangeSetApplied={handleChangeSetApplied}
-          />
+          {!isVisitor && (
+            <ChatSheet
+              open={chatOpen}
+              onClose={() => setChatOpen(false)}
+              seriesId={watchProgress.seriesId}
+              seriesTitle={graphState.data.series.title}
+              viewAsOfOrder={watchProgress.viewAsOfOrder}
+              currentEpisodeCode={
+                episodes.find((episode) => episode.episode_order === watchProgress.confirmedOrder)?.code ?? null
+              }
+              onShowInGraph={handleShowInGraph}
+              onOpenDetail={handleOpenDetail}
+              onChangeSetApplied={handleChangeSetApplied}
+            />
+          )}
         </>
       )}
       {graphState.status === 'idle' && <GraphEmptyState />}
@@ -556,7 +587,7 @@ function AuthenticatedApp() {
         episodes={episodes}
         onSelectNode={handleJumpToNode}
         onRequestChange={handleEpisodeSelect}
-        onOpenChat={() => setChatOpen(true)}
+        onOpenChat={isVisitor ? undefined : () => setChatOpen(true)}
         onOpenTimeline={handleOpenTimeline}
         onOpenSettings={() => setView('settings')}
         onOpenDashboard={handleOpenDashboard}

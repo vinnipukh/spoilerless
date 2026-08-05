@@ -106,7 +106,12 @@ function initialState(): State {
   }
 }
 
-export function useWatchProgress() {
+export function useWatchProgress(options?: { persist?: boolean }) {
+  // Quick task 260805-te3: `persist: false` = read-only visitor (misafir)
+  // mode. Progress writes are auth-gated (POST /progress → 401 anonymous),
+  // so a visitor's boundary changes stay purely local: never POST, never
+  // open the unlock modal, never touch the backend.
+  const persist = options?.persist ?? true
   const [state, setState] = useState<State>(initialState)
 
   // Set by the first user-initiated interaction (requestChange/
@@ -128,6 +133,7 @@ export function useWatchProgress() {
   // once the user has clicked (userInteractedRef) so hydration never rolls
   // back a committed selection (PROB-31).
   useEffect(() => {
+    if (!persist) return // visitor mode: no backend progress to hydrate
     const seriesId = state.seriesId
     if (!seriesId) return
     let cancelled = false
@@ -160,6 +166,13 @@ export function useWatchProgress() {
   // happened" (PROB-31). Never silently returns.
   function requestChange(seriesId: string, nextOrder: number): Promise<boolean> {
     userInteractedRef.current = true
+
+    // Visitor mode: purely local view switch — no POST, no unlock modal.
+    if (!persist) {
+      setState((prev) => ({ ...prev, seriesId, viewAsOfOrder: nextOrder }))
+      return Promise.resolve(true)
+    }
+
     const currentView = state.seriesId === seriesId ? state.viewAsOfOrder : null
     const watched = state.seriesId === seriesId ? state.watchedThroughOrder : null
 
@@ -201,6 +214,7 @@ export function useWatchProgress() {
   }
 
   async function confirmChange() {
+    if (!persist) return // visitor mode: pendingChange is never set
     userInteractedRef.current = true
     const pending = state.pendingChange
     if (!pending) return
