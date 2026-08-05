@@ -172,10 +172,12 @@ async def test_custom_node_and_relationship_writes_use_static_queries_and_parame
         ),
     )
     calls = [call for session in database.driver.sessions for call in session.tx.calls]
-    # Each callback is retried twice by the fake. With revision logging each callback
-    # runs the mutation query + log_revision query = 2 queries. 2 retries × 2 queries = 4.
-    # Two operations (custom_node + custom_relationship) = 8 calls total.
-    assert len(calls) == 8
+    # Each callback is retried twice by the fake. custom_node now derives its
+    # visible_from_order through the shared rule (PROB-25, #49): it first reads
+    # the episode order, then runs the mutation + log_revision = 3 queries per
+    # callback (2 retries × 3 = 6). custom_relationship keeps mutation +
+    # log_revision = 2 per callback (2 retries × 2 = 4). Total 10.
+    assert len(calls) == 10
     # Filter to mutation queries only (revision queries use "revision:" prefix)
     mutation_calls = [(q, p) for q, p in calls if p.get("id", "").startswith(("user-node:", "user-rel:"))]
     assert len(mutation_calls) == 4  # 2 per operation × 2 retries

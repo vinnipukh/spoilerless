@@ -25,6 +25,7 @@ from spoilerless.app.domain.user_content import (
 )
 from spoilerless.app.graph.database import Neo4jDatabase
 from spoilerless.app.revisions import RevisionRepository
+from spoilerless.app.spoiler.visibility import derive_visible_from_order
 
 
 class UserContentValidationError(ValueError):
@@ -182,6 +183,7 @@ NOTE_CREATE_QUERIES: Mapping[NoteTargetType, str] = {
         WHERE target.origin IN ['canonical', 'candidate', 'user']
           AND target.visible_from_order IS NOT NULL AND target.visible_from_order >= 1
         CREATE (note:UserNote {id: $id, series_id: $series_id, user_id: $user_id,
+          created_by: $user_id,
           target_type: $target_type, target_id: $target_id, content: $content,
           visible_from_order: target.visible_from_order, origin: 'user',
           created_at: $created_at, updated_at: $updated_at})
@@ -199,6 +201,7 @@ NOTE_CREATE_QUERIES: Mapping[NoteTargetType, str] = {
         WHERE target.origin IN ['canonical', 'candidate', 'user']
           AND target.visible_from_order IS NOT NULL AND target.visible_from_order >= 1
         CREATE (note:UserNote {id: $id, series_id: $series_id, user_id: $user_id,
+          created_by: $user_id,
           target_type: $target_type, target_id: $target_id, content: $content,
           visible_from_order: target.visible_from_order, origin: 'user',
           created_at: $created_at, updated_at: $updated_at})
@@ -217,7 +220,8 @@ CUSTOM_NODE_CREATE_QUERIES: Mapping[CustomNodeType, str] = {
         MATCH (episode:Episode {{id: $episode_id, series_id: $series_id}})
         WHERE episode.episode_order IS NOT NULL AND episode.episode_order >= 1
         CREATE (node:{node_type.value} {{id: $id, series_id: $series_id, user_id: $user_id,
-          label: $label, episode_id: $episode_id, visible_from_order: episode.episode_order,
+          created_by: $user_id,
+          label: $label, episode_id: $episode_id, visible_from_order: $visible_from_order,
           origin: 'user', created_at: $created_at, updated_at: $updated_at}})
         RETURN node.id AS id, node.series_id AS series_id, node.user_id AS user_id,
           '{node_type.value}' AS type, node.label AS label,
@@ -234,6 +238,7 @@ CUSTOM_RELATIONSHIP_CREATE_QUERY = """
       AND target.visible_from_order IS NOT NULL AND target.visible_from_order >= 1
       AND episode.episode_order IS NOT NULL AND episode.episode_order >= 1
     CREATE (claim:Claim {id: $id, series_id: $series_id, user_id: $user_id,
+      created_by: $user_id,
       subject_id: $source_id, object_id: $target_id, predicate: $predicate,
       claim_type: 'user_authored', episode_id: $episode_id, visible_from_order:
         CASE WHEN source.visible_from_order > target.visible_from_order
@@ -421,11 +426,25 @@ class UserContentRepository:
     @staticmethod
     async def _create_custom_node(tx: Any, payload: tuple[CustomNodeCreateCommand, str]) -> Any:
         command, query = payload
+        # Derive visibility through the single shared rule (PROB-25, #49) rather
+        # than stamping episode.episode_order inline in Cypher — read the
+        # episode order first, then let derive_visible_from_order own the rule.
+        episode_row = await (await tx.run(
+            "MATCH (episode:Episode {id: $episode_id, series_id: $series_id}) "
+            "WHERE episode.episode_order IS NOT NULL AND episode.episode_order >= 1 "
+            "RETURN episode.episode_order AS episode_order",
+            episode_id=command.episode_id, series_id=command.series_id)).single()
+        if episode_row is None:
+            raise UserContentNotFound("episode not found")
+        visible_from_order = derive_visible_from_order(
+            episode_row.data().get("episode_order"), None
+        )
         result = await _run_create(tx, query,
             "episode not found",
             id=command.id, series_id=command.series_id,
             user_id=command.user_id,
             label=command.label, episode_id=command.episode_id,
+            visible_from_order=visible_from_order,
             created_at=command.created_at, updated_at=command.updated_at)
         snapshot = RevisionRepository.take_snapshot(result)
         await RevisionRepository.log_revision(

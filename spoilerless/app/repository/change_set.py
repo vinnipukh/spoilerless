@@ -55,6 +55,7 @@ from spoilerless.app.graph.change_set import (
 from spoilerless.app.graph.database import Neo4jDatabase
 from spoilerless.app.repository.user_content import NOTE_DELETE_QUERY, NOTE_UPDATE_QUERY
 from spoilerless.app.revisions import RevisionRepository
+from spoilerless.app.spoiler.visibility import derive_visible_from_order
 
 _OPERATION_ADAPTER: TypeAdapter[ChangeSetOperation] = TypeAdapter(ChangeSetOperation)
 
@@ -609,7 +610,7 @@ async def _apply_one_operation(
     """
     match operation.operation_type:
         case "create_node":
-            await _require_visible(tx, operation.episode_id, series_id, current_progress)
+            episode = await _require_visible(tx, operation.episode_id, series_id, current_progress)
             query = CHANGE_SET_CREATE_NODE_QUERIES.get(operation.node_type)
             if query is None:
                 raise ChangeSetOperationInvalid(f"Unsupported node type: {operation.node_type}")
@@ -622,7 +623,9 @@ async def _apply_one_operation(
                 label=operation.label,
                 episode_id=operation.episode_id,
                 description=(operation.properties or {}).get("description"),
-                visible_from_order=current_progress,
+                visible_from_order=derive_visible_from_order(
+                    episode.get("visible_from_order"), current_progress
+                ),
                 user_id=user_id,
                 now=now,
             )
@@ -654,7 +657,7 @@ async def _apply_one_operation(
         case "create_relationship":
             await _require_visible(tx, operation.source_id, series_id, current_progress)
             await _require_visible(tx, operation.target_id, series_id, current_progress)
-            await _require_visible(tx, operation.episode_id, series_id, current_progress)
+            episode = await _require_visible(tx, operation.episode_id, series_id, current_progress)
             return await _run_apply(
                 tx,
                 CHANGE_SET_CREATE_RELATIONSHIP_QUERY,
@@ -666,7 +669,9 @@ async def _apply_one_operation(
                 relationship_type=operation.relationship_type.value,
                 episode_id=operation.episode_id,
                 description=(operation.properties or {}).get("description"),
-                visible_from_order=current_progress,
+                visible_from_order=derive_visible_from_order(
+                    episode.get("visible_from_order"), current_progress
+                ),
                 user_id=user_id,
                 now=now,
             )
@@ -709,7 +714,7 @@ async def _apply_one_operation(
         case "create_claim":
             await _require_visible(tx, operation.subject_id, series_id, current_progress)
             await _require_visible(tx, operation.object_id, series_id, current_progress)
-            await _require_visible(tx, operation.episode_id, series_id, current_progress)
+            episode = await _require_visible(tx, operation.episode_id, series_id, current_progress)
             return await _run_apply(
                 tx,
                 CHANGE_SET_CREATE_CLAIM_QUERY,
@@ -723,7 +728,9 @@ async def _apply_one_operation(
                 confidence_level=operation.confidence_level.value,
                 episode_id=operation.episode_id,
                 description=(operation.properties or {}).get("description"),
-                visible_from_order=current_progress,
+                visible_from_order=derive_visible_from_order(
+                    episode.get("visible_from_order"), current_progress
+                ),
                 user_id=user_id,
                 now=now,
             )
@@ -760,7 +767,7 @@ async def _apply_one_operation(
         case "attach_evidence":
             await _require_visible(tx, operation.claim_id, series_id, current_progress)
             await _require_visible(tx, operation.source_id, series_id, current_progress)
-            await _require_visible(tx, operation.episode_id, series_id, current_progress)
+            episode = await _require_visible(tx, operation.episode_id, series_id, current_progress)
             content_hash = hashlib.sha256(operation.text.encode("utf-8")).hexdigest()
             return await _run_apply(
                 tx,
@@ -774,11 +781,16 @@ async def _apply_one_operation(
                 locator=operation.locator,
                 text=operation.text,
                 content_hash=content_hash,
-                visible_from_order=current_progress,
+                visible_from_order=derive_visible_from_order(
+                    episode.get("visible_from_order"), current_progress
+                ),
                 user_id=user_id,
                 now=now,
             )
         case "create_note":
+            # A note carries no episode signal — its visibility follows the
+            # current progress floor through the same shared rule (episode
+            # order absent → derive_visible_from_order returns current_progress).
             await _require_visible(tx, operation.target_id, series_id, current_progress)
             query = CHANGE_SET_CREATE_NOTE_QUERIES.get(operation.target_type)
             if query is None:
@@ -794,7 +806,7 @@ async def _apply_one_operation(
                 target_type=operation.target_type.value,
                 target_id=operation.target_id,
                 content=operation.content,
-                visible_from_order=current_progress,
+                visible_from_order=derive_visible_from_order(None, current_progress),
                 user_id=user_id,
                 now=now,
             )

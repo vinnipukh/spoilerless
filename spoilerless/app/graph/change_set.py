@@ -81,6 +81,7 @@ WHERE target.visible_from_order IS NOT NULL
   AND target.visible_from_order <= $visible_until_order
 RETURN target.id AS id,
        target.origin AS origin,
+       target.visible_from_order AS visible_from_order,
        labels(target) AS node_labels
 """
 
