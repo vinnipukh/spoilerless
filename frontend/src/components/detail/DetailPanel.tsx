@@ -644,7 +644,7 @@ export function DetailPanel({
         onInteractOutside={(event) => event.preventDefault()}
         onEscapeKeyDown={(event) => event.preventDefault()}
         className={cn(
-          'mt-0 max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!h-auto max-sm:!w-full max-sm:!border-t max-sm:!border-l-0 max-sm:max-h-[70vh] lg:max-w-md',
+          'mt-0 max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!h-auto max-sm:!w-full max-sm:!border-t max-sm:!border-l-0 max-sm:max-h-[70vh] lg:max-w-xl',
           // Fix 3: explicit left-border + shadow prevents canvas bleed-through
           'border-r border-border shadow-lg',
         )}
