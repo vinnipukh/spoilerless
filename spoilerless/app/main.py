@@ -146,3 +146,18 @@ async def health_check(request: Request) -> HealthResponse | JSONResponse:
     return HealthResponse(
         status="ok", database="connected", service=SERVICE_NAME
     )
+
+
+@app.head("/health", include_in_schema=False)
+async def health_check_head(request: Request) -> Response:
+    """HEAD variant of the health check for uptime monitors (UptimeRobot etc.).
+
+    FastAPI does not auto-register HEAD for a GET route, so a HEAD probe would
+    otherwise get 405. Returns 200 when the database is reachable, 503 when not.
+    """
+    database: Neo4jDatabase = request.app.state.neo4j
+    try:
+        await database.verify_connection()
+    except Exception:
+        return Response(status_code=503)
+    return Response(status_code=200)
