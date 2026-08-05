@@ -158,6 +158,32 @@ class TestCandidateApprove:
         )
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
+    def test_approve_returns_real_persisted_revision_id(
+        self, live_client: TestClient, ingested_claim_id: str, admin_session: str
+    ):
+        """PROB-12/#34: approve returns the id log_revision actually persisted,
+        not a fabricated sha256 hash — and that id is GET-able (200, not 404).
+
+        The old code returned ``revision:<12 hex chars>`` (no hyphens); the real
+        persisted id is ``revision:<uuid4>`` (always contains hyphens). A
+        follow-up GET on the returned id must resolve the very revision that was
+        written."""
+        response = live_client.post(
+            f"/api/series/{self.SERIES_ID}/candidates/{ingested_claim_id}/approve",
+        )
+        assert response.status_code == 200, response.text
+        revision_id = response.json()["revision_id"]
+        assert revision_id.startswith("revision:")
+        # A real uuid4 has hyphens; the old fabricated sha256[:12] never did.
+        assert "-" in revision_id, f"looks fabricated, not a persisted uuid: {revision_id}"
+
+        got = live_client.get(
+            f"/api/series/{self.SERIES_ID}/revisions/{revision_id}",
+            params={"visible_until_order": 99},
+        )
+        assert got.status_code == 200, f"returned revision id not GET-able: {got.text}"
+        assert got.json()["id"] == revision_id
+
     def test_approve_nonexistent_returns_404(
         self, live_client: TestClient, admin_session: str
     ):

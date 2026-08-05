@@ -280,5 +280,13 @@ class ChangeSetResponse(StrictModel):
     created_at: datetime
     confirmed_at: datetime | None = None
     applied_at: datetime | None = None
-    revision_id: Identifier | None = None
+    revision_id: Identifier | None = Field(
+        default=None,
+        description="The apply-time Revision id — preserved across revert (PROB-27, #51).",
+    )
+    revert_revision_id: Identifier | None = Field(
+        default=None,
+        description="The revert-time Revision id, set when the ChangeSet is reverted; "
+        "kept alongside revision_id so both links survive (PROB-27, #51).",
+    )
     idempotency_key: str | None = None

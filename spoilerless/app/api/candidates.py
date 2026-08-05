@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 from datetime import datetime, timezone
 from typing import Annotated, Any
 
@@ -211,15 +210,16 @@ async def approve_candidate(
         """, claim_id=cmd["claim_id"], series_id=cmd["series_id"])
 
         now = cmd["now"]
-        cid = cmd["claim_id"]
-        rev_id = f"revision:{hashlib.sha256(f'approve:{cid}:{now.isoformat()}'.encode()).hexdigest()[:12]}"
-        await RevisionRepository.log_revision(tx, series_id=cmd["series_id"], resource_type="Claim",
+        revision = await RevisionRepository.log_revision(tx, series_id=cmd["series_id"], resource_type="Claim",
             resource_id=cmd["claim_id"], action=RevisionAction.UPDATED,
-            before=before, after=after, visible_from_order=before.get("visible_from_order", 1), created_at=now)
-        return {"id": cmd["claim_id"], "status": "canonical", "origin": "candidate", "revision_id": rev_id}
+            before=before, after=after, visible_from_order=before.get("visible_from_order", 1),
+            created_at=now, user_id=cmd["user_id"])
+        # Return the id RevisionRepository.log_revision actually persisted
+        # (PROB-12, #34) — never a fabricated hash. GET /revisions/{id} resolves it.
+        return {"id": cmd["claim_id"], "status": "canonical", "origin": "candidate", "revision_id": revision["id"]}
 
     try:
-        result = await db.execute_write(_approve, {"series_id": series_id, "claim_id": claim_id, "now": datetime.now(timezone.utc)})
+        result = await db.execute_write(_approve, {"series_id": series_id, "claim_id": claim_id, "now": datetime.now(timezone.utc), "user_id": _admin["id"]})
     except HTTPException:
         raise
     except Exception as exc:
@@ -265,15 +265,14 @@ async def reject_candidate(
         """, claim_id=cmd["claim_id"], series_id=cmd["series_id"])
 
         now = cmd["now"]
-        cid = cmd["claim_id"]
-        rev_id = f"revision:{hashlib.sha256(f'reject:{cid}:{now.isoformat()}'.encode()).hexdigest()[:12]}"
-        await RevisionRepository.log_revision(tx, series_id=cmd["series_id"], resource_type="Claim",
+        revision = await RevisionRepository.log_revision(tx, series_id=cmd["series_id"], resource_type="Claim",
             resource_id=cmd["claim_id"], action=RevisionAction.UPDATED,
-            before=before, after=after, visible_from_order=before.get("visible_from_order", 1), created_at=now)
-        return {"id": cmd["claim_id"], "status": "rejected", "origin": "candidate", "revision_id": rev_id}
+            before=before, after=after, visible_from_order=before.get("visible_from_order", 1),
+            created_at=now, user_id=cmd["user_id"])
+        return {"id": cmd["claim_id"], "status": "rejected", "origin": "candidate", "revision_id": revision["id"]}
 
     try:
-        result = await db.execute_write(_reject, {"series_id": series_id, "claim_id": claim_id, "now": datetime.now(timezone.utc)})
+        result = await db.execute_write(_reject, {"series_id": series_id, "claim_id": claim_id, "now": datetime.now(timezone.utc), "user_id": _admin["id"]})
     except HTTPException:
         raise
     except Exception as exc:
@@ -324,16 +323,15 @@ async def edit_candidate(
         await tx.run(update_query, **params)
 
         now = cmd["now"]
-        cid = cmd["claim_id"]
-        rev_id = f"revision:{hashlib.sha256(f'edit:{cid}:{now.isoformat()}'.encode()).hexdigest()[:12]}"
         after = {**before, **cmd["updates"]}
-        await RevisionRepository.log_revision(tx, series_id=cmd["series_id"], resource_type="Claim",
+        revision = await RevisionRepository.log_revision(tx, series_id=cmd["series_id"], resource_type="Claim",
             resource_id=cmd["claim_id"], action=RevisionAction.UPDATED,
-            before=before, after=after, visible_from_order=before.get("visible_from_order", 1), created_at=now)
-        return {"id": cmd["claim_id"], "status": "edited", "origin": "candidate", "revision_id": rev_id, "updates_applied": list(cmd["updates"].keys())}
+            before=before, after=after, visible_from_order=before.get("visible_from_order", 1),
+            created_at=now, user_id=cmd["user_id"])
+        return {"id": cmd["claim_id"], "status": "edited", "origin": "candidate", "revision_id": revision["id"], "updates_applied": list(cmd["updates"].keys())}
 
     try:
-        result = await db.execute_write(_edit, {"series_id": series_id, "claim_id": claim_id, "updates": updates, "now": datetime.now(timezone.utc)})
+        result = await db.execute_write(_edit, {"series_id": series_id, "claim_id": claim_id, "updates": updates, "now": datetime.now(timezone.utc), "user_id": _admin["id"]})
     except HTTPException:
         raise
     except ValueError as exc:

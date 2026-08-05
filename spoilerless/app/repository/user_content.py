@@ -453,7 +453,7 @@ class UserContentRepository:
             resource_id=command.id, action=RevisionAction.CREATED,
             before=None, after=snapshot,
             visible_from_order=result["visible_from_order"],
-            created_at=command.created_at)
+            created_at=command.created_at, user_id=command.user_id)
         return result
 
     @staticmethod
@@ -488,7 +488,7 @@ class UserContentRepository:
             resource_id=command.id, action=RevisionAction.CREATED,
             before=None, after=snapshot,
             visible_from_order=result["visible_from_order"],
-            created_at=command.created_at)
+            created_at=command.created_at, user_id=command.user_id)
         return result
 
     async def _custom_read(self, series_id: str, resource_id: str, boundary: int, queries: list[str]) -> Any:
@@ -545,7 +545,7 @@ class UserContentRepository:
                     resource_id=command.id, action=RevisionAction.UPDATED,
                     before=before, after=after,
                     visible_from_order=result_data["visible_from_order"],
-                    created_at=command.updated_at)
+                    created_at=command.updated_at, user_id=command.user_id)
                 return result_data
         ownership = await (await tx.run(OWNERSHIP_QUERY, id=command.id, series_id=command.series_id)).single()
         _raise_on_ownership_conflict(ownership, command.user_id, command.is_admin, "node not found")
@@ -595,7 +595,7 @@ class UserContentRepository:
                         resource_id=node_id, action=RevisionAction.DELETED,
                         before=before, after=None,
                         visible_from_order=old_state["visible_from_order"],
-                        created_at=_utc_now())
+                        created_at=_utc_now(), user_id=user_id)
                 return deleted_id
         ownership = await (await tx.run(OWNERSHIP_QUERY, id=node_id, series_id=series_id)).single()
         _raise_on_ownership_conflict(ownership, user_id, is_admin, "node not found")
@@ -646,7 +646,7 @@ class UserContentRepository:
             resource_id=command.id, action=RevisionAction.UPDATED,
             before=before, after=after,
             visible_from_order=result_data["visible_from_order"],
-            created_at=command.updated_at)
+            created_at=command.updated_at, user_id=command.user_id)
         return result_data
 
     async def delete_custom_relationship(
@@ -685,7 +685,7 @@ class UserContentRepository:
                 resource_id=relationship_id, action=RevisionAction.DELETED,
                 before=before, after=None,
                 visible_from_order=old_state["visible_from_order"],
-                created_at=_utc_now())
+                created_at=_utc_now(), user_id=user_id)
 
         if record is None:
             ownership = await (await tx.run(OWNERSHIP_QUERY, id=relationship_id, series_id=series_id)).single()
@@ -708,7 +708,7 @@ class UserContentRepository:
             resource_id=command.id, action=RevisionAction.CREATED,
             before=None, after=snapshot,
             visible_from_order=result["visible_from_order"],
-            created_at=command.created_at)
+            created_at=command.created_at, user_id=command.user_id)
         return result
 
     async def update_note(
@@ -751,7 +751,7 @@ class UserContentRepository:
             resource_id=command.id, action=RevisionAction.UPDATED,
             before=before, after=after,
             visible_from_order=result_data["visible_from_order"],
-            created_at=command.updated_at)
+            created_at=command.updated_at, user_id=command.user_id)
         return result_data
 
     async def delete_note(
@@ -802,7 +802,7 @@ class UserContentRepository:
             resource_id=note_id, action=RevisionAction.DELETED,
             before=before, after=None,
             visible_from_order=old_state["visible_from_order"],
-            created_at=_utc_now())
+            created_at=_utc_now(), user_id=user_id)
         return record.data().get("id")
 
     @staticmethod

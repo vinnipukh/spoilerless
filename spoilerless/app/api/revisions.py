@@ -30,7 +30,7 @@ RETURN revision.id AS id, revision.series_id AS series_id,
   revision.resource_type AS resource_type, revision.resource_id AS resource_id,
   revision.action AS action, revision.before AS before,
   revision.after AS after, revision.visible_from_order AS visible_from_order,
-  revision.created_at AS created_at
+  revision.user_id AS user_id, revision.created_at AS created_at
 ORDER BY revision.created_at DESC, revision.id ASC
 """
 
@@ -43,7 +43,7 @@ RETURN revision.id AS id, revision.series_id AS series_id,
   revision.resource_type AS resource_type, revision.resource_id AS resource_id,
   revision.action AS action, revision.before AS before,
   revision.after AS after, revision.visible_from_order AS visible_from_order,
-  revision.created_at AS created_at
+  revision.user_id AS user_id, revision.created_at AS created_at
 """
 
 
@@ -294,6 +294,7 @@ async def revert_revision(
             after=new_snapshot,
             visible_from_order=vfo,
             created_at=_cmd["now"],
+            user_id=_cmd["user_id"],
         )
         return revert_record
 

@@ -379,6 +379,7 @@ class ChangeSetRepository:
             after=None,
             visible_from_order=revert_visible_from_order,
             created_at=command.now,
+            user_id=command.user_id,
         )
 
         reverted_record = await (
@@ -468,6 +469,7 @@ class ChangeSetRepository:
             after={"operation_types": operation_types, "affected_ids": applied_ids},
             visible_from_order=current_progress,
             created_at=command.now,
+            user_id=command.user_id,
         )
 
         idempotency_key = f"change-set-apply:{uuid4()}"

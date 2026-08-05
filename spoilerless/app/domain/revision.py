@@ -28,6 +28,11 @@ class RevisionResponse(UserResponseModel):
     action: RevisionAction
     before: dict[str, Any] | None = None
     after: dict[str, Any] | None = None
+    user_id: Identifier | None = Field(
+        default=None,
+        description="Acting user who performed the logged mutation (PROB-33, #33). "
+        "Null for revisions logged before actor attribution.",
+    )
     created_at: datetime
     visible_from_order: VisibilityOrder
 

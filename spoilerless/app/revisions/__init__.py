@@ -17,13 +17,14 @@ CREATE (revision:Revision {
   before: $before_json,
   after: $after_json,
   visible_from_order: $visible_from_order,
+  user_id: $user_id,
   created_at: $created_at
 })
 RETURN revision.id AS id, revision.series_id AS series_id,
   revision.resource_type AS resource_type, revision.resource_id AS resource_id,
   revision.action AS action, revision.before AS before,
   revision.after AS after, revision.visible_from_order AS visible_from_order,
-  revision.created_at AS created_at
+  revision.user_id AS user_id, revision.created_at AS created_at
 """
 
 
@@ -72,7 +73,15 @@ class RevisionRepository:
         after: dict[str, Any] | None,
         visible_from_order: int,
         created_at: datetime,
+        user_id: str | None = None,
     ) -> dict[str, Any]:
+        """Append one Revision row and return it (including its persisted id).
+
+        ``user_id`` records the acting user (PROB-33, #33) — the id of whoever
+        performed the mutation being logged. It is optional only for backward
+        safety; every call site in the write path threads the authenticated
+        actor. Revisions written before actor attribution carry ``null`` here.
+        """
         result = await tx.run(
             REVISION_CREATE_QUERY,
             id=f"revision:{uuid4()}",
@@ -83,6 +92,7 @@ class RevisionRepository:
             before_json=RevisionRepository._to_json(before),
             after_json=RevisionRepository._to_json(after),
             visible_from_order=visible_from_order,
+            user_id=user_id,
             created_at=created_at,
         )
         record = await result.single()

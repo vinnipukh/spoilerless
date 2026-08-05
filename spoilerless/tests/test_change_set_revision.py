@@ -317,7 +317,8 @@ def test_revert_after_single_applied_change_set_deletes_created_resource(
 
     response = _revert(client, change_set_id)
     assert response.status_code == 200, response.text
-    assert response.json()["status"] == "reverted"
+    body = response.json()
+    assert body["status"] == "reverted"
 
     # Pre-apply state restored: the created resource is gone.
     assert asyncio.run(_location_count(label)) == 0
@@ -328,6 +329,12 @@ def test_revert_after_single_applied_change_set_deletes_created_resource(
     assert len(revisions) == 2
     assert revisions[0]["action"] == "Created"
     assert revisions[1]["action"] == "Reverted"
+
+    # PROB-27/#51: the reverted ChangeSet preserves BOTH links — the apply-time
+    # revision_id survives (no longer overwritten) and the revert Revision id is
+    # recorded separately in revert_revision_id.
+    assert body["revision_id"] == revisions[0]["id"]
+    assert body["revert_revision_id"] == revisions[1]["id"]
 
 
 def test_revert_rejected_when_change_set_was_never_applied(

@@ -57,6 +57,7 @@ CREATE (u)-[:PROPOSED_CHANGE_SET]->(cs:ChangeSet {
     confirmed_at: null,
     applied_at: null,
     revision_id: null,
+    revert_revision_id: null,
     idempotency_key: null
 })-[:IN_SERIES]->(s)
 CREATE (cs)-[:FOR_SESSION]->(session)
@@ -72,6 +73,7 @@ RETURN cs.id AS id,
        cs.confirmed_at AS confirmed_at,
        cs.applied_at AS applied_at,
        cs.revision_id AS revision_id,
+       cs.revert_revision_id AS revert_revision_id,
        cs.idempotency_key AS idempotency_key
 """
 
@@ -102,6 +104,7 @@ _CHANGE_SET_FIELDS = """\
        cs.confirmed_at AS confirmed_at,
        cs.applied_at AS applied_at,
        cs.revision_id AS revision_id,
+       cs.revert_revision_id AS revert_revision_id,
        cs.idempotency_key AS idempotency_key
 """
 
@@ -191,11 +194,15 @@ RETURN deleted_id AS id
 
 # Revert only succeeds from 'applied' — an unapplied/rejected/failed/already-
 # reverted ChangeSet (or one owned by another user) yields zero rows.
+# PROB-27/#51: preserve BOTH links — the apply-time `revision_id` stays intact
+# (the audit trail of what was applied), and the newly logged revert Revision
+# is recorded separately in `revert_revision_id`. The old query overwrote
+# `revision_id`, destroying the apply link.
 MARK_CHANGE_SET_REVERTED_QUERY = f"""\
 MATCH (u:AppUser {{id: $user_id}})-[:PROPOSED_CHANGE_SET]->
       (cs:ChangeSet {{id: $id, series_id: $series_id}})
 WHERE cs.status = 'applied'
-SET cs.status = 'reverted', cs.revision_id = $revert_revision_id
+SET cs.status = 'reverted', cs.revert_revision_id = $revert_revision_id
 RETURN {_CHANGE_SET_FIELDS}
 """
 
