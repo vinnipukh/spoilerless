@@ -58,6 +58,7 @@ class ProductionGoogleVerifier:
 
     async def verify(self, credential: str, client_id: str) -> dict[str, Any]:
         try:
+            import google.auth.exceptions  # noqa: F401  # binds `google` in function scope so the except clause below can never NameError (#42)
             from google.oauth2 import id_token
             from google.auth.transport import requests as google_requests
         except ImportError as exc:
