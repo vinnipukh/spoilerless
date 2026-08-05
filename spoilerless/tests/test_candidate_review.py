@@ -23,6 +23,11 @@ from spoilerless.app.graph.database import Neo4jDatabase
 from spoilerless.app.graph.seed import setup_database
 from spoilerless.app.repository.session import Neo4jSessionRepository
 from spoilerless.app.repository.user import UserRepository
+from spoilerless.tests.conftest import (
+    REVIEW_SCRATCH_SERIES,
+    bootstrap_scratch_series,
+    teardown_scratch_series,
+)
 
 FIXTURE_PATH = Path("data/dexter/test/extraction_fixture.json")
 
@@ -39,10 +44,18 @@ async def _seed_live_database() -> None:
 
 @pytest.fixture(scope="module")
 def live_client() -> Iterator[TestClient]:
+    """TestClient over the live app; scratch review series bootstrapped for
+    the module and torn down afterwards (series rows + candidate residue +
+    progress rows) so review tests never write to the live seeded series
+    (PROB-06/22, #14/#46)."""
     asyncio.run(_seed_live_database())
-    main_module = importlib.import_module("spoilerless.app.main")
-    with TestClient(main_module.app) as client:
-        yield client
+    try:
+        bootstrap_scratch_series(REVIEW_SCRATCH_SERIES)
+        main_module = importlib.import_module("spoilerless.app.main")
+        with TestClient(main_module.app) as client:
+            yield client
+    finally:
+        teardown_scratch_series(REVIEW_SCRATCH_SERIES)
 
 
 @pytest.fixture
@@ -64,7 +77,7 @@ def ingested_claim_id(live_client: TestClient, ingest_session: str) -> str:
     with open(FIXTURE_PATH) as f:
         fixture = json.load(f)
     response = live_client.post(
-        "/api/series/series_dexter/candidates/ingest",
+        f"/api/series/{REVIEW_SCRATCH_SERIES}/candidates/ingest",
         json=fixture,
     )
     return response.json()["created"][0]
@@ -76,7 +89,7 @@ def test_ingest_anonymous_returns_401(live_client: TestClient) -> None:
     with open(FIXTURE_PATH) as f:
         fixture = json.load(f)
     response = live_client.post(
-        "/api/series/series_dexter/candidates/ingest",
+        f"/api/series/{REVIEW_SCRATCH_SERIES}/candidates/ingest",
         json=fixture,
     )
     assert response.status_code == 401, response.text
@@ -147,7 +160,7 @@ def user_session(live_client: TestClient) -> Iterator[str]:
 class TestCandidateApprove:
     """PREP-03: Candidate claim approval — admin-gated since 08-03 (AUTH-03)."""
 
-    SERIES_ID = "series_dexter"
+    SERIES_ID = REVIEW_SCRATCH_SERIES
 
     def test_approve_returns_200(
         self, live_client: TestClient, ingested_claim_id: str, admin_session: str
@@ -207,7 +220,7 @@ class TestCandidateApprove:
 class TestCandidateReject:
     """PREP-03: Candidate claim rejection — admin-gated since 08-03 (AUTH-03)."""
 
-    SERIES_ID = "series_dexter"
+    SERIES_ID = REVIEW_SCRATCH_SERIES
 
     def test_reject_returns_200(
         self, live_client: TestClient, ingested_claim_id: str, admin_session: str
@@ -241,7 +254,7 @@ class TestCandidateReject:
 class TestCandidateEdit:
     """PREP-03: Candidate claim edit (PATCH) — admin-gated since 08-03 (AUTH-03)."""
 
-    SERIES_ID = "series_dexter"
+    SERIES_ID = REVIEW_SCRATCH_SERIES
 
     def test_edit_returns_200(
         self, live_client: TestClient, ingested_claim_id: str, admin_session: str

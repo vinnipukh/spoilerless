@@ -14,6 +14,11 @@ from spoilerless.app.graph.database import Neo4jDatabase
 from spoilerless.app.graph.seed import setup_database
 from spoilerless.app.repository.session import Neo4jSessionRepository
 from spoilerless.app.repository.user import UserRepository
+from spoilerless.tests.conftest import (
+    CANDIDATE_SCRATCH_SERIES,
+    bootstrap_scratch_series,
+    teardown_scratch_series,
+)
 
 FIXTURE_PATH = Path("data/dexter/test/extraction_fixture.json")
 
@@ -31,11 +36,22 @@ async def _seed_live_database() -> None:
 
 @pytest.fixture(scope="module")
 def live_client() -> Iterator[TestClient]:
-    """Returns a TestClient connected to a live Neo4j instance."""
+    """Returns a TestClient connected to a live Neo4j instance.
+
+    The scratch series is bootstrapped before the app starts so the
+    candidate boundary-validation (D-09) resolves against its own persisted
+    episodes, and torn down (series rows + candidate residue + progress
+    rows) after the module — the suite never writes to the live seeded
+    series (PROB-06/22, #14/#46).
+    """
     asyncio.run(_seed_live_database())
-    main_module = importlib.import_module("spoilerless.app.main")
-    with TestClient(main_module.app) as client:
-        yield client
+    try:
+        bootstrap_scratch_series(CANDIDATE_SCRATCH_SERIES)
+        main_module = importlib.import_module("spoilerless.app.main")
+        with TestClient(main_module.app) as client:
+            yield client
+    finally:
+        teardown_scratch_series(CANDIDATE_SCRATCH_SERIES)
 
 
 def _create_user_with_session(role: str = "user") -> tuple[str, str]:
@@ -102,7 +118,7 @@ def extraction_fixture() -> dict:
 class TestCandidateIngest:
     """PREP-02: Candidate claim ingest and storage."""
 
-    SERIES_ID = "series_dexter"
+    SERIES_ID = CANDIDATE_SCRATCH_SERIES
 
     def test_ingest_creates_candidate_claims(self, live_client: TestClient, user_session: str, extraction_fixture: dict):
         """Ingesting the fixture creates Claim nodes with origin: 'candidate'."""
@@ -188,7 +204,7 @@ class TestCandidateReadBoundary:
     """PROB-05/#13: candidate list/get require a RESOLVED spoiler boundary —
     an omitted boundary never defaults to every visibility level."""
 
-    SERIES_ID = "series_dexter"
+    SERIES_ID = CANDIDATE_SCRATCH_SERIES
 
     def test_list_omitted_boundary_returns_422(self, live_client: TestClient):
         response = live_client.get(f"/api/series/{self.SERIES_ID}/candidates")

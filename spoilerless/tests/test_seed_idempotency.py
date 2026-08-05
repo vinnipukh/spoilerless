@@ -104,10 +104,10 @@ async def test_seed_is_idempotent_and_complete(live_database: Neo4jDatabase) -> 
     await live_database.execute_query(
         "MATCH (n) WHERE n.origin = 'user' OR n.id STARTS WITH 'user-' DETACH DELETE n"
     )
-    # Candidate-origin residue from other test modules (test_candidate_ingest
-    # ingests claims/evidence/sources into series_dexter) must be cleared too,
-    # or the pristine-seed counts below fail. Fixes CI: the whole suite shares
-    # one container, so earlier tests' candidate nodes leak into this one.
+    # Candidate-origin residue from other test modules (pre-09-08 candidate
+    # tests ingested into the seeded series) must be cleared too, or the
+    # pristine-seed counts below fail. Fixes CI: the whole suite shares one
+    # container, so earlier tests' candidate nodes leak into this one.
     await live_database.execute_query(
         "MATCH (n) WHERE n.origin = 'candidate' DETACH DELETE n"
     )
@@ -116,20 +116,40 @@ async def test_seed_is_idempotent_and_complete(live_database: Neo4jDatabase) -> 
     second_counts = await setup_database(live_database)
     second = await _snapshot(live_database)
 
-    assert first_counts == second_counts == {"nodes": 290, "relationships": 308}
+    # Idempotency: a re-run must produce byte-identical counts and snapshots.
+    # (PROB-06/#44, NO-EXACT-SEED-SETS — never assert absolute totals against
+    # the live DB; the enriched S01E01 seed changed them and will again.)
+    assert first_counts == second_counts
     assert first == second
-    assert {row["label"]: row["count"] for row in first["nodes"]} == {
-        "Character": 32,
-        "Claim": 132,
-        "Episode": 3,
-        "Event": 39,
-        "EvidenceFragment": 36,
-        "Location": 22,
-        "Object": 17,
-        "Organization": 5,
+
+    # Completeness (fixture-derived, drift-agnostic): every seed file row
+    # must be present — a superset check, never an exact count.
+    data = load_seed_data()
+    expected_by_label = {
+        "Character": len(data["characters"]),
+        "Event": len(data["events"]),
+        "Location": len(data["locations"]),
+        "Organization": len(data["organizations"]),
+        "Object": len(data["objects"]),
+        "Claim": len(data["claims"]),
+        "EvidenceFragment": len(data["evidence"]),
+        "Source": len(data["sources"]),
         "Series": 1,
-        "Source": 3,
+        "Episode": len(data["episodes"]),
     }
+    counts = {row["label"]: row["count"] for row in first["nodes"]}
+    for label, expected in expected_by_label.items():
+        assert counts.get(label, 0) >= expected, f"{label} under-seeded"
+
+    # Relationship invariants exactly derivable from the seed metadata.
+    rel_counts = {row["type"]: row["count"] for row in first["relationships"]}
+    assert rel_counts["PART_OF"] == len(data["episodes"])
+    assert rel_counts["PRECEDES"] == len(data["episodes"]) - 1
+    # Every claim carries at least one SUPPORTED_BY (evidence) and one
+    # REFERS_TO (source) edge.
+    assert rel_counts["SUPPORTED_BY"] >= len(data["claims"])
+    assert rel_counts["REFERS_TO"] >= len(data["claims"])
+
     assert all(len(row["ids"]) == len(set(row["ids"])) for row in first["nodes"])
     assert all(
         len(row["ids"]) == len(set(row["ids"])) for row in first["relationships"]
@@ -170,7 +190,10 @@ async def test_community_schema_creates_only_unique_and_index(
         "Organization", "Object", "Claim", "Source", "EvidenceFragment", "UserNote",
         "AppUser", "Session", "Revision",
     }
-    assert unique_labels == expected_labels, (
+    # SUPERSET check — additive constraints (e.g. the upcoming ShareToken
+    # constraint from plan 09-12) must never break this test (PROB-20/#44,
+    # NO-EXACT-SEED-SETS).
+    assert expected_labels <= unique_labels, (
         f"Missing uniqueness constraints for: {expected_labels - unique_labels}"
     )
 
@@ -284,7 +307,7 @@ async def test_note_write_rejects_null_visibility_target(
             content="This should not be creatable",
         )
         with pytest.raises(UserContentNotFound, match="note target not found"):
-            await repo.create_note(SERIES_ID, note)
+            await repo.create_note(SERIES_ID, "user:seed-test", note)
     finally:
         await live_database.execute_query(CLEANUP_NULL_NODE, id=NULLABLE_ID)
 
@@ -320,7 +343,7 @@ async def test_custom_node_write_rejects_null_episode(
             episode_id=null_ep_id,
         )
         with pytest.raises(UserContentNotFound, match="episode not found"):
-            await repo.create_custom_node(SERIES_ID, custom)
+            await repo.create_custom_node(SERIES_ID, "user:seed-test", custom)
     finally:
         await live_database.execute_query(
             "MATCH (n:Episode {id: $id}) DETACH DELETE n", id=null_ep_id
@@ -370,7 +393,7 @@ async def test_constraints_visibility_and_provenance(live_database: Neo4jDatabas
         series_id=SERIES_ID,
     )
 
-    assert {row["label"] for row in constraints} == {
+    assert {row["label"] for row in constraints} >= {
         "Series",
         "Episode",
         "Character",
@@ -449,14 +472,48 @@ async def test_setup_preserves_user_layer_and_deleted_resources_stay_deleted(
     try:
         await setup_database(live_database)
         canonical_before = await _layer_snapshot(live_database, "canonical")
-        assert sum(len(layer) for layer in canonical_before.values()) == 573
+        # Fixture-derived completeness: the canonical layer must contain at
+        # least as many rows as the seed files define (exact totals depend on
+        # seed content — the #44 drift class; assert supersets, never exact
+        # numbers).
+        data = load_seed_data()
+        # Canonical-only completeness: the seed files mix `canonical` and
+        # `candidate` origins (6 candidate characters, 1 candidate org, 18
+        # candidate claims), while the canonical layer snapshot counts only
+        # `origin = 'canonical'` rows — so the expectation filters to
+        # canonical origin (the #44 drift class; supersets, never exact).
+        def _canonical(rows: list[dict]) -> int:
+            return sum(1 for row in rows if row.get("origin", "canonical") == "canonical")
+
+        expected_node_rows = (
+            1  # Series
+            + _canonical(data["episodes"])
+            + _canonical(data["characters"])
+            + _canonical(data["events"])
+            + _canonical(data["locations"])
+            + _canonical(data["organizations"])
+            + _canonical(data["objects"])
+            + _canonical(data["sources"])
+            + _canonical(data["evidence"])
+            + _canonical(data["claims"])
+        )
+        canonical_episodes = _canonical(data["episodes"])
+        canonical_claims = _canonical(data["claims"])
+        assert len(canonical_before["nodes"]) >= expected_node_rows
+        assert len(canonical_before["relationships"]) >= (
+            canonical_episodes  # PART_OF
+            + (canonical_episodes - 1)  # PRECEDES
+            + canonical_claims  # SUPPORTED_BY (>= 1 evidence each)
+            + canonical_claims  # REFERS_TO (1 source each)
+        )
 
         await live_database.execute_query(USER_LAYER_CREATE_QUERY)
         user_before = await _layer_snapshot(live_database, "user")
         first_report = await setup_database(live_database)
         second_report = await setup_database(live_database)
 
-        assert first_report == second_report == {"nodes": 297, "relationships": 309}
+        # Idempotent under the user layer, and neither layer is mutated.
+        assert second_report == first_report
         assert await _layer_snapshot(live_database, "canonical") == canonical_before
         assert await _layer_snapshot(live_database, "user") == user_before
 
@@ -469,11 +526,15 @@ async def test_setup_preserves_user_layer_and_deleted_resources_stay_deleted(
             ORDER BY id
             """
         )
-        assert incomplete == [{
+        # The user-authored setup claim is the expected incomplete one; any
+        # other incomplete claims must be user-authored too (user claims may
+        # legitimately lack evidence/source links).
+        assert {
             "id": "user-rel:setup-preservation",
             "origin": "user",
             "claim_type": "user_authored",
-        }]
+        } in incomplete
+        assert all(row["origin"] == "user" for row in incomplete)
 
         constraints = await live_database.execute_query(
             "SHOW CONSTRAINTS YIELD name RETURN name ORDER BY name"

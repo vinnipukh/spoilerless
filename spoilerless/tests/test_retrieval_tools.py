@@ -33,8 +33,10 @@ from spoilerless.app.retrieval.tools import (
 SERIES_ID = "series_dexter"
 DEXTER = "dexter:character:dexter_morgan"
 DEBRA = "dexter:character:debra_morgan"
+DORIS = "dexter:character:doris_morgan"
 HARRY = "dexter:character:harry_morgan"
 PAUL = "dexter:character:paul_bennett"
+RUDY = "dexter:character:rudy_cooper"
 
 CLAIM_DEBRA_FAMILY = "dexter:claim:s01e01:dexter_debra_family"
 CLAIM_BATISTA_WORK = "dexter:claim:s01e01:dexter_batista_work"
@@ -275,15 +277,19 @@ async def test_search_entities_returns_visible_matches_in_stable_order(
         visible_until_order=3,
     )
     # Deterministic order (visible_from_order, id) across repeated identical calls.
-    assert [row["id"] for row in first] == [DEBRA, DEXTER, HARRY]
+    # The enriched seed made all four Morgans visible_from_order 1 (D-14
+    # curation); order is id-stable within the same vfo.
+    assert [row["id"] for row in first] == [DEBRA, DEXTER, DORIS, HARRY]
     assert first == second
 
 
 @pytest.mark.asyncio
 async def test_search_entities_hides_future_matches(database: Neo4jDatabase) -> None:
+    # Paul Bennett is visible_from_order 2 — hidden at boundary 1 (the
+    # enriched seed moved Harry to vfo 1, so Paul is the hidden probe now).
     hidden = await search_entities(
         database,
-        query="harry",
+        query="paul",
         allowed_entity_types=["Character"],
         limit=10,
         series_id=SERIES_ID,
@@ -302,13 +308,13 @@ async def test_search_entities_hides_future_matches(database: Neo4jDatabase) -> 
 
     revealed = await search_entities(
         database,
-        query="harry",
+        query="paul",
         allowed_entity_types=["Character"],
         limit=10,
         series_id=SERIES_ID,
-        visible_until_order=3,
+        visible_until_order=2,
     )
-    assert [row["id"] for row in revealed] == [HARRY]
+    assert [row["id"] for row in revealed] == [PAUL]
 
 
 @pytest.mark.asyncio
@@ -380,6 +386,11 @@ async def test_find_path_returns_visible_path(database: Neo4jDatabase) -> None:
         "path": [DEXTER, DEBRA],
         "edges": [CLAIM_DEBRA_FAMILY],
         "hops": 1,
+    } or result == {
+        "found": True,
+        "path": [DEXTER, DEBRA],
+        "edges": ["dexter:claim:s01e01:debra_trusts_dexter"],
+        "hops": 1,
     }
 
 
@@ -400,6 +411,11 @@ async def test_find_path_clamps_requested_hops_to_server_ceiling(
         "found": True,
         "path": [DEXTER, DEBRA],
         "edges": [CLAIM_DEBRA_FAMILY],
+        "hops": 1,
+    } or clamped == {
+        "found": True,
+        "path": [DEXTER, DEBRA],
+        "edges": ["dexter:claim:s01e01:debra_trusts_dexter"],
         "hops": 1,
     }
 
@@ -524,7 +540,7 @@ async def test_get_claims_hidden_and_missing_ids_identical(
     database: Neo4jDatabase,
 ) -> None:
     hidden = await get_claims(
-        database, entity_ids=[HARRY], series_id=SERIES_ID, visible_until_order=1
+        database, entity_ids=[PAUL], series_id=SERIES_ID, visible_until_order=1
     )
     missing = await get_claims(
         database,
@@ -659,7 +675,7 @@ async def test_get_current_visible_graph_summary_hides_future_resources(
     )
     # Future resources are excluded entirely from the boundary-1 summary.
     assert PAUL not in _ids(at_one["entities"])
-    assert HARRY not in _ids(at_one["entities"])
+    assert RUDY not in _ids(at_one["entities"])
     # Hidden counts are never exposed: every count grows only with visibility.
     for key in ("entities", "claims", "evidence", "sources"):
         assert at_one["counts"][key] < at_three["counts"][key], key
@@ -802,9 +818,9 @@ async def test_get_entity_boundary_is_inclusive(database: Neo4jDatabase) -> None
 async def test_get_entity_hidden_character_behaves_as_nonexistent(
     database: Neo4jDatabase,
 ) -> None:
-    # Harry Morgan is visible from order 3; at boundary 1 he must not exist.
+    # Paul Bennett is visible from order 2; at boundary 1 he must not exist.
     hidden = await get_entity(
-        database, entity_id=HARRY, series_id=SERIES_ID, visible_until_order=1
+        database, entity_id=PAUL, series_id=SERIES_ID, visible_until_order=1
     )
     missing = await get_entity(
         database,
@@ -857,16 +873,18 @@ async def test_get_neighborhood_returns_visible_neighbors_claims_evidence_source
 async def test_get_neighborhood_excludes_hidden_claims(
     database: Neo4jDatabase,
 ) -> None:
-    # dexter_harry_family is visible from order 3 — excluded at boundary 1.
+    # rita_paul_family is visible from order 2 — excluded at boundary 1.
+    # (The enriched seed moved the Harry claim/node to vfo 1, so the
+    # Paul-Bennett pair is the hidden-at-1 probe now.)
     result = await get_neighborhood(
         database,
-        entity_id=DEXTER,
+        entity_id="dexter:character:rita_bennett",
         series_id=SERIES_ID,
         visible_until_order=1,
         depth=1,
     )
-    assert CLAIM_HARRY_FAMILY not in _ids(result["claims"])
-    assert HARRY not in _ids(result["nodes"])
+    assert "dexter:claim:s01e02:rita_paul_family" not in _ids(result["claims"])
+    assert PAUL not in _ids(result["nodes"])
 
 
 @pytest.mark.asyncio
@@ -900,7 +918,7 @@ async def test_get_neighborhood_hidden_entity_fails_closed(
 ) -> None:
     result = await get_neighborhood(
         database,
-        entity_id=HARRY,
+        entity_id=PAUL,
         series_id=SERIES_ID,
         visible_until_order=1,
         depth=1,
@@ -1054,26 +1072,37 @@ async def test_search_entities_mixed_query_returns_only_visible_matches(
     (D-15)."""
     mixed = await search_entities(
         database,
-        query="morgan",
+        query="bennett",
         allowed_entity_types=["Character"],
         limit=10,
         series_id=SERIES_ID,
         visible_until_order=1,
     )
-    # Dexter Morgan (1) and Debra Morgan (1) are visible; Harry Morgan (3)
-    # is hidden at boundary 1 and must not appear in the mixed result set.
-    assert _ids(mixed) == {DEBRA, DEXTER}
-    assert HARRY not in _ids(mixed)
+    # Astor/Cody/Rita Bennett (vfo 1) are visible; Paul Bennett (vfo 2) is
+    # hidden at boundary 1 and must not appear in the mixed result set (the
+    # enriched seed moved all Morgans to vfo 1, so the Bennetts are the
+    # mixed probe now).
+    assert _ids(mixed) == {
+        "dexter:character:astor_bennett",
+        "dexter:character:cody_bennett",
+        "dexter:character:rita_bennett",
+    }
+    assert PAUL not in _ids(mixed)
 
     revealed = await search_entities(
         database,
-        query="morgan",
+        query="bennett",
         allowed_entity_types=["Character"],
         limit=10,
         series_id=SERIES_ID,
-        visible_until_order=3,
+        visible_until_order=2,
     )
-    assert _ids(revealed) == {DEBRA, DEXTER, HARRY}
+    assert _ids(revealed) == {
+        "dexter:character:astor_bennett",
+        "dexter:character:cody_bennett",
+        PAUL,
+        "dexter:character:rita_bennett",
+    }
 
 
 @pytest.mark.asyncio
@@ -1085,22 +1114,26 @@ async def test_search_entities_fuzzy_partial_match_cannot_reveal_hidden_entity(
     future entity (D-15)."""
     partial = await search_entities(
         database,
-        query="morga",
+        query="bennet",
         allowed_entity_types=["Character"],
         limit=10,
         series_id=SERIES_ID,
         visible_until_order=1,
     )
-    # "morga" prefix-matches Dexter/Debra Morgan (visible) and Harry Morgan
-    # (hidden at boundary 1) — only the visible ones may appear.
-    assert _ids(partial) == {DEBRA, DEXTER}
-    assert HARRY not in _ids(partial)
+    # "bennet" prefix-matches Astor/Cody/Rita Bennett (visible) and Paul
+    # Bennett (hidden at boundary 1) — only the visible ones may appear.
+    assert _ids(partial) == {
+        "dexter:character:astor_bennett",
+        "dexter:character:cody_bennett",
+        "dexter:character:rita_bennett",
+    }
+    assert PAUL not in _ids(partial)
 
     # A fragment that exists ONLY inside the hidden entity's name matches
     # nothing at boundary 1 — byte-identical to a nonexistent name.
     only_hidden = await search_entities(
         database,
-        query="arry",
+        query="coop",
         allowed_entity_types=["Character"],
         limit=10,
         series_id=SERIES_ID,
