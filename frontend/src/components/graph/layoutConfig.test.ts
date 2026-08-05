@@ -16,10 +16,10 @@ describe('nodeRepulsionFor (08-06 Dexter 5cm special case)', () => {
   })
 
   it('keeps the base repulsion for every other node', () => {
-    expect(nodeRepulsionFor({ id: () => 'char_debra_morgan' })).toBe(220000)
+    expect(nodeRepulsionFor({ id: () => 'char_debra_morgan' })).toBe(300000)
   })
 
   it('keeps the higher repulsion for cluster parents', () => {
-    expect(nodeRepulsionFor({ id: () => 'cluster:Ep #1', isParent: () => true })).toBe(450000)
+    expect(nodeRepulsionFor({ id: () => 'cluster:Ep #1', isParent: () => true })).toBe(600000)
   })
 })

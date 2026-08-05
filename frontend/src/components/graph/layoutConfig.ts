@@ -41,7 +41,7 @@ export function nodeRepulsionFor(node: RepulsionNode): number {
       ? node.id()
       : (node.data?.('id') as string | undefined)
   if (id === DEXTER_NODE_ID) return DEXTER_REPULSION
-  return node.isParent?.() ? 450000 : 220000
+  return node.isParent?.() ? 600000 : 300000
 }
 
 export function layoutOptionsFor(
@@ -62,18 +62,19 @@ export function layoutOptionsFor(
       // minimization (08-06: dense graph, long edges were colliding).
       quality: 'proof',
       randomize: false,
-      // 08-06 (product owner): nodes need ~2.5cm of clearance between them
-      // (~95px at 96dpi). fcose has no hard min-gap parameter, so the gap is
-      // enforced via strong node repulsion (all pairs) + long ideal edges
-      // (connected pairs); gravity is lowered so clusters don't collapse
-      // back together. Tune these constants if the live graph reads too
-      // tight or too loose.
+      // 08-06 (product owner): nodes need ~3cm of clearance between them
+      // (~113px at 96dpi; was ~2.5cm, raised 08-06). fcose has no hard
+      // min-gap parameter, so the gap is enforced via strong node repulsion
+      // (all pairs) + long ideal edges (connected pairs); gravity is
+      // lowered so clusters don't collapse back together. Tune these
+      // constants if the live graph reads too tight or too loose.
       nodeRepulsion: nodeRepulsionFor,
       idealEdgeLength: 320,
-      // 08-06: stiffer springs keep connected pairs at ideal length ->
-      // straighter, shorter edges -> fewer long-range crossings.
-      edgeElasticity: 0.5,
-      gravity: 0.04,
+      // 08-06: stiffer springs make the pull between CONNECTED nodes
+      // dominant (nodes are drawn toward their neighbours, not the canvas
+      // centre); gravity is lowered to ~zero so the layout is edge-driven.
+      edgeElasticity: 0.75,
+      gravity: 0.02,
       tilingPaddingVertical: 35,
       tilingPaddingHorizontal: 35,
     }
@@ -83,10 +84,10 @@ export function layoutOptionsFor(
     return {
       ...common,
       name: 'cose-bilkent',
-      nodeRepulsion: nodeRepulsionFor,
+      nodeRepulsion: 160000,
       idealEdgeLength: 320,
-      edgeElasticity: 0.25,
-      gravity: 0.04,
+      edgeElasticity: 0.4,
+      gravity: 0.03,
       tile: true,
     }
   }
@@ -96,7 +97,7 @@ export function layoutOptionsFor(
     name: 'cose',
     nodeRepulsion: nodeRepulsionFor,
     idealEdgeLength: 320,
-    edgeElasticity: 0.25,
-    gravity: 0.04,
+    edgeElasticity: 0.4,
+    gravity: 0.03,
   }
 }
