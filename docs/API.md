@@ -80,7 +80,7 @@ Series, episodes, graph, notes, custom nodes, custom relationships, revisions, c
 
 ### Which endpoints require the admin role?
 
-`RequireAdminDependency` (`spoilerless/app/api/deps.py`) first resolves the session via `CurrentUserDependency`, then rejects with `403 forbidden` unless the resolved `AppUser.role` is `"admin"`. `role` is derived server-side from `ADMIN_EMAILS` membership at Google sign-in and is never accepted from a request body. Admin-gated routes:
+`RequireAdminDependency` (`spoilerless/app/api/deps.py`) first resolves the session via `CurrentUserDependency`, then rejects with `403 FORBIDDEN` unless the resolved `AppUser.role` is `"admin"`. `role` is derived server-side from `ADMIN_EMAILS` membership at Google sign-in and is never accepted from a request body. Admin-gated routes:
 
 - `PATCH /api/series/{series_id}/candidates/{claim_id}` (edit)
 - `POST /api/series/{series_id}/candidates/{claim_id}/approve`
@@ -213,7 +213,7 @@ Create a node:
 }
 ```
 
-`node_type` is one of `Character`, `Event`, `Location`, `Organization`, or `Object`; `label` is 1–200 characters; and `episode_id` is 1–255 characters. Visibility is derived from the referenced same-series episode. PATCH accepts only `{"label":"..."}`. Deleting a node with dependent notes or user relationships returns `409 resource_conflict`.
+`node_type` is one of `Character`, `Event`, `Location`, `Organization`, or `Object`; `label` is 1–200 characters; and `episode_id` is 1–255 characters. Visibility is derived from the referenced same-series episode. PATCH accepts only `{"label":"..."}`. Deleting a node with dependent notes or user relationships returns `409 RESOURCE_CONFLICT`.
 
 ### Custom relationships
 
@@ -237,10 +237,10 @@ The response uses `source`, `target`, and `type` rather than the request names `
 All revision operations require `visible_until_order` as a positive query integer. Unlike graph, note, and direct custom-content reads, revision routes do **not** verify that a positive value matches a persisted Episode order; they apply it directly to revision visibility queries.
 
 - `GET /revisions` accepts optional `resource_type` and `resource_id` filters and returns newest revisions first.
-- `GET /revisions/{revision_id}` returns a visible `RevisionResponse` or an indistinguishable `404 resource_not_found`.
+- `GET /revisions/{revision_id}` returns a visible `RevisionResponse` or an indistinguishable `404 RESOURCE_NOT_FOUND`.
 - `POST /revisions/{revision_id}/revert` restores an `Updated` user resource from `before`, or recreates a `Deleted` resource. It emits a new `Reverted` revision.
-- Reverting a `Created` revision returns `422 cannot_revert_create`.
-- Reverting an `Updated` resource whose current origin is canonical or candidate returns `409 cannot_revert_canonical`. The `Deleted` branch does not check the saved snapshot's origin before recreating it.
+- Reverting a `Created` revision returns `422 CANNOT_REVERT_CREATE`.
+- Reverting an `Updated` resource whose current origin is canonical or candidate returns `409 CANNOT_REVERT_CANONICAL`. The `Deleted` branch does not check the saved snapshot's origin before recreating it.
 
 A revision contains `id`, `series_id`, `resource_type`, `resource_id`, `action`, nullable `before` and `after` snapshots, `created_at`, and `visible_from_order`.
 
@@ -279,7 +279,7 @@ Ingestion returns `200` with `created` and `errors` arrays. Candidate IDs are de
 
 PATCH accepts at least one of `label`, `predicate`, `claim_type`, `confidence_level`, `relationship_effect`, `valid_from_order`, `valid_until_order`, `evidence_text`, `evidence_locator`, `source_type`, or `source_locator`. Approve changes `status` to `canonical` while retaining `origin: "candidate"`; reject changes `status` to `rejected`. Candidate edit, approve, and reject operations log revisions.
 
-Edit, approve, and reject each require `RequireAdminDependency`: a valid session **and** an admin-role user, or `403 forbidden`. Ingest, list, and single-claim read remain unauthenticated.
+Edit, approve, and reject each require `RequireAdminDependency`: a valid session **and** an admin-role user, or `403 FORBIDDEN`. Ingest, list, and single-claim read remain unauthenticated.
 
 ### Watch progress
 
@@ -291,7 +291,7 @@ Edit, approve, and reject each require `RequireAdminDependency`: a valid session
 }
 ```
 
-The integer must be greater than zero. The authenticated user and path supply `user_id` and `series_id`; clients cannot submit them. The operation upserts and returns `UserSeriesProgressResponse`. GET returns `404 resource_not_found` when no row exists.
+The integer must be greater than zero. The authenticated user and path supply `user_id` and `series_id`; clients cannot submit them. The operation upserts and returns `UserSeriesProgressResponse`. GET returns `404 RESOURCE_NOT_FOUND` when no row exists.
 
 ### Chat
 
@@ -330,7 +330,7 @@ The non-streaming response is a `MessageResponseEnvelope`:
 }
 ```
 
-The server reads the spoiler boundary from persisted progress. If progress is absent on a message path, it creates a progress record at order 1. Chat-session ownership is scoped to the authenticated user and series; foreign, cross-series, and missing sessions all produce `404 resource_not_found`.
+The server reads the spoiler boundary from persisted progress. If progress is absent on a message path, it creates a progress record at order 1. Chat-session ownership is scoped to the authenticated user and series; foreign, cross-series, and missing sessions all produce `404 RESOURCE_NOT_FOUND`.
 
 The streaming route emits SSE frames:
 
@@ -342,7 +342,7 @@ data: {"message":{},"citations":[],"graph_focus":{},"proposed_change_set":null}
 
 ```
 
-After streaming starts, failures are reported with `event: error` and a JSON object containing `code` and `message`. Possible in-stream codes include `too_many_requests`, `LLM_PROVIDER_UNAVAILABLE`, and `LLM_STREAM_FAILED`.
+After streaming starts, failures are reported with `event: error` and a JSON object containing `code` and `message`. Possible in-stream codes include `TOO_MANY_REQUESTS`, `LLM_PROVIDER_UNAVAILABLE`, and `LLM_STREAM_FAILED`.
 
 ### ChangeSets
 
@@ -371,7 +371,7 @@ Propose a ChangeSet:
 
 Propose validates the complete batch and persists only an `awaiting_confirmation` draft. A requested direct mutation of a canonical/candidate Character or Claim is replaced with a `create_note` annotation; other protected labels cannot accept notes and fail validation, while user-origin targets retain the requested operation. Confirm revalidates and applies the batch transactionally. Confirming an already applied ChangeSet is idempotent. Reject performs no graph mutation. Revert supports only applied ChangeSets whose operations are entirely create-shaped; later conflicting modifications return `409`, and unsupported update/delete reversal returns `422`.
 
-Only confirm requires `RequireAdminDependency` — applying an AI-proposed ChangeSet to the shared canonical graph is admin-only, so a non-admin authenticated user gets `403 forbidden` before any mutation. Propose, reject, and revert require only a valid session (`CurrentUserDependency`), open to any authenticated user.
+Only confirm requires `RequireAdminDependency` — applying an AI-proposed ChangeSet to the shared canonical graph is admin-only, so a non-admin authenticated user gets `403 FORBIDDEN` before any mutation. Propose, reject, and revert require only a valid session (`CurrentUserDependency`), open to any authenticated user.
 
 ### LLM settings
 
@@ -392,7 +392,7 @@ Only confirm requires `RequireAdminDependency` — applying an AI-proposed Chang
 
 `provider` is `gemini` or `openai_compatible`; these are available implementations, not a statement that both are active. The provider used for a chat request is the effective non-empty stored value, falling back to `LLM_PROVIDER`; disabled or incomplete configuration is rejected before use. OpenAI-compatible requests post to `/chat/completions`. Gemini uses the `generateContent`/`streamGenerateContent` action family rather than that path; the current streaming provider posts to `/v1beta/models/{model}:streamGenerateContent?alt=sse`. `system_prompt_language` is `english` or `turkish`. A null or empty-string `api_key` retains the stored key; a whitespace-only string is truthy and is persisted as the new key. `enabled: null` retains the stored enabled state. Responses expose only `api_key_configured` and `api_key_masked`.
 
-Both routes require `RequireAdminDependency`: a non-admin authenticated user gets `403 forbidden`; an unauthenticated caller gets `401 AUTH_UNAUTHENTICATED`.
+Both routes require `RequireAdminDependency`: a non-admin authenticated user gets `403 FORBIDDEN`; an unauthenticated caller gets `401 AUTH_UNAUTHENTICATED`.
 
 ## Error Codes
 
@@ -401,13 +401,13 @@ Normal HTTP errors use this envelope:
 ```json
 {
   "detail": {
-    "code": "resource_not_found",
+    "code": "RESOURCE_NOT_FOUND",
     "message": "Resource not found."
   }
 }
 ```
 
-FastAPI request-validation failures are sanitized to `422 invalid_request`; Pydantic field details are not returned by the installed handler. Database exceptions and constraint failures are also mapped centrally. Candidate ingestion is an exception: its `invalid_extraction_payload` message may include batch or claim validation context.
+FastAPI request-validation failures are sanitized to `422 INVALID_REQUEST`; Pydantic field details are not returned by the installed handler. Database exceptions and constraint failures are also mapped centrally. Candidate ingestion is an exception: its `INVALID_EXTRACTION_PAYLOAD` message may include batch or claim validation context.
 
 The codebase currently emits both lowercase domain codes and uppercase authentication/LLM codes. Clients should compare codes exactly as returned.
 
@@ -417,23 +417,23 @@ The codebase currently emits both lowercase domain codes and uppercase authentic
 | 401 | `AUTH_INVALID_GOOGLE_CREDENTIAL` | Google ID-token verification failed |
 | 401 | `AUTH_DISABLED` | Google client ID or a valid session TTL is not configured |
 | 403 | `AUTH_ORIGIN_NOT_ALLOWED` | Sign-in request origin does not match configured frontend origins |
-| 404 | `series_not_found` | Series lookup failed |
-| 404 | `resource_not_found` | Resource is absent, foreign, cross-series, or hidden at the boundary |
-| 404 | `candidate_not_found` | Candidate claim lookup failed |
-| 409 | `resource_conflict` | Resource state, ownership, dependency, or ChangeSet state conflicts |
-| 409 | `constraint_violation` | A Neo4j uniqueness or other database constraint failed |
-| 409 | `changeset_stale` | Progress was lowered after a ChangeSet was proposed |
-| 409 | `cannot_revert_canonical` | Revision target is canonical or candidate content |
-| 409 | `resource_already_exists` | A deleted revision target was already recreated |
-| 409 | `cannot_approve_non_candidate` | Approval target does not have candidate origin |
-| 422 | `invalid_request` | Request-model or repository validation failed |
-| 422 | `invalid_visible_until_order` | Boundary does not identify a persisted episode order |
-| 422 | `invalid_extraction_payload` | Candidate batch, candidate edit, approval, or rejection failed validation |
-| 422 | `cannot_revert_create` | A creation revision has no prior state to restore |
-| 422 | `invalid_action` | Revision action cannot be reverted by the route |
-| 429 | `too_many_requests` | The user already has a chat generation in flight |
-| 503 | `database_unavailable` | Neo4j is unreachable or rejects authentication |
-| 503 | `database_error` | Another handled Neo4j request error occurred |
+| 404 | `SERIES_NOT_FOUND` | Series lookup failed |
+| 404 | `RESOURCE_NOT_FOUND` | Resource is absent, foreign, cross-series, or hidden at the boundary |
+| 404 | `CANDIDATE_NOT_FOUND` | Candidate claim lookup failed |
+| 409 | `RESOURCE_CONFLICT` | Resource state, ownership, dependency, or ChangeSet state conflicts |
+| 409 | `CONSTRAINT_VIOLATION` | A Neo4j uniqueness or other database constraint failed |
+| 409 | `CHANGESET_STALE` | Progress was lowered after a ChangeSet was proposed |
+| 409 | `CANNOT_REVERT_CANONICAL` | Revision target is canonical or candidate content |
+| 409 | `RESOURCE_ALREADY_EXISTS` | A deleted revision target was already recreated |
+| 409 | `CANNOT_APPROVE_NON_CANDIDATE` | Approval target does not have candidate origin |
+| 422 | `INVALID_REQUEST` | Request-model or repository validation failed |
+| 422 | `INVALID_VISIBLE_UNTIL_ORDER` | Boundary does not identify a persisted episode order |
+| 422 | `INVALID_EXTRACTION_PAYLOAD` | Candidate batch, candidate edit, approval, or rejection failed validation |
+| 422 | `CANNOT_REVERT_CREATE` | A creation revision has no prior state to restore |
+| 422 | `INVALID_ACTION` | Revision action cannot be reverted by the route |
+| 429 | `TOO_MANY_REQUESTS` | The user already has a chat generation in flight |
+| 503 | `DATABASE_UNAVAILABLE` | Neo4j is unreachable or rejects authentication |
+| 503 | `DATABASE_ERROR` | Another handled Neo4j request error occurred |
 | 503 | `AUTH_SERVICE_UNAVAILABLE` | Google verification infrastructure failed |
 | 503 | `LLM_DISABLED` | Effective LLM configuration is disabled |
 | 503 | `LLM_PROVIDER_UNAVAILABLE` | LLM configuration or provider request is unavailable |
@@ -450,9 +450,9 @@ There is no general, catch-all HTTP request-rate limiter. Three route groups car
 | Chat send | `POST .../chat/sessions/{session_id}/messages`, `.../messages/stream` | 20 requests / 60 seconds | Authenticated user ID |
 | Content write | `POST`/`PATCH`/`DELETE` on notes, custom nodes, and custom relationships | 30 requests / 60 seconds | Authenticated user ID, else client IP |
 
-A request that exceeds its window's limit returns `429 too_many_requests` using the same error envelope as other errors. The limiter is bound at application startup only when `REDIS_URL` is non-empty; if Redis is not configured, every `RateLimiter` dependency is a no-op and the route runs unthrottled instead of the app failing to start. This is separate from CORS and from authentication — it is enforced independently of whether the request is otherwise valid.
+A request that exceeds its window's limit returns `429 TOO_MANY_REQUESTS` using the same error envelope as other errors. The limiter is bound at application startup only when `REDIS_URL` is non-empty; if Redis is not configured, every `RateLimiter` dependency is a no-op and the route runs unthrottled instead of the app failing to start. This is separate from CORS and from authentication — it is enforced independently of whether the request is otherwise valid.
 
-Chat generation additionally has an in-process concurrency guard of **one active generation per user**, independent of the Redis-backed chat-send window above. A second concurrent non-streaming generation returns `429 too_many_requests`. The streaming route may report the same condition as an SSE `event: error` frame after the stream has opened, since a rejection after headers are sent cannot change the HTTP status. This guard is process-local and is not itself a distributed or time-window rate limit.
+Chat generation additionally has an in-process concurrency guard of **one active generation per user**, independent of the Redis-backed chat-send window above. A second concurrent non-streaming generation returns `429 TOO_MANY_REQUESTS`. The streaming route may report the same condition as an SSE `event: error` frame after the stream has opened, since a rejection after headers are sent cannot change the HTTP status. This guard is process-local and is not itself a distributed or time-window rate limit.
 
 ## CORS
 

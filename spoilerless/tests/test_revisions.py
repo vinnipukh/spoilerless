@@ -482,7 +482,7 @@ class TestRevertCreatedRevision:
 
         resp = _revert_revision(user_content_client, created_rev["id"])
         assert resp.status_code == 422
-        assert resp.json()["detail"]["code"] == "cannot_revert_create"
+        assert resp.json()["detail"]["code"] == "CANNOT_REVERT_CREATE"
 
 
 class TestRevertCanonicalResource:
@@ -515,7 +515,7 @@ class TestRevertCanonicalResource:
 
         resp = _revert_revision(user_content_client, updated_rev["id"])
         assert resp.status_code == 409
-        assert resp.json()["detail"]["code"] == "cannot_revert_canonical"
+        assert resp.json()["detail"]["code"] == "CANNOT_REVERT_CANONICAL"
 
 
 class TestRevertAuthentication:

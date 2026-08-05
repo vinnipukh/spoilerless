@@ -15,7 +15,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .catch((err) => {
         if (cancelled) return
-        if (err instanceof ApiError && (err.code === 'AUTH_UNAUTHENTICATED' || err.code === 'unauthenticated')) {
+        if (err instanceof ApiError && err.code === 'AUTH_UNAUTHENTICATED') {
           setState({ status: 'unauthenticated' })
         } else {
           setState({ status: 'unauthenticated' })

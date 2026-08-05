@@ -74,10 +74,10 @@ describe('changeSet api client', () => {
   })
 
   it('throws ApiError with the backend code/message intact on a non-2xx response', async () => {
-    mockFetchJson(422, { detail: { code: 'invalid_request', message: 'Request validation failed.' } })
+    mockFetchJson(422, { detail: { code: 'INVALID_REQUEST', message: 'Request validation failed.' } })
 
     await expect(confirmChangeSet('series_dexter', 'change_set_1')).rejects.toMatchObject({
-      code: 'invalid_request',
+      code: 'INVALID_REQUEST',
       message: 'Request validation failed.',
     })
     await expect(confirmChangeSet('series_dexter', 'change_set_1')).rejects.toBeInstanceOf(ApiError)

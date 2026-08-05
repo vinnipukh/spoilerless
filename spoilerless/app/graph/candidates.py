@@ -147,7 +147,7 @@ async def _ingest_candidate_claims(tx: Any, cmd: dict[str, Any]) -> dict[str, An
             errors.append({
                 "index": i,
                 "claim_id": claim.candidate_id,
-                "code": "ingest_error",
+                "code": "INGEST_ERROR",
                 "message": str(exc),
             })
 

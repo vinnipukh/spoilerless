@@ -75,10 +75,10 @@ describe('progress api client', () => {
   })
 
   it('throws ApiError with the backend code/message intact on a non-2xx response', async () => {
-    mockFetchJson(404, { detail: { code: 'resource_not_found', message: 'Resource not found.' } })
+    mockFetchJson(404, { detail: { code: 'RESOURCE_NOT_FOUND', message: 'Resource not found.' } })
 
     await expect(getProgress('series_dexter')).rejects.toMatchObject({
-      code: 'resource_not_found',
+      code: 'RESOURCE_NOT_FOUND',
       message: 'Resource not found.',
     })
     await expect(getProgress('series_dexter')).rejects.toBeInstanceOf(ApiError)

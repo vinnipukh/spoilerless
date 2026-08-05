@@ -193,14 +193,14 @@ class TestCandidateReadBoundary:
     def test_list_omitted_boundary_returns_422(self, live_client: TestClient):
         response = live_client.get(f"/api/series/{self.SERIES_ID}/candidates")
         assert response.status_code == 422
-        assert response.json()["detail"]["code"] == "invalid_request"
+        assert response.json()["detail"]["code"] == "INVALID_REQUEST"
 
     def test_get_omitted_boundary_returns_422(self, live_client: TestClient):
         response = live_client.get(
             f"/api/series/{self.SERIES_ID}/candidates/some-claim-id"
         )
         assert response.status_code == 422
-        assert response.json()["detail"]["code"] == "invalid_request"
+        assert response.json()["detail"]["code"] == "INVALID_REQUEST"
 
     def test_list_nonpersisted_boundary_returns_422(self, live_client: TestClient):
         """A boundary that is not a persisted episode order is rejected like
@@ -210,7 +210,7 @@ class TestCandidateReadBoundary:
             params={"visible_until_order": 999},
         )
         assert response.status_code == 422
-        assert response.json()["detail"]["code"] == "invalid_visible_until_order"
+        assert response.json()["detail"]["code"] == "INVALID_VISIBLE_UNTIL_ORDER"
 
     def test_get_above_boundary_reads_as_missing(self, live_client: TestClient):
         """A claim whose reveal point is above the resolved boundary reads as
@@ -257,7 +257,7 @@ class TestCandidateReadBoundary:
                 params={"visible_until_order": 1},
             )
             assert hidden.status_code == 404
-            assert hidden.json()["detail"]["code"] == "candidate_not_found"
+            assert hidden.json()["detail"]["code"] == "CANDIDATE_NOT_FOUND"
 
             visible = live_client.get(
                 f"/api/series/{self.SERIES_ID}/candidates/{claim_id}",

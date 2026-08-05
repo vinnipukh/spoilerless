@@ -132,7 +132,7 @@ def test_high_boundary_returns_real_titles(live_client: TestClient) -> None:
 def test_unknown_series_episodes_returns_404(live_client: TestClient) -> None:
     response = live_client.get("/api/series/unknown/episodes")
     assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "series_not_found"
+    assert response.json()["detail"]["code"] == "SERIES_NOT_FOUND"
 
 
 # ── D-05 fail-closed effective boundary (authenticated) ──

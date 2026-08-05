@@ -44,7 +44,7 @@ type ChatErrorKind = 'disabled' | 'provider-unavailable' | 'busy' | 'recoverable
 function classifyChatError(error: ApiError): ChatErrorKind {
   if (error.code === 'LLM_DISABLED') return 'disabled'
   if (error.code === 'LLM_PROVIDER_UNAVAILABLE') return 'provider-unavailable'
-  if (error.code === 'too_many_requests') return 'busy'
+  if (error.code === 'TOO_MANY_REQUESTS') return 'busy'
   if (error.code.startsWith('LLM_')) return 'recoverable'
   return 'non-retryable'
 }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from fastapi import FastAPI
@@ -7,11 +8,14 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel, ConfigDict, Field
 
 from spoilerless.app.core.errors import (
+    ERROR_CODES,
     ErrorResponse,
     error_responses,
     http_error,
     install_error_handlers,
 )
+
+ERROR_CODE_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 
 class _StrictPayload(BaseModel):
@@ -46,7 +50,7 @@ def _contract_app() -> FastAPI:
 
     @app.get("/missing", responses=error_responses(404))
     async def missing() -> None:
-        raise http_error(404, "resource_not_found", "Resource not found.")
+        raise http_error(404, "RESOURCE_NOT_FOUND", "Resource not found.")
 
     return app
 
@@ -75,7 +79,7 @@ def test_validation_error_uses_stable_sanitized_envelope() -> None:
 
     assert response.status_code == 422
     assert_error_envelope(
-        response.json(), code="invalid_request", message="Request validation failed."
+        response.json(), code="INVALID_REQUEST", message="Request validation failed."
     )
     assert secret not in response.text
     assert "input" not in response.text.lower()
@@ -92,7 +96,7 @@ def test_validation_error_sanitizes_malformed_json_without_echoing_input() -> No
 
     assert response.status_code == 422
     assert_error_envelope(
-        response.json(), code="invalid_request", message="Request validation failed."
+        response.json(), code="INVALID_REQUEST", message="Request validation failed."
     )
     assert secret not in response.text
 
@@ -102,7 +106,7 @@ def test_http_error_uses_exact_runtime_envelope() -> None:
 
     assert response.status_code == 404
     assert_error_envelope(
-        response.json(), code="resource_not_found", message="Resource not found."
+        response.json(), code="RESOURCE_NOT_FOUND", message="Resource not found."
     )
 
 
@@ -298,3 +302,63 @@ def test_all_story_reads_graph_errors_health_and_deletes_are_fully_typed() -> No
     for path, item in schema["paths"].items():
         if "delete" in item:
             assert item["delete"]["responses"]["204"].get("content") in (None, {})
+
+
+def _collect_openapi_error_codes() -> set[str]:
+    """Collect every error code the OpenAPI document documents.
+
+    Walks (a) every response example on every operation and (b) the
+    ErrorDetail schema's ``code`` examples, so both the shared envelope and
+    route-level documented codes are covered.
+    """
+    from spoilerless.app.main import app
+
+    schema = app.openapi()
+    codes: set[str] = set()
+
+    for path, item in schema["paths"].items():
+        for method, operation in item.items():
+            if method not in {"get", "post", "patch", "put", "delete"}:
+                continue
+            for response in operation.get("responses", {}).values():
+                content = response.get("content") or {}
+                example = content.get("application/json", {}).get("example")
+                if isinstance(example, dict):
+                    detail = example.get("detail")
+                    if isinstance(detail, dict) and "code" in detail:
+                        codes.add(str(detail["code"]))
+
+    detail_schema = (
+        schema.get("components", {}).get("schemas", {}).get("ErrorDetail", {})
+    )
+    examples = detail_schema.get("properties", {}).get("code", {}).get("examples", [])
+    codes.update(str(ex) for ex in examples if isinstance(ex, str))
+    return codes
+
+
+def test_every_openapi_error_code_is_uppercase_and_registered() -> None:
+    """PROB-09/#20: the OpenAPI contract only documents canonical codes.
+
+    Every code the API documents in an error response must match the
+    uppercase pattern AND be a member of the ERROR_CODES registry — a new
+    route that emits an unregistered or legacy-lowercase code fails here.
+    """
+    codes = _collect_openapi_error_codes()
+    assert codes, "expected at least one documented error code"
+    for code in sorted(codes):
+        assert ERROR_CODE_PATTERN.fullmatch(code), (
+            f"documented error code {code!r} is not uppercase "
+            r"(^[A-Z][A-Z0-9_]*$)"
+        )
+        assert code in ERROR_CODES, (
+            f"documented error code {code!r} is missing from the canonical "
+            "ERROR_CODES registry in spoilerless/app/core/errors.py"
+        )
+
+
+def test_registry_codes_all_match_uppercase_pattern() -> None:
+    """The registry itself can never carry a lowercase/legacy code."""
+    for code in ERROR_CODES:
+        assert ERROR_CODE_PATTERN.fullmatch(code), (
+            f"registry code {code!r} violates the uppercase pattern"
+        )

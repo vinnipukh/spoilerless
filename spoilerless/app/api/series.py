@@ -41,7 +41,7 @@ async def get_series(series_id: str, service: SeriesServiceDependency) -> Series
     if record is None:
         raise HTTPException(
             status_code=404,
-            detail={"code": "series_not_found", "message": "Series not found."},
+            detail={"code": "SERIES_NOT_FOUND", "message": "Series not found."},
         )
     return SeriesResponse(**record)
 
@@ -77,7 +77,7 @@ async def list_episodes(
     if not records:
         raise HTTPException(
             status_code=404,
-            detail={"code": "series_not_found", "message": "Series not found."},
+            detail={"code": "SERIES_NOT_FOUND", "message": "Series not found."},
         )
 
     # PROB-04/#12: an anonymous reader's effective boundary is FIXED at

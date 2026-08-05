@@ -300,7 +300,7 @@ def test_custom_relationship_rejects_non_user_predicate_groups(
         "predicate": predicate, "episode_id": "dexter_s01e01",
     })
     assert response.status_code == 422
-    assert response.json() == {"detail": {"code": "invalid_request", "message": "Request validation failed."}}
+    assert response.json() == {"detail": {"code": "INVALID_REQUEST", "message": "Request validation failed."}}
 
 
 def test_custom_relationship_visibility_max_cross_series_dangling_and_in_use(
@@ -474,7 +474,7 @@ def test_user_content_is_owner_bound_and_cross_owner_mutations_rejected(
             assert response.status_code == 403, (
                 f"{method.upper()} {url} -> {response.status_code}: {response.text}"
             )
-            assert response.json()["detail"]["code"] == "forbidden"
+            assert response.json()["detail"]["code"] == "FORBIDDEN"
     finally:
         asyncio.run(_delete_test_user(google_sub_b))
 

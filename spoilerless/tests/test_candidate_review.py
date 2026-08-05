@@ -201,7 +201,7 @@ class TestCandidateApprove:
             f"/api/series/{self.SERIES_ID}/candidates/{ingested_claim_id}/approve",
         )
         assert response.status_code == 403, response.text
-        assert response.json()["detail"]["code"] == "forbidden"
+        assert response.json()["detail"]["code"] == "FORBIDDEN"
 
 
 class TestCandidateReject:
@@ -235,7 +235,7 @@ class TestCandidateReject:
             f"/api/series/{self.SERIES_ID}/candidates/{ingested_claim_id}/reject",
         )
         assert response.status_code == 403, response.text
-        assert response.json()["detail"]["code"] == "forbidden"
+        assert response.json()["detail"]["code"] == "FORBIDDEN"
 
 
 class TestCandidateEdit:
@@ -272,4 +272,4 @@ class TestCandidateEdit:
             json={"confidence_level": "high"},
         )
         assert response.status_code == 403, response.text
-        assert response.json()["detail"]["code"] == "forbidden"
+        assert response.json()["detail"]["code"] == "FORBIDDEN"

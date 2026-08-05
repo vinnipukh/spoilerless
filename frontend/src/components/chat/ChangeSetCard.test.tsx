@@ -134,7 +134,7 @@ describe('ChangeSetCard', () => {
 
   it('renders the stale "no longer valid... ask again" banner instead of the controls when confirm returns changeset_stale', async () => {
     vi.mocked(confirmChangeSet).mockRejectedValue(
-      new ApiError({ code: 'changeset_stale', message: 'Watch progress changed.' }),
+      new ApiError({ code: 'CHANGESET_STALE', message: 'Watch progress changed.' }),
     )
     const user = userEvent.setup()
     render(<ChangeSetCard changeSet={proposedChangeSetAwaitingConfirmation} seriesId="series_dexter" />)

@@ -20,7 +20,7 @@ type Props = {
 
 // A local-only UI state layered on top of the backend's own `ChangeSetStatus`
 // — `'stale'` has no backend status value (RAG-14's staleness is a 409
-// `changeset_stale` error at confirm-time, not a status the ChangeSet record
+// `CHANGESET_STALE` error at confirm-time, not a status the ChangeSet record
 // itself ever carries), so it is tracked as a distinct local state that
 // replaces the Confirm/Reject controls with the documented "no longer
 // valid... ask again" banner instead of a generic error.
@@ -259,7 +259,7 @@ export function ChangeSetCard({ changeSet, seriesId, onApplied }: Props) {
       setLocalStatus(updated.status)
       if (updated.status === 'applied') onApplied?.(updated)
     } catch (error) {
-      if (error instanceof ApiError && error.code === 'changeset_stale') {
+      if (error instanceof ApiError && error.code === 'CHANGESET_STALE') {
         setLocalStatus('stale')
       }
       // Any other error leaves the card awaiting confirmation so the user

@@ -186,7 +186,7 @@ Two optional comma-separated, case-insensitive email lists gate and classify sig
   email demotes that user's `role` the next time they sign in, it is never read from client input or
   persisted independent of login. `RequireAdminDependency` (`spoilerless/app/api/deps.py`) enforces
   `role == "admin"` on admin-only routes (for example `GET`/`PUT /api/settings/llm`), rejecting with
-  `403 forbidden` otherwise.
+  `403 FORBIDDEN` otherwise.
 
 Both checks run **after** Google token verification succeeds, so they are driven by a Google-attested email
 plus a server-controlled env var — never by unverified client input.
@@ -209,7 +209,7 @@ unthrottled and always queries Neo4j directly:
   | Chat send | 20 requests | 60s | per user |
   | Content write | 30 requests | 60s | per user, falling back to IP |
 
-  A request over the limit is rejected with `429 too_many_requests`.
+  A request over the limit is rejected with `429 TOO_MANY_REQUESTS`.
 - **Graph query response cache** (`spoilerless/app/cache/graph_cache.py`) — cache-aside layer for
   `GET /api/series/{series_id}/graph`. Cache key is `graph:{series_id}:{effective_boundary}:{user_id or 'anon'}`
   with a `300`-second TTL (`DEFAULT_GRAPH_TTL_SECONDS`); any Redis error or unset `REDIS_URL` falls through
@@ -267,7 +267,7 @@ set at runtime through the API and is persisted in the graph — it is **not** p
   - Both routes depend on `RequireAdminDependency` (`spoilerless/app/api/deps.py`), so only a session whose
     `role == "admin"` (see [Authentication allowlist and admin role](#authentication-allowlist-and-admin-role))
     may view or change the shared LLM provider configuration; any other authenticated user gets
-    `403 forbidden`.
+    `403 FORBIDDEN`.
 - **Precedence:** For `provider`, `api_key`, `base_url`, and `model`, a non-empty stored graph value wins;
   otherwise the corresponding `LLM_*` setting from `Settings` is used as the fallback (`get_llm()` and
   `get_llm_provider()` use `stored.get(field) or env_value`). `enabled` is different because `false` is

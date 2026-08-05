@@ -78,7 +78,7 @@ def test_error_responses() -> None:
     assert response.status_code == 503
     assert response.json() == {
         "detail": {
-            "code": "database_unavailable",
+            "code": "DATABASE_UNAVAILABLE",
             "message": "The graph database is unavailable.",
         }
     }
@@ -228,16 +228,16 @@ def test_graph_error_shapes(live_client: TestClient) -> None:
         asyncio.run(_clean_boundary_session(3))
 
     assert unknown.status_code == 404
-    assert unknown.json()["detail"]["code"] == "series_not_found"
+    assert unknown.json()["detail"]["code"] == "SERIES_NOT_FOUND"
     for response in (missing, malformed):
         assert response.status_code == 422
-        assert response.json()["detail"]["code"] == "invalid_request"
+        assert response.json()["detail"]["code"] == "INVALID_REQUEST"
     # Anonymous clamp: boundary 4 request yields boundary-1 content (200).
     assert anon_nonpersisted.status_code == 200
     assert anon_nonpersisted.json()["effective_view_order"] == 1
     # Authenticated non-persisted order stays fail-closed 422.
     assert nonpersisted.status_code == 422
-    assert nonpersisted.json()["detail"]["code"] == "invalid_visible_until_order"
+    assert nonpersisted.json()["detail"]["code"] == "INVALID_VISIBLE_UNTIL_ORDER"
 
 
 def test_graph_database_unavailable_is_sanitized(live_client: TestClient) -> None:
@@ -251,7 +251,7 @@ def test_graph_database_unavailable_is_sanitized(live_client: TestClient) -> Non
         main_module.app.dependency_overrides.clear()
 
     assert response.status_code == 503
-    assert response.json()["detail"]["code"] == "database_unavailable"
+    assert response.json()["detail"]["code"] == "DATABASE_UNAVAILABLE"
     assert "secret" not in response.text
     assert "MATCH" not in response.text
 
@@ -263,7 +263,7 @@ def test_graph_database_unavailable_is_sanitized(live_client: TestClient) -> Non
 # visible node. Harry Morgan is intentionally visible from order 1 (the Buddy
 # flashback) and is therefore no longer forbidden at boundary 2.
 @pytest.mark.parametrize(
-    ("boundary", "forbidden", "present"),
+    ("boundary", "FORBIDDEN", "present"),
     [
         (
             1,

@@ -44,21 +44,21 @@ ChangeSetServiceDependency = Annotated[ChangeSetService, Depends(get_change_set_
 
 
 def _not_found() -> None:
-    raise http_error(404, "resource_not_found", "Resource not found.")
+    raise http_error(404, "RESOURCE_NOT_FOUND", "Resource not found.")
 
 
 def _invalid() -> None:
-    raise http_error(422, "invalid_request", "Request validation failed.")
+    raise http_error(422, "INVALID_REQUEST", "Request validation failed.")
 
 
 def _conflict(message: str = "The request conflicts with the current resource state.") -> None:
-    raise http_error(409, "resource_conflict", message)
+    raise http_error(409, "RESOURCE_CONFLICT", message)
 
 
 def _stale() -> None:
     raise http_error(
         409,
-        "changeset_stale",
+        "CHANGESET_STALE",
         "This ChangeSet was proposed at a higher progress boundary than the "
         "current progress and must be regenerated before it can be confirmed.",
     )

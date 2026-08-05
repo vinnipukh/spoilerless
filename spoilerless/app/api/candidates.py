@@ -50,7 +50,7 @@ async def _require_resolved_boundary(
     if visible_until_order is None:
         raise http_error(
             422,
-            "invalid_request",
+            "INVALID_REQUEST",
             "visible_until_order is required to read candidates — an omitted "
             "boundary must never default to every visibility level.",
         )
@@ -60,7 +60,7 @@ async def _require_resolved_boundary(
     if boundary_episode is None:
         raise http_error(
             422,
-            "invalid_visible_until_order",
+            "INVALID_VISIBLE_UNTIL_ORDER",
             "visible_until_order must identify a persisted episode order.",
         )
 
@@ -131,7 +131,7 @@ class EditCandidateRequest(BaseModel):
             "description": "Invalid extraction payload.",
             "content": {
                 "application/json": {
-                    "example": {"detail": {"code": "invalid_extraction_payload", "message": "Validation failed at index 2: claim_type 'unknown' not in ontology"}}
+                    "example": {"detail": {"code": "INVALID_EXTRACTION_PAYLOAD", "message": "Validation failed at index 2: claim_type 'unknown' not in ontology"}}
                 }
             },
         },
@@ -158,7 +158,7 @@ async def ingest_candidates(
     except Exception as exc:
         raise http_error(
             status_code=422,
-            code="invalid_extraction_payload",
+            code="INVALID_EXTRACTION_PAYLOAD",
             message=f"Batch validation error: {exc}",
         )
 
@@ -224,7 +224,7 @@ async def get_candidate(
         series_id, claim_id, visible_until_order=visible_until_order
     )
     if claim is None:
-        raise http_error(404, "candidate_not_found", f"Candidate claim not found: {claim_id}")
+        raise http_error(404, "CANDIDATE_NOT_FOUND", f"Candidate claim not found: {claim_id}")
     return claim
 
 
@@ -256,10 +256,10 @@ async def approve_candidate(
         result = await tx.run(read_query, claim_id=cmd["claim_id"], series_id=cmd["series_id"])
         record = await result.single()
         if record is None:
-            raise http_error(404, "candidate_not_found", f"Candidate claim not found: {cmd['claim_id']}")
+            raise http_error(404, "CANDIDATE_NOT_FOUND", f"Candidate claim not found: {cmd['claim_id']}")
         row = dict(record.data())
         if row["origin"] != "candidate":
-            raise http_error(409, "cannot_approve_non_candidate", f"Claim '{cmd['claim_id']}' origin is '{row['origin']}', not 'candidate'.")
+            raise http_error(409, "CANNOT_APPROVE_NON_CANDIDATE", f"Claim '{cmd['claim_id']}' origin is '{row['origin']}', not 'candidate'.")
 
         before = dict(row)
         after = dict(before)
@@ -284,7 +284,7 @@ async def approve_candidate(
     except HTTPException:
         raise
     except Exception as exc:
-        raise http_error(422, "invalid_extraction_payload", f"Approve error: {exc}")
+        raise http_error(422, "INVALID_EXTRACTION_PAYLOAD", f"Approve error: {exc}")
     await invalidate_series(series_id)
     return result
 
@@ -313,7 +313,7 @@ async def reject_candidate(
         result = await tx.run(read_query, claim_id=cmd["claim_id"], series_id=cmd["series_id"])
         record = await result.single()
         if record is None:
-            raise http_error(404, "candidate_not_found", f"Candidate claim not found: {cmd['claim_id']}")
+            raise http_error(404, "CANDIDATE_NOT_FOUND", f"Candidate claim not found: {cmd['claim_id']}")
 
         row = dict(record.data())
         before = dict(row)
@@ -337,7 +337,7 @@ async def reject_candidate(
     except HTTPException:
         raise
     except Exception as exc:
-        raise http_error(422, "invalid_extraction_payload", f"Reject error: {exc}")
+        raise http_error(422, "INVALID_EXTRACTION_PAYLOAD", f"Reject error: {exc}")
     await invalidate_series(series_id)
     return result
 
@@ -368,7 +368,7 @@ async def edit_candidate(
         result = await tx.run(read_query, claim_id=cmd["claim_id"], series_id=cmd["series_id"])
         record = await result.single()
         if record is None:
-            raise http_error(404, "candidate_not_found", f"Candidate claim not found: {cmd['claim_id']}")
+            raise http_error(404, "CANDIDATE_NOT_FOUND", f"Candidate claim not found: {cmd['claim_id']}")
 
         row = dict(record.data())
         before = dict(row)
@@ -396,8 +396,8 @@ async def edit_candidate(
     except HTTPException:
         raise
     except ValueError as exc:
-        raise http_error(422, "invalid_extraction_payload", str(exc))
+        raise http_error(422, "INVALID_EXTRACTION_PAYLOAD", str(exc))
     except Exception as exc:
-        raise http_error(422, "invalid_extraction_payload", f"Edit error: {exc}")
+        raise http_error(422, "INVALID_EXTRACTION_PAYLOAD", f"Edit error: {exc}")
     await invalidate_series(series_id)
     return result

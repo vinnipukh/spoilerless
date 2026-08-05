@@ -150,10 +150,10 @@ describe('chat api client', () => {
   })
 
   it('throws ApiError with the backend code/message intact on a non-2xx response', async () => {
-    mockFetchJson(404, { detail: { code: 'resource_not_found', message: 'Resource not found.' } })
+    mockFetchJson(404, { detail: { code: 'RESOURCE_NOT_FOUND', message: 'Resource not found.' } })
 
     await expect(listChatSessions('series_dexter')).rejects.toMatchObject({
-      code: 'resource_not_found',
+      code: 'RESOURCE_NOT_FOUND',
       message: 'Resource not found.',
     })
     await expect(listChatSessions('series_dexter')).rejects.toBeInstanceOf(ApiError)
@@ -306,14 +306,14 @@ describe('streamMessage', () => {
 
   it('invokes onError for a structured event: error chunk (concurrency rejection)', async () => {
     mockStreamResponse([
-      'event: error\ndata: {"code":"too_many_requests","message":"Too many concurrent requests."}\n\n',
+      'event: error\ndata: {"code":"TOO_MANY_REQUESTS","message":"Too many concurrent requests."}\n\n',
     ])
 
     const onDone = vi.fn()
     const onError = vi.fn()
     await streamMessage('series_dexter', 'session_1', 'Hi', { onDone, onError })
 
-    expect(onError).toHaveBeenCalledWith({ code: 'too_many_requests', message: 'Too many concurrent requests.' })
+    expect(onError).toHaveBeenCalledWith({ code: 'TOO_MANY_REQUESTS', message: 'Too many concurrent requests.' })
     expect(onDone).not.toHaveBeenCalled()
   })
 

@@ -335,7 +335,7 @@ def test_cross_user_session_is_generic_404(
 
     response = client.get(f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}")
     assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "resource_not_found"
+    assert response.json()["detail"]["code"] == "RESOURCE_NOT_FOUND"
     assert user_a["id"] != other["id"]
 
 
@@ -807,7 +807,7 @@ def test_unknown_session_is_generic_404(
         json={"question": "hello"},
     )
     assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "resource_not_found"
+    assert response.json()["detail"]["code"] == "RESOURCE_NOT_FOUND"
 
 
 def test_zero_sessions_returns_empty_list_not_404(
@@ -853,7 +853,7 @@ def test_delete_session_removes_it_and_its_messages_from_subsequent_get(
 
     after = client.get(f"/api/series/{SERIES_ID}/chat/sessions/{session['id']}")
     assert after.status_code == 404
-    assert after.json()["detail"]["code"] == "resource_not_found"
+    assert after.json()["detail"]["code"] == "RESOURCE_NOT_FOUND"
 
 
 def test_delete_session_cross_user_and_nonexistent_return_identical_404(
@@ -880,7 +880,7 @@ def test_delete_session_cross_user_and_nonexistent_return_identical_404(
 
     assert cross_user.status_code == nonexistent.status_code == 404
     assert cross_user.json() == nonexistent.json()
-    assert cross_user.json()["detail"]["code"] == "resource_not_found"
+    assert cross_user.json()["detail"]["code"] == "RESOURCE_NOT_FOUND"
 
 
 def test_delete_session_cross_series_is_generic_404(
@@ -895,7 +895,7 @@ def test_delete_session_cross_series_is_generic_404(
         f"/api/series/series_other_show/chat/sessions/{session['id']}"
     )
     assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "resource_not_found"
+    assert response.json()["detail"]["code"] == "RESOURCE_NOT_FOUND"
 
 
 def test_delete_session_retried_twice_returns_204_then_404(
@@ -913,7 +913,7 @@ def test_delete_session_retried_twice_returns_204_then_404(
 
     assert first.status_code == 204
     assert second.status_code == 404
-    assert second.json()["detail"]["code"] == "resource_not_found"
+    assert second.json()["detail"]["code"] == "RESOURCE_NOT_FOUND"
 
 
 # ---------------------------------------------------------------------------
@@ -943,7 +943,7 @@ def test_concurrent_generation_for_same_user_is_rejected_with_clear_error(
             json={"question": "Who is Dexter related to?"},
         )
         assert response.status_code == 429
-        assert response.json()["detail"]["code"] == "too_many_requests"
+        assert response.json()["detail"]["code"] == "TOO_MANY_REQUESTS"
     finally:
         service.release_generation_slot(user["id"])
 

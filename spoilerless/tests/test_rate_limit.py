@@ -64,5 +64,5 @@ async def test_callback_raises_429_with_existing_error_code() -> None:
     with pytest.raises(HTTPException) as exc_info:
         await rate_limit_callback(_Request(), response=None)
     assert exc_info.value.status_code == 429
-    assert exc_info.value.detail["code"] == "too_many_requests"
+    assert exc_info.value.detail["code"] == "TOO_MANY_REQUESTS"
     assert "message" in exc_info.value.detail

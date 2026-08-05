@@ -58,7 +58,7 @@ async def rate_limit_callback(
     ``spoilerless/app/core/errors.py``'s ``_ERROR_SPECS[429]`` — never a new
     uppercase code (``ErrorDetail.code``'s regex is ``^[a-z][a-z0-9_]*$``).
     """
-    raise http_error(429, "too_many_requests", "Too many requests. Please slow down.")
+    raise http_error(429, "TOO_MANY_REQUESTS", "Too many requests. Please slow down.")
 
 
 class RateLimiter:

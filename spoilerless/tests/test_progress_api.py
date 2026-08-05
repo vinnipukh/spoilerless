@@ -243,7 +243,7 @@ def test_progress_is_scoped_to_the_authenticated_user(
 
     response = client.get("/api/series/series_dexter/progress")
     assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "resource_not_found"
+    assert response.json()["detail"]["code"] == "RESOURCE_NOT_FOUND"
 
 
 def test_progress_get_query_scopes_ownership_inside_the_match_pattern() -> None:
@@ -271,7 +271,7 @@ def test_never_watched_and_nonexistent_series_return_identical_404(
     assert (
         never_watched.json()["detail"]["code"]
         == nonexistent.json()["detail"]["code"]
-        == "resource_not_found"
+        == "RESOURCE_NOT_FOUND"
     )
     assert never_watched.json() == nonexistent.json()
 
@@ -353,7 +353,7 @@ def test_get_missing_progress_returns_generic_404(
 ) -> None:
     response = client.get("/api/series/series_dexter/progress")
     assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "resource_not_found"
+    assert response.json()["detail"]["code"] == "RESOURCE_NOT_FOUND"
 
 
 def test_post_progress_rejects_non_positive_boundary(
@@ -398,7 +398,7 @@ def test_progress_null_persisted_split_field_fails_closed_to_422(
         # Read path: GET must 422 via the documented envelope, never 500.
         read = client.get("/api/series/series_dexter/progress")
         assert read.status_code == 422, read.text
-        assert read.json()["detail"]["code"] == "invalid_visible_until_order"
+        assert read.json()["detail"]["code"] == "INVALID_VISIBLE_UNTIL_ORDER"
 
         # Write path: a view-only update reads the corrupt row first and must
         # surface the same 422 envelope.
@@ -407,7 +407,7 @@ def test_progress_null_persisted_split_field_fails_closed_to_422(
             json={"view_as_of_order": 2},
         )
         assert write.status_code == 422, write.text
-        assert write.json()["detail"]["code"] == "invalid_visible_until_order"
+        assert write.json()["detail"]["code"] == "INVALID_VISIBLE_UNTIL_ORDER"
     finally:
         # authed_user teardown removes the AppUser + its progress rows.
         pass
@@ -569,7 +569,7 @@ def test_non_persisted_watched_through_order_is_rejected(
             json={"watched_through_order": bad_order},
         )
         assert response.status_code == 422, response.text
-        assert response.json()["detail"]["code"] == "invalid_visible_until_order"
+        assert response.json()["detail"]["code"] == "INVALID_VISIBLE_UNTIL_ORDER"
 
 
 def test_view_as_of_order_above_watched_through_order_is_rejected(
@@ -581,7 +581,7 @@ def test_view_as_of_order_above_watched_through_order_is_rejected(
         json={"watched_through_order": 2, "view_as_of_order": 3},
     )
     assert response.status_code == 422
-    assert response.json()["detail"]["code"] == "invalid_visible_until_order"
+    assert response.json()["detail"]["code"] == "INVALID_VISIBLE_UNTIL_ORDER"
 
 
 def test_cross_series_progress_update_is_rejected(
@@ -595,7 +595,7 @@ def test_cross_series_progress_update_is_rejected(
         json={"watched_through_order": 1},
     )
     assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "resource_not_found"
+    assert response.json()["detail"]["code"] == "RESOURCE_NOT_FOUND"
 
 
 def test_view_only_change_without_existing_record_is_generic_404(
@@ -607,7 +607,7 @@ def test_view_only_change_without_existing_record_is_generic_404(
         "/api/series/series_dexter/progress", json={"view_as_of_order": 1}
     )
     assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "resource_not_found"
+    assert response.json()["detail"]["code"] == "RESOURCE_NOT_FOUND"
 
 
 def test_progress_update_rejects_both_boundary_fields_together(

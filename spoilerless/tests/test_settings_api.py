@@ -332,7 +332,7 @@ def test_get_and_update_llm_settings_require_admin_role(
 
     get_response = client.get("/api/settings/llm")
     assert get_response.status_code == 403, get_response.text
-    assert get_response.json()["detail"]["code"] == "forbidden"
+    assert get_response.json()["detail"]["code"] == "FORBIDDEN"
 
     put_response = client.put(
         "/api/settings/llm",
@@ -344,4 +344,4 @@ def test_get_and_update_llm_settings_require_admin_role(
         },
     )
     assert put_response.status_code == 403, put_response.text
-    assert put_response.json()["detail"]["code"] == "forbidden"
+    assert put_response.json()["detail"]["code"] == "FORBIDDEN"

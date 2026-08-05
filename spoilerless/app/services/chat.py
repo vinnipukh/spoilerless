@@ -126,7 +126,7 @@ async def get_llm_provider(
                 validated = LLMSettingsUpdate(base_url=base_url)
             except ValidationError as exc:
                 error = exc.errors()[0]
-                raise http_error(422, "invalid_request", error["msg"]) from exc
+                raise http_error(422, "INVALID_REQUEST", error["msg"]) from exc
             base_url = validated.base_url
         if provider == "gemini":
             if not model:

@@ -36,19 +36,19 @@ def _repository(database: Neo4jDatabase) -> UserContentRepository:
 
 
 def _not_found() -> Exception:
-    return http_error(404, "resource_not_found", "Resource not found.")
+    return http_error(404, "RESOURCE_NOT_FOUND", "Resource not found.")
 
 
 def _invalid(exc: UserContentValidationError) -> Exception:
-    return http_error(422, "invalid_request", "Request validation failed.")
+    return http_error(422, "INVALID_REQUEST", "Request validation failed.")
 
 
 def _conflict(exc: UserContentConflict) -> Exception:
-    return http_error(409, "resource_conflict", "The request conflicts with the current resource state.")
+    return http_error(409, "RESOURCE_CONFLICT", "The request conflicts with the current resource state.")
 
 
 def _forbidden() -> Exception:
-    return http_error(403, "forbidden", "This resource belongs to another user.")
+    return http_error(403, "FORBIDDEN", "This resource belongs to another user.")
 
 
 def _actor(user: dict) -> tuple[str, bool]:

@@ -48,11 +48,11 @@ ChatServiceDependency = Annotated[ChatService, Depends(get_chat_service)]
 
 
 def _not_found() -> None:
-    raise http_error(404, "resource_not_found", "Resource not found.")
+    raise http_error(404, "RESOURCE_NOT_FOUND", "Resource not found.")
 
 
 def _too_many_requests() -> None:
-    raise http_error(429, "too_many_requests", "Too many concurrent requests.")
+    raise http_error(429, "TOO_MANY_REQUESTS", "Too many concurrent requests.")
 
 
 @router.post(
@@ -228,7 +228,7 @@ async def stream_message(
                     yield f"data: {json.dumps(chunk)}\n\n"
         except ConcurrentGenerationLimitExceeded:
             error_payload = {
-                "code": "too_many_requests",
+                "code": "TOO_MANY_REQUESTS",
                 "message": "Too many concurrent requests.",
             }
             yield f"event: error\ndata: {json.dumps(error_payload)}\n\n"

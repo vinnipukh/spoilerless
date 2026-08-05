@@ -69,7 +69,7 @@ async def get_graph(
 ) -> GraphResponse:
     series = await service.get_series_meta(series_id)
     if series is None:
-        raise _error(404, "series_not_found", "Series not found.")
+        raise _error(404, "SERIES_NOT_FOUND", "Series not found.")
 
     # PROB-04/#12: the effective boundary for an ANONYMOUS reader is FIXED at
     # order 1 — a client-chosen visible_until_order must never widen the
@@ -81,7 +81,7 @@ async def get_graph(
     if boundary_episode is None:
         raise _error(
             422,
-            "invalid_visible_until_order",
+            "INVALID_VISIBLE_UNTIL_ORDER",
             "visible_until_order must identify a persisted episode order.",
         )
 

@@ -48,7 +48,7 @@ RETURN revision.id AS id, revision.series_id AS series_id,
 
 
 def _not_found() -> Exception:
-    return http_error(404, "resource_not_found", "Resource not found.")
+    return http_error(404, "RESOURCE_NOT_FOUND", "Resource not found.")
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +153,7 @@ async def revert_revision(
         if action == RevisionAction.CREATED:
             raise http_error(
                 422,
-                "cannot_revert_create",
+                "CANNOT_REVERT_CREATE",
                 "Cannot revert a Creation revision.",
             )
 
@@ -178,7 +178,7 @@ async def revert_revision(
             if resource_props.get("origin") != "user":
                 raise http_error(
                     409,
-                    "cannot_revert_canonical",
+                    "CANNOT_REVERT_CANONICAL",
                     "Cannot revert a canonical or candidate resource.",
                 )
 
@@ -190,7 +190,7 @@ async def revert_revision(
             if stored_owner is not None and stored_owner != _cmd["user_id"] and not _cmd["is_admin"]:
                 raise http_error(
                     403,
-                    "forbidden",
+                    "FORBIDDEN",
                     "This resource belongs to another user.",
                 )
 
@@ -228,7 +228,7 @@ async def revert_revision(
             if snapshot_owner is not None and snapshot_owner != _cmd["user_id"] and not _cmd["is_admin"]:
                 raise http_error(
                     403,
-                    "forbidden",
+                    "FORBIDDEN",
                     "This resource belongs to another user.",
                 )
             # Check if resource was already re-created (idempotency guard)
@@ -241,7 +241,7 @@ async def revert_revision(
             if existing is not None:
                 raise http_error(
                     409,
-                    "resource_already_exists",
+                    "RESOURCE_ALREADY_EXISTS",
                     "This resource has already been re-created.",
                 )
 
@@ -279,7 +279,7 @@ async def revert_revision(
         else:
             raise http_error(
                 422,
-                "invalid_action",
+                "INVALID_ACTION",
                 f"Cannot revert revision with action: {action.value}",
             )
 

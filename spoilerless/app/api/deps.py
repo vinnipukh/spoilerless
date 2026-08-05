@@ -100,12 +100,12 @@ async def require_admin(user: CurrentUserDependency) -> dict[str, Any]:
     of the D-03 design: only a trusted operator-designated admin can commit
     candidate claims or AI-proposed ChangeSets to the shared canonical graph,
     or mutate the shared LLM settings. Uses the existing lowercase
-    ``"forbidden"`` error code from ``spoilerless/app/core/errors.py``'s
+    ``"FORBIDDEN"`` error code from ``spoilerless/app/core/errors.py``'s
     ``_ERROR_SPECS[403]`` (docs/PROBLEMS.md #20 already flags the casing
     inconsistency — do not add a new uppercase code).
     """
     if user.get("role") != "admin":
-        raise http_error(403, "forbidden", "Admin role required for this action.")
+        raise http_error(403, "FORBIDDEN", "Admin role required for this action.")
     return user
 
 

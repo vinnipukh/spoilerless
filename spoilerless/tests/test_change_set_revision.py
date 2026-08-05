@@ -350,7 +350,7 @@ def test_revert_rejected_when_change_set_was_never_applied(
 
     response = _revert(client, change_set_id)
     assert response.status_code == 409, response.text
-    assert response.json()["detail"]["code"] == "resource_conflict"
+    assert response.json()["detail"]["code"] == "RESOURCE_CONFLICT"
     assert asyncio.run(_change_set_status(change_set_id)) == "awaiting_confirmation"
 
 
@@ -372,7 +372,7 @@ def test_reverting_an_already_reverted_change_set_is_rejected(
 
     second = _revert(client, change_set_id)
     assert second.status_code == 409, second.text
-    assert second.json()["detail"]["code"] == "resource_conflict"
+    assert second.json()["detail"]["code"] == "RESOURCE_CONFLICT"
 
 
 # ---------------------------------------------------------------------------
@@ -444,7 +444,7 @@ def test_revert_conflicts_when_resource_modified_by_later_unrelated_change(
 
     response = _revert(client, change_set_id)
     assert response.status_code == 409, response.text
-    assert response.json()["detail"]["code"] == "resource_conflict"
+    assert response.json()["detail"]["code"] == "RESOURCE_CONFLICT"
 
     # The later change's state is left completely untouched by the failed revert.
     row_after_failed_revert = asyncio.run(_location_row("Mutated by later change"))
@@ -514,7 +514,7 @@ def test_revert_rejected_for_change_set_with_no_stored_prior_state(
 
     response = _revert(client, update_change_set_id)
     assert response.status_code == 422, response.text
-    assert response.json()["detail"]["code"] == "invalid_request"
+    assert response.json()["detail"]["code"] == "INVALID_REQUEST"
 
     # The failed revert attempt made zero mutation — the update stands.
     row = asyncio.run(_location_row("Updated label"))

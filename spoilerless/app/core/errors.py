@@ -14,9 +14,55 @@ from neo4j.exceptions import (
     Neo4jError,
     ServiceUnavailable,
 )
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 logger = logging.getLogger(__name__)
+
+
+# Canonical error-code registry (PROB-09/#20). Every code the API emits —
+# the shared HTTP-status envelope below, route-level http_error() calls,
+# the auth routes, and the LLM chat paths — must be listed here and match
+# ^[A-Z][A-Z0-9_]*$. ErrorDetail validation AND the OpenAPI contract test
+# both reference this set, so a future code that is unregistered (or a
+# legacy lowercase code) fails fast instead of silently drifting.
+ERROR_CODES: frozenset[str] = frozenset({
+    # Shared HTTP-status envelope codes (see _ERROR_SPECS below)
+    "UNAUTHENTICATED",
+    "FORBIDDEN",
+    "RESOURCE_NOT_FOUND",
+    "RESOURCE_CONFLICT",
+    "INVALID_REQUEST",
+    "TOO_MANY_REQUESTS",
+    "DATABASE_UNAVAILABLE",
+    "DATABASE_ERROR",
+    "CONSTRAINT_VIOLATION",
+    # Route-level codes (api/graph.py, api/series.py, api/candidates.py,
+    # api/change_set.py, api/revisions.py, api/progress.py, graph/candidates.py)
+    "SERIES_NOT_FOUND",
+    "INVALID_VISIBLE_UNTIL_ORDER",
+    "INVALID_EXTRACTION_PAYLOAD",
+    "CANDIDATE_NOT_FOUND",
+    "CANNOT_APPROVE_NON_CANDIDATE",
+    "CHANGESET_STALE",
+    "INVALID_ACTION",
+    "CANNOT_REVERT_CREATE",
+    "CANNOT_REVERT_CANONICAL",
+    "RESOURCE_ALREADY_EXISTS",
+    "INGEST_ERROR",
+    # Auth codes (api/auth.py)
+    "AUTH_INVALID_GOOGLE_CREDENTIAL",
+    "AUTH_UNAUTHENTICATED",
+    "AUTH_SESSION_EXPIRED",
+    "AUTH_SESSION_INVALID",
+    "AUTH_ORIGIN_NOT_ALLOWED",
+    "AUTH_EMAIL_NOT_ALLOWED",
+    "AUTH_DISABLED",
+    "AUTH_SERVICE_UNAVAILABLE",
+    # LLM codes (api/chat.py, llm/provider.py)
+    "LLM_DISABLED",
+    "LLM_PROVIDER_UNAVAILABLE",
+    "LLM_STREAM_FAILED",
+})
 
 
 class ErrorDetail(BaseModel):
@@ -25,9 +71,9 @@ class ErrorDetail(BaseModel):
     code: str = Field(
         min_length=1,
         max_length=100,
-        pattern=r"^[a-z][a-z0-9_]*$",
+        pattern=r"^[A-Z][A-Z0-9_]*$",
         description="Stable machine-readable error code.",
-        examples=["invalid_request"],
+        examples=["INVALID_REQUEST"],
     )
     message: str = Field(
         min_length=1,
@@ -35,6 +81,21 @@ class ErrorDetail(BaseModel):
         description="Sanitized human-readable error message.",
         examples=["Request validation failed."],
     )
+
+    @field_validator("code")
+    @classmethod
+    def _code_must_be_registered(cls, value: str) -> str:
+        """Reject codes outside the canonical registry (PROB-09/#20).
+
+        Keeps the validation pattern and the registry in agreement: a code
+        that matches the shape but is not registered fails here, so the
+        contract cannot drift one code at a time.
+        """
+        if value not in ERROR_CODES:
+            raise ValueError(
+                f"code {value!r} is not in the canonical ERROR_CODES registry"
+            )
+        return value
 
 
 class ErrorResponse(BaseModel):
@@ -44,7 +105,7 @@ class ErrorResponse(BaseModel):
             "examples": [
                 {
                     "detail": {
-                        "code": "invalid_request",
+                        "code": "INVALID_REQUEST",
                         "message": "Request validation failed.",
                     }
                 }
@@ -63,22 +124,22 @@ _SAFE_ERRORS: tuple[type[BaseException], ...] = (
 )
 
 _ERROR_SPECS: dict[int, tuple[str, str, str]] = {
-    401: ("unauthenticated", "Authentication required.", "Authentication is required for this resource."),
-    403: ("forbidden", "Forbidden.", "The request is forbidden."),
-    404: ("resource_not_found", "Resource not found.", "The resource was not found."),
+    401: ("UNAUTHENTICATED", "Authentication required.", "Authentication is required for this resource."),
+    403: ("FORBIDDEN", "Forbidden.", "The request is forbidden."),
+    404: ("RESOURCE_NOT_FOUND", "Resource not found.", "The resource was not found."),
     409: (
-        "resource_conflict",
+        "RESOURCE_CONFLICT",
         "The request conflicts with the current resource state.",
         "The request conflicts with the current resource state.",
     ),
-    422: ("invalid_request", "Request validation failed.", "The request is invalid."),
+    422: ("INVALID_REQUEST", "Request validation failed.", "The request is invalid."),
     429: (
-        "too_many_requests",
+        "TOO_MANY_REQUESTS",
         "Too many concurrent requests.",
         "The request was rejected because of a concurrency limit.",
     ),
     503: (
-        "database_unavailable",
+        "DATABASE_UNAVAILABLE",
         "The graph database is unavailable.",
         "The graph database is unavailable.",
     ),
@@ -127,7 +188,7 @@ def error_responses(*status_codes: int) -> dict[int, dict[str, Any]]:
 
 def database_error_response(exc: BaseException) -> JSONResponse:
     unavailable = isinstance(exc, (ServiceUnavailable, AuthError, OSError))
-    code = "database_unavailable" if unavailable else "database_error"
+    code = "DATABASE_UNAVAILABLE" if unavailable else "DATABASE_ERROR"
     message = (
         "The graph database is unavailable."
         if unavailable
@@ -139,7 +200,7 @@ def database_error_response(exc: BaseException) -> JSONResponse:
 def request_validation_error_response() -> JSONResponse:
     return JSONResponse(
         status_code=422,
-        content=_envelope("invalid_request", "Request validation failed."),
+        content=_envelope("INVALID_REQUEST", "Request validation failed."),
     )
 
 
@@ -153,13 +214,13 @@ def install_error_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=409,
             content=_envelope(
-                "constraint_violation",
+                "CONSTRAINT_VIOLATION",
                 "The request violates a database constraint.",
             ),
         )
 
     async def database_handler(_request: Request, exc: Exception) -> JSONResponse:
-        logger.error("database_error", exc_info=exc)
+        logger.error("DATABASE_ERROR", exc_info=exc)
         return database_error_response(exc)
 
     async def validation_handler(

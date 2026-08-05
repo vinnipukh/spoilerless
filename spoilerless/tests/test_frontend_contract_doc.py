@@ -115,15 +115,15 @@ def test_document_locks_origins_boundaries_errors_and_compatibility() -> None:
     for status in ("404", "409", "422", "503"):
         assert status in document
     for code in (
-        "series_not_found",
-        "resource_not_found",
-        "resource_conflict",
-        "invalid_request",
-        "invalid_visible_until_order",
-        "database_unavailable",
+        "SERIES_NOT_FOUND",
+        "RESOURCE_NOT_FOUND",
+        "RESOURCE_CONFLICT",
+        "INVALID_REQUEST",
+        "INVALID_VISIBLE_UNTIL_ORDER",
+        "DATABASE_UNAVAILABLE",
     ):
         assert f"`{code}`" in document
-    assert '{"detail":{"code":"resource_not_found","message":"Resource not found."}}' in document
+    assert '{"detail":{"code":"RESOURCE_NOT_FOUND","message":"Resource not found."}}' in document
 
     assert "## D-28 compatibility corrections" in document
     assert "required positive integer, not a nullable string" in lower

@@ -320,7 +320,7 @@ def test_confirm_rejects_stale_change_set_after_progress_is_lowered(
 
     response = _confirm(client, change_set_id)
     assert response.status_code == 409, response.text
-    assert response.json()["detail"]["code"] == "changeset_stale"
+    assert response.json()["detail"]["code"] == "CHANGESET_STALE"
 
     # Nothing was applied — the target resource never came into existence.
     assert asyncio.run(_location_count(label)) == 0
@@ -408,7 +408,7 @@ def test_confirm_requires_admin_role_403_for_non_admin(
 
     response = _confirm(client, change_set_id)
     assert response.status_code == 403, response.text
-    assert response.json()["detail"]["code"] == "forbidden"
+    assert response.json()["detail"]["code"] == "FORBIDDEN"
 
     # The gate rejected the request before any mutation — the ChangeSet is
     # exactly where propose left it, and reject remains reachable for the

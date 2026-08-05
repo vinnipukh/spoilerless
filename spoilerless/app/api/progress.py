@@ -60,9 +60,9 @@ async def get_progress(
         # PROB-16/#37: a persisted row with a null/out-of-range split field
         # (corrupt legacy data) must fail closed to the documented 422
         # envelope — never a bare TypeError (500) from effective_view_order.
-        raise http_error(422, "invalid_visible_until_order", str(exc))
+        raise http_error(422, "INVALID_VISIBLE_UNTIL_ORDER", str(exc))
     if progress is None:
-        raise http_error(404, "resource_not_found", "Resource not found.")
+        raise http_error(404, "RESOURCE_NOT_FOUND", "Resource not found.")
     return progress
 
 
@@ -98,8 +98,8 @@ async def update_progress(
             visible_until_order=payload.visible_until_order,
         )
     except ProgressSeriesNotFoundError:
-        raise http_error(404, "resource_not_found", "Resource not found.")
+        raise http_error(404, "RESOURCE_NOT_FOUND", "Resource not found.")
     except ProgressNotFoundError:
-        raise http_error(404, "resource_not_found", "Resource not found.")
+        raise http_error(404, "RESOURCE_NOT_FOUND", "Resource not found.")
     except InvalidVisibilityOrder as exc:
-        raise http_error(422, "invalid_visible_until_order", str(exc))
+        raise http_error(422, "INVALID_VISIBLE_UNTIL_ORDER", str(exc))
