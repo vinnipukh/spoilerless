@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import cytoscape from 'cytoscape'
 import CytoscapeComponent from 'react-cytoscapejs'
 import type { GraphNode, GraphResponse } from '../../types/graph'
@@ -15,6 +15,19 @@ import {
 import { NodeHoverCard } from './NodeHoverCard'
 import { GraphLegend } from './GraphLegend'
 import { GraphControls } from './GraphControls'
+import { GraphFilterPanel } from './GraphFilterPanel'
+import {
+  initialFilterState,
+  toggleNodeType,
+  toggleEdgeFamily,
+  setAllFilters,
+  type FilterState,
+} from './filterState'
+import {
+  focusReducer,
+  initialFocusState,
+  applyFocusToCytoscape,
+} from './focusReducer'
 import { GraphFocusIndicator } from './GraphFocusIndicator'
 import { PathFinder, type PathPick } from './PathFinder'
 import { createCustomNode } from '../../api/userContent'
@@ -280,8 +293,12 @@ export function GraphCanvas({
   const [localReveal, setLocalReveal] = useState<FocusedElementIds | null>(null)
   // Pending reveal target (external prop wins over the local custom-node one).
   const revealTarget = revealElementIds ?? localReveal
-  // FEAT-06 (09-11): path-finder mode. Node taps route to the PathFinder's
-  // registered pick handler while active.
+  // Filter state for node-type and edge-family toggles (PROB-32 / FEAT-11.4)
+  const allNodeTypes = useMemo(() => ['Character', 'Event', 'Location', 'Organization', 'Object', 'Episode', 'Series'], [])
+  const allEdgeFamilies = useMemo(() => ['CHARACTER', 'STRUCTURAL', 'EPISODE', 'USER'], [])
+  const [filterState, setFilterState] = useState<FilterState>(() => initialFilterState(allNodeTypes, allEdgeFamilies))
+  const [focusState, dispatchFocus] = useReducer(focusReducer, initialFocusState())
+  const [focusModeActive, setFocusModeActive] = useState(false)
   const [pathMode, setPathMode] = useState(false)
   const pathPickHandlerRef = useRef<((pick: PathPick) => void) | null>(null)
   // Mirrors `pathMode` for the cy tap handlers (registered once at mount —
@@ -495,6 +512,25 @@ export function GraphCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newlyRevealedIds])
 
+  useEffect(() => {
+    const cy = cyInstanceRef.current
+    if (!cy) return
+    cy.batch(() => {
+      for (const [nodeType, visible] of Object.entries(filterState.nodeTypes)) {
+        const nodes = cy.nodes(`[nodeType="${nodeType}"]`)
+        if (visible) nodes.removeClass('filtered-out')
+        else nodes.addClass('filtered-out')
+      }
+    })
+  }, [filterState])
+
+  useEffect(() => {
+    const cy = cyInstanceRef.current
+    if (cy) {
+      applyFocusToCytoscape(cy, focusState.focusedId)
+    }
+  }, [focusState.focusedId])
+
   const [hoveredNodeInfo, setHoveredNodeInfo] = useState<{ node: GraphNode; pos: { x: number; y: number } } | null>(null)
 
   return (
@@ -558,6 +594,7 @@ export function GraphCanvas({
                 })
                 return
               }
+              dispatchFocus({ type: 'FOCUS_NODE', id: node.id() })
               const neighborhood = node.closedNeighborhood()
               cy.elements().difference(neighborhood).addClass('faded')
               neighborhood.removeClass('faded')
@@ -589,6 +626,7 @@ export function GraphCanvas({
 
             cy.on('tap', (evt) => {
               if (evt.target === cy) {
+                dispatchFocus({ type: 'CLEAR_FOCUS' })
                 // FEAT-06 (09-11): an empty-canvas tap during path mode
                 // clears the mode entirely (Clear/Esc/empty-tap exits).
                 if (pathModeRef.current) {
@@ -620,6 +658,12 @@ export function GraphCanvas({
             }}
           />
         )}
+        <GraphFilterPanel
+          filterState={filterState}
+          onToggleNodeType={(type) => setFilterState((prev) => toggleNodeType(prev, type))}
+          onToggleEdgeFamily={(family) => setFilterState((prev) => toggleEdgeFamily(prev, family))}
+          onSetAll={(enabled) => setFilterState((prev) => setAllFilters(prev, enabled))}
+        />
         <GraphLegend />
         <GraphControls
           cyRef={cyInstanceRef}
@@ -632,6 +676,8 @@ export function GraphCanvas({
             setPathMode(active)
             onPathModeChange?.(active)
           }}
+          focusModeActive={focusModeActive}
+          onFocusModeChange={(active) => setFocusModeActive(active)}
           onExport={async () => {
             if (!seriesId) return
             try {

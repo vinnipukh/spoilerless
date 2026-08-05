@@ -26,6 +26,30 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
 
   return [
     {
+      selector: '.filtered-out',
+      style: {
+        display: 'none',
+      },
+    },
+    {
+      selector: 'node[isCluster]',
+      style: {
+        shape: 'round-rectangle',
+        'background-color': '#1E2740',
+        'background-opacity': 0.7,
+        'border-width': 1,
+        'border-color': '#334155',
+        'border-style': 'solid',
+        color: '#94A3B8',
+        'font-size': 10,
+        'font-weight': 'bold',
+        'text-valign': 'top',
+        'text-halign': 'left',
+        'text-margin-y': 4,
+        padding: '24px',
+      },
+    },
+    {
       selector: 'node',
       style: {
         label: 'data(label)',
@@ -104,6 +128,28 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
       selector: 'node[origin = "canonical"]',
       style: { 'border-style': 'solid' },
     },
+    // --- Obsidian-style simple nodes (08-05 user-directed declutter) ---
+    // Nodes stamped `simple` by graphElements.ts (no portrait AND < 3 edges)
+    // collapse to a small neutral dot + quiet gray label — the reference
+    // "Journal" look (photo 08-05). Placed after every node-type
+    // shape/color selector so it wins at equal specificity; the portrait
+    // selector `node[imageUrl]` can never match a `simple` node (simple
+    // requires no imageUrl).
+    {
+      selector: 'node[simple]',
+      style: {
+        shape: 'ellipse',
+        width: 13,
+        height: 13,
+        'background-color': '#64748B', // slate-500: quiet neutral dot
+        'border-width': 1,
+        'border-color': 'rgba(255, 255, 255, 0.12)',
+        'border-style': 'solid',
+        color: '#94A3B8', // --muted-foreground
+        'font-size': 9,
+        'text-margin-y': 4,
+      },
+    },
     // User-origin edges: dashed line
     {
       selector: 'edge[origin = "user"]',
@@ -158,6 +204,13 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
     {
       selector: 'node[nodeType="Series"].selected-dominant',
       style: { width: 74, height: 74 },
+    },
+    // Simple-node selection bump — must sit AFTER the per-type selected
+    // bumps (all specificity 3, later wins) or a selected `simple` Character
+    // would jump to the 51px portrait size.
+    {
+      selector: 'node[simple].selected-dominant',
+      style: { width: 20, height: 20 },
     },
     {
       selector: 'node.faded',

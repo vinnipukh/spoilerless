@@ -1,5 +1,5 @@
 import type cytoscape from 'cytoscape'
-import { ZoomIn, ZoomOut, Maximize2, RotateCcw, Waypoints, Download, Share2 } from 'lucide-react'
+import { ZoomIn, ZoomOut, Maximize2, RotateCcw, Waypoints, Download, Share2, MousePointer2 } from 'lucide-react'
 import {
   Tooltip,
   TooltipTrigger,
@@ -11,6 +11,8 @@ type Props = {
   onReset: () => void
   pathModeActive?: boolean
   onPathModeChange?: (active: boolean) => void
+  focusModeActive?: boolean
+  onFocusModeChange?: (active: boolean) => void
   onExport?: () => void
   exporting?: boolean
   exported?: boolean
@@ -22,6 +24,8 @@ export function GraphControls({
   onReset,
   pathModeActive = false,
   onPathModeChange,
+  focusModeActive = false,
+  onFocusModeChange,
   onExport,
   exported = false,
   onShareLink,
@@ -125,6 +129,23 @@ export function GraphControls({
           </button>
         </TooltipTrigger>
         <TooltipContent side="left">Show path</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label="Toggle focus mode"
+            className={`flex h-11 w-11 cursor-pointer items-center justify-center rounded-md shadow-sm ring-1 ring-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              focusModeActive
+                ? 'bg-accent text-accent-foreground'
+                : 'bg-card text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => onFocusModeChange?.(!focusModeActive)}
+          >
+            <MousePointer2 className="h-4 w-4" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="left">Toggle focus mode</TooltipContent>
       </Tooltip>
 
       {onExport && (
