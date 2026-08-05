@@ -147,4 +147,52 @@ describe('TimelineView', () => {
     expect(screen.getByText('The timeline is empty')).toBeTruthy()
     expect(screen.getByText('Advance your watch progress to reveal more events.')).toBeTruthy()
   })
+
+  describe('timeline graph filter (08-06)', () => {
+    function renderFiltered(
+      filteredIds: string[] = [],
+      onToggleFilter = vi.fn(),
+      onClearFilter = vi.fn(),
+    ) {
+      return render(
+        <TimelineView
+          nodes={events}
+          claims={claims}
+          episodes={episodes}
+          selectedId={null}
+          onSelect={vi.fn()}
+          filteredIds={filteredIds}
+          onToggleFilter={onToggleFilter}
+          onClearFilter={onClearFilter}
+        />,
+      )
+    }
+
+    it('checkbox click toggles the event id through onToggleFilter', () => {
+      const onToggleFilter = vi.fn()
+      renderFiltered([], onToggleFilter)
+      fireEvent.click(screen.getByLabelText('Filter graph by Cops arrive'))
+      expect(onToggleFilter).toHaveBeenCalledWith('dexter:event:s01e01_buddy_flashback')
+    })
+
+    it('renders checked state + banner for active filter ids', () => {
+      renderFiltered(['dexter:event:s01e01_buddy_flashback'])
+      expect(screen.getByLabelText('Filter graph by Cops arrive')).toHaveAttribute(
+        'aria-checked',
+        'true',
+      )
+      expect(screen.getByLabelText('Filter graph by Buddy flashback')).toHaveAttribute(
+        'aria-checked',
+        'false',
+      )
+      expect(screen.getByText('Filtering the graph by 1 event')).toBeTruthy()
+    })
+
+    it('Clear button empties the filter through onClearFilter', () => {
+      const onClearFilter = vi.fn()
+      renderFiltered(['dexter:event:s01e01_buddy_flashback'], vi.fn(), onClearFilter)
+      fireEvent.click(screen.getByText('Clear'))
+      expect(onClearFilter).toHaveBeenCalled()
+    })
+  })
 })

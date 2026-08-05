@@ -31,15 +31,16 @@ export function GraphFilterPanel({
   const [open, setOpen] = useState(false)
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="fixed top-16 left-1/2 -translate-x-1/2 z-[40] w-72 md:ml-[15.5rem]">
+    <Collapsible open={open} onOpenChange={setOpen} className="fixed top-20 left-1/2 -translate-x-1/2 z-[40] w-72 md:ml-[15.5rem]">
       {/* 08-06: on md+, the Filters pill sits beside the centered search
           bar, immediately right of it. NOTE: the pill is `fixed` (viewport
           coords) while the search bar is `absolute` inside the graph
-          container, so top-16 is the correct row — top-4 hid the pill
-          under the fixed header (08-06 fix). Bar is w-96 centered -> right
-          edge at 50%+192px; the trigger is mx-auto in this w-72 container,
-          so ml-[15.5rem] puts its center ~8px right of the bar's right
-          edge. Mobile keeps the old centered position. */}
+          container, so top-20 is the correct row (top-4 hid the pill under
+          the fixed header; top-16 read slightly high — 08-06). Bar is
+          w-96 centered -> right edge at 50%+192px; the trigger is mx-auto
+          in this w-72 container, so ml-[15.5rem] puts its center ~8px
+          right of the bar's right edge. Mobile keeps the old centered
+          position. */}
       <CollapsibleTrigger asChild>
         <Button
           variant="outline"

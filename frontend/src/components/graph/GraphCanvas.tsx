@@ -166,6 +166,10 @@ type Props = {
   // existing assertions) keeps compiling and rendering unmodified.
   newlyRevealedIds?: FocusedElementIds | null
   onNewlyRevealedDone?: () => void
+  // 08-06 (product owner): events selected in the Timeline view — when
+  // non-empty, the graph hides every node not participating in (or being)
+  // one of the selected events, plus edges touching hidden nodes.
+  timelineFilterIds?: string[]
   // FEAT-06 (09-11): path-finder mode toggle (driven from GraphControls).
   // While active, node taps route to the PathFinder instead of select.
   onPathModeChange?: (active: boolean) => void
@@ -314,6 +318,7 @@ export function GraphCanvas({
   onRevealDone,
   newlyRevealedIds = null,
   onNewlyRevealedDone,
+  timelineFilterIds,
   onPathModeChange,
   readOnly = false,
   onShareLink,
@@ -334,8 +339,10 @@ export function GraphCanvas({
   const allNodeTypes = useMemo(() => ['Character', 'Event', 'Location', 'Organization', 'Object', 'Episode', 'Series'], [])
   const allEdgeFamilies = useMemo(() => ['CHARACTER', 'STRUCTURAL', 'EPISODE', 'USER'], [])
   const [filterState, setFilterState] = useState<FilterState>(() => initialFilterState(allNodeTypes, allEdgeFamilies))
+  // 08-06: previous timeline event filter — tracks entry/exit so stale
+  // `.filtered-out` classes are cleared when the filter is removed.
+  const prevTimelineFilter = useRef<string[]>([])
   const [focusState, dispatchFocus] = useReducer(focusReducer, initialFocusState())
-  const [focusModeActive, setFocusModeActive] = useState(false)
   const [pathMode, setPathMode] = useState(false)
   const pathPickHandlerRef = useRef<((pick: PathPick) => void) | null>(null)
   // Mirrors `pathMode` for the cy tap handlers (registered once at mount —
@@ -553,6 +560,7 @@ export function GraphCanvas({
     const cy = cyInstanceRef.current
     if (!cy || typeof cy.nodes !== 'function') return
     const updateFilters = () => {
+      // Node-type toggles (existing FEAT-11.4 behavior).
       for (const [nodeType, visible] of Object.entries(filterState.nodeTypes)) {
         const nodes = cy.nodes(`[nodeType="${nodeType}"]`)
         if (nodes && typeof nodes.removeClass === 'function') {
@@ -560,10 +568,45 @@ export function GraphCanvas({
           else nodes.addClass('filtered-out')
         }
       }
+      // Timeline event filter (08-06): when events are selected in the
+      // Timeline view, hide every node that is not one of the selected
+      // events and not connected to one, plus edges touching hidden nodes.
+      // Runs on both entering AND leaving the filter so stale classes are
+      // cleared. Guarded by getElementById so the jsdom fake cy (which
+      // lacks it) skips this pass in unit tests.
+      const prevFilter = prevTimelineFilter.current
+      const nextFilter = timelineFilterIds ?? []
+      const hadFilter = prevFilter.length > 0
+      const hasFilter = nextFilter.length > 0
+      if ((hasFilter || hadFilter) && typeof cy.getElementById === 'function') {
+        const kept = new Set<string>(nextFilter)
+        if (hasFilter) {
+          for (const edge of graph.edges) {
+            if (kept.has(edge.source) || kept.has(edge.target)) {
+              kept.add(edge.source)
+              kept.add(edge.target)
+            }
+          }
+        }
+        for (const node of graph.nodes) {
+          const el = cy.getElementById(node.id)
+          if (hasFilter && !kept.has(node.id)) el?.addClass('filtered-out')
+          else el?.removeClass('filtered-out')
+        }
+        for (const edge of graph.edges) {
+          const el = cy.getElementById(edge.id)
+          if (hasFilter && (!kept.has(edge.source) || !kept.has(edge.target))) {
+            el?.addClass('filtered-out')
+          } else {
+            el?.removeClass('filtered-out')
+          }
+        }
+      }
+      prevTimelineFilter.current = nextFilter
     }
     if (typeof cy.batch === 'function') cy.batch(updateFilters)
     else updateFilters()
-  }, [filterState])
+  }, [filterState, timelineFilterIds, graph])
 
   useEffect(() => {
     const cy = cyInstanceRef.current
@@ -717,8 +760,6 @@ export function GraphCanvas({
             setPathMode(active)
             onPathModeChange?.(active)
           }}
-          focusModeActive={focusModeActive}
-          onFocusModeChange={(active) => setFocusModeActive(active)}
           onExport={async () => {
             if (!seriesId) return
             try {

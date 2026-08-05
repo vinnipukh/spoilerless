@@ -23,6 +23,10 @@ type Props = {
   episodes: EpisodeResponse[]
   selectedId: string | null
   onSelect: (selection: TimelineSelection) => void
+  // 08-06: events toggled into the graph's timeline filter.
+  filteredIds?: string[]
+  onToggleFilter?: (id: string) => void
+  onClearFilter?: () => void
 }
 
 type GroupedEvent = {
@@ -38,7 +42,16 @@ function episodeCodeFor(event: GraphNode, episodes: EpisodeResponse[]): EpisodeR
   return episodes.find((episode) => episode.episode_order === event.visible_from_order)
 }
 
-export function TimelineView({ nodes, claims, episodes, selectedId, onSelect }: Props) {
+export function TimelineView({
+  nodes,
+  claims,
+  episodes,
+  selectedId,
+  onSelect,
+  filteredIds = [],
+  onToggleFilter,
+  onClearFilter,
+}: Props) {
   const [activeIndex, setActiveIndex] = useState(0)
 
   const groups = useMemo(() => {
@@ -132,6 +145,21 @@ export function TimelineView({ nodes, claims, episodes, selectedId, onSelect }: 
 
   return (
     <div className="flex h-full flex-col" onKeyDown={handleKeyDown}>
+      {filteredIds.length > 0 && onClearFilter && (
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2 text-sm">
+          <span className="text-muted-foreground">
+            Filtering the graph by {filteredIds.length}{' '}
+            {filteredIds.length === 1 ? 'event' : 'events'}
+          </span>
+          <button
+            type="button"
+            onClick={onClearFilter}
+            className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Clear
+          </button>
+        </div>
+      )}
       <ScrollArea className="h-full">
         <div className="border-l-2 border-border pl-4 ml-3 py-4 pr-4">
           {groups.map((group) => (
@@ -150,6 +178,12 @@ export function TimelineView({ nodes, claims, episodes, selectedId, onSelect }: 
                       episodeCode={event.episode?.code ?? null}
                       claimsCount={event.claimsCount}
                       selected={selected}
+                      filtered={filteredIds.includes(event.node.id)}
+                      onToggleFilter={
+                        onToggleFilter
+                          ? () => onToggleFilter(event.node.id)
+                          : undefined
+                      }
                       onSelect={() => {
                         setActiveIndex(index)
                         onSelect({

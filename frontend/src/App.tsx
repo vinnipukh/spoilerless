@@ -162,6 +162,9 @@ function AuthenticatedApp() {
   // unmounts the graph view (including the chat sheet); chat history
   // survives server-side.
   const [view, setView] = useState<'graph' | 'timeline' | 'settings'>('graph')
+  // 08-06: events toggled in the Timeline view filter the graph to the
+  // subgraph around them (nodes participating in the selected events).
+  const [timelineFilterIds, setTimelineFilterIds] = useState<string[]>([])
   // FEAT-04 (09-10): series dashboard dialog open state.
   const [dashboardOpen, setDashboardOpen] = useState(false)
   // FEAT-09 (09-12): share dialog open state.
@@ -492,6 +495,13 @@ function AuthenticatedApp() {
           episodes={episodes}
           selectedId={selectedElement?.kind === 'node' ? selectedElement.id : null}
           onSelect={handleTimelineSelect}
+          filteredIds={timelineFilterIds}
+          onToggleFilter={(id) =>
+            setTimelineFilterIds((prev) =>
+              prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+            )
+          }
+          onClearFilter={() => setTimelineFilterIds([])}
         />
       ) : view === 'settings' ? (
         <SettingsPage onBack={() => setView('graph')} />
@@ -523,6 +533,7 @@ function AuthenticatedApp() {
             onClearFocus={handleClearFocus}
             revealElementIds={revealIds}
             onRevealDone={() => setRevealIds(null)}
+            timelineFilterIds={timelineFilterIds}
             newlyRevealedIds={newlyRevealedIds}
             onNewlyRevealedDone={() => setNewlyRevealedIds(null)}
             readOnly={isVisitor}
