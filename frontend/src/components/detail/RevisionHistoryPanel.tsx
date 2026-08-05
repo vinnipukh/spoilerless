@@ -42,7 +42,7 @@ export type DiffDetail = {
 }
 
 // ── Diff summary: show which fields changed with before/after values ──
-export function diffFields(
+function diffFields(
   before: Record<string, unknown> | null,
   after: Record<string, unknown> | null,
 ): DiffDetail[] {

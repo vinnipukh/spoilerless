@@ -12,10 +12,7 @@ export function NodeHoverCard({ node, claims = [], position, onDismiss }: Props)
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
-    if (!node || !position) {
-      setVisible(false)
-      return
-    }
+    if (!node || !position) return
 
     const timer = setTimeout(() => {
       setVisible(true)
@@ -31,6 +28,7 @@ export function NodeHoverCard({ node, claims = [], position, onDismiss }: Props)
 
     return () => {
       clearTimeout(timer)
+      setVisible(false)
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [node, position, onDismiss])

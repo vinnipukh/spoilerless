@@ -21,6 +21,8 @@ import {
   toggleNodeType,
   toggleEdgeFamily,
   setAllFilters,
+  getCachedPositions,
+  setCachedPositions,
   type FilterState,
 } from './filterState'
 import {
@@ -58,10 +60,40 @@ let layoutName: 'fcose' | 'cose-bilkent' | 'cose' = 'fcose'
 // `graph` object, so the canvas actually reflows on every boundary change.
 // Guarded so it never throws into an effect that a test double's fake `cy`
 // (no real `.layout()` method) might pass in.
-function runLayout(cy: cytoscape.Core) {
+function runLayout(cy: cytoscape.Core, seriesId?: string | null, visibleUntilOrder?: number | null) {
   if (typeof cy.layout !== 'function') return
+
+  if (seriesId && visibleUntilOrder != null) {
+    const cached = getCachedPositions(seriesId, visibleUntilOrder)
+    if (cached && cached.size > 0) {
+      const applyPos = () => {
+        if (typeof cy.getElementById === 'function') {
+          for (const [nodeId, pos] of cached.entries()) {
+            const node = cy.getElementById(nodeId)
+            if (node && node.length > 0 && typeof node.position === 'function') {
+              node.position(pos)
+            }
+          }
+        }
+      }
+      if (typeof cy.batch === 'function') cy.batch(applyPos)
+      else applyPos()
+      return
+    }
+  }
+
   try {
-    cy.layout(layoutOptionsFor(layoutName)).run()
+    const l = cy.layout(layoutOptionsFor(layoutName))
+    if (seriesId && visibleUntilOrder != null && typeof l.one === 'function') {
+      l.one('layoutstop', () => {
+        const map = new Map<string, { x: number; y: number }>()
+        cy.nodes().forEach((n) => {
+          map.set(n.id(), n.position())
+        })
+        setCachedPositions(seriesId, visibleUntilOrder, map)
+      })
+    }
+    l.run()
   } catch (error) {
     console.error(
       'cose-bilkent layout failed at runtime; falling back to the built-in cose layout',
@@ -331,8 +363,8 @@ export function GraphCanvas({
     // the framing (the edge lands wherever the layout puts it — the user's
     // "new edges show up on the right" complaint).
     if (focusedElementIds || revealTarget) return
-    runLayout(cy)
-  }, [graph, focusedElementIds, revealTarget])
+    runLayout(cy, seriesId, graph.visible_until_order)
+  }, [graph, focusedElementIds, revealTarget, seriesId])
 
   // Apply/clear an externally-driven `graph_focus` highlight (RAG-17), keyed
   // on the `focusedElementIds` prop — the same "prop-driven effect" pattern
@@ -514,19 +546,23 @@ export function GraphCanvas({
 
   useEffect(() => {
     const cy = cyInstanceRef.current
-    if (!cy) return
-    cy.batch(() => {
+    if (!cy || typeof cy.nodes !== 'function') return
+    const updateFilters = () => {
       for (const [nodeType, visible] of Object.entries(filterState.nodeTypes)) {
         const nodes = cy.nodes(`[nodeType="${nodeType}"]`)
-        if (visible) nodes.removeClass('filtered-out')
-        else nodes.addClass('filtered-out')
+        if (nodes && typeof nodes.removeClass === 'function') {
+          if (visible) nodes.removeClass('filtered-out')
+          else nodes.addClass('filtered-out')
+        }
       }
-    })
+    }
+    if (typeof cy.batch === 'function') cy.batch(updateFilters)
+    else updateFilters()
   }, [filterState])
 
   useEffect(() => {
     const cy = cyInstanceRef.current
-    if (cy) {
+    if (cy && focusState.focusedId != null) {
       applyFocusToCytoscape(cy, focusState.focusedId)
     }
   }, [focusState.focusedId])
@@ -669,7 +705,7 @@ export function GraphCanvas({
           cyRef={cyInstanceRef}
           onReset={() => {
             const cy = cyInstanceRef.current
-            if (cy) runLayout(cy)
+            if (cy) runLayout(cy, seriesId, graph.visible_until_order)
           }}
           pathModeActive={pathMode}
           onPathModeChange={(active) => {
