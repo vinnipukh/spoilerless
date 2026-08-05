@@ -26,20 +26,34 @@ export function focusReducer(state: FocusState, action: FocusAction): FocusState
 export function applyFocusToCytoscape(cy: cytoscape.Core, focusedId: string | null) {
   if (!cy) return
 
-  cy.batch(() => {
-    cy.elements().removeClass('faded selected-dominant')
+  const apply = () => {
+    if (typeof cy.elements === 'function') {
+      cy.elements().removeClass('faded selected-dominant')
+    }
 
-    if (!focusedId) return
+    if (!focusedId || typeof cy.getElementById !== 'function') return
 
     const target = cy.getElementById(focusedId)
     if (!target || target.length === 0) return
 
-    target.addClass('selected-dominant')
+    if (typeof target.addClass === 'function') {
+      target.addClass('selected-dominant')
+    }
 
-    // 1-hop neighborhood elements (node + connected edges + connected neighbor nodes)
-    const neighborhood = target.closedNeighborhood()
-    const outside = cy.elements().difference(neighborhood)
+    if (typeof target.closedNeighborhood === 'function' && typeof cy.elements === 'function') {
+      const neighborhood = target.closedNeighborhood()
+      if (neighborhood && typeof cy.elements().difference === 'function') {
+        const outside = cy.elements().difference(neighborhood)
+        if (outside && typeof outside.addClass === 'function') {
+          outside.addClass('faded')
+        }
+      }
+    }
+  }
 
-    outside.addClass('faded')
-  })
+  if (typeof cy.batch === 'function') {
+    cy.batch(apply)
+  } else {
+    apply()
+  }
 }
