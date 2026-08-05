@@ -97,13 +97,13 @@ Plans:
   5. All 10 new features are live and usable: node search/jump, timeline view, newly-revealed highlight on episode advance, series dashboard, note/claim export, shortest-path relationship finder, full-text note/claim search, command palette, shareable read-only snapshot link, and a mobile-usable graph/detail panel
   6. FEAT-11 (Obsidian-style second-brain touches, small scope): node backlinks panel (reverse relationships + mentions), hover preview card on graph nodes, quick-switcher jump (⌘K fuzzy search), graph filters by node type/edge type, per-node properties (aliases, created/updated, source), and version-history surfaced via the existing Revision system — spoiler boundary preserved throughout; no free-form canvas or personal-layer rewrite in this phase
 
-**Plans**: 7/18 plans executed
+**Plans**: 8/18 plans executed
 
 - [x] 09-01-PLAN.md
 - [x] 09-02-PLAN.md
 - [x] 09-03-PLAN.md
 - [x] 09-04-PLAN.md
-- [ ] 09-05-PLAN.md
+- [x] 09-05-PLAN.md
 - [x] 09-06-PLAN.md
 - [x] 09-07-PLAN.md
 - [ ] 09-08-PLAN.md
@@ -158,7 +158,7 @@ Plans:
 | 6. Spoiler-safe GraphRAG chat and graph-editing agent | v1.1 | 13/13 | Complete | 2026-08-02 |
 | 7. Spoiler-Safety Hardening | v1.2 | 8/8 | Complete | 2026-08-03 |
 | 8. Production Deployment & Automated CI/CD | v1.3 | 8/8 | Complete    | 2026-08-04 |
-| 9. Feature Expansion & Full Audit Remediation | v1.3 | 7/18 | In Progress|  |
+| 9. Feature Expansion & Full Audit Remediation | v1.3 | 8/18 | In Progress|  |
 | 10. Polish & Finishing Touches | v1.3 | 0/TBD | Not started | - |
 
 Full phase details archived at `.planning/milestones/v1.1-ROADMAP.md` / `.planning/milestones/v1.1-phases/` and `.planning/milestones/v1.2-ROADMAP.md` / `.planning/milestones/v1.2-phases/` (v1.2 archive supersedes the earlier v1.1 archive, which predates Phase 7).
