@@ -59,6 +59,14 @@ describe('graphToElements', () => {
     expect(ep1?.data.areaScale).toBe(3)
   })
 
+  it('does NOT inflate the Ep #1 cluster in overview mode (zoom-out fix)', () => {
+    const elements = graphToElements(graphResponseS01E01, 'overview')
+    const ep1 = elements.find((el) => el.data.id === 'cluster:Ep #1')
+
+    expect(ep1?.data.isCluster).toBe(true)
+    expect(ep1?.data).not.toHaveProperty('areaScale')
+  })
+
   describe('overview mode (08-06+ presentation declutter)', () => {
     const overviewIds = () =>
       new Set(graphToElements(graphResponseS01E01, 'overview').map((el) => el.data.id))

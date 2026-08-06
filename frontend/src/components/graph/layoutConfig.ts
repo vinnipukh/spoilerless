@@ -62,7 +62,8 @@ export function layoutOptionsFor(
   // curated clusters are easier to read — repulsion × OVERVIEW_SPACING_SCALE
   // (pair separation scales ~ sqrt(repulsion) ≈ 1.26x), longer ideal edges,
   // lower gravity, roomier cluster tiling. Full mode keeps the 5cm/7cm
-  // constants tuned on the dense graph.
+  // constants tuned on the dense graph. The initial zoom-out from the sparse
+  // layout is capped by OVERVIEW_MIN_ZOOM in GraphCanvas's layoutstop.
   const spacing = mode === 'overview' ? OVERVIEW_SPACING_SCALE : 1
   const edgeLength = mode === 'overview' ? 420 : 320
   const gravity = mode === 'overview' ? 0.015 : 0.02

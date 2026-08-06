@@ -53,6 +53,12 @@ const prefersReducedMotion =
 
 let layoutName: 'fcose' | 'cose-bilkent' | 'cose' = 'fcose'
 
+// 08-06+ (product owner): Overview's sparse layout makes cytoscape's fit
+// zoom out so far the nodes look tiny. On layout completion, if the fit
+// landed below this floor, zoom back in to it centered on the graph's
+// bounding-box centre (the graph fills the screen; pan reveals the rest).
+const OVERVIEW_MIN_ZOOM = 0.5
+
 // react-cytoscapejs's own declarative `layout` prop only re-applies a layout
 // when the prop's shallow-compared field values change (never true here,
 // since every render passes literal-equal field values) — so it never
@@ -98,6 +104,27 @@ function runLayout(
           map.set(n.id(), n.position())
         })
         setCachedPositions(seriesId, visibleUntilOrder, map, mode)
+        // Zoom floor (Overview only): fit zoomed out too far on the sparse
+        // layout — lift the view back to OVERVIEW_MIN_ZOOM, anchored on the
+        // graph centre (model-coordinate `position` keeps the anchor fixed).
+        // Guarded for test fakes (no zoom/boundingBox).
+        if (
+          mode === 'overview' &&
+          typeof cy.zoom === 'function'
+        ) {
+          const els = typeof cy.elements === 'function' ? cy.elements() : null
+          const bb =
+            els && typeof els.boundingBox === 'function' ? els.boundingBox() : null
+          if (bb && cy.zoom() < OVERVIEW_MIN_ZOOM) {
+            cy.zoom({
+              level: OVERVIEW_MIN_ZOOM,
+              position: {
+                x: bb.x1 + bb.w / 2,
+                y: bb.y1 + bb.h / 2,
+              },
+            })
+          }
+        }
       })
     }
     l.run()

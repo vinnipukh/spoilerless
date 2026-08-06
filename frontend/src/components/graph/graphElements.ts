@@ -124,9 +124,13 @@ export function graphToElements(
         label,
         isCluster: true,
         // 08-05 (product owner): the Episode-1 band occupies ~3x the layout
-        // area. The stylesheet turns this into a bigger cluster box via
-        // padding on the `Ep #1` parent (graphStylesheet.ts).
-        ...(label === 'Ep #1' ? { areaScale: 3 } : {}),
+        // area in FULL mode. The stylesheet turns this into a bigger cluster
+        // box via padding on the `Ep #1` parent (graphStylesheet.ts).
+        // 08-06+ (product owner): Overview mode does NOT inflate the box —
+        // with only the curated nodes inside it, 300px of padding is dead
+        // space that makes the whole view zoom out. The base 24px padding
+        // keeps the episode-band framing without the empty expanse.
+        ...(mode === 'full' && label === 'Ep #1' ? { areaScale: 3 } : {}),
       },
     }),
   )
