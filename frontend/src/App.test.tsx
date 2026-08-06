@@ -103,6 +103,7 @@ vi.mock('react-cytoscapejs', () => {
             addClass: () => fakeTarget,
             removeClass: () => fakeTarget,
             closedNeighborhood: () => makeFakeCollection(),
+            connectedEdges: () => makeFakeCollection(),
             connectedNodes: () => makeFakeCollection(),
           }
           return (

@@ -59,6 +59,46 @@ describe('graphToElements', () => {
     expect(ep1?.data.areaScale).toBe(3)
   })
 
+  describe('overview mode (08-06+ presentation declutter)', () => {
+    const overviewIds = () =>
+      new Set(graphToElements(graphResponseS01E01, 'overview').map((el) => el.data.id))
+
+    it('renders only the curated tier-1 + structural nodes', () => {
+      const present = overviewIds()
+      for (const id of ['char_dexter_morgan', 'char_debra_morgan', 'char_angel_batista', 'loc_miami_metro', 'dexter_s01e01', 'series_dexter']) {
+        expect(present.has(id)).toBe(true)
+      }
+    })
+
+    it('hides tier-3 nodes and edges touching them', () => {
+      const present = overviewIds()
+      for (const id of ['char_rita_bennett', 'char_james_doakes', 'char_ice_truck_killer', 'loc_dexters_apartment', 'event_first_kill']) {
+        expect(present.has(id)).toBe(false)
+      }
+      // edge_6 (dexter -> event_first_kill) and edge_2's target... edge_2 is
+      // dexter->miami_metro (both kept). The dropped event kills its edge.
+      expect(present.has('edge_6')).toBe(false)
+    })
+
+    it('keeps user-origin edges between kept nodes', () => {
+      expect(overviewIds().has('user-rel:test-1')).toBe(true)
+    })
+
+    it('keeps full mode behavior with mode="full" (default)', () => {
+      const full = new Set(graphToElements(graphResponseS01E01, 'full').map((el) => el.data.id))
+      const connected = new Set<string>()
+      for (const e of graphResponseS01E01.edges) {
+        connected.add(e.source)
+        connected.add(e.target)
+      }
+      expect(
+        graphResponseS01E01.nodes
+          .filter((n) => connected.has(n.id))
+          .every((n) => full.has(n.id)),
+      ).toBe(true)
+    })
+  })
+
   describe('isolated-node pruning (08-06)', () => {
     const ids = () =>
       new Set(graphToElements(graphResponseS01E01).map((el) => el.data.id))

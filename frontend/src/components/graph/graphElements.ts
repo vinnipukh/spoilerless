@@ -20,11 +20,28 @@
 // dimensions, degree, or position.
 
 import type { ElementDefinition } from 'cytoscape'
-import type { GraphResponse } from '../../types/graph'
+import type { GraphEdge, GraphResponse } from '../../types/graph'
+import { overviewProjection, type GraphMode } from './overviewTiers'
 
-export function graphToElements(graph: GraphResponse): ElementDefinition[] {
+export function graphToElements(
+  graph: GraphResponse,
+  mode: GraphMode = 'full',
+): ElementDefinition[] {
+  // 08-06+ (product owner, presentation): Overview mode renders a curated
+  // ~25-45 node projection (tier-1 + required connectors, deduped edges);
+  // Full mode renders every spoiler-safe node/edge the backend returned.
+  // Both modes consume ONLY the backend-filtered lists — Overview's tiering
+  // is semantic curation, never a second visible_from_order authority.
+  let nodes = graph.nodes
+  let edges: GraphEdge[] = graph.edges
+  if (mode === 'overview') {
+    const projection = overviewProjection(graph)
+    nodes = graph.nodes.filter((n) => projection.keptNodeIds.has(n.id))
+    edges = projection.keptEdges
+  }
+
   // 08-05 user-directed Obsidian-style declutter: any node WITHOUT a portrait
-  // AND with < 3 edges (degree computed from the backend-filtered edge list
+  // AND with < 3 edges (degree computed from the mode's edge list
   // only — the D-16 layout rule above permits any computation that consumes
   // only the filtered node/edge lists, never hidden totals) is stamped
   // `simple` and rendered as a small neutral dot by graphStylesheet.ts.
@@ -36,19 +53,19 @@ export function graphToElements(graph: GraphResponse): ElementDefinition[] {
   // visibly smaller. Revisit if spoiler-inference ever becomes a live
   // concern (e.g. a portrait mask feature).
   const degree = new Map<string, number>()
-  for (const edge of graph.edges) {
+  for (const edge of edges) {
     degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1)
     degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1)
   }
 
-  // 08-06 (product owner): isolated nodes — zero edges in the
-  // backend-filtered edge list — are dropped from the view. They render as
-  // noise with no connections. The backend has already applied the
-  // spoiler-safe visible_from_order filter; this is a pure topology
-  // decision over the already-filtered lists (D-16 layout rule permits any
-  // computation that consumes only the filtered node/edge lists).
+  // 08-06 (product owner): isolated nodes — zero edges in the mode's edge
+  // list — are dropped from the view. They render as noise with no
+  // connections. The backend has already applied the spoiler-safe
+  // visible_from_order filter; this is a pure topology decision over the
+  // already-filtered lists (D-16 layout rule permits any computation that
+  // consumes only the filtered node/edge lists).
   const connected = new Set<string>()
-  for (const edge of graph.edges) {
+  for (const edge of edges) {
     connected.add(edge.source)
     connected.add(edge.target)
   }
@@ -60,7 +77,7 @@ export function graphToElements(graph: GraphResponse): ElementDefinition[] {
   // Compound parent key = subplot/cluster tag if present, else episode band from visible_from_order
   const clusters = new Map<string, string>()
 
-  const nodeElements: ElementDefinition[] = graph.nodes
+  const nodeElements: ElementDefinition[] = nodes
     .filter((node) => connected.has(node.id))
     .map((node) => {
     // Only Character nodes ever carry a portrait — other node types must
@@ -114,7 +131,7 @@ export function graphToElements(graph: GraphResponse): ElementDefinition[] {
     }),
   )
 
-  const edgeElements: ElementDefinition[] = graph.edges.map((edge) => {
+  const edgeElements: ElementDefinition[] = edges.map((edge) => {
     const claim = edge.claim_id ? claimById.get(edge.claim_id) : undefined
 
     return {

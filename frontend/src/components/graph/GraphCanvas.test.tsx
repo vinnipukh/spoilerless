@@ -39,6 +39,7 @@ let capturedProps: Record<string, unknown> = {}
 type FakeCollection = {
   ids: string[]
   length: number
+  connectedEdges: () => FakeCollection
   addClass: (cls: string) => FakeCollection
   removeClass: (cls: string) => FakeCollection
   merge: (other: FakeCollection) => FakeCollection
@@ -60,11 +61,20 @@ type Handler = (evt: unknown) => void
 let registry: Map<string, Set<string>> = new Map()
 let handlers: Record<string, Handler[]> = {}
 let fitCalls: Array<{ ids: string[]; padding: unknown }> = []
+// nodeId -> connected edge ids, built from the captured elements so the fake
+// cy's `connectedEdges()` mirrors the real graph (label-visible assertions).
+let edgeAdj: Map<string, string[]> = new Map()
+// The fake cy instance handed to GraphCanvas via props.cy — background-tap
+// simulations must pass this SAME object (the empty-tap handler checks
+// `evt.target === cy`).
+let capturedCy: unknown = null
 
 function resetFakeCytoscape() {
   registry = new Map()
   handlers = {}
   fitCalls = []
+  edgeAdj = new Map()
+  capturedCy = null
 }
 
 // Real cytoscape.js accepts a space-separated class list to addClass/
@@ -79,6 +89,10 @@ function makeCollection(ids: string[]): FakeCollection {
   const collection: FakeCollection = {
     ids,
     length: ids.length,
+    // Real cytoscape collections expose connectedEdges(); the focus effect
+    // resolves focused nodes via getElementById (a 1-element collection) and
+    // calls connectedEdges() on it — mirror that here from edgeAdj.
+    connectedEdges: () => makeCollection(collection.ids.flatMap((id) => edgeAdj.get(id) ?? [])),
     addClass: (cls) => {
       for (const id of collection.ids) {
         for (const single of splitClasses(cls)) registry.get(id)?.add(single)
@@ -132,7 +146,7 @@ function makeElementHandle(id: string, data: Record<string, unknown>): FakeEleme
       return handle
     },
     closedNeighborhood: () => makeCollection([id]),
-    connectedEdges: () => makeCollection([]),
+    connectedEdges: () => makeCollection(edgeAdj.get(id) ?? []),
     connectedNodes: () => makeCollection([]),
   }
   return handle
@@ -159,6 +173,17 @@ vi.mock('react-cytoscapejs', () => {
     capturedElements = props.elements
     capturedProps = { minZoom: props.minZoom, maxZoom: props.maxZoom }
     for (const el of props.elements) ensureRegistered(el.data.id as string)
+    edgeAdj = new Map()
+    for (const el of props.elements) {
+      const data = el.data as Record<string, unknown>
+      if (typeof data.source === 'string' && typeof data.target === 'string') {
+        const edgeId = data.id as string
+        const src = data.source
+        const tgt = data.target
+        edgeAdj.set(src, [...(edgeAdj.get(src) ?? []), edgeId])
+        edgeAdj.set(tgt, [...(edgeAdj.get(tgt) ?? []), edgeId])
+      }
+    }
 
     const fakeCy = {
       on: (event: string, selectorOrHandler: unknown, maybeHandler?: Handler) => {
@@ -177,6 +202,7 @@ vi.mock('react-cytoscapejs', () => {
       },
     }
     props.cy?.(fakeCy)
+    capturedCy = fakeCy
 
     return (
       <div data-testid="graph-canvas-stub">
@@ -204,7 +230,7 @@ beforeEach(() => {
 
 describe('GraphCanvas', () => {
   it('renders elements corresponding to the S01E01 fixture node and edge ids', () => {
-    render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} />)
+    render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="full" />)
 
     const renderedNodeIds = nodeElements(capturedElements).map((n) => n.data.id)
     const renderedEdgeIds = edgeElements(capturedElements).map((e) => e.data.id)
@@ -224,7 +250,7 @@ describe('GraphCanvas', () => {
   })
 
   it('renders elements corresponding to the S01E03 fixture after a boundary change', () => {
-    render(<GraphCanvas graph={graphResponseS01E03} onSelect={() => {}} seriesId="series:dexter" episodes={[]} />)
+    render(<GraphCanvas graph={graphResponseS01E03} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="full" />)
 
     const renderedNodeIds = nodeElements(capturedElements).map((n) => n.data.id)
     const connected = connectedNodeIds(graphResponseS01E03)
@@ -236,7 +262,7 @@ describe('GraphCanvas', () => {
   })
 
   it('maps every node to a data(nodeType), including Episode and Series (no default-ellipse fallthrough)', () => {
-    render(<GraphCanvas graph={graphResponseS01E03} onSelect={() => {}} seriesId="series:dexter" episodes={[]} />)
+    render(<GraphCanvas graph={graphResponseS01E03} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="full" />)
 
     const nodes = nodeElements(capturedElements)
     expect(nodes.some((node) => node.data.nodeType === 'Episode')).toBe(true)
@@ -244,7 +270,7 @@ describe('GraphCanvas', () => {
   })
 
   it('never filters elements by visible_from_order (pure pass-through of the fetched GraphResponse)', () => {
-    render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} />)
+    render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="full" />)
 
     const nodeIds = nodeElements(capturedElements).map((node) => node.data.id)
     // The pass-through guarantee is about visible_from_order (never filtered
@@ -259,14 +285,14 @@ describe('GraphCanvas', () => {
   })
 
   it('passes minZoom={0.3} and maxZoom={2.5} to CytoscapeComponent', () => {
-    render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} />)
+    render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="full" />)
 
     expect(capturedProps.minZoom).toBe(0.3)
     expect(capturedProps.maxZoom).toBe(2.5)
   })
 
   it('includes claimStatus in edge data for edges with a claim', () => {
-    render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} />)
+    render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="full" />)
 
     // edge_4 (FAMILY_OF, claim_id='claim_3', status='canonical') should have claimStatus='canonical'
     const edge4 = edgeElements(capturedElements).find((e) => e.data.id === 'edge_4')
@@ -285,7 +311,7 @@ describe('GraphCanvas', () => {
   })
 
   it('renders within a graph-canvas-backdrop wrapper div', () => {
-    const { container } = render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} />)
+    const { container } = render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="full" />)
 
     const backdrop = container.querySelector('.graph-canvas-backdrop')
     expect(backdrop).toBeTruthy()
@@ -518,6 +544,95 @@ describe('GraphCanvas', () => {
       } finally {
         vi.useRealTimers()
       }
+    })
+  })
+
+  describe('Overview/Full modes (08-06+ presentation declutter)', () => {
+    it('defaults to Overview: the curated subset, not every element', () => {
+      render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} />)
+
+      const renderedNodeIds = nodeElements(capturedElements).map((n) => n.data.id)
+      const renderedEdgeIds = edgeElements(capturedElements).map((e) => e.data.id)
+
+      // Tier-1 fixture nodes render; tier-3 detail is hidden.
+      for (const id of ['char_dexter_morgan', 'char_debra_morgan', 'char_angel_batista', 'loc_miami_metro', 'dexter_s01e01', 'series_dexter']) {
+        expect(renderedNodeIds).toContain(id)
+      }
+      for (const id of ['event_first_kill', 'char_rita_bennett', 'char_james_doakes', 'char_ice_truck_killer']) {
+        expect(renderedNodeIds).not.toContain(id)
+      }
+      // The user edge between kept nodes survives; the edge to the dropped
+      // event does not.
+      expect(renderedEdgeIds).toContain('user-rel:test-1')
+      expect(renderedEdgeIds).not.toContain('edge_6')
+    })
+
+    it('switching to Full restores every element', async () => {
+      const user = userEvent.setup()
+      render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="overview" />)
+
+      expect(nodeElements(capturedElements).map((n) => n.data.id)).not.toContain('event_first_kill')
+
+      await user.click(screen.getByRole('button', { name: 'Full mode' }))
+
+      const renderedNodeIds = nodeElements(capturedElements).map((n) => n.data.id)
+      const renderedEdgeIds = edgeElements(capturedElements).map((e) => e.data.id)
+      expect(renderedNodeIds).toContain('event_first_kill')
+      expect(renderedEdgeIds).toContain('edge_6')
+    })
+
+    it('selecting a node reveals its incident edge labels; empty-tap clears them', () => {
+      render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="full" />)
+
+      simulateTap('node', 'char_dexter_morgan')
+      // edge_2 (dexter -> miami_metro) and edge_6 (dexter -> event) are both
+      // incident to Dexter → labels visible.
+      expect(classesFor('edge_2').has('label-visible')).toBe(true)
+      expect(classesFor('edge_6').has('label-visible')).toBe(true)
+      // An unrelated edge (edge_5, debra -> miami_metro) stays label-less.
+      expect(classesFor('edge_5').has('label-visible')).toBe(false)
+
+      simulateBackgroundTap(capturedCy)
+      expect(classesFor('edge_2').has('label-visible')).toBe(false)
+    })
+
+    it('external focus (focusedElementIds) reveals labels for focused edges', () => {
+      const { rerender } = render(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          focusedElementIds={null}
+        />,
+      )
+
+      rerender(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          focusedElementIds={{ nodeIds: ['char_dexter_morgan'], edgeIds: ['edge_1'] }}
+        />,
+      )
+
+      expect(classesFor('edge_1').has('label-visible')).toBe(true)
+      // Dexter's incident edges get labels through the node side of the focus.
+      expect(classesFor('edge_2').has('label-visible')).toBe(true)
+      expect(classesFor('edge_5').has('label-visible')).toBe(false)
+
+      rerender(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          focusedElementIds={null}
+        />,
+      )
+      expect(classesFor('edge_1').has('label-visible')).toBe(false)
+      expect(classesFor('edge_2').has('label-visible')).toBe(false)
     })
   })
 })

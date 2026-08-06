@@ -57,12 +57,18 @@ export function setAllFilters(state: FilterState, enabled: boolean): FilterState
   return { nodeTypes, edgeFamilies }
 }
 
-// Position Cache keyed by `${seriesId}:${visibleUntilOrder}`
+// Position Cache keyed by `${seriesId}:${visibleUntilOrder}:${mode}` — mode
+// is part of the key because Overview and Full render different node sets
+// and must not share cached positions.
 type Position = { x: number; y: number }
 const positionCache = new Map<string, Map<string, Position>>()
 
-export function getCachedPositions(seriesId: string, visibleUntilOrder: number): Map<string, Position> | undefined {
-  const key = `${seriesId}:${visibleUntilOrder}`
+export function getCachedPositions(
+  seriesId: string,
+  visibleUntilOrder: number,
+  mode: string = 'full',
+): Map<string, Position> | undefined {
+  const key = `${seriesId}:${visibleUntilOrder}:${mode}`
   return positionCache.get(key)
 }
 
@@ -70,7 +76,8 @@ export function setCachedPositions(
   seriesId: string,
   visibleUntilOrder: number,
   positions: Map<string, Position>,
+  mode: string = 'full',
 ) {
-  const key = `${seriesId}:${visibleUntilOrder}`
+  const key = `${seriesId}:${visibleUntilOrder}:${mode}`
   positionCache.set(key, positions)
 }

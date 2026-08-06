@@ -1,6 +1,7 @@
 import cytoscape from 'cytoscape'
 import fcose from 'cytoscape-fcose'
 import coseBilkent from 'cytoscape-cose-bilkent'
+import type { GraphMode } from './overviewTiers'
 
 // Register extensions with Cytoscape safely (no-op if already registered)
 try {
@@ -23,6 +24,8 @@ type RepulsionNode = {
   id?: () => string
 }
 
+export const OVERVIEW_SPACING_SCALE = 1.6
+
 /**
  * Per-node repulsion multiplier used by every layout.
  *
@@ -35,24 +38,35 @@ type RepulsionNode = {
  */
 export const DEXTER_REPULSION = 1_633_333
 
-export function nodeRepulsionFor(node: RepulsionNode): number {
+export function nodeRepulsionFor(node: RepulsionNode, spacingScale: number = 1): number {
   const id =
     typeof node.id === 'function'
       ? node.id()
       : (node.data?.('id') as string | undefined)
-  if (id === DEXTER_NODE_ID) return DEXTER_REPULSION
-  return node.isParent?.() ? 1666667 : 833333
+  if (id === DEXTER_NODE_ID) return DEXTER_REPULSION * spacingScale
+  return (node.isParent?.() ? 1666667 : 833333) * spacingScale
 }
 
 export function layoutOptionsFor(
   name: 'fcose' | 'cose-bilkent' | 'cose',
   prefersReducedMotion: boolean = false,
+  mode: GraphMode = 'full',
 ) {
   const common = {
     fit: true,
     padding: 48,
     animate: prefersReducedMotion ? false : ('end' as const),
   }
+
+  // 08-06+ (product owner): Overview mode gets extra spacing so the fewer,
+  // curated clusters are easier to read — repulsion × OVERVIEW_SPACING_SCALE
+  // (pair separation scales ~ sqrt(repulsion) ≈ 1.26x), longer ideal edges,
+  // lower gravity, roomier cluster tiling. Full mode keeps the 5cm/7cm
+  // constants tuned on the dense graph.
+  const spacing = mode === 'overview' ? OVERVIEW_SPACING_SCALE : 1
+  const edgeLength = mode === 'overview' ? 420 : 320
+  const gravity = mode === 'overview' ? 0.015 : 0.02
+  const tiling = mode === 'overview' ? 45 : 35
 
   if (name === 'fcose') {
     return {
@@ -68,15 +82,15 @@ export function layoutOptionsFor(
       // (all pairs) + long ideal edges (connected pairs); gravity is
       // lowered so clusters don't collapse back together. Tune these
       // constants if the live graph reads too tight or too loose.
-      nodeRepulsion: nodeRepulsionFor,
-      idealEdgeLength: 320,
+      nodeRepulsion: (node: RepulsionNode) => nodeRepulsionFor(node, spacing),
+      idealEdgeLength: edgeLength,
       // 08-06: stiffer springs make the pull between CONNECTED nodes
       // dominant (nodes are drawn toward their neighbours, not the canvas
       // centre); gravity is lowered to ~zero so the layout is edge-driven.
       edgeElasticity: 0.75,
-      gravity: 0.02,
-      tilingPaddingVertical: 35,
-      tilingPaddingHorizontal: 35,
+      gravity,
+      tilingPaddingVertical: tiling,
+      tilingPaddingHorizontal: tiling,
     }
   }
 
@@ -84,10 +98,10 @@ export function layoutOptionsFor(
     return {
       ...common,
       name: 'cose-bilkent',
-      nodeRepulsion: 160000,
-      idealEdgeLength: 320,
+      nodeRepulsion: 160000 * spacing,
+      idealEdgeLength: edgeLength,
       edgeElasticity: 0.4,
-      gravity: 0.03,
+      gravity,
       tile: true,
     }
   }
@@ -95,9 +109,9 @@ export function layoutOptionsFor(
   return {
     ...common,
     name: 'cose',
-    nodeRepulsion: nodeRepulsionFor,
-    idealEdgeLength: 320,
+    nodeRepulsion: (node: RepulsionNode) => nodeRepulsionFor(node, spacing),
+    idealEdgeLength: edgeLength,
     edgeElasticity: 0.4,
-    gravity: 0.03,
+    gravity,
   }
 }

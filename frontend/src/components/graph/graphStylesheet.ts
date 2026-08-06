@@ -231,7 +231,13 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
     {
       selector: 'edge',
       style: {
-        label: 'data(label)',
+        // 08-06+ (product owner): edge labels are NOT permanently visible —
+        // they cover the screen in dense hubs. The label itself is added by
+        // the `edge.hovered, edge.edge-active, edge.label-visible` selector
+        // below (hover, tap-select, or connected-node selection); the text
+        // props here stay on the base so a shown label still renders with
+        // the dark pill (08-06) at the right size/color.
+        label: '',
         'font-size': 9,
         color: '#E2E8F0',
         width: 1.5,
@@ -249,6 +255,16 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
         'text-background-shape': 'roundrectangle',
         'transition-property': 'line-color, target-arrow-color, width, opacity',
         'transition-duration': transitionMs,
+      },
+    },
+    // 08-06+ (product owner): label visibility is interaction-driven only —
+    // hovered edge, tapped/selected edge (.edge-active), or an edge incident
+    // to a selected node (.label-visible, applied by GraphCanvas's tap
+    // handler and the external-focus effect).
+    {
+      selector: 'edge.hovered, edge.edge-active, edge.label-visible',
+      style: {
+        label: 'data(label)',
       },
     },
     // Dashed candidate edges

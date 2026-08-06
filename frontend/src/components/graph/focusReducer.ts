@@ -28,7 +28,7 @@ export function applyFocusToCytoscape(cy: cytoscape.Core, focusedId: string | nu
 
   const apply = () => {
     if (typeof cy.elements === 'function') {
-      cy.elements().removeClass('faded selected-dominant')
+      cy.elements().removeClass('faded selected-dominant label-visible')
     }
 
     if (!focusedId || typeof cy.getElementById !== 'function') return
@@ -38,6 +38,11 @@ export function applyFocusToCytoscape(cy: cytoscape.Core, focusedId: string | nu
 
     if (typeof target.addClass === 'function') {
       target.addClass('selected-dominant')
+    }
+
+    // 08-06+: the focused node's incident edges reveal their labels.
+    if (typeof target.connectedEdges === 'function') {
+      target.connectedEdges().addClass('label-visible')
     }
 
     if (typeof target.closedNeighborhood === 'function' && typeof cy.elements === 'function') {

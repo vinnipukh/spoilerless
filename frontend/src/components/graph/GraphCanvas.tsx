@@ -5,6 +5,7 @@ import type { GraphNode, GraphResponse } from '../../types/graph'
 import type { EpisodeResponse } from '../../types/series'
 import { graphToElements } from './graphElements'
 import { buildGraphStylesheet } from './graphStylesheet'
+import type { GraphMode } from './overviewTiers'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   Dialog,
@@ -65,11 +66,12 @@ function runLayout(
   seriesId?: string | null,
   visibleUntilOrder?: number | null,
   forceRelayout: boolean = false,
+  mode: GraphMode = 'full',
 ) {
   if (typeof cy.layout !== 'function') return
 
   if (!forceRelayout && seriesId && visibleUntilOrder != null) {
-    const cached = getCachedPositions(seriesId, visibleUntilOrder)
+    const cached = getCachedPositions(seriesId, visibleUntilOrder, mode)
     if (cached && cached.size > 0) {
       const applyPos = () => {
         if (typeof cy.getElementById === 'function') {
@@ -88,14 +90,14 @@ function runLayout(
   }
 
   try {
-    const l = cy.layout(layoutOptionsFor(layoutName))
+    const l = cy.layout(layoutOptionsFor(layoutName, prefersReducedMotion, mode))
     if (seriesId && visibleUntilOrder != null && typeof l.one === 'function') {
       l.one('layoutstop', () => {
         const map = new Map<string, { x: number; y: number }>()
         cy.nodes().forEach((n) => {
           map.set(n.id(), n.position())
         })
-        setCachedPositions(seriesId, visibleUntilOrder, map)
+        setCachedPositions(seriesId, visibleUntilOrder, map, mode)
       })
     }
     l.run()
@@ -106,7 +108,7 @@ function runLayout(
     )
     layoutName = 'cose'
     try {
-      cy.layout(layoutOptionsFor('cose')).run()
+      cy.layout(layoutOptionsFor('cose', prefersReducedMotion, mode)).run()
     } catch (fallbackError) {
       console.error('built-in cose layout also failed', fallbackError)
     }
@@ -177,6 +179,10 @@ type Props = {
   readOnly?: boolean
   // FEAT-09 (09-12): Share snapshot link trigger (opens ShareDialog)
   onShareLink?: () => void
+  // 08-06+ (product owner, presentation): starting graph mode. Overview
+  // (default) shows the curated tier-1 + connector projection; Full shows
+  // every spoiler-safe element.
+  initialMode?: GraphMode
 }
 
 
@@ -322,10 +328,12 @@ export function GraphCanvas({
   onPathModeChange,
   readOnly = false,
   onShareLink,
+  initialMode = 'overview',
 }: Props) {
 
 
-  const elements = useMemo(() => graphToElements(graph), [graph])
+  const [mode, setMode] = useState<GraphMode>(initialMode)
+  const elements = useMemo(() => graphToElements(graph, mode), [graph, mode])
   const wiredCyRef = useRef<cytoscape.Core | null>(null)
   const cyInstanceRef = useRef<cytoscape.Core | null>(null)
   const stylesheet = useMemo(() => buildGraphStylesheet(prefersReducedMotion), [])
@@ -364,19 +372,25 @@ export function GraphCanvas({
   // changes (which re-run this effect via `focusedElementIds` in the deps)
   // from ever re-laying-out an unchanged graph.
   const lastLayoutGraphRef = useRef<GraphResponse | null>(null)
+  const lastLayoutModeRef = useRef<GraphMode>(mode)
   useEffect(() => {
     const cy = cyInstanceRef.current
     if (!cy) return
-    if (lastLayoutGraphRef.current === graph) return
-    lastLayoutGraphRef.current = graph
+    const graphChanged = lastLayoutGraphRef.current !== graph
+    const modeChanged = lastLayoutModeRef.current !== mode
+    if (!graphChanged && !modeChanged) return
+    if (graphChanged) lastLayoutGraphRef.current = graph
+    if (modeChanged) lastLayoutModeRef.current = mode
     // Skip the destructive full relayout while a reveal is pending too:
     // freshly created edges connect already-positioned nodes, and re-running
-    // cose-bilkent would animate the nodes AFTER the reveal's cy.fit, undoing
+    // the layout would animate the nodes AFTER the reveal's cy.fit, undoing
     // the framing (the edge lands wherever the layout puts it — the user's
     // "new edges show up on the right" complaint).
     if (focusedElementIds || revealTarget) return
-    runLayout(cy, seriesId, graph.visible_until_order)
-  }, [graph, focusedElementIds, revealTarget, seriesId])
+    // A mode switch re-runs with forceRelayout (different node set + spacing
+    // constants); a graph change reuses the cached positions per mode.
+    runLayout(cy, seriesId, graph.visible_until_order, modeChanged, mode)
+  }, [graph, focusedElementIds, revealTarget, seriesId, mode])
 
   // Apply/clear an externally-driven `graph_focus` highlight (RAG-17), keyed
   // on the `focusedElementIds` prop — the same "prop-driven effect" pattern
@@ -414,7 +428,7 @@ export function GraphCanvas({
     // Always start from a clean slate — clears whatever the previous
     // `focusedElementIds` value (or a manual tap) left behind, identically
     // to tapping empty canvas.
-    cy.elements().removeClass('selected-dominant faded edge-active')
+    cy.elements().removeClass('selected-dominant faded edge-active label-visible')
 
     if (!focusedElementIds) return
 
@@ -431,6 +445,18 @@ export function GraphCanvas({
     if (focused.length === 0) return
 
     focused.addClass('selected-dominant')
+    // 08-06+: labels of the focused edges + edges incident to focused nodes
+    // become visible (stylesheet `edge.label-visible`).
+    for (const nodeId of focusedElementIds.nodeIds) {
+      const el = cy.getElementById(nodeId)
+      if (el && el.length > 0 && typeof el.connectedEdges === 'function') {
+        el.connectedEdges().addClass('label-visible')
+      }
+    }
+    for (const edgeId of focusedElementIds.edgeIds) {
+      const el = cy.getElementById(edgeId)
+      if (el && el.length > 0) el.addClass('label-visible')
+    }
     cy.elements().difference(focused).addClass('faded')
 
     // Gentle re-frame on the focused subgraph — same 48px padding
@@ -455,7 +481,7 @@ export function GraphCanvas({
       return
     }
 
-    cy.elements().removeClass('selected-dominant faded edge-active')
+    cy.elements().removeClass('selected-dominant faded edge-active label-visible')
     const requestedIds = [...revealTarget.nodeIds, ...revealTarget.edgeIds]
     const revealed = cy.collection()
     for (const id of requestedIds) {
@@ -472,7 +498,7 @@ export function GraphCanvas({
     const frame = requestAnimationFrame(() => cy.fit(revealed, 60))
 
     const timer = window.setTimeout(() => {
-      cy.elements().removeClass('selected-dominant faded edge-active')
+      cy.elements().removeClass('selected-dominant faded edge-active label-visible')
       if (revealElementIds) onRevealDone?.()
       else setLocalReveal(null)
     }, 2200)
@@ -628,7 +654,7 @@ export function GraphCanvas({
         />
         <CytoscapeComponent
           elements={elements}
-          layout={layoutOptionsFor(layoutName)}
+          layout={layoutOptionsFor(layoutName, prefersReducedMotion, mode)}
           stylesheet={stylesheet}
           style={{ width: '100%', height: '100%' }}
           minZoom={0.3}
@@ -682,8 +708,11 @@ export function GraphCanvas({
               const neighborhood = node.closedNeighborhood()
               cy.elements().difference(neighborhood).addClass('faded')
               neighborhood.removeClass('faded')
-              cy.elements().removeClass('selected-dominant edge-active')
+              cy.elements().removeClass('selected-dominant edge-active label-visible')
               node.addClass('selected-dominant')
+              // 08-06+: selecting a node reveals its incident edge labels
+              // (stylesheet `edge.label-visible`).
+              node.connectedEdges().addClass('label-visible')
               onSelect({
                 kind: 'node',
                 id: node.id(),
@@ -697,7 +726,7 @@ export function GraphCanvas({
               const neighborhood = edge.connectedNodes().union(edge)
               cy.elements().difference(neighborhood).addClass('faded')
               neighborhood.removeClass('faded')
-              cy.elements().removeClass('selected-dominant edge-active')
+              cy.elements().removeClass('selected-dominant edge-active label-visible')
               edge.addClass('edge-active')
               onSelect({
                 kind: 'edge',
@@ -717,7 +746,7 @@ export function GraphCanvas({
                   setPathMode(false)
                   onPathModeChange?.(false)
                 }
-                cy.elements().removeClass('faded selected-dominant edge-active on-path path-source path-target')
+                cy.elements().removeClass('faded selected-dominant edge-active on-path path-source path-target label-visible')
                 onSelect(null)
               }
             })
@@ -751,9 +780,11 @@ export function GraphCanvas({
         <GraphLegend />
         <GraphControls
           cyRef={cyInstanceRef}
+          mode={mode}
+          onModeChange={setMode}
           onReset={() => {
             const cy = cyInstanceRef.current
-            if (cy) runLayout(cy, seriesId, graph.visible_until_order, true)
+            if (cy) runLayout(cy, seriesId, graph.visible_until_order, true, mode)
           }}
           pathModeActive={pathMode}
           onPathModeChange={(active) => {

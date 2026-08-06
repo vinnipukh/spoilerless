@@ -1,5 +1,6 @@
 import type cytoscape from 'cytoscape'
 import { ZoomIn, ZoomOut, Maximize2, RotateCcw, Waypoints, Download, Share2 } from 'lucide-react'
+import type { GraphMode } from './overviewTiers'
 import {
   Tooltip,
   TooltipTrigger,
@@ -15,6 +16,9 @@ type Props = {
   exporting?: boolean
   exported?: boolean
   onShareLink?: () => void
+  // 08-06+ (product owner, presentation): Overview/Full graph-mode toggle.
+  mode?: GraphMode
+  onModeChange?: (mode: GraphMode) => void
 }
 
 export function GraphControls({
@@ -25,6 +29,8 @@ export function GraphControls({
   onExport,
   exported = false,
   onShareLink,
+  mode = 'overview',
+  onModeChange,
 }: Props) {
 
   function zoomIn() {
@@ -53,6 +59,39 @@ export function GraphControls({
 
   return (
     <div className="fixed bottom-20 left-4 z-[40] flex flex-col gap-2 pb-[env(safe-area-inset-bottom)]">
+      {onModeChange && (
+        <div
+          role="group"
+          aria-label="Graph mode"
+          className="flex h-11 items-stretch overflow-hidden rounded-md bg-card text-xs shadow-sm ring-1 ring-border"
+        >
+          <button
+            type="button"
+            aria-label="Overview mode"
+            className={`min-h-[44px] cursor-pointer px-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              mode === 'overview'
+                ? 'bg-accent font-medium text-accent-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => onModeChange('overview')}
+          >
+            Overview
+          </button>
+          <button
+            type="button"
+            aria-label="Full mode"
+            className={`min-h-[44px] cursor-pointer border-l border-border px-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              mode === 'full'
+                ? 'bg-accent font-medium text-accent-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => onModeChange('full')}
+          >
+            Full
+          </button>
+        </div>
+      )}
+
       <Tooltip>
         <TooltipTrigger asChild>
           <button
