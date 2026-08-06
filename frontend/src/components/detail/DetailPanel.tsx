@@ -644,7 +644,13 @@ export function DetailPanel({
         onInteractOutside={(event) => event.preventDefault()}
         onEscapeKeyDown={(event) => event.preventDefault()}
         className={cn(
-          'mt-0 max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!h-auto max-sm:!w-full max-sm:!border-t max-sm:!border-l-0 max-sm:max-h-[70vh] lg:max-w-xl',
+          'mt-0 max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!h-auto max-sm:!w-full max-sm:!border-t max-sm:!border-l-0 max-sm:max-h-[70vh]',
+          // 08-06+: the base shadcn sheet pins the width with a
+          // DATA-ATTRIBUTE variant (`data-[side=left]:sm:max-w-sm`, 384px) —
+          // higher specificity than plain lg:max-w-xl, so the inspector was
+          // stuck at 384px and six tabs (~374px) clipped the rightmost one.
+          // Override at the SAME specificity: 448px on sm+, 576px on lg+.
+          'data-[side=left]:sm:max-w-md data-[side=left]:lg:max-w-xl',
           // Fix 3: explicit left-border + shadow prevents canvas bleed-through
           'border-r border-border shadow-lg',
         )}
@@ -697,13 +703,18 @@ export function DetailPanel({
             <Tabs defaultValue="overview" className="flex min-h-0 flex-1 flex-col">
               {/* Fix 2: sticky tab bar with opaque bg and relative z-10 prevents
                   canvas control overlays from bleeding through */}
-              <TabsList className="sticky top-0 z-10 shrink-0 overflow-x-auto flex-nowrap bg-popover mx-4">
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                {selectedNode && <TabsTrigger value="backlinks">Backlinks</TabsTrigger>}
-                {noteTargetType && <TabsTrigger value="notes">Notes</TabsTrigger>}
-                {(selectedNode || activeClaim) && <TabsTrigger value="history">History</TabsTrigger>}
-                <TabsTrigger value="claims">Claims</TabsTrigger>
-                <TabsTrigger value="evidence">Evidence</TabsTrigger>
+              {/* 08-06+: the base shadcn TabsList is w-fit — with 6 tabs it
+                  grows past the panel and the parent clips the rightmost tab
+                  (Evidence) with no scrollbar. Cap it at the available width
+                  (mx-4 margins accounted) so overflow-x-auto actually
+                  scrolls; triggers are shrink-0 so they keep natural width. */}
+              <TabsList className="sticky top-0 z-10 shrink-0 w-fit max-w-[calc(100%-2rem)] overflow-x-auto flex-nowrap bg-popover mx-4">
+                <TabsTrigger value="overview" className="shrink-0">Overview</TabsTrigger>
+                {selectedNode && <TabsTrigger value="backlinks" className="shrink-0">Backlinks</TabsTrigger>}
+                {noteTargetType && <TabsTrigger value="notes" className="shrink-0">Notes</TabsTrigger>}
+                {(selectedNode || activeClaim) && <TabsTrigger value="history" className="shrink-0">History</TabsTrigger>}
+                <TabsTrigger value="claims" className="shrink-0">Claims</TabsTrigger>
+                <TabsTrigger value="evidence" className="shrink-0">Evidence</TabsTrigger>
               </TabsList>
 
               {/* Fix 3: overflow-y-auto ONLY on the tab content body — header
@@ -945,15 +956,19 @@ export function DetailPanel({
                 )}
                 {resolved &&
                   evidenceEntries.map(({ evidence, sourceLabel }) => (
+                    // 08-06+ (product owner): render evidence as CLAIMS-style
+                    // cards — bold title + muted metadata line, cards grow
+                    // naturally (no max-h-32 inner scroll; the panel scrolls
+                    // as a whole, matching the Claims tab).
                     <div
                       key={evidence.id}
-                      className="max-h-32 overflow-y-auto rounded-md border border-border p-2"
+                      className="rounded-md border border-border p-2"
                       style={{ borderLeft: `4px solid ${EVIDENCE_ACCENT_COLOR}` }}
                     >
-                      <p>
+                      <p className="font-medium break-words overflow-wrap-anywhere">
                         Source: {sourceLabel} - {evidence.locator}
                       </p>
-                      <p className="text-muted-foreground">{evidence.text}</p>
+                      <p className="text-muted-foreground">{evidence.origin}</p>
                     </div>
                   ))}
               </TabsContent>
