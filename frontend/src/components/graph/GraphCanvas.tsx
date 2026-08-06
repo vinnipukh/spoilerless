@@ -6,6 +6,7 @@ import type { EpisodeResponse } from '../../types/series'
 import { graphToElements } from './graphElements'
 import { buildGraphStylesheet } from './graphStylesheet'
 import type { GraphMode } from './overviewTiers'
+import { autoZoomHold } from './autoZoomHold'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   Dialog,
@@ -59,22 +60,52 @@ let layoutName: 'fcose' | 'cose-bilkent' | 'cose' = 'fcose'
 // bounding-box centre (the graph fills the screen; pan reveals the rest).
 const OVERVIEW_MIN_ZOOM = 0.8
 
-// react-cytoscapejs's own declarative `layout` prop only re-applies a layout
-// when the prop's shallow-compared field values change (never true here,
-// since every render passes literal-equal field values) — so it never
-// re-lays-out purely because the *elements* changed (new episode boundary).
-// This function is called imperatively instead, from an effect keyed on the
-// `graph` object, so the canvas actually reflows on every boundary change.
-// Guarded so it never throws into an effect that a test double's fake `cy`
-// (no real `.layout()` method) might pass in.
+// 08-06+ (product owner): after ANY pointer/touch interaction anywhere in
+// the app, the auto zoom-out (layout fit + zoom floor) is suppressed for
+// this long — the view must not yank away while the user is working. Each
+// touch resets the timer. Explicit view actions (mode switch, reset zoom)
+// still re-fit; only graph-change-driven layouts honour the hold.
+const AUTO_ZOOM_HOLD_MS = 20_000
+
+// 08-06+ (product owner): interaction state lives at MODULE level (see
+// autoZoomHold.ts) — the canvas unmounts on every graph refetch (destructive
+// loading unmount), so per-mount state would lose the 20s hold on each
+// remount. `lastViewport` is what a held remount restores (the fresh cy
+// otherwise starts at the default zoom-1 origin).
+
+// react-cytoscapejs's own declarative `layout` prop re-applies a layout when
+// the prop's shallow-diff (its `diff()` compares per-key VALUES) sees any
+// change. layoutOptionsFor returns a fresh nodeRepulsion CLOSURE on every
+// call, so passing it inline re-ran the layout (fit:true — the "auto
+// zoom-out"!) on EVERY GraphCanvas re-render. The component memoizes the
+// layout object (see `layout` inside GraphCanvas) so its reference is
+// stable: react-cytoscapejs short-circuits on `prev === next` and leaves
+// the viewport alone. runLayout below reflows imperatively on graph
+// changes. Guarded so it never throws into an effect that a test double's
+// fake `cy` (no real `.layout()` method) might pass in.
 function runLayout(
   cy: cytoscape.Core,
   seriesId?: string | null,
   visibleUntilOrder?: number | null,
   forceRelayout: boolean = false,
   mode: GraphMode = 'full',
+  suppressAutoZoom: boolean = false,
 ) {
   if (typeof cy.layout !== 'function') return
+
+  // 08-06+ (product owner): while the user is actively interacting (touched
+  // the screen within AUTO_ZOOM_HOLD_MS), graph-change-driven layouts must
+  // NOT yank the viewport — run without fit and skip the zoom floor so the
+  // view stays exactly where the user left it. Explicit view actions
+  // (forceRelayout: mode switch / reset zoom) always re-fit.
+  const holdView = suppressAutoZoom && !forceRelayout
+  if (holdView && typeof cy.zoom === 'function' && typeof cy.pan === 'function') {
+    // A destructive remount created a fresh cy at the default zoom-1 origin
+    // — restore the user's last viewport so the held view survives it (this
+    // also covers the cached-positions early return below).
+    cy.zoom(autoZoomHold.lastViewport.zoom)
+    cy.pan({ ...autoZoomHold.lastViewport.pan })
+  }
 
   if (!forceRelayout && seriesId && visibleUntilOrder != null) {
     const cached = getCachedPositions(seriesId, visibleUntilOrder, mode)
@@ -96,7 +127,9 @@ function runLayout(
   }
 
   try {
-    const l = cy.layout(layoutOptionsFor(layoutName, prefersReducedMotion, mode))
+    const l = cy.layout(
+      layoutOptionsFor(layoutName, prefersReducedMotion, mode, !holdView),
+    )
     if (seriesId && visibleUntilOrder != null && typeof l.one === 'function') {
       l.one('layoutstop', () => {
         const map = new Map<string, { x: number; y: number }>()
@@ -107,8 +140,10 @@ function runLayout(
         // Zoom floor (Overview only): fit zoomed out too far on the sparse
         // layout — lift the view back to OVERVIEW_MIN_ZOOM, anchored on the
         // graph centre (model-coordinate `position` keeps the anchor fixed).
-        // Guarded for test fakes (no zoom/boundingBox).
+        // Guarded for test fakes (no zoom/boundingBox). Skipped while the
+        // user's 20s interaction hold is active.
         if (
+          !holdView &&
           mode === 'overview' &&
           typeof cy.zoom === 'function'
         ) {
@@ -135,7 +170,9 @@ function runLayout(
     )
     layoutName = 'cose'
     try {
-      cy.layout(layoutOptionsFor('cose', prefersReducedMotion, mode)).run()
+      cy.layout(
+        layoutOptionsFor('cose', prefersReducedMotion, mode, !holdView),
+      ).run()
     } catch (fallbackError) {
       console.error('built-in cose layout also failed', fallbackError)
     }
@@ -361,6 +398,30 @@ export function GraphCanvas({
 
   const [mode, setMode] = useState<GraphMode>(initialMode)
   const elements = useMemo(() => graphToElements(graph, mode), [graph, mode])
+  // Memoized layout options for the declarative CytoscapeComponent prop: the
+  // object reference must stay stable across re-renders or react-cytoscapejs
+  // re-runs the layout on every render. The prop NEVER fits — runLayout is
+  // the single fit authority (it decides per the 20s interaction hold); a
+  // fit:true here would zoom out on every remount before the hold logic
+  // runs. Rebuilt only when the mode changes.
+  const layout = useMemo(
+    () => layoutOptionsFor(layoutName, prefersReducedMotion, mode, false),
+    // layoutName is module-level (mutated only by the rare fallback in
+    // runLayout's catch) — not a reactive dependency.
+    [mode],
+  )
+  // 08-06+ (product owner): timestamp of the last touch anywhere in the app
+  // (document-level capture) — stored at MODULE level so the 20s hold
+  // survives the destructive unmount/remount that every graph refetch does.
+  // NEGATIVE_INFINITY = never touched this mount → the first layout always
+  // fits normally.
+  useEffect(() => {
+    const onTouch = () => {
+      autoZoomHold.lastTouchAt = performance.now()
+    }
+    document.addEventListener('pointerdown', onTouch, true)
+    return () => document.removeEventListener('pointerdown', onTouch, true)
+  }, [])
   const wiredCyRef = useRef<cytoscape.Core | null>(null)
   const cyInstanceRef = useRef<cytoscape.Core | null>(null)
   const stylesheet = useMemo(() => buildGraphStylesheet(prefersReducedMotion), [])
@@ -415,8 +476,13 @@ export function GraphCanvas({
     // "new edges show up on the right" complaint).
     if (focusedElementIds || revealTarget) return
     // A mode switch re-runs with forceRelayout (different node set + spacing
-    // constants); a graph change reuses the cached positions per mode.
-    runLayout(cy, seriesId, graph.visible_until_order, modeChanged, mode)
+    // constants); a graph change reuses the cached positions per mode. A
+    // recent touch (within AUTO_ZOOM_HOLD_MS) suppresses the auto zoom-out
+    // on graph-change-driven layouts — the view must not yank while the
+    // user is working.
+    const suppressAutoZoom =
+      performance.now() - autoZoomHold.lastTouchAt < AUTO_ZOOM_HOLD_MS
+    runLayout(cy, seriesId, graph.visible_until_order, modeChanged, mode, suppressAutoZoom)
   }, [graph, focusedElementIds, revealTarget, seriesId, mode])
 
   // Apply/clear an externally-driven `graph_focus` highlight (RAG-17), keyed
@@ -681,7 +747,7 @@ export function GraphCanvas({
         />
         <CytoscapeComponent
           elements={elements}
-          layout={layoutOptionsFor(layoutName, prefersReducedMotion, mode)}
+          layout={layout}
           stylesheet={stylesheet}
           style={{ width: '100%', height: '100%' }}
           minZoom={0.3}
@@ -775,6 +841,16 @@ export function GraphCanvas({
                 }
                 cy.elements().removeClass('faded selected-dominant edge-active on-path path-source path-target label-visible')
                 onSelect(null)
+              }
+            })
+
+            // 08-06+ (product owner): remember the user's viewport so a held
+            // remount (graph refetch within the 20s interaction window) can
+            // restore it instead of dropping to the fresh cy's default.
+            cy.on('viewport', () => {
+              if (typeof cy.zoom === 'function' && typeof cy.pan === 'function') {
+                const p = cy.pan()
+                autoZoomHold.lastViewport = { zoom: cy.zoom(), pan: { x: p.x, y: p.y } }
               }
             })
           }}

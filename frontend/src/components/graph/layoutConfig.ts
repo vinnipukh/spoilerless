@@ -51,9 +51,10 @@ export function layoutOptionsFor(
   name: 'fcose' | 'cose-bilkent' | 'cose',
   prefersReducedMotion: boolean = false,
   mode: GraphMode = 'full',
+  fit: boolean = true,
 ) {
   const common = {
-    fit: true,
+    fit,
     padding: 48,
     animate: prefersReducedMotion ? false : ('end' as const),
   }

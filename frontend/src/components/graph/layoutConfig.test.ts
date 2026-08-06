@@ -53,4 +53,10 @@ describe('layoutOptionsFor overview spacing (08-06+)', () => {
     const probe = { id: () => 'char_debra_morgan' }
     expect(overview.nodeRepulsion(probe)).toBeGreaterThan(full.nodeRepulsion(probe))
   })
+
+  it('accepts a fit flag (default true; false = interaction hold-view)', () => {
+    expect(layoutOptionsFor('fcose', false, 'overview').fit).toBe(true)
+    expect(layoutOptionsFor('fcose', false, 'overview', false).fit).toBe(false)
+    expect(layoutOptionsFor('cose', false, 'full', false).fit).toBe(false)
+  })
 })

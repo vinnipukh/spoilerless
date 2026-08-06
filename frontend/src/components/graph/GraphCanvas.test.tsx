@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { GraphCanvas } from './GraphCanvas'
+import { __resetAutoZoomStateForTests } from './autoZoomHold'
 import { graphResponseS01E01, graphResponseS01E03 } from '../../test/fixtures/graphResponse'
 
 // 08-06: graphToElements prunes isolated (degree-0) nodes — these
@@ -68,6 +69,9 @@ let edgeAdj: Map<string, string[]> = new Map()
 // simulations must pass this SAME object (the empty-tap handler checks
 // `evt.target === cy`).
 let capturedCy: unknown = null
+// Layout spy: records the options each cy.layout() call receives (runLayout
+// becomes reachable once the fake exposes `layout`).
+let layoutCalls: Array<{ fit: unknown }> = []
 
 function resetFakeCytoscape() {
   registry = new Map()
@@ -75,6 +79,7 @@ function resetFakeCytoscape() {
   fitCalls = []
   edgeAdj = new Map()
   capturedCy = null
+  layoutCalls = []
 }
 
 // Real cytoscape.js accepts a space-separated class list to addClass/
@@ -169,9 +174,10 @@ vi.mock('react-cytoscapejs', () => {
     cy?: (cy: unknown) => void
     minZoom?: number
     maxZoom?: number
+    layout?: unknown
   }) {
     capturedElements = props.elements
-    capturedProps = { minZoom: props.minZoom, maxZoom: props.maxZoom }
+    capturedProps = { minZoom: props.minZoom, maxZoom: props.maxZoom, layout: props.layout }
     for (const el of props.elements) ensureRegistered(el.data.id as string)
     edgeAdj = new Map()
     for (const el of props.elements) {
@@ -200,6 +206,12 @@ vi.mock('react-cytoscapejs', () => {
       fit: (elements: FakeCollection, padding: unknown) => {
         fitCalls.push({ ids: elements?.ids ?? [], padding })
       },
+      // 08-06+ auto-zoom-hold: runLayout is reachable once `layout` exists —
+      // record the options (esp. `fit`) so the suppression is assertable.
+      layout: (opts: Record<string, unknown>) => {
+        layoutCalls.push({ fit: opts.fit })
+        return { one: () => {}, run: () => {} }
+      },
     }
     props.cy?.(fakeCy)
     capturedCy = fakeCy
@@ -226,6 +238,9 @@ function edgeElements(elements: CapturedElement[]) {
 
 beforeEach(() => {
   resetFakeCytoscape()
+  // The module-level interaction state survives component remounts (by
+  // design, for the 20s hold) — clear it so tests are isolated.
+  __resetAutoZoomStateForTests()
 })
 
 describe('GraphCanvas', () => {
@@ -633,6 +648,70 @@ describe('GraphCanvas', () => {
       )
       expect(classesFor('edge_1').has('label-visible')).toBe(false)
       expect(classesFor('edge_2').has('label-visible')).toBe(false)
+    })
+  })
+
+  describe('auto zoom hold after touch (08-06+)', () => {
+    it('lays out with fit:true when the screen has not been touched', () => {
+      render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="full" />)
+
+      expect(layoutCalls.length).toBeGreaterThan(0)
+      expect(layoutCalls[layoutCalls.length - 1]?.fit).toBe(true)
+    })
+
+    it('a pointerdown within 20s suppresses the fit on the next graph-change layout', () => {
+      const { rerender } = render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="full" />)
+      expect(layoutCalls[layoutCalls.length - 1]?.fit).toBe(true)
+
+      // User touches the screen anywhere — the listener is document-level.
+      document.dispatchEvent(new Event('pointerdown'))
+
+      // A graph change (new object identity) re-runs the layout; the recent
+      // touch holds the viewport (fit:false, no auto zoom-out).
+      rerender(
+        <GraphCanvas graph={{ ...graphResponseS01E01 }} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="full" />,
+      )
+      expect(layoutCalls[layoutCalls.length - 1]?.fit).toBe(false)
+    })
+
+    it('a mode switch still forces fit (explicit view action bypasses the hold)', async () => {
+      const user = userEvent.setup()
+      render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="overview" />)
+
+      // Clicking the toggle both touches the screen AND changes the mode —
+      // forceRelayout (mode switch) wins over the 20s hold.
+      await user.click(screen.getByRole('button', { name: 'Full mode' }))
+
+      expect(layoutCalls[layoutCalls.length - 1]?.fit).toBe(true)
+    })
+
+    it('keeps the CytoscapeComponent layout prop reference stable across graph-change re-renders (no per-render re-fit)', () => {
+      const { rerender } = render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="full" />)
+      const first = capturedProps.layout
+      // The declarative prop never fits — runLayout is the single fit authority.
+      expect((first as { fit?: unknown }).fit).toBe(false)
+
+      // A graph change re-renders — the memoized layout object must be the
+      // SAME reference, or react-cytoscapejs re-runs the layout (the auto
+      // zoom-out after interactions).
+      rerender(
+        <GraphCanvas graph={{ ...graphResponseS01E01 }} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="full" />,
+      )
+      expect(capturedProps.layout).toBe(first)
+    })
+
+    it('rebuilds the layout prop only when the mode changes', async () => {
+      const user = userEvent.setup()
+      const { rerender } = render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="overview" />)
+      const overviewLayout = capturedProps.layout
+
+      rerender(
+        <GraphCanvas graph={{ ...graphResponseS01E01 }} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="overview" />,
+      )
+      expect(capturedProps.layout).toBe(overviewLayout)
+
+      await user.click(screen.getByRole('button', { name: 'Full mode' }))
+      expect(capturedProps.layout).not.toBe(overviewLayout)
     })
   })
 })
