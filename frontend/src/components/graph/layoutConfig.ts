@@ -26,14 +26,14 @@ type RepulsionNode = {
 /**
  * Per-node repulsion multiplier used by every layout.
  *
- * 08-06 (product owner) special case: every node must sit at least ~5cm
- * (~190px @96dpi) from Dexter Morgan's node. fcose has no per-pair
- * min-gap parameter, so Dexter's node carries ~5.5x the base repulsion of
+ * 08-06+ (product owner) special case: every node must sit at least ~7cm
+ * (~265px @96dpi) from Dexter Morgan's node. fcose has no per-pair
+ * min-gap parameter, so Dexter's node carries ~1.96x the base repulsion of
  * a normal node — pair separation scales with sqrt(repulsion product),
- * i.e. sqrt(1_200_000 / 220_000) ≈ 2.3x the ~95px base gap ≈ 220px ≈ 5.8cm
+ * i.e. sqrt(1_633_333 / 833_333) = 1.4x the ~5cm base gap ≈ 7cm
  * center-to-center. Tunable via DEXTER_REPULSION.
  */
-export const DEXTER_REPULSION = 1_200_000
+export const DEXTER_REPULSION = 1_633_333
 
 export function nodeRepulsionFor(node: RepulsionNode): number {
   const id =
@@ -41,7 +41,7 @@ export function nodeRepulsionFor(node: RepulsionNode): number {
       ? node.id()
       : (node.data?.('id') as string | undefined)
   if (id === DEXTER_NODE_ID) return DEXTER_REPULSION
-  return node.isParent?.() ? 600000 : 300000
+  return node.isParent?.() ? 1666667 : 833333
 }
 
 export function layoutOptionsFor(
@@ -62,8 +62,8 @@ export function layoutOptionsFor(
       // minimization (08-06: dense graph, long edges were colliding).
       quality: 'proof',
       randomize: false,
-      // 08-06 (product owner): nodes need ~3cm of clearance between them
-      // (~113px at 96dpi; was ~2.5cm, raised 08-06). fcose has no hard
+      // 08-06+ (product owner): nodes need ~5cm of clearance between them
+      // (~189px at 96dpi; was ~3cm, raised 08-06+). fcose has no hard
       // min-gap parameter, so the gap is enforced via strong node repulsion
       // (all pairs) + long ideal edges (connected pairs); gravity is
       // lowered so clusters don't collapse back together. Tune these
