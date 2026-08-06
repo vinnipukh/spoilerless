@@ -57,7 +57,7 @@ let layoutName: 'fcose' | 'cose-bilkent' | 'cose' = 'fcose'
 // zoom out so far the nodes look tiny. On layout completion, if the fit
 // landed below this floor, zoom back in to it centered on the graph's
 // bounding-box centre (the graph fills the screen; pan reveals the rest).
-const OVERVIEW_MIN_ZOOM = 0.5
+const OVERVIEW_MIN_ZOOM = 0.8
 
 // react-cytoscapejs's own declarative `layout` prop only re-applies a layout
 // when the prop's shallow-compared field values change (never true here,
