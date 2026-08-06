@@ -10,7 +10,7 @@
 - [Environment Variables](#environment-variables)
 - [Backend Configuration (Pydantic Settings)](#backend-configuration-pydantic-settings)
 - [Per-Environment Overrides](#per-environment-overrides)
-- [Runtime LLM Settings Override (stored in Neo4j)](#runtime-llm-settings-override-stored-in-neo4j)
+- [Runtime LLM Settings & BYOK Overrides](#runtime-llm-settings--byok-overrides)
 - [Session Storage](#session-storage)
 - [Docker Compose (Neo4j)](#docker-compose-neo4j)
 - [Frontend Configuration](#frontend-configuration)
@@ -28,11 +28,7 @@ The backend reads configuration from the current working directory's `.env` file
 cp .env.example .env
 ```
 
-> **Verified against the repo:** `.env.example` (project root) was read directly. `SESSION_COOKIE_SAMESITE`,
-> `ALLOWED_EMAILS`, `ADMIN_EMAILS`, `REDIS_URL`, `LLM_FALLBACK_EN`, and `LLM_FALLBACK_TR` all exist as fields
-> on the `Settings` class but are **not** listed in `.env.example` (they are optional overrides/additions
-> with in-code defaults). Local secret-bearing `.env` files were intentionally not read. Secret values are
-> never documented here.
+> **Verified against the repo:** `.env.example` (project root) was read directly. `VITE_GOOGLE_CLIENT_ID` and `VITE_API_BASE_URL` are included in the root template for Vite frontend configuration (via `envDir: '..'`). `SESSION_COOKIE_SAMESITE`, `ALLOWED_EMAILS`, `ADMIN_EMAILS`, `REDIS_URL`, `LLM_FALLBACK_EN`, and `LLM_FALLBACK_TR` exist as fields on the `Settings` class but are **not** listed in `.env.example` (they are optional overrides/additions with in-code defaults). Local secret-bearing `.env` files were intentionally not read. Secret values are never documented here.
 
 ### Variable Reference
 
@@ -42,7 +38,9 @@ cp .env.example .env
 | `NEO4J_USERNAME` | _(none — must be set)_ | Yes | Neo4j authentication username. Can also be configured via `AURA_USERNAME`. |
 | `NEO4J_PASSWORD` | _(none — must be set)_ | Yes | Neo4j authentication password. Must match `NEO4J_AUTH` in `docker-compose.yml` for local development. Can also be configured via `AURA_PASSWORD`. |
 | `NEO4J_DATABASE` | `neo4j` | No | Neo4j database name to connect to. Can also be configured via `AURA_DATABASE`. |
-| `GOOGLE_CLIENT_ID` | `""` (empty) | No — but sign-in fails without it | Google OAuth 2.0 Web Client ID used to verify Google ID tokens. When unset, `POST /api/auth/google` returns `401 AUTH_DISABLED`. |
+| `GOOGLE_CLIENT_ID` | `""` (empty) | No — but sign-in fails without it | Google OAuth 2.0 Web Client ID used to verify Google ID tokens. When unset, `POST /api/auth/google` returns `401 AUTH_DISABLED`. Must match `VITE_GOOGLE_CLIENT_ID`. |
+| `VITE_GOOGLE_CLIENT_ID` | `""` (empty) | Yes — for frontend sign-in | Google OAuth 2.0 Web Client ID loaded by Vite from root `.env` (`envDir: '..'`). Must match `GOOGLE_CLIENT_ID`; backend startup enforces equality via `verify_google_client_id_equality()`. |
+| `VITE_API_BASE_URL` | `/api` | No | Base API endpoint prefix for frontend fetch calls (`/api` routes requests through Vite dev proxy; set to absolute URL e.g. `https://api.spoilerless.net` in production). |
 | `SESSION_COOKIE_NAME` | `session` | No | Name of the HttpOnly session cookie. |
 | `SESSION_TTL_SECONDS` | `604800` (7 days) | No — but sign-in fails if `<= 0` | Session time-to-live in seconds. `POST /api/auth/google` returns `401 AUTH_DISABLED` if this is explicitly set to a non-positive value; when unset, the default applies. |
 | `SESSION_COOKIE_SAMESITE` | `lax` | No — not in `.env.example` | `SameSite` policy applied to the session cookie by `_make_cookie`/`_delete_cookie` in `spoilerless/app/api/auth.py`. `lax` is correct for the same-site custom-domain layout; use `strict` or `none` (with `SESSION_COOKIE_SECURE=true`) deliberately per environment. |
@@ -133,7 +131,7 @@ class Settings(BaseSettings):
 - **`@lru_cache`:** `get_settings()` caches a single `Settings` instance for the process lifetime.
 - **No startup validation beyond Pydantic's type coercion:** `neo4j_uri`, `neo4j_username`, and
   `neo4j_password` have no default, so `Settings()` raises a `pydantic.ValidationError` at import time if
-  they are missing. All other fields have defaults and will not block startup.
+  they are missing. All other fields have defaults and will not block startup. `verify_google_client_id_equality()` validates that `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID` match when both are set.
 
 ### Database connection
 
@@ -250,10 +248,12 @@ configuration is done by maintaining a separate `.env` per deployment:
 
 ---
 
-## Runtime LLM Settings Override (stored in Neo4j)
+## Runtime LLM Settings & BYOK Overrides
 
 In addition to the `LLM_*` environment variables above, the effective LLM provider configuration can be
-set at runtime through the API and is persisted in the graph — it is **not** purely `.env`-driven.
+set at runtime through the API (persisted in Neo4j) or passed on a per-request basis via HTTP headers.
+
+### Persisted Settings (Stored in Neo4j)
 
 - **Storage:** `SettingsRepository` (`spoilerless/app/repository/settings.py`) persists a single
   `:AppSetting {key: 'llm'}` node in Neo4j via `MERGE`, storing the payload as a JSON string property.
@@ -297,11 +297,27 @@ set at runtime through the API and is persisted in the graph — it is **not** p
   LLM (`spoilerless/app/services/chat.py` reads the stored value per turn) and which localized fallback text
   is used for a turn — see `_fallback_for()` in `spoilerless/app/retrieval/pipeline.py`, which selects `"tr"`
   when `system_prompt_language == "turkish"` and otherwise `"en"` (this is a direct selection, not
-  automatic detection of the user's message language — `detect_language()` in `spoilerless/app/llm/fallbacks.py`
-  exists but is not used by `_fallback_for`).
+  automatic detection of the user's message language — `detect_language()` was deleted from
+  `spoilerless/app/llm/fallbacks.py` as it was superseded by the prompt-language rule in PROB-28/#52).
 - **Secret write semantics:** `PUT /api/settings/llm` accepts `api_key: str | None`; sending `None` or an
   empty string preserves the previously stored key rather than clearing it, since `GET` never returns the
   full key for a client to round-trip.
+
+### Request-Scoped BYOK (Bring-Your-Own-Key) Header Overrides
+
+In addition to stored graph settings and environment variables, the backend supports per-request LLM configuration via HTTP headers sent on chat endpoints (`spoilerless/app/services/chat.py`):
+
+| Header | Description |
+|---|---|
+| `X-LLM-Api-Key` | Per-request LLM API key. When present and non-blank, triggers BYOK resolution. |
+| `X-LLM-Provider` | LLM provider implementation (`openai_compatible`, `gemini`, `vllm`, `ollama`). Defaults to `openai_compatible`. |
+| `X-LLM-Base-URL` | Custom base URL for the LLM endpoint (validated for HTTP/HTTPS scheme and hostname). |
+| `X-LLM-Model` | LLM model identifier. |
+
+**Resolution Order / Precedence:**
+1. **BYOK Headers:** If `X-LLM-Api-Key` is present and non-blank in the request headers, the provider is constructed **exclusively** from the `X-LLM-*` header values. Stored graph settings and `.env` fallbacks are not consulted. Header credentials reach only the provider constructor and are never logged, stored in Neo4j, or returned in API response models.
+2. **Neo4j Graph Storage:** If no BYOK key is provided, non-empty settings stored in the `:AppSetting {key: 'llm'}` graph node take next precedence.
+3. **Environment Fallbacks:** If a setting is absent in graph storage, the corresponding `LLM_*` environment variable default is used.
 
 ---
 
@@ -316,9 +332,15 @@ Two `SessionRepository` implementations exist in `spoilerless/app/repository/ses
 
 Only the raw session token's SHA-256 hash is ever persisted (`token_hash`); the raw token returned to the
 browser as the cookie value is never stored. Session lookups reject expired (`expires_at <= now`) or
-revoked (`revoked_at IS NOT NULL`) sessions. There is currently no automated cleanup job for
-expired/revoked `Session` nodes — the module docstring documents the intended periodic cleanup Cypher
-query, but it is not scheduled anywhere in this codebase.
+revoked (`revoked_at IS NOT NULL`) sessions.
+
+### Periodic Session Cleanup
+
+Automated background cleanup is active in production and local runtime:
+- During application `lifespan()` startup in `spoilerless/app/main.py`, an asyncio background task (`_session_sweep_loop`) is launched if Neo4j is reachable on startup.
+- The sweep runs periodically every **3,600 seconds (1 hour)** (`SESSION_SWEEP_INTERVAL_SECONDS`).
+- Each iteration calls `app.state.session_repo.sweep_expired()` and `app.state.share_repo.sweep_expired()`, deleting expired or revoked `(:Session)` and `(:ShareToken)` nodes from Neo4j.
+- Failed sweep iterations log an exception and retry on the next interval without crashing the process.
 
 ---
 
@@ -383,6 +405,7 @@ docker compose ps neo4j
 
 ```typescript
 export default defineConfig({
+  envDir: '..',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
@@ -676,10 +699,7 @@ VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 **Important:** The `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID` values in the root `.env` must match
 exactly. The backend verifies the token audience against its configured `GOOGLE_CLIENT_ID`; a mismatch
 causes `google_auth()` to raise `GoogleVerificationError("audience_mismatch")`, returned to the client as
-`401 AUTH_INVALID_GOOGLE_CREDENTIAL`. Since 09-05, startup also runs
-`verify_google_client_id_equality()` — when **both** variables are set and differ, startup fails with a
-`RuntimeError` instead of shipping a broken login flow (a missing `VITE_GOOGLE_CLIENT_ID` in local dev
-does not crash).
+`401 AUTH_INVALID_GOOGLE_CREDENTIAL`. Startup runs `verify_google_client_id_equality()` — when **both** variables are set and differ, startup fails with a `RuntimeError` instead of shipping a broken login flow (a missing `VITE_GOOGLE_CLIENT_ID` in local dev does not crash).
 
 > `GOOGLE_CLIENT_SECRET` is **not** used anywhere in this codebase. Never add it to any configuration file.
 
@@ -697,13 +717,12 @@ does not crash).
 
 1. Set `LLM_ENABLED=true` in `.env`, **or** enable it later via `PUT /api/settings/llm` (`enabled: true`)
    once signed in as an admin (see [above](#5-restricting-sign-in-and-granting-the-admin-role)) — the
-   runtime setting takes precedence over the env value.
+   runtime setting takes precedence over the env value. Alternatively, send BYOK request headers (`X-LLM-Api-Key`, `X-LLM-Provider`, etc.) on chat requests to override both env and stored graph settings for that request.
 2. Provide `LLM_API_KEY` and `LLM_MODEL` — either in `.env` or through the same `PUT /api/settings/llm`
    call. `LLM_PROVIDER` has a default; an explicit base URL is required only for `openai_compatible` because Gemini supplies its default URL.
 3. For `LLM_PROVIDER=gemini` with an empty `LLM_BASE_URL`, the service automatically uses
    `https://generativelanguage.googleapis.com`.
-4. Restart the backend if changes were made via `.env`; runtime-settings changes via the API take effect
-   on the next chat call without a restart.
+4. Restart the backend if changes were made via `.env`; runtime-settings changes via the API or request headers take effect on the next chat call without a restart.
 
 ### 7. Enabling Redis-backed rate limiting and the graph query cache (optional)
 

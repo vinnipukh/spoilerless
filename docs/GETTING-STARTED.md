@@ -16,7 +16,7 @@ Install the following before cloning the repository:
 | Node.js | `^22.22.2` or `^24.15.0` or `>=26.0.0` | Run Vite 8 and the frontend toolchain |
 | npm | Bundled with a compatible Node.js release | Install and run frontend dependencies |
 
-The Node.js constraint accounts for the full installed frontend toolchain: the committed lockfile's `jsdom` 30.0.1 requires `^22.22.2 || ^24.15.0 || >=26.0.0`, which is stricter than Vite 8.1.5 and ESLint 10.8.0.
+The Node.js constraint accounts for the full installed frontend toolchain: the committed lockfile's `jsdom` 30.0.1 requires `^22.22.2 || ^24.15.0 || >=26.0.0`, which is stricter than Vite 8.1 and ESLint 10.6.
 
 Verify the tools:
 
@@ -63,7 +63,7 @@ npm --version
 4. Set the frontend variable in the same root `.env`:
 
    - Set `VITE_GOOGLE_CLIENT_ID` to the same client ID used by the backend.
-   - Keep `VITE_API_BASE_URL` commented out (the dev proxy handles `/api`).
+   - Keep `VITE_API_BASE_URL` commented out or set to `/api` (the dev proxy handles `/api`).
 
    The application can start without a Google client ID, but the login page reports that Google Sign-In is not configured. Do not commit the root `.env`, and do not place secrets in `VITE_*` variables.
 
@@ -96,7 +96,7 @@ Wait until Neo4j is healthy before the seed script runs (the 5-second sleep help
 
 > **Note:** If you prefer not to use background jobs (`&`), you can run `docker compose up -d` and the seed script, then start the backend (`uv run uvicorn spoilerless.app.main:app --reload`) and frontend (`cd frontend && npm run dev`) in separate terminal windows.
 
-### 5. Confirm the application works
+### Confirm the Application Works
 
 1. Open `http://localhost:5173`.
 2. Sign in with Google; authentication is required to reach the series, episode, and graph controls.
@@ -123,7 +123,7 @@ Candidate extraction review is currently an API workflow rather than a dedicated
 `uv sync` currently warns that project entry points are skipped because the repository has no build system or `tool.uv.package = true`. Use the verified module form instead:
 
 ```bash
-uv run --project spoilerless python -m spoilerless.app.graph.setup
+uv run python -m spoilerless.app.graph.setup
 ```
 
 ### Python or Node.js is rejected

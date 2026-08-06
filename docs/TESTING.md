@@ -29,20 +29,19 @@ Many backend files are unit or contract tests, but integration tests connect to 
 docker compose up -d
 ```
 
-`spoilerless/tests/conftest.py` supplies these defaults unless the environment already overrides them:
+Tests rely on environment variables or `scripts/env-local.sh` for Neo4j credentials:
 
-```text
-NEO4J_URI=bolt://127.0.0.1:7687
-NEO4J_USERNAME=neo4j
-NEO4J_PASSWORD=hdgraf-local-password
-NEO4J_DATABASE=neo4j
+```bash
+source scripts/env-local.sh
 ```
 
-The same file adds both the repository root and `spoilerless/` to `sys.path`, so run backend commands from the repository root. This also avoids failures in tests that open repository-relative fixtures such as `data/dexter/test/extraction_fixture.json` and `docs/extraction-schema.json`.
+This exports the required environment variables (`NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`).
+
+The `spoilerless/tests/conftest.py` file adds both the repository root and `spoilerless/` to `sys.path`, so run backend commands from the repository root. This also avoids failures in tests that open repository-relative fixtures such as `data/dexter/test/extraction_fixture.json` and `docs/extraction-schema.json`.
 
 ### Frontend
 
-The frontend uses Vitest `^4.1.10`, Testing Library, `@testing-library/jest-dom`, and `user-event`. `frontend/vite.config.ts` configures:
+The frontend uses Vitest `^4.1.10`, Testing Library (`@testing-library/react`, `@testing-library/jest-dom`), and `@testing-library/user-event`. `frontend/vite.config.ts` configures:
 
 - the `jsdom` environment;
 - global Vitest APIs;
@@ -102,7 +101,7 @@ cd frontend
 NODE_ENV=test CI=1 npm run test
 ```
 
-Setting `NODE_ENV=test` is important: a shell that retains `NODE_ENV=production` can load React's production behavior and cause misleading failures. This document does not claim the current suite passes; report the output of the run you perform.
+Setting `NODE_ENV=test` is important: a shell that retains `NODE_ENV=production` can load React's production behavior and cause misleading failures.
 
 Run one test file:
 
@@ -145,7 +144,7 @@ Backend integration tests are not automatically isolated from the application's 
 
 When a test changes persistent user configuration, preserve and restore the previous value rather than deleting it unconditionally. `test_settings_api.py` demonstrates the required pattern: it backs up the existing `:AppSetting {key: 'llm'}` value, performs the test, then restores that value with a fresh driver and event loop. Scratch fixtures such as those in `test_retrieval_tools.py` create records under a dedicated series ID and delete that series in teardown.
 
-`test_candidate_ingest.py` and `test_candidate_review.py` were converted to a scratch-series pattern in 09-08 (PROB-22/#46). They now create a dedicated `series_scratch_candidates` / `series_scratch_review` series via `bootstrap_scratch_series()` in `conftest.py`, and `teardown_scratch_series()` deletes all rows including `UserSeriesProgress` and `origin='candidate'` residue within a `try/finally` block on a fresh driver/event loop — they no longer touch `series_dexter`. The suite is now deterministic: a full `uv run pytest` run against a clean-seeded local DB should produce 0 unexpected failures (575 passed, 1 skipped as of 09-08 closeout).
+`test_candidate_ingest.py` and `test_candidate_review.py` use a scratch-series pattern. They create a dedicated `series_scratch_candidates` / `series_scratch_review` series via `bootstrap_scratch_series()` in `conftest.py`, and `teardown_scratch_series()` deletes all rows including `UserSeriesProgress` and `origin='candidate'` residue within a `try/finally` block on a fresh driver/event loop — they no longer touch `series_dexter`. The suite is deterministic: a full `uv run pytest` run against a clean-seeded local DB should produce 0 unexpected failures (575 passed, 1 skipped).
 
 Treat the default test configuration as a **shared-live-database hazard**, not as an isolated test container:
 
@@ -171,7 +170,7 @@ The HTTP surface is a closed inventory. Adding, removing, or changing a route re
 |---|---|---|
 | Root-relative fixture `FileNotFoundError` | pytest was run from `spoilerless/` | Re-run from the repository root. |
 | Many unrelated live-DB failures after an aborted run | Shared Neo4j contains partial fixture state | Stop; inspect/backup the database, then clean or reseed only with explicit data-loss awareness. Re-run a focused file before blaming source. |
-| `test_seed_idempotency.py` fails with a relationship/node count mismatch | The seed was enriched or the DB was polluted by pre-09-08 test runs. | Re-seed the local DB (`uv run --project spoilerless python -m spoilerless.app.graph.setup`) and re-run. Post-09-08 the suite is deterministic — this failure class should no longer occur. |
+| `test_seed_idempotency.py` fails with a relationship/node count mismatch | The seed was enriched or the DB was polluted by interrupted test runs. | Re-seed the local DB (`uv run --project spoilerless python -m spoilerless.app.graph.setup`) and re-run. With proper teardown, the suite is deterministic and this failure class should no longer occur. |
 | React renders an empty container or many Testing Library lookups fail | `NODE_ENV=production` leaked into Vitest | Re-run with `NODE_ENV=test CI=1`. |
 | `toBeInTheDocument` is missing | Wrong jest-dom entry/setup | Keep `@testing-library/jest-dom/vitest` in `frontend/src/test/setup.ts`. |
 | Pointer capture, `ResizeObserver`, `matchMedia`, or `React.act` fails | Required jsdom shim is absent | Add a suite-wide shim to `frontend/src/test/setup.ts`, not per test. |
@@ -204,11 +203,11 @@ The repository uses GitHub Actions (`.github/workflows/ci.yml`) to automatically
 
 ### Backend
 
-The backend suite runs in CI on Ubuntu using `uv` against an ephemeral Neo4j service container. The workflow executes:
+The backend suite runs in CI on Ubuntu using `uv` against an ephemeral Neo4j service container (`neo4j:2026.06.0-community`). The workflow executes:
 - Schema setup: `uv run --project spoilerless python -m spoilerless.app.graph.setup`
 - The test suite: `uv run pytest`
 - A pollution gate: an automated check to ensure no scratch-series or candidate-origin residue is left in the database.
 
 ### Frontend
 
-The frontend CI job performs build, lint, and audit steps, but it does **not** execute the frontend test suite. Ensure you run frontend tests locally before submitting changes.
+The frontend CI job performs build, lint, and audit steps (`npm ci`, `npm run build`, `npm run lint`, `npm audit --audit-level=high`), but it does **not** execute the frontend test suite. Ensure you run frontend tests locally before submitting changes.

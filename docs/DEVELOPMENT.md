@@ -128,7 +128,7 @@ When adding or changing an endpoint:
 3. Put orchestration, authorization decisions, spoiler-boundary derivation, and conflict rules in the service layer.
 4. Add the route under `spoilerless/app/api/` and register a new router in `spoilerless/app/main.py`.
 5. Add focused tests. For story-sensitive reads, test visible data **and** forbidden future sentinels, hidden-versus-missing behavior, invalid boundaries, graph closure, and sanitized errors.
-6. Keep the closed API inventory synchronized. `spoilerless/tests/test_frontend_contract_doc.py` currently locks 44 operations across 32 path templates; route changes require updates to that test, `spoilerless/tests/test_openapi_contract.py`, and `docs/frontend-api-contract.md`.
+6. Keep the closed API inventory synchronized. `spoilerless/tests/test_frontend_contract_doc.py` currently locks 50 operations across 37 path templates; route changes require updates to that test, `spoilerless/tests/test_openapi_contract.py`, and [frontend-api-contract.md](frontend-api-contract.md).
 7. If the new/changed route writes graph content that `GET /api/series/{series_id}/graph` could return, call `await invalidate_series(series_id)` from `spoilerless/app/cache/graph_cache.py` after the write, following the existing pattern in `spoilerless/app/api/candidates.py`, `spoilerless/app/api/change_set.py`, and `spoilerless/app/api/user_content.py`. Invalidation is coarse (whole series) by design; do not try to target a single cache key.
 8. If the new/changed route is a login, chat-send, or content-write style endpoint, add the matching dependency from `spoilerless/app/services/rate_limit.py` (`login_rate_limiter`, `chat_send_rate_limiter`, or `content_write_rate_limiter`) rather than inventing a new limiter instance.
 
@@ -193,7 +193,7 @@ Commit history commonly uses scoped prefixes such as `feat`, `fix`, `test`, `doc
 
 ## Pull request process
 
-There is no committed `CONTRIBUTING.md` or `.github/PULL_REQUEST_TEMPLATE.md`, so the repository does not define required branch names, checklist items, or approvals. However, a GitHub Actions workflow (`ci.yml`) is configured to enforce automated PR gates.
+Contribution guidance is provided in [CONTRIBUTING.md](../CONTRIBUTING.md). There is no committed `.github/PULL_REQUEST_TEMPLATE.md`, so the repository does not define required PR template checklists or approvals. However, a GitHub Actions workflow (`ci.yml`) is configured to enforce automated PR gates.
 
 For a pull request against `main`:
 

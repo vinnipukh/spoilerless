@@ -306,7 +306,7 @@ and Neo4j AuraDB backup/restore.
 
 ### Outstanding (not yet configured)
 
-- **External uptime monitor** (OPS-02): no UptimeRobot (or equivalent)
+- **External uptime monitor**: no UptimeRobot (or equivalent)
   monitor polls `GET /health` yet — requires human account sign-up. See
   `docs/RUNBOOK.md` §1 for the planned detection flow.
 
@@ -400,8 +400,8 @@ are executable by a future operator without platform dashboard access.
 ## Branch-protection checklist (operator applies in GitHub UI)
 
 No repo-local CLI path exists for GitHub branch protection; the operator
-configures these in **Settings → Branches → Add rule (main)** during the
-final wave:
+configures these in **Settings → Branches → Add rule (main)** in the
+GitHub repository UI:
 
 1. **Require a pull request before merging** — required approvals: 1,
    dismiss stale reviews: on.

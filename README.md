@@ -13,18 +13,20 @@ Explore characters, events, locations, claims, and relationships through an inte
 
 ## Deployment & Environment Quick Reference
 
+<!-- VERIFY: Production stack endpoints (app.spoilerless.net, api.spoilerless.net), Neo4j AuraDB instance ID (03a8623b), Upstash Redis instance (darling-rat-221809), and Cloudflare DNS setup are external infrastructure details. -->
 **Production stack (live):** Vercel `app.spoilerless.net` (frontend) · Render `api.spoilerless.net` (backend) · Neo4j AuraDB Free `03a8623b` · Upstash Redis `darling-rat-221809` · Cloudflare DNS + apex redirect.
 
 ### Where configuration lives
 
 | Location | Holds | Notes |
 |---|---|---|
-| `.env` (repo root) | Backend settings (`NEO4J_*`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`, `ADMIN_EMAILS`, `REDIS_URL`, `LLM_*`) AND the frontend's `VITE_GOOGLE_CLIENT_ID` | Read by `spoilerless/app/core/config.py` via pydantic-settings; Vite reads it too via `envDir: '..'` in `frontend/vite.config.ts` (09-05 envDir consolidation — `frontend/.env.local` was deleted). **Never committed.** Points at the shared AuraDB by default. |
+| `.env` (repo root) | Backend settings (`NEO4J_*`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`, `ADMIN_EMAILS`, `REDIS_URL`, `LLM_*`) AND the frontend's `VITE_GOOGLE_CLIENT_ID` | Read by `spoilerless/app/core/config.py` via pydantic-settings; Vite reads it too via `envDir: '..'` in `frontend/vite.config.ts`. **Never committed.** Points at the shared AuraDB by default. |
 | `scripts/env-local.sh` | Local-Docker Neo4j credentials (`localhost:7687`, password `hdgraf-local-password`) | `source scripts/env-local.sh` before running the spoilerless/tests against the local Docker Neo4j — **never** edit `.env` to switch databases. The password must match the running container's `NEO4J_AUTH`, not the Compose default. |
 | `docker-compose.yml` | Local Neo4j Community container (`spoilerless-neo4j`, auth `neo4j` / `${NEO4J_PASSWORD:-change-me}`) | Only for local testing; production uses AuraDB. |
 
 ### Platform environment variables
 
+<!-- VERIFY: Render platform deployment environment variables and target database URL. -->
 **Render — `api.spoilerless.net`** (required unless noted):
 
 ```
@@ -41,6 +43,7 @@ SESSION_COOKIE_SECURE=true                                            # optional
 SESSION_TTL_SECONDS=604800                                            # optional
 ```
 
+<!-- VERIFY: Vercel deployment parameters and target API URL. -->
 **Vercel — `app.spoilerless.net`**:
 
 ```
@@ -50,6 +53,7 @@ VITE_GOOGLE_CLIENT_ID=<same Google OAuth web client ID>
 
 Build settings: Framework Preset **Vite**, Root Directory **`frontend/`**, Build Command **`npm run build`**, Output Directory **`dist`**.
 
+<!-- VERIFY: Cloudflare DNS routing and HTTP dynamic redirect configuration. -->
 **Cloudflare — DNS + redirect:** CNAME `app` → Vercel target (proxied), CNAME `api` → Render target (DNS-only), apex `@` A-record `192.0.2.1` (proxied), plus a Dynamic Redirect rule: hostname `spoilerless.net` → 301 → `concat("https://app.spoilerless.net", http.request.uri.path)`.
 
 ### Fresh machine checklist
@@ -66,9 +70,9 @@ Full platform-specific procedures, rollback, and monitoring: [`docs/DEPLOYMENT.m
 
 ## Product direction
 
-The repository is a polished vertical prototype for a **spoiler-aware, provenance-backed narrative knowledge graph**: an Obsidian-like graph, human-authored knowledge, revision history, and GraphRAG over only the viewer-visible subgraph. Candidate review and chat, which began as roadmap goals, are now implemented; automated subtitle/script ingestion, production deployment, and broader product scope remain future work.
+The repository is a polished vertical prototype for a **spoiler-aware, provenance-backed narrative knowledge graph**: an Obsidian-like graph, human-authored knowledge, revision history, and GraphRAG over only the viewer-visible subgraph. Candidate review and chat are implemented; automated subtitle/script ingestion, production deployment scaling, and broader product scope remain future work.
 
-Coding agents should use [`docs/PROJECT-SPEC.md`](./docs/PROJECT-SPEC.md) for product intent and non-negotiable invariants, and [`docs/ROADMAP.md`](./docs/ROADMAP.md) for milestone history and future research direction. Both documents distinguish implemented capability, historical prototype scope, and future requirements; implementation status must still be verified against live source and tests before acting on it.
+Coding agents should use [`docs/PROJECT-SPEC.md`](./docs/PROJECT-SPEC.md) for product intent and non-negotiable invariants. The document distinguishes implemented capability, historical prototype scope, and future requirements; implementation status must still be verified against live source and tests before acting on it.
 
 ---
 
@@ -88,7 +92,7 @@ Coding agents should use [`docs/PROJECT-SPEC.md`](./docs/PROJECT-SPEC.md) for pr
 - **Node search + Notes & Claims search** — Zero-dependency substring search over the loaded graph payload (nodes, notes, and claims) with spoiler-safe results.
 - **Timeline view** — A chronological, episode-grouped timeline of visible events; selecting an event frames it in the graph.
 - **Series dashboard** — A dialog listing all available series with watch-progress bars; opens any series through the existing progress flow.
-- **Markdown export** — Export the visible graph (or a single resource) as Markdown from the same filtered read path (D-11).
+- **Markdown export** — Export the visible graph (or a single resource) as Markdown from the same filtered read path.
 - **Path finder** — Pick two nodes to highlight the shortest visible path between them (server-resolved boundary, capped hops).
 
 ---
@@ -265,7 +269,7 @@ The backend exposes REST endpoints grouped by area, documented via OpenAPI at `/
 | Series | `/api/series` | List/get series and episodes |
 | Graph | `/api/series/{series_id}/graph` | Spoiler-filtered graph, keyed by `visible_until_order` |
 | Graph path | `POST /api/series/{series_id}/graph/path` | Shortest visible path between two entities (server-resolved boundary, `max_hops` capped at 4) |
-| Export | `GET /api/series/{series_id}/export` | Visible graph (or `target_id` resource) as Markdown (D-11) |
+| Export | `GET /api/series/{series_id}/export` | Visible graph (or `target_id` resource) as Markdown |
 | Auth | `/api/auth` | Google sign-in, current user, logout |
 | User content | `/api/series/{series_id}/notes`, `/custom-nodes`, `/custom-relationships` | User notes and custom graph content |
 | Revisions | `/api/series/{series_id}/...` | Revision history for user edits |
@@ -311,7 +315,6 @@ Watch progress is persisted per user via `GET/POST /api/series/{series_id}/progr
 |---|---|
 | [`docs/GETTING-STARTED.md`](./docs/GETTING-STARTED.md) | Step-by-step local setup and demo walkthrough |
 | [`docs/PROJECT-SPEC.md`](./docs/PROJECT-SPEC.md) | Canonical product aim, invariants, coding-agent rules, and future architecture |
-| [`docs/ROADMAP.md`](./docs/ROADMAP.md) | Canonical milestones, current gaps, backlog, and research direction |
 | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | System architecture, layer breakdown, spoiler model, ontology |
 | [`docs/CONFIGURATION.md`](./docs/CONFIGURATION.md) | Environment variables, Docker Compose, backend settings |
 | [`docs/API.md`](./docs/API.md) | Full HTTP API reference |

@@ -1,35 +1,56 @@
 <!-- generated-by: gsd-doc-writer -->
 # Contributing to Spoilerless
 
-Thank you for your interest in contributing to Spoilerless!
+Thank you for your interest in contributing to Spoilerless! This document provides guidelines and instructions for submitting contributions to the project.
 
 ## Code of Conduct
-Please ensure that all interactions within the community are respectful and constructive.
+Please ensure that all community interactions remain respectful, inclusive, and constructive. While there is no separate `CODE_OF_CONDUCT.md` file in the repository root, all contributors are expected to uphold standard open-source community standards.
 
 ## Issue Reporting
-If you find a bug or have a feature request, please open an issue on GitHub. Include as much relevant information as possible, such as:
-- A clear description of the issue or feature.
-- Steps to reproduce (for bugs).
-- Expected vs. actual behavior.
-- Relevant logs or error messages.
+Before opening a new issue, search existing issues to avoid duplicates. When reporting a bug or requesting a feature:
+- Use a clear and descriptive title.
+- Provide a detailed description of the issue or proposed enhancement.
+- Include step-by-step reproduction instructions (for bug reports).
+- Include expected vs. actual behavior.
+- Include relevant error logs or command output where applicable.
 
 ## Development Setup
-For full instructions on setting up your local environment, please refer to our [README.md](README.md) and [docs/CONFIGURATION.md](docs/CONFIGURATION.md). 
+For full environment setup details, see [README.md](README.md), [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md), and [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
-A brief overview:
-- **Backend**: Uses Python 3.13 and `uv`. Run `uv sync` to install dependencies and `uv run pytest` for testing.
-- **Frontend**: Uses Node.js. Navigate to the `frontend/` directory, run `npm ci` to install dependencies, and `npm run dev` to start the development server.
-- **Database**: Uses Neo4j. A `docker-compose.yml` is provided in the project root to spin up the required services.
+Quick setup summary:
+- **Backend (Python 3.13)**: Managed with `uv`.
+  - Install dependencies: `uv sync`
+  - Seed graph database: `uv run --project spoilerless python -m spoilerless.app.graph.setup`
+- **Database (Neo4j)**:
+  - Start local Neo4j container: `docker compose up -d neo4j`
+  - Set local environment variables before running tests: `source scripts/env-local.sh`
+- **Frontend (Node.js 24 / React / TypeScript)**:
+  - Navigate to frontend: `cd frontend`
+  - Install dependencies: `npm ci`
+  - Start dev server: `npm run dev`
 
 ## Coding Standards
-- **Backend (Python)**: Ensure your code works with Python 3.13. Write tests for new functionality and ensure `uv run pytest` passes.
-- **Frontend (TypeScript/React)**: Follow the existing formatting. Ensure your code passes linting (`npm run lint`) and builds successfully (`npm run build`).
+- **Backend (Python)**:
+  - Ensure compatibility with Python >= 3.13.
+  - Follow standard Python style guidelines.
+  - Write unit and integration tests under `spoilerless/tests`.
+  - Ensure `uv run pytest` passes cleanly.
+  - Ensure test runs leave zero database pollution (no remaining `series_scratch*` nodes or `candidate` origin rows).
+- **Frontend (TypeScript / React)**:
+  - Code using TypeScript and React 19.
+  - Ensure code passes ESLint: `npm run lint`
+  - Ensure unit tests pass: `npm run test`
+  - Ensure TypeScript type checks and Vite build pass: `npm run build`
 
 ## Pull Request Guidelines
-1. Fork the repository and create your branch from `main`.
-2. Ensure you have added or updated tests as appropriate.
-3. Verify that all CI checks pass. The `.github/workflows/ci.yml` pipeline will run automatically on pull requests.
-   - This includes backend tests and frontend linting/builds.
-4. Submit your pull request with a clear title and description of your changes.
+1. Fork the repository and create your feature branch from `main` (`git checkout -b feature/my-feature`).
+2. Implement your changes, adding tests for new functionality where applicable.
+3. Test your changes locally:
+   - Backend: Run `uv run pytest` with local Neo4j configured (`source scripts/env-local.sh`).
+   - Frontend: Run `npm run lint`, `npm run test`, and `npm run build` in `frontend/`.
+4. Verify that CI workflows will pass. The GitHub Actions pipeline in [.github/workflows/ci.yml](.github/workflows/ci.yml) checks:
+   - Backend: dependencies sync, database setup, `pytest` execution, and DB-pollution assertions.
+   - Frontend: `npm ci`, `npm run build`, `npm run lint`, and `npm audit --audit-level=high`.
+5. Open a Pull Request against the `main` branch with a concise title and clear summary of changes.
 
-We look forward to your contributions!
+We appreciate your contributions!
