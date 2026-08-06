@@ -29,7 +29,7 @@ Redirect Rule. <!-- VERIFY: Cloudflare apex redirect rule active -->
 | `render.yaml` | Render | Blueprint: `uv sync --frozen` → `uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT`, free plan, `autoDeploy: true` |
 | `frontend/vercel.json` | Vercel | SPA catch-all rewrite (`/(.*)` → `/index.html`) for client-side routing. No `/api` proxy — the frontend calls the Render backend directly via `VITE_API_BASE_URL`. |
 | `.github/workflows/ci.yml` | GitHub Actions | Pull-request gate: backend `pytest` + DB-pollution gate + frontend `build`/`lint`/`audit` (see Build Pipeline) |
-| `.github/workflows/release.yml` | GitHub Actions | Staged-promotion skeleton (carry-over 09-07): manual `workflow_dispatch` with `release-candidate` / `release` stages. The `release` stage creates a `release-*` tag. Gated on the `ci` workflow passing on `main`. |
+| `.github/workflows/release.yml` | GitHub Actions | Staged-promotion skeleton: manual `workflow_dispatch` with `release-candidate` / `release` stages. The `release` stage creates a `release-*` tag. Gated on the `ci` workflow passing on `main`. |
 
 ### Database — Neo4j AuraDB Free
 
@@ -47,7 +47,7 @@ The backend connects to AuraDB via `Neo4jDatabase.open()` in
   `CREATE ROLE`/`CREATE USER` — database user administration is a
   paid-tier feature. The app runs with the single instance admin
   credential from the Aura credentials file. Least-privilege DB access
-  (D-16) is a documented Free-tier ceiling; upgrading to a paid tier is
+  is a documented Free-tier ceiling; upgrading to a paid tier is
   the path to true custom RBAC.
 
 The seed data (Dexter S01E01-03 fixture graph) is migrated via the
@@ -163,8 +163,7 @@ request with two jobs:
 
 The CI backend job uses its own ephemeral Neo4j service container
 (pinned patch tag, port 7687, health check polling `localhost:7474`) —
-it never touches production AuraDB. The DB-pollution gate (PROB-22,
-carry-over 09-08) fails the build if any scratch-series or
+it never touches production AuraDB. The DB-pollution gate fails the build if any scratch-series or
 candidate-origin nodes are left behind by the test suite. No deploy step
 is included; Render and Vercel auto-deploy on push to the connected
 branch via their native git integration.
@@ -252,7 +251,7 @@ fetch queries Neo4j directly.
 
 ## Production Safety
 
-### Closed by this phase (08)
+### Security and Reliability Features
 
 - **Session cookie** defaults to `Secure` (production-safe out of the
   box), with settings-driven `SameSite`.
@@ -273,42 +272,37 @@ fetch queries Neo4j directly.
   write) reduces Neo4j load on repeated graph fetches.
 - **CI gate** — GitHub Actions runs backend `pytest` and frontend
   `build`/`lint`/`audit` on every PR, with its own throwaway Neo4j service
-  container and a DB-pollution gate (carry-over 09-08).
-
-### Closed by Phase 9
-
-- **Structured exception logging** (09-06): the chat stream handler logs
+  container and a DB-pollution gate.
+- **Structured exception logging**: the chat stream handler logs
   `LLMProviderUnavailable` and bare exceptions with `logger.exception`
   before yielding the SSE error event. The session-sweep background task
   also logs failed iterations. Database and LLM error handlers are
   installed during startup (`install_database_error_handlers`,
   `install_llm_error_handlers`).
-- **Request-logging middleware** (09-08): every request is logged with
+- **Request-logging middleware**: every request is logged with
   method, path, status, and duration (ms); `X-LLM-*`, `Cookie`,
   `Set-Cookie`, and `Authorization` header values are redacted.
-- **Security headers** (PROB-17, 09-05): `Content-Security-Policy`,
+- **Security headers**: `Content-Security-Policy`,
   `Strict-Transport-Security`, `X-Content-Type-Options`,
   `X-Frame-Options`, `Referrer-Policy` on every response.
-- **DB-pollution CI gate** (09-08): the CI backend job asserts zero
+- **DB-pollution CI gate**: the CI backend job asserts zero
   scratch-series or candidate-origin residue after the test suite.
-- **Zombie sweep** (09-08): `spoilerless/scripts/zombie_sweep.py`
+- **Zombie sweep**: `spoilerless/scripts/zombie_sweep.py`
   removes tie-less `AppUser` rows and expired/revoked/orphaned `Session`
   nodes. `--dry-run` first, then `--execute`. Protected dev user is
   never deleted.
-- **Session sweep** (09-08): a background task in the FastAPI lifespan
+- **Session sweep**: a background task in the FastAPI lifespan
   deletes expired/revoked sessions every hour.
-- **Write-path auth hardening** (09-03): all mutation routes require
+- **Write-path auth hardening**: all mutation routes require
   authentication; ownership binding on user content; admin-only
   candidate review.
 
-### Known gaps (explicitly deferred to later phases)
+### Known Gaps
 
 Ownership binding, session-ID collision fix, user-content auth on all
 mutation routes, full request/response casing consistency, test-suite
 isolation from the live DB, frontend lint debt, stale-doc corrections,
-Neo4j AuraDB backup/restore, and ten new features — see
-`docs/PROBLEMS.md` (57 items) and `.planning/REQUIREMENTS.md` Phase 9
-(PROB-01..32, FEAT-01..10).
+and Neo4j AuraDB backup/restore.
 
 ### Outstanding (not yet configured)
 
@@ -380,7 +374,7 @@ Render and Vercel each provide build/runtime logs and basic metrics in
 their respective dashboards. No custom log drain, alert rule, custom
 dashboard, Sentry, Datadog, or OpenTelemetry integration is configured.
 
-The backend now includes structured logging infrastructure (Phase 9):
+The backend now includes structured logging infrastructure:
 - **Request-logging middleware** logs method, path, status, and duration
   for every request, with sensitive headers (`X-LLM-*`, `Cookie`,
   `Set-Cookie`, `Authorization`) redacted.
@@ -403,7 +397,7 @@ are executable by a future operator without platform dashboard access.
 - The Compose health check probes `http://localhost:7474` every 10
   seconds with a 5-second timeout and 10 retries.
 
-## Branch-protection checklist (carry-over 09-08 — operator applies in GitHub UI)
+## Branch-protection checklist (operator applies in GitHub UI)
 
 No repo-local CLI path exists for GitHub branch protection; the operator
 configures these in **Settings → Branches → Add rule (main)** during the

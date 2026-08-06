@@ -46,7 +46,7 @@ Spoilerless is a **spoiler-aware TV series knowledge graph** application. It let
 
 The core architectural invariant is that **spoilery content is never transmitted to the client** (or to the LLM) unless the requester has already reached that point in the story. Spoiler-sensitive content nodes, relationships, and claims carry a `visible_from_order` field; system records such as users, sessions, progress, chat, ChangeSets, and settings do not universally carry it. Spoiler-aware reads filter content at the Cypher layer rather than after retrieval.
 
-The system is a multi-series-capable web application composed of three deployable parts: a React single-page application, a FastAPI backend, and a Neo4j graph database running in Docker. Authentication scopes progress, chat, and ChangeSets to users, but ordinary notes, custom nodes, and custom relationships have no general `AppUser` ownership binding and are not isolated per user.
+The system is a multi-series-capable web application composed of three deployable parts: a React single-page application, a FastAPI backend, and a Neo4j graph database running in Docker. Authentication scopes progress, chat, ChangeSets, and user content (notes, custom nodes, custom relationships) to users, isolating them per user.
 
 ### Stack Summary
 
@@ -324,7 +324,7 @@ Two sibling routes added in plan 09-11 reuse the same spoiler-safe machinery. `P
 - **`Neo4jDatabase`** (`graph/database.py`) — lazy-initialized async Neo4j driver with no import-time side effects; `open()`/`close()` lifecycle managed by the FastAPI `lifespan` context; `execute_query()` for retryable read/write Cypher returning `list[dict]`; `execute_write()` for managed-transaction writes; `verify_connection()` for the health check.
 - **`UserRepository`** (`repository/user.py`) — `upsert()` (MERGE on `google_sub`), `get_by_id()`. Users are stored as `(:AppUser)` nodes.
 - **`SessionRepository`** (`repository/session.py`) — a `SessionRepository` protocol with two implementations: `Neo4jSessionRepository` (the default, wired directly into `main.py`'s lifespan) persists sessions as `(:Session)` nodes linked via `(:AppUser)-[:HAS_SESSION]->(:Session)`, with uniqueness constraints on `id` and `token_hash` and an index on `expires_at` (created by the seed pipeline); `InMemorySessionRepository` is a plain-dictionary store with no synchronization, suitable only for single-process development and tests. Tokens are `secrets.token_urlsafe(48)`; only the SHA-256 hash is ever persisted; expired/revoked sessions are rejected lazily at read time (a periodic `DETACH DELETE` cleanup task is a documented TODO).
-- **`UserContentRepository`** (`repository/user_content.py`) — manages notes, custom nodes, and custom relationships. Visibility is **derived from the target entity** (notes inherit the target's `visible_from_order`; custom relationships use `MAX(source, target, episode)`). It validates ID namespacing (`user-note:`, `user-node:`, `user-rel:` prefixes) and mutation queries gate on `origin = 'user'`, but these routes do not bind an authenticated owner ID, so content is not isolated per user. Deleting a custom node with attached notes/claims returns `409`.
+- **`UserContentRepository`** (`repository/user_content.py`) — manages notes, custom nodes, and custom relationships. Visibility is **derived from the target entity** (notes inherit the target's `visible_from_order`; custom relationships use `MAX(source, target, episode)`). It validates ID namespacing (`user-note:`, `user-node:`, `user-rel:` prefixes) and mutation queries gate on `origin = 'user'`, and these routes bind an authenticated owner ID, so content is isolated per user. Deleting a custom node with attached notes/claims returns `409`.
 - **`ChangeSetRepository`**, **`ChatRepository`**, **`SettingsRepository`** — the corresponding data-access layers for the ChangeSet, chat, and settings subsystems described in [7.9](#79-changeset-two-stage-mutation-flow), [7.8](#78-graphrag-lite-chat-pipeline), and [7.11](#711-settings-system-user-configurable-llm-provider).
 
 A separate operator script, `spoilerless/scripts/zombie_sweep.py` (PROB-22/#46), sweeps orphaned `(:AppUser)` rows and stale `(:Session)` nodes — dry-run-first by default (`python -m spoilerless.scripts.zombie_sweep --dry-run` counts; `--execute` deletes).
@@ -444,11 +444,11 @@ User selects "S01E03" in EpisodeSelector
 
 ```
 POST /api/series/{series_id}/notes { target_type, target_id, content }
-  → UserContentRepository.create_note()
+  → UserContentRepository.create_note(series_id, user_id, request)
       validates the target exists in the same series and has visible_from_order >= 1
       generates id = "user-note:{uuid4}"
       Neo4j: MATCH target WHERE target.visible_from_order >= 1 (no request boundary is accepted or resolved)
-             CREATE (:UserNote)-[:REFERS_TO {origin:'user'}]->(target)
+             CREATE (:UserNote {user_id: $user_id, ...})-[:REFERS_TO {origin:'user'}]->(target)
   → Response: NoteResponse with origin="user", visible_from_order inherited from target
 ```
 

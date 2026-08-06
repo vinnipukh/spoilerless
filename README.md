@@ -3,6 +3,8 @@
 
 **A spoiler-aware, source-grounded television-series knowledge graph application.**
 
+![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
+
 Explore characters, events, locations, claims, and relationships through an interactive graph interface — with spoiler protection enforced at the backend data-access layer, plus an optional spoiler-safe LLM chat over the same filtered graph.
 
 > **Prototype scope:** Dexter, Season 1, Episodes 1–3.
@@ -332,6 +334,12 @@ spoiler-safety guarantees.
 
 ---
 
+## Contributing
+
+Please refer to [`CONTRIBUTING.md`](./CONTRIBUTING.md) for details on our code of conduct, development workflow, and the process for submitting pull requests.
+
+---
+
 ## License
 
-This project is for demonstration and development purposes. All show-related data is used for illustrative, non-commercial prototyping.
+This project is licensed under the MIT License - see the [`LICENSE`](./LICENSE) file for details. All show-related data is used for illustrative, non-commercial prototyping.

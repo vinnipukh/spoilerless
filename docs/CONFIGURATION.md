@@ -38,10 +38,10 @@ cp .env.example .env
 
 | Variable | Default | Required | Description |
 |---|---|---|---|
-| `NEO4J_URI` | _(none — must be set)_ | Yes | Bolt URI for the Neo4j database. Use `neo4j+s://` for TLS connections (e.g. Neo4j Aura). |
-| `NEO4J_USERNAME` | _(none — must be set)_ | Yes | Neo4j authentication username. |
-| `NEO4J_PASSWORD` | _(none — must be set)_ | Yes | Neo4j authentication password. Must match `NEO4J_AUTH` in `docker-compose.yml` for local development (see [Docker Compose](#docker-compose-neo4j)). |
-| `NEO4J_DATABASE` | `neo4j` | No | Neo4j database name to connect to. |
+| `NEO4J_URI` | _(none — must be set)_ | Yes | Bolt URI for the Neo4j database. Use `neo4j+s://` for TLS connections (e.g. Neo4j Aura). Can also be configured via `AURA_URI`. |
+| `NEO4J_USERNAME` | _(none — must be set)_ | Yes | Neo4j authentication username. Can also be configured via `AURA_USERNAME`. |
+| `NEO4J_PASSWORD` | _(none — must be set)_ | Yes | Neo4j authentication password. Must match `NEO4J_AUTH` in `docker-compose.yml` for local development. Can also be configured via `AURA_PASSWORD`. |
+| `NEO4J_DATABASE` | `neo4j` | No | Neo4j database name to connect to. Can also be configured via `AURA_DATABASE`. |
 | `GOOGLE_CLIENT_ID` | `""` (empty) | No — but sign-in fails without it | Google OAuth 2.0 Web Client ID used to verify Google ID tokens. When unset, `POST /api/auth/google` returns `401 AUTH_DISABLED`. |
 | `SESSION_COOKIE_NAME` | `session` | No | Name of the HttpOnly session cookie. |
 | `SESSION_TTL_SECONDS` | `604800` (7 days) | No — but sign-in fails if `<= 0` | Session time-to-live in seconds. `POST /api/auth/google` returns `401 AUTH_DISABLED` if this is explicitly set to a non-positive value; when unset, the default applies. |
@@ -85,35 +85,38 @@ variable name (e.g. `neo4j_uri` ← `NEO4J_URI`).
 
 ```python
 class Settings(BaseSettings):
-    neo4j_uri: str
-    neo4j_username: str
-    neo4j_password: str
-    neo4j_database: str = "neo4j"
+    # Accept either the aura_* names used in local .env files or the NEO4J_*
+    # names used in deployed environments (Render/Aura credential file). The
+    # aura_* alias wins when both are present.
+    neo4j_uri: str = Field(validation_alias=AliasChoices("aura_uri", "neo4j_uri"))
+    neo4j_username: str = Field(validation_alias=AliasChoices("aura_username", "neo4j_username"))
+    neo4j_password: str = Field(validation_alias=AliasChoices("aura_password", "neo4j_password"))
+    neo4j_database: str = Field(default="neo4j", validation_alias=AliasChoices("aura_database", "neo4j_database"))
 
-    google_client_id: str = ""
-    session_cookie_name: str = "session"
-    session_ttl_seconds: int = 604800
-    session_cookie_samesite: str = "lax"
-    session_cookie_secure: bool = True
-    frontend_origins: str = "http://localhost:5173"
-    allowed_emails: str = ""
-    admin_emails: str = ""
+    google_client_id: str = Field(default="")
+    session_cookie_name: str = Field(default="session")
+    session_ttl_seconds: int = Field(default=604800)
+    session_cookie_samesite: str = Field(default="lax")
+    session_cookie_secure: bool = Field(default=True)
+    frontend_origins: str = Field(default="http://localhost:5173")
+    allowed_emails: str = Field(default="")
+    admin_emails: str = Field(default="")
 
-    redis_url: str = ""
+    redis_url: str = Field(default="")
 
-    llm_enabled: bool = False
-    llm_provider: str = "openai_compatible"
-    llm_base_url: str = ""
-    llm_api_key: str = ""
-    llm_model: str = ""
-    llm_timeout_seconds: int = 60
-    llm_max_output_tokens: int = 800
-    llm_temperature: float = 0.0
-    llm_max_tool_rounds: int = 4
-    llm_max_context_items: int = 40
-    llm_max_context_characters: int = 12000
-    llm_fallback_en: str | None = None
-    llm_fallback_tr: str | None = None
+    llm_enabled: bool = Field(default=False)
+    llm_provider: str = Field(default="openai_compatible")
+    llm_base_url: str = Field(default="")
+    llm_api_key: str = Field(default="")
+    llm_model: str = Field(default="")
+    llm_timeout_seconds: int = Field(default=60)
+    llm_max_output_tokens: int = Field(default=800)
+    llm_temperature: float = Field(default=0.0)
+    llm_max_tool_rounds: int = Field(default=4)
+    llm_max_context_items: int = Field(default=40)
+    llm_max_context_characters: int = Field(default=12000)
+    llm_fallback_en: str | None = Field(default=None)
+    llm_fallback_tr: str | None = Field(default=None)
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -125,10 +128,9 @@ class Settings(BaseSettings):
 ### Behaviour
 
 - **File precedence:** `.env` relative to the process's current working directory, then process environment variables (process env takes
-  precedence — pydantic-settings default behavior).
+  precedence — pydantic-settings default behavior). The `AURA_*` aliases take precedence over `NEO4J_*` names when both are present.
 - **`extra="ignore"`:** Unknown variables present in `.env` are silently ignored rather than raising an error.
-- **`@lru_cache`:** `get_settings()` caches a single `Settings` instance for the process lifetime — call it
-  freely from routes and services without re-parsing `.env` on every call.
+- **`@lru_cache`:** `get_settings()` caches a single `Settings` instance for the process lifetime.
 - **No startup validation beyond Pydantic's type coercion:** `neo4j_uri`, `neo4j_username`, and
   `neo4j_password` have no default, so `Settings()` raises a `pydantic.ValidationError` at import time if
   they are missing. All other fields have defaults and will not block startup.
@@ -417,7 +419,7 @@ Since the 09-05 envDir consolidation, `frontend/vite.config.ts` sets `envDir: '.
 | Variable | Required | Description |
 |---|---|---|
 | `VITE_GOOGLE_CLIENT_ID` | Yes, for sign-in | Google OAuth client ID, read via `import.meta.env.VITE_GOOGLE_CLIENT_ID` in `frontend/src/components/auth/LoginPage.tsx`. Must match the backend's `GOOGLE_CLIENT_ID`. When unset, the login page renders a "Google Sign-In is not configured" message instead of the sign-in button. |
-| `VITE_API_BASE_URL` | No — commented out in `frontend/.env.example` | Read via `import.meta.env.VITE_API_BASE_URL ?? ''` in `frontend/src/api/client.ts` (used by `apiFetch`, the shared client for every non-streaming API call) and again in `frontend/src/api/chat.ts` for the raw SSE `streamMessage` fetch. Empty (the unset default) preserves relative-URL requests through the Vite dev proxy; setting it prefixes every request with an absolute origin so a hosted frontend can reach a backend on another origin — `frontend/.env.example`'s commented example is `VITE_API_BASE_URL=https://api.spoilerless.net`. <!-- VERIFY: The exact production API origin is deployment-specific; confirm the current value in the Vercel project's build-time environment variables. --> |
+| `VITE_API_BASE_URL` | No — set to `/api` in root `.env.example` | Read via `import.meta.env.VITE_API_BASE_URL ?? ''` in `frontend/src/api/client.ts` (used by `apiFetch`, the shared client for every non-streaming API call) and again in `frontend/src/api/chat.ts` for the raw SSE `streamMessage` fetch. A value of `/api` (as in `.env.example`) preserves relative-URL requests through the Vite dev proxy; setting it prefixes every request with an absolute origin so a hosted frontend can reach a backend on another origin (e.g., `https://api.spoilerless.net`). <!-- VERIFY: The exact production API origin is deployment-specific; confirm the current value in the Vercel project's build-time environment variables. --> |
 
 > **Security:** Vite inlines `VITE_*` variables into the built JavaScript bundle at build time — never
 > store secrets in the root `.env`. `VITE_GOOGLE_CLIENT_ID` is a public OAuth client identifier

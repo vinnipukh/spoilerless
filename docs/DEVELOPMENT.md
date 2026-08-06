@@ -193,7 +193,7 @@ Commit history commonly uses scoped prefixes such as `feat`, `fix`, `test`, `doc
 
 ## Pull request process
 
-There is no committed `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md`, or GitHub Actions workflow, so the repository does not define required branch names, checklist items, approvals, or automated PR gates.
+There is no committed `CONTRIBUTING.md` or `.github/PULL_REQUEST_TEMPLATE.md`, so the repository does not define required branch names, checklist items, or approvals. However, a GitHub Actions workflow (`ci.yml`) is configured to enforce automated PR gates.
 
 For a pull request against `main`:
 
@@ -201,4 +201,4 @@ For a pull request against `main`:
 - Keep backend API, frontend types/clients, tests, and documentation synchronized. API inventory changes must also update the OpenAPI contract tests and `docs/frontend-api-contract.md`.
 - Run the relevant focused backend tests first. Run the broad backend suite only against a disposable or explicitly test-only Neo4j database because it is not isolated from the configured database. Also run `NODE_ENV=test CI=1 npm run test` and `npm run build`; run `npm run lint` and ensure your change adds no new findings relative to the existing baseline.
 - Push the branch and open a GitHub pull request targeting `main`. Describe the behavior change, database/configuration impact, and exact verification commands and results.
-- Because no CI workflow or review policy is configured, do not assume checks ran remotely; record local evidence and wait for repository-maintainer review before merging.
+- Ensure the CI workflow passes. The workflow automatically runs backend tests against a clean Neo4j instance, verifies no database pollution occurs, and runs frontend builds, lints, and audits.

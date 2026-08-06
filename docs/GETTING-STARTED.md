@@ -39,8 +39,8 @@ npm --version
    ```
 
 2. Create the local configuration file from the committed template. The frontend reads its `VITE_*`
-   variables from the **root `.env`** (via `envDir: '..'` in `frontend/vite.config.ts` — the
-   `frontend/.env.local` file was removed in the 09-05 envDir consolidation):
+   variables from the **root `.env`** (via `envDir: '..'` in `frontend/vite.config.ts` — there is
+   no `frontend/.env.local` file):
 
    ```bash
    cp .env.example .env
@@ -82,54 +82,19 @@ npm --version
 
 ## First Run
 
-Run each long-lived server in its own terminal from the repository root.
-
-### 1. Start Neo4j
+To start the database, seed the graph, and launch both the backend and frontend servers at once, run the following compound command in a bash-compatible terminal from the repository root:
 
 ```bash
-docker compose up -d
-docker compose ps neo4j
+docker compose up -d && \
+  sleep 5 && \
+  uv run python -m spoilerless.app.graph.setup && \
+  uv run uvicorn spoilerless.app.main:app --reload & \
+  (cd frontend && npm run dev)
 ```
 
-Docker Compose defines one service named `neo4j`, using the container name `spoilerless-neo4j`. Wait until it is healthy.
+Wait until Neo4j is healthy before the seed script runs (the 5-second sleep helps ensure it). The backend listens on `http://localhost:8000` (Swagger UI at `/docs`) and the Vite frontend listens on `http://localhost:5173`.
 
-| Service | Local address | Purpose |
-|---|---|---|
-| Neo4j Browser | `http://localhost:7474` | Browser UI and HTTP health check |
-| Neo4j Bolt | `neo4j://localhost:7687` | Backend database connection |
-
-### 2. Seed the graph
-
-The `pyproject.toml` declares an `spoilerless-setup` entry point, but the project currently has no build-system/package setting, so `uv sync` may skip installing that executable. The directly runnable module is:
-
-```bash
-uv run --project spoilerless python -m spoilerless.app.graph.setup
-```
-
-A successful run prints a `Dexter graph setup complete` summary. The seed operation is intended to create constraints and load the Dexter Season 1, Episodes 1–3 data from `data/dexter/`.
-
-### 3. Start the backend
-
-```bash
-uv run uvicorn spoilerless.app.main:app --reload
-```
-
-The backend listens on `http://localhost:8000` by default. Check it in another terminal:
-
-```bash
-curl http://localhost:8000/health
-```
-
-Swagger UI is available at `http://localhost:8000/docs`. The backend deliberately starts in degraded mode if Neo4j is unavailable; in that case `/health` returns HTTP 503 with the database marked unavailable.
-
-### 4. Start the frontend
-
-```bash
-cd frontend
-npm run dev
-```
-
-Vite serves the frontend at `http://localhost:5173` and proxies `/api` requests to `http://127.0.0.1:8000`.
+> **Note:** If you prefer not to use background jobs (`&`), you can run `docker compose up -d` and the seed script, then start the backend (`uv run uvicorn spoilerless.app.main:app --reload`) and frontend (`cd frontend && npm run dev`) in separate terminal windows.
 
 ### 5. Confirm the application works
 
@@ -181,7 +146,7 @@ If the seed integrity audit fails against an older local graph, do not ignore th
 
 ### The login page says Google Sign-In is not configured
 
-Set the same OAuth Web Client ID in both `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID` in the **root `.env`** (since 09-05 the frontend reads `VITE_*` from the root `.env` via `envDir: '..'` — there is no `frontend/.env.local`), then restart both dev servers. The local frontend origin must also be registered with the OAuth provider. Do not add a Google client secret; this application verifies browser-issued ID tokens using the client ID.
+Set the same OAuth Web Client ID in both `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID` in the **root `.env`** (the frontend reads `VITE_*` from the root `.env` via `envDir: '..'`), then restart both dev servers. The local frontend origin must also be registered with the OAuth provider. Do not add a Google client secret; this application verifies browser-issued ID tokens using the client ID.
 
 ### A local port is already in use
 

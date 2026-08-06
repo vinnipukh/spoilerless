@@ -200,4 +200,15 @@ The backend configuration has no `pytest-cov` or `--cov-fail-under` setting. The
 
 ## CI integration
 
-No CI test workflow is configured. The repository has no `.github/workflows/` directory, so pushes and pull requests do not automatically run pytest or Vitest. Record local results before submitting changes; use a disposable/test-only Neo4j database for the broad backend suite.
+The repository uses GitHub Actions (`.github/workflows/ci.yml`) to automatically run tests on pull requests.
+
+### Backend
+
+The backend suite runs in CI on Ubuntu using `uv` against an ephemeral Neo4j service container. The workflow executes:
+- Schema setup: `uv run --project spoilerless python -m spoilerless.app.graph.setup`
+- The test suite: `uv run pytest`
+- A pollution gate: an automated check to ensure no scratch-series or candidate-origin residue is left in the database.
+
+### Frontend
+
+The frontend CI job performs build, lint, and audit steps, but it does **not** execute the frontend test suite. Ensure you run frontend tests locally before submitting changes.
