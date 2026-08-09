@@ -335,13 +335,18 @@ describe('DetailPanel readOnly (visitor / misafir read-only mode)', () => {
     expect(screen.queryByRole('button', { name: 'Create relationship' })).not.toBeInTheDocument()
   })
 
-  it('shows a sign-in hint instead of note write affordances', async () => {
-    const user = userEvent.setup()
+  it('hides the Notes and History tabs entirely (auth-gated surfaces)', async () => {
     const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
     renderPanel(<DetailPanel selected={selected} {...defaultProps} readOnly />)
 
-    await user.click(await screen.findByRole('tab', { name: 'Notes' }))
-    expect(await screen.findByText('Sign in to view and manage notes.')).toBeInTheDocument()
+    await screen.findByRole('heading', { name: 'Dexter Morgan' })
+    expect(screen.queryByRole('tab', { name: 'Notes' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Add note' })).not.toBeInTheDocument()
+    // Browsable tabs remain for guests
+    expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Backlinks' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Claims' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Evidence' })).toBeInTheDocument()
   })
 })

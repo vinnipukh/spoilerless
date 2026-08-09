@@ -711,8 +711,11 @@ export function DetailPanel({
               <TabsList className="sticky top-0 z-10 shrink-0 w-fit max-w-[calc(100%-2rem)] overflow-x-auto flex-nowrap bg-popover mx-4">
                 <TabsTrigger value="overview" className="shrink-0">Overview</TabsTrigger>
                 {selectedNode && <TabsTrigger value="backlinks" className="shrink-0">Backlinks</TabsTrigger>}
-                {noteTargetType && <TabsTrigger value="notes" className="shrink-0">Notes</TabsTrigger>}
-                {(selectedNode || activeClaim) && <TabsTrigger value="history" className="shrink-0">History</TabsTrigger>}
+                {/* Visitor (misafir) mode: Notes and History are auth-gated
+                    surfaces (note writes + revert 401 for guests) — hide the
+                    tabs entirely instead of showing dead-end affordances. */}
+                {!readOnly && noteTargetType && <TabsTrigger value="notes" className="shrink-0">Notes</TabsTrigger>}
+                {!readOnly && (selectedNode || activeClaim) && <TabsTrigger value="history" className="shrink-0">History</TabsTrigger>}
                 <TabsTrigger value="claims" className="shrink-0">Claims</TabsTrigger>
                 <TabsTrigger value="evidence" className="shrink-0">Evidence</TabsTrigger>
               </TabsList>
@@ -845,15 +848,9 @@ export function DetailPanel({
               </TabsContent>
 
               <TabsContent value="notes" className="flex flex-col gap-2 overflow-y-auto px-4 pb-4 pt-2">
-                {/* Read-only (visitor) mode: the notes routes are auth-gated
-                    (GET /notes → 401 anonymous), so the whole tab degrades to
-                    a sign-in hint instead of an error state. */}
-                {readOnly ? (
-                  <p className="text-xs text-muted-foreground py-2">
-                    Sign in to view and manage notes.
-                  </p>
-                ) : (
-                  <>
+                {/* The Notes trigger itself is hidden in read-only (visitor)
+                    mode — the notes routes are auth-gated, so a guest can
+                    never reach this content. */}
                 {/* Create note form */}
                 {showNewNoteForm ? (
                   <NoteEditor
@@ -918,8 +915,6 @@ export function DetailPanel({
                       )
                     ))}
                   </div>
-                )}
-                  </>
                 )}
               </TabsContent>
 
