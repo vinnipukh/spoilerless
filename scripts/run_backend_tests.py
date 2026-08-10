@@ -2,11 +2,15 @@
 
 Why this exists
 ---------------
-The full ``uv run pytest spoilerless/tests/`` run takes 15+ minutes, so
-coding agents time out mid-run and broken backend code ships without being
-caught (see docs/BACKEND_DEPLOY_FIX.md). This runner splits the suite into
-10 named chunks and can launch them **in parallel** — total wall time then
-tracks the slowest chunk, not the sum.
+The full ``uv run pytest spoilerless/tests/`` run takes ~40 minutes against the
+shared live AuraDB (was 75+ before the 2026-08-10 suite-time pass — see
+docs/PROBLEMS.md SEVENTH PASS), so coding agents time out mid-run and broken
+backend code ships without being caught (see docs/BACKEND_DEPLOY_FIX.md). This
+runner splits the suite into 10 named chunks and can launch them **in parallel**
+— but measured on the shared AuraDB, parallel is SLOWER than serial (connection
+contention; the 2026-08-05 observation still holds), so parallel mode is only
+useful against isolated Neo4j instances. Total wall time serial tracks the sum;
+parallel tracks the slowest chunk (graph ≈ 15 min, chat-llm ≈ 7 min).
 
 Critical environment note
 -------------------------

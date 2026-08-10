@@ -7,7 +7,9 @@
 
 ## Root Cause
 
-Render's **dashboard start command** has been manually set to:
+The repository does not expose the current **Render dashboard Start Command**,
+so its value requires operator verification. If an existing service still uses
+this stale pre-rename command, it produces the reported import error:
 ```
 uv run uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
 ```
@@ -19,15 +21,18 @@ The `render.yaml` in the repo has the **correct** command:
 startCommand: uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT
 ```
 
-However, **Render dashboard overrides take precedence over `render.yaml`** for existing services. Someone (likely the sibling agent Hermes) changed the start command in the Render dashboard to reference `backend.app.main:app`.
+An existing service can have a dashboard override that differs from the
+Blueprint. Whether such an override is currently present, and how it was set,
+cannot be determined from this repository. Treat both as operator-verification
+items rather than attributing the change to an actor.
 
 ## Fix (Manual — Render Dashboard)
 
 1. Go to https://dashboard.render.com → **spoilerless-api** service
 2. **Settings** → **Start Command**
-3. Change from: `uv run uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT`
-4. Change to: `uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT`
-5. Click **Save Changes** → service will auto-redeploy
+3. Inspect the current value; dashboard state is **operator-verification required**.
+4. Set it to exactly: `uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT`
+5. Save the setting and follow the dashboard's deployment status to verify the service restarts successfully.
 
 Alternatively, delete and re-create the service from the Blueprint (`render.yaml`) which already has the correct value.
 
@@ -42,11 +47,12 @@ Alternatively, delete and re-create the service from the Blueprint (`render.yaml
 
 ## Backend Tests — Break Up Strategy
 
-The full `uv run pytest` suite takes too long to run synchronously, which
-means broken backend code ships without being caught. The suite is split
-into **10 named chunks** — every file in `spoilerless/tests/` appears in
-exactly one chunk, and each chunk is a bounded run that finishes in seconds
-to a few minutes.
+The full `uv run pytest` suite can be slow in some local and networked-Neo4j
+environments. Pull requests still run the full suite and DB-pollution gate in
+CI. For targeted local diagnosis, the suite is split into **10 named chunks** —
+every file in `spoilerless/tests/` appears in exactly one chunk. A chunk bounds
+the test scope, but it has no enforced runtime limit; duration depends on the
+selected files, Neo4j environment, network, and current load.
 
 **Preferred entry point** — the chunk runner (strips the Hermes-terminal
 `PYTHONPATH` that shadows the venv, so `import spoilerless` works):
@@ -73,18 +79,21 @@ Equivalent raw pytest invocations (chunk → files):
 | 9 | `chat-llm` | `test_chat_api.py` `test_chat_persistence.py` `test_retrieval_pipeline.py` `test_retrieval_tools.py` `test_prompt_injection.py` `test_llm_provider.py` | chat/LLM, ~slow |
 | 10 | `contract-ops` | `test_frontend_contract_doc.py` `test_openapi_contract.py` `test_share_api.py` `test_error_handlers.py` `test_rate_limit.py` | contract/doc, ~medium |
 
-Run chunks as parallel background tasks when verifying a branch. If any
-chunk fails, you catch it in seconds instead of waiting for the full suite.
+Run chunks in parallel only when every worker uses an **isolated Neo4j** that
+cannot race with another worker (for example, separately isolated CI service
+instances). Never parallelize these chunks against a shared AuraDB. With a
+shared database, run chunks sequentially and use `--chunk <name>` for targeted
+diagnosis; failure-detection time is workload-dependent and is not guaranteed.
 
-**Measured (2026-08-05):** launching all 10 chunks at once against the
-**shared live AuraDB** is *counterproductive* — 10 driver pools contend on
-the free instance's connection budget (plus production traffic), and the
-parallel wall time exceeded 27 minutes without completing, i.e. slower than
-the sequential run. The sequential run also takes 15–20 min. Parallelism
-only pays off against an **isolated** Neo4j (the CI job's ephemeral docker
-container, or a local docker Neo4j via `source scripts/env-local.sh`) —
-that is the path for fast full-suite verification. Against live Aura, use
-single chunks (`--chunk <name>`) for bounded agent verification.
+**Measured 2026-08-10 (suite-time pass, commit a56b52f + docs/PROBLEMS.md
+SEVENTH PASS):** the full suite is ~40 minutes serial against the shared live
+AuraDB (down from 75+). A parallel batch of 8 non-seed chunks (2,3,5,6,7,8,9,10)
+was killed after 25+ minutes without completing — still slower than serial, so
+the durable guidance stands: against shared AuraDB run single chunks
+(`--chunk <name>`) sequentially; parallel is only useful with isolated Neo4j
+instances. The graph chunk alone is ~15 min (per-test re-seed is required for
+isolation — module-scoped clients broke cookie/get_database state), and the
+sub-8-minute target requires local docker Neo4j (`scripts/env-local.sh`).
 
 **Environment pitfall (why agents historically "could not run" the suite):**
 the Hermes terminal exports `PYTHONPATH` pointing at the hermes-agent

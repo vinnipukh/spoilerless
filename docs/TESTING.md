@@ -17,27 +17,23 @@ The backend uses:
 
 These settings are defined in the root `pyproject.toml`. Python `>=3.13` is required.
 
-Install the Python dependencies from the repository root:
+Install the locked Python environment from the repository root:
 
 ```bash
-uv sync
+uv sync --frozen
 ```
 
-Many backend files are unit or contract tests, but integration tests connect to Neo4j. Start the repository's Neo4j service before running those tests:
-
-```bash
-docker compose up -d
-```
-
-Tests rely on environment variables or `scripts/env-local.sh` for Neo4j credentials:
+Many backend files are unit or contract tests, but the suite is not split into separately configured unit and integration groups. Files that instantiate `Neo4jDatabase`, call `setup_database()`, or use a live application `TestClient` connect to Neo4j. For a fresh local test database, use one coherent credential set and seed it before running those files:
 
 ```bash
 source scripts/env-local.sh
+docker compose up -d neo4j
+uv run --project spoilerless python -m spoilerless.app.graph.setup
 ```
 
-This exports the required environment variables (`NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`).
+`scripts/env-local.sh` exports `NEO4J_URI=neo4j://localhost:7687`, username `neo4j`, password `hdgraf-local-password`, and database `neo4j`. Sourcing it **before** `docker compose up` also supplies that password to Compose. A container previously initialized with another password keeps the credential stored in `neo4j_data`; changing the shell variable does not reset an existing database.
 
-The `spoilerless/tests/conftest.py` file adds both the repository root and `spoilerless/` to `sys.path`, so run backend commands from the repository root. This also avoids failures in tests that open repository-relative fixtures such as `data/dexter/test/extraction_fixture.json` and `docs/extraction-schema.json`.
+Alternatively, provide the four `NEO4J_*` variables yourself and make them match the database you intend to test. `spoilerless/tests/conftest.py` does **not** create an isolated database or supply connection settings. It adds the repository root and `spoilerless/` to `sys.path`, so run backend commands from the repository root. This also avoids failures in tests that open repository-relative fixtures such as `data/dexter/test/extraction_fixture.json` and `docs/extraction-schema.json`.
 
 ### Frontend
 
@@ -47,11 +43,11 @@ The frontend uses Vitest `^4.1.10`, Testing Library (`@testing-library/react`, `
 - global Vitest APIs;
 - `frontend/src/test/setup.ts` as the setup file.
 
-Install dependencies once:
+Install the committed dependency tree:
 
 ```bash
 cd frontend
-npm install
+npm ci
 ```
 
 The setup file registers jest-dom matchers and browser API shims needed by React 19, Radix components, and graph components, including pointer capture, `ResizeObserver`, and `matchMedia`.
@@ -69,7 +65,7 @@ uv run pytest
 Run one test file:
 
 ```bash
-uv run pytest spoilerless/tests/test_openapi_contract.py
+uv run pytest spoilerless/tests/test_user_content_models.py
 ```
 
 Run a subset selected by name:
@@ -94,11 +90,11 @@ There are no configured pytest marker groups such as `unit` or `integration`; se
 
 ### Frontend commands
 
-Use an explicit test environment and CI mode for a reliable one-shot full run:
+Use Vitest's explicit run mode for a reliable one-shot full run:
 
 ```bash
 cd frontend
-NODE_ENV=test CI=1 npm run test
+NODE_ENV=test npm run test -- --run
 ```
 
 Setting `NODE_ENV=test` is important: a shell that retains `NODE_ENV=production` can load React's production behavior and cause misleading failures.
@@ -107,24 +103,24 @@ Run one test file:
 
 ```bash
 cd frontend
-NODE_ENV=test CI=1 npm run test -- src/components/detail/DetailPanel.test.tsx
+NODE_ENV=test npm run test -- --run src/components/detail/DetailPanel.test.tsx
 ```
 
 Run a subset by test name:
 
 ```bash
 cd frontend
-NODE_ENV=test CI=1 npm run test -- -t "renders the locked no-selection placeholder with no Tabs"
+NODE_ENV=test npm run test -- --run -t "renders the locked no-selection placeholder with no Tabs"
 ```
 
-For interactive watch mode, omit `CI=1`:
+For interactive watch mode, omit `--run`:
 
 ```bash
 cd frontend
 NODE_ENV=test npm run test
 ```
 
-The package defines only the `test` script (`vitest`); there are no separate `test:unit`, `test:integration`, or `test:e2e` scripts.
+The package defines only the `test` script (`vitest`); there are no separate `test:unit`, `test:integration`, or `test:e2e` scripts. Frontend tests are colocated throughout `frontend/src/`, including `api/`, `components/`, `hooks/`, `lib/`, and the application-level `frontend/src/App.test.tsx`.
 
 ## Writing backend tests
 
@@ -134,9 +130,17 @@ The package defines only the `test` script (`vitest`); there are no separate `te
 - Prefer existing fakes for isolated service tests, such as `FakeUserRepo`, `FakeGoogleVerifier`, `InMemorySessionRepository`, and `FakeLLMProvider`.
 - Use a context-managed `TestClient` when the app owns an async Neo4j driver so requests share one portal event loop.
 - Keep spoiler-boundary assertions fail-closed: assert that hidden content is absent, not only that visible content is present.
-- Add API inventory changes to both contract tests and `docs/frontend-api-contract.md`; `test_openapi_contract.py` and `test_frontend_contract_doc.py` enforce the API surface.
+- Add API inventory changes to both contract tests and `docs/frontend-api-contract.md`. `test_frontend_contract_doc.py` currently locks the live 50-operation, 37-template inventory. `test_openapi_contract.py` is an intended companion gate but is currently stale and red: it still expects 32 templates, omits the graph-path, export, and share templates, and assumes every DELETE response is 204 even though share-token revocation returns 200. Do not treat that file as a passing bounded gate until those assertions are updated.
 
-`spoilerless/tests/conftest.py` contains shared path and Neo4j environment setup, plus an autouse `_disable_rate_limiter` fixture that patches `RateLimiter.__call__` to a no-op so rate-limited routes are testable without a live Redis. Most other fixtures and helper functions are local to the test file that owns them. Examples include live database/client fixtures, in-memory authentication repositories, HTTP transport stubs, SSE parsers, and fixture-payload builders.
+`spoilerless/tests/conftest.py` contains shared import-path setup, scratch-series helpers, and an autouse `_disable_rate_limiter` fixture that patches `RateLimiter.__call__` to a no-op so rate-limited routes are testable without a live Redis. It does not configure Neo4j credentials. Since the 2026-08-10 suite-time pass it also hosts the shared test infrastructure (see `docs/PROBLEMS.md` SEVENTH PASS):
+
+- `seed_live_database()` / `live_client` — one seeded main-app TestClient definition (was copy-pasted in six files).
+- `module_cleanup_fixture(queries)` / `cleanup_with_fresh_driver(queries)` — per-test second-driver cleanup moved to once-per-module teardown; `(query, params)` tuples supported. The factory's return value MUST be bound to a module-level name (e.g. `_cleanup_after_module = module_cleanup_fixture(...)`) or pytest never registers the fixture.
+- `run_query(query, **params)` — fresh-driver probe helper (reliable read-after-write on AuraDB; a shared-driver variant intermittently missed app-driver writes).
+- `helper_db()` / `run_async(coro_factory)` — shared driver/loop for service-level probes (chat/progress).
+- `pytest-asyncio` is configured with `asyncio_default_fixture_loop_scope = "module"` / `asyncio_default_test_loop_scope = "module"` so module-scoped async database fixtures are safe (one loop per file).
+
+Most other fixtures and helper functions are local to the test file that owns them. Examples include live database/client fixtures, in-memory authentication repositories, HTTP transport stubs, SSE parsers, and fixture-payload builders.
 
 ### Live Neo4j safety
 
@@ -144,12 +148,13 @@ Backend integration tests are not automatically isolated from the application's 
 
 When a test changes persistent user configuration, preserve and restore the previous value rather than deleting it unconditionally. `test_settings_api.py` demonstrates the required pattern: it backs up the existing `:AppSetting {key: 'llm'}` value, performs the test, then restores that value with a fresh driver and event loop. Scratch fixtures such as those in `test_retrieval_tools.py` create records under a dedicated series ID and delete that series in teardown.
 
-`test_candidate_ingest.py` and `test_candidate_review.py` use a scratch-series pattern. They create a dedicated `series_scratch_candidates` / `series_scratch_review` series via `bootstrap_scratch_series()` in `conftest.py`, and `teardown_scratch_series()` deletes all rows including `UserSeriesProgress` and `origin='candidate'` residue within a `try/finally` block on a fresh driver/event loop — they no longer touch `series_dexter`. The suite is deterministic: a full `uv run pytest` run against a clean-seeded local DB should produce 0 unexpected failures (575 passed, 1 skipped).
+`test_candidate_ingest.py` and `test_candidate_review.py` use a scratch-series pattern. They create dedicated `series_scratch_candidates` / `series_scratch_review` series via `bootstrap_scratch_series()` in `conftest.py`, and `teardown_scratch_series()` runs from `finally` on a fresh driver/event loop. Teardown removes the scratch series, its progress rows, and all `origin='candidate'` nodes. These files no longer write candidate data into `series_dexter`, but their global candidate cleanup is another reason not to run them against a shared or valuable database.
 
 Treat the default test configuration as a **shared-live-database hazard**, not as an isolated test container:
 
 - Prefer unit/contract files that do not open Neo4j, or target one live test file with `-k`, before considering the broad suite.
-- Point integration runs at a disposable Neo4j database or back up anything that must survive. The defaults in `conftest.py` are the same local host, credentials, and database commonly used by the application.
+- Point integration runs at a disposable Neo4j database or back up anything that must survive. Tests consume the same `NEO4J_*` settings as the application; `conftest.py` does not redirect them to a test-only database.
+- Run live-database files sequentially. No xdist configuration is present, and scratch cleanup, seed setup, and shared settings restoration are not designed for concurrent workers or concurrent test runs against the same database.
 - Let teardown complete. An interrupted run can leave sessions, progress, candidate, ChangeSet, or scratch-series records behind and make later results order/state dependent.
 - If a run was interrupted, assume the database may be dirty. Inspect and back it up before any cleanup or reseed; `spoilerless.app.graph.setup` writes the configured graph and is not a substitute for a backup.
 - Tests that open the application with its async driver should use `with TestClient(...)` so all requests share one portal loop. Teardown that needs a different loop should open a fresh driver, as `test_settings_api.py` does.
@@ -170,8 +175,8 @@ The HTTP surface is a closed inventory. Adding, removing, or changing a route re
 |---|---|---|
 | Root-relative fixture `FileNotFoundError` | pytest was run from `spoilerless/` | Re-run from the repository root. |
 | Many unrelated live-DB failures after an aborted run | Shared Neo4j contains partial fixture state | Stop; inspect/backup the database, then clean or reseed only with explicit data-loss awareness. Re-run a focused file before blaming source. |
-| `test_seed_idempotency.py` fails with a relationship/node count mismatch | The seed was enriched or the DB was polluted by interrupted test runs. | Re-seed the local DB (`uv run --project spoilerless python -m spoilerless.app.graph.setup`) and re-run. With proper teardown, the suite is deterministic and this failure class should no longer occur. |
-| React renders an empty container or many Testing Library lookups fail | `NODE_ENV=production` leaked into Vitest | Re-run with `NODE_ENV=test CI=1`. |
+| `test_seed_idempotency.py` fails with a relationship/node mismatch | The disposable test DB was not clean, or an interrupted/concurrent run left user/candidate records behind. | Stop concurrent runs and inspect the configured database. On a disposable local DB, run the setup module and retry the focused file; never use reseeding as a substitute for backing up valuable data. |
+| React renders an empty container or many Testing Library lookups fail | `NODE_ENV=production` leaked into Vitest | Re-run with `NODE_ENV=test npm run test -- --run`. |
 | `toBeInTheDocument` is missing | Wrong jest-dom entry/setup | Keep `@testing-library/jest-dom/vitest` in `frontend/src/test/setup.ts`. |
 | Pointer capture, `ResizeObserver`, `matchMedia`, or `React.act` fails | Required jsdom shim is absent | Add a suite-wide shim to `frontend/src/test/setup.ts`, not per test. |
 | Cytoscape click/focus test does nothing | Stub does not preserve/register handlers or collection behavior | Follow the stateful stubs in `frontend/src/App.test.tsx` and `frontend/src/components/graph/GraphCanvas.test.tsx`. |
@@ -199,7 +204,7 @@ The backend configuration has no `pytest-cov` or `--cov-fail-under` setting. The
 
 ## CI integration
 
-The repository uses GitHub Actions (`.github/workflows/ci.yml`) to automatically run tests on pull requests.
+The repository uses GitHub Actions (`.github/workflows/ci.yml`) to run checks on `pull_request` events only. A direct push to `main` does not trigger this CI workflow. The manually dispatched `release.yml` is currently a promotion skeleton and does not run either test suite.
 
 ### Backend
 
