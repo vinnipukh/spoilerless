@@ -32,14 +32,21 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
       },
     },
     {
+      // 08-10 (product owner): the episode-band box is now a NON-INTERACTIVE
+      // dashed outline — pointer-events: no so taps land on the canvas/nodes
+      // (a cluster tap used to bubble into the node handler and open a bogus
+      // DetailPanel), and background-opacity 0 so the dot-grid canvas shows
+      // through instead of the solid card fill. The 'Ep #1' label stays as
+      // the band's only visible content besides the dashed border.
       selector: 'node[isCluster]',
       style: {
         shape: 'round-rectangle',
         'background-color': '#1E2740',
-        'background-opacity': 0.7,
+        'background-opacity': 0,
         'border-width': 1,
         'border-color': '#334155',
-        'border-style': 'solid',
+        'border-style': 'dashed',
+        events: 'no',
         color: '#94A3B8',
         'font-size': 10,
         'font-weight': 'bold',
