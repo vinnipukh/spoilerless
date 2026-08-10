@@ -356,7 +356,7 @@ Race: the mount-time `getProgress` hydration (`useEffect` deps `[]`, lines 104-1
 ## SEVENTH PASS — backend test-suite time (2026-08-10)
 
 Suite was 75+ min (coding agents timed out mid-run; see BACKEND_DEPLOY_FIX.md).
-Optimized in one pass (commit {h}):
+Optimized in one pass (commit a56b52f):
 
 - **Per-test full re-seed (was ~12s x N)** — graph/episode/api_series tests each
   re-seeded the dexter graph; kept function-scoped for isolation (module-scoped
@@ -373,12 +373,52 @@ Optimized in one pass (commit {h}):
 
 Result: 75m -> ~40m serial (measured 33:34 with earlier variant; latest
 reliability fixes re-add ~5m). PARALLEL chunks measured SLOWER than serial on
-AuraDB (connection contention; memory rule holds). <8m requires local docker
-Neo4j (scripts/env-local.sh; Docker Desktop currently not running).
+AuraDB (connection contention; memory rule holds). Local docker Neo4j (see
+EIGHTH PASS) runs the suite in ~2m but exposes local-version test failures.
 
 Pre-existing failures (NOT from this pass, verified on HEAD): 3 doc-contract
 tests (frontend_contract_doc, 2x openapi_contract — docs mid-update) and
 TestSeedImageCuration (seed data has zero character image_url values).
+
+## EIGHTH PASS — local docker Neo4j run (2026-08-10)
+
+Follow-up to SEVENTH PASS: stood up local docker Neo4j to hit the <8m target.
+
+**Setup (done this session, container still running):**
+- Docker Desktop started (engine 29.6.2); container `hdgraf-neo4j` on
+  `neo4j:5-community`, port 7687, creds per `scripts/env-local.sh`
+  (`neo4j` / `hdgraf-local-password`, db `neo4j`). Run tests with
+  `source scripts/env-local.sh && uv run pytest ...`.
+- Full suite: **2:01 wall (121s)** — 551 passed, 1 skipped, 35 failed
+  (vs ~40m serial / 75m original on AuraDB).
+
+**35 failures on local 5.x — three NEW classes, one pre-existing:**
+
+1. **change-set family 503s (28 failures**: test_change_set_api 8,
+   confirmation 6, protection 5, revision 9) — propose/confirm return
+   `503 DATABASE_ERROR` ("The graph database request could not be
+   completed."). Same code passes on AuraDB, so this is a **local
+   5.x Cypher/constraint incompatibility** in the change-set path
+   (propose boundary resolution / confirm apply). Root cause NOT yet
+   isolated — the app's database-error handler masks the driver
+   exception; next step is running the failing query with the raw
+   driver error surfaced (or comparing constraint syntax 5.x vs the
+   AuraDB engine version). Untriaged.
+2. **test_seed_idempotency 2 failures** (`test_community_schema_creates_only_unique_and_index`,
+   `test_constraints_visibility_and_provenance`) — exact constraint/index
+   name-set assertions written against AuraDB's engine; local 5.x names
+   differ (same disease as the original #14/#19 finding).
+3. **test_graph_api 2 failures** — one is the pre-existing
+   TestSeedImageCuration (seed data has zero character image_urls);
+   the second is a constraint-shape assertion in the same class as (2).
+4. **3 doc-contract failures** — pre-existing (fail on HEAD too;
+   frontend_contract_doc + 2x openapi_contract, docs mid-update).
+
+**Verdict:** the <8m target is met on local docker (2:01); the
+change-set 503s are a local-version gap that must be root-caused before
+local docker can replace AuraDB as the default test target. Until then:
+AuraDB = the canonical green target; local docker = fast iteration only
+for non-change-set files.
 
 ## What to fix first (a survival order, not a wish list)
 
