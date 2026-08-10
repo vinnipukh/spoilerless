@@ -22,6 +22,8 @@ The API surface is 33 path templates / 45 operations (verified from the live `/o
 
 No `CurrentUserDependency` anywhere in `user_content.py`, `candidates.py`, or the revert route. The frontend never gates on auth either — `useAuth` is imported only in `App.tsx` and `LoginPage.tsx`; `DetailPanel`, the notes tab, and the custom-content dialogs render for anonymous visitors. **Fix:** put every mutation behind `require_current_user` and bind records to `user["id"]`.
 
+> **FACT-CHECK CORRECTION (2026-08-10, ledger accuracy verification):** the frontend-reachability half of this finding was **false at the audit snapshot**. At HEAD `9caa85b`, `frontend/src/App.tsx` `AppContent` (lines 343-359) returned `<LoginPage />` for both the `unauthenticated` and `error` auth states, and only the `authenticated` branch rendered `AuthenticatedApp` — the sole place `DetailPanel` (`App.tsx:308`), the notes tab, and the custom-content dialogs existed. Anonymous visitors therefore could NOT reach the graph workspace or its write controls through the UI. The API-side finding stands (the 14 write operations were genuinely anonymous at `9caa85b`), and the `useAuth`-imports grep (`App.tsx` + `LoginPage.tsx` only) was accurate — but the inference that the frontend "never gates on auth" and rendered mutation controls to anonymous visitors was not.
+
 ### 2. Any anonymous visitor can promote claims to canonical — graph poisoning
 `POST /api/series/{series_id}/candidates/{claim_id}/approve` (`candidates.py:175-213`) flips `status = 'canonical'` on any claim with `origin: 'candidate'` and logs a revision. Combined with anonymous `ingest` (`candidates.py:107`), a stranger can: inject arbitrary claims → approve them → **permanently alter the canonical knowledge graph every visitor sees**. The "candidate review workflow" the README advertises has no reviewer — the door is unlocked. **Fix:** admin/owner gate; candidates must never be writable anonymously.
 
@@ -146,6 +148,8 @@ No `LICENSE` or `CONTRIBUTING.md` in the repo (verified). `data/dexter/seed/char
 - `verify_origin` and CORS share one origin list, so adding a new frontend origin silently widens CSRF acceptance — no separate CSRF allowlist.
 - LLM chat questions capped at 4000 chars but there is no server-side normalization of whitespace-only questions (they are stripped by `StrictModel` but still bill a tool round).
 
+> **FACT-CHECK CORRECTION (2026-08-10, ledger accuracy verification):** the "still bill a tool round" half of this bullet is **incorrect** at the snapshot. `ChatMessageCreateRequest.question` is `str = Field(min_length=1, max_length=4000)` (`backend/app/domain/chat.py:82`) on `StrictModel` (`backend/app/domain/user_content.py:88`, `model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)`): a whitespace-only value is stripped to `""` and fails validation with `string_too_short` (422) before any pipeline call, so it never reaches generation and never bills a tool round. The "capped at 4000 chars" half stands; the billing half does not.
+
 ---
 
 ## SECOND PASS — deployment blockers from the full code walk (2026-08-04)
@@ -183,6 +187,8 @@ The only logging in the app is a handful of `logger.warning(...)` calls in `api/
 
 ### 40. Core modules have no direct tests
 No test file exists for `graph/database.py` (the driver layer everything rides on), `graph/ontology.py`, `services/series.py`, `api/series.py`, `api/deps.py`, `core/config.py`, `llm/system_prompt.py` (the 837-line prompt is only asserted indirectly through pipeline tests), or `main.py` (lifespan/health). The DB layer — connection lifecycle, `execute_write` semantics, the `$query`-parameter collision class — is completely untested directly. **Fix:** unit tests for the DB wrapper and policy/service layer against a disposable driver (Testcontainers), per #15.
+
+> **FACT-CHECK CORRECTION (2026-08-10, ledger accuracy verification):** the blanket "no direct tests" claim and the `system_prompt.py` parenthetical were **false at the snapshot**. At HEAD `9caa85b`: `services/series.py`'s `SeriesService` is directly tested in `backend/tests/test_episode_masking.py`; `llm/system_prompt.py`'s `compose_system_prompt` is directly imported and behaviorally asserted in `backend/tests/test_prompt_injection.py` (e.g. `test_system_prompt_names_delimiters_and_frames_content_as_data` calls `compose_system_prompt(language)`); and `main.py` is directly imported (`importlib.import_module("backend.app.main")`, `backend/tests/test_graph_api.py:55`) with `/health` assertions. The genuine snapshot gap — no direct test file at all — is `graph/database.py`, `graph/ontology.py`, `api/series.py`, `api/deps.py`, and `core/config.py`; the DB-layer sentence of the finding stands.
 
 ### 41. Small lies in the code that erode trust
 - `repository/settings.py` docstring claims "A uniqueness constraint on `key` is created by the seed routine" — **the constraint was removed from `seed.py`** (it broke `test_seed_idempotency`'s exact-set assertion; see the project runbook). The code documents a constraint that does not exist.
@@ -346,6 +352,33 @@ Race: the mount-time `getProgress` hydration (`useEffect` deps `[]`, lines 104-1
 **Fix:** (a) in `requestChange`, never silently return — surface the no-op or reconcile `currentView`; (b) make the view-only branch await the POST and refetch the graph on failure (or optimistically refetch); (c) serialize the mount-time hydration against user clicks (skip hydration if a click already occurred, or merge backend values without clobbering a newer local change). Add a regression test: select above `watchedThroughOrder` with a failing view-only POST → dialog still opens / graph refetches.
 
 ---
+
+## SEVENTH PASS — backend test-suite time (2026-08-10)
+
+Suite was 75+ min (coding agents timed out mid-run; see BACKEND_DEPLOY_FIX.md).
+Optimized in one pass (commit {h}):
+
+- **Per-test full re-seed (was ~12s x N)** — graph/episode/api_series tests each
+  re-seeded the dexter graph; kept function-scoped for isolation (module-scoped
+  client broke cookie isolation + get_database lifespan interplay), duplicated
+  `_seed_live_database` copies consolidated into conftest.
+- **Per-test cleanup driver+queries (2nd driver + 2-8 Cypher x per test x 9
+  files)** — moved to module-scoped teardown via `module_cleanup_fixture`
+  (bound fixture; the factory result must be assigned, not discarded).
+- **Per-probe TLS handshake (~1s x dozens)** — probe queries share a runner;
+  fresh-driver `run_query` kept where read-after-write reliability matters
+  (shared-driver variant intermittently missed app-driver writes).
+- **chat_persistence sync->async** (asyncio_mode=auto), `loop_scope=module`.
+- Fixed: ghost-node (fixed id) index-conflict residue via per-test cleanup.
+
+Result: 75m -> ~40m serial (measured 33:34 with earlier variant; latest
+reliability fixes re-add ~5m). PARALLEL chunks measured SLOWER than serial on
+AuraDB (connection contention; memory rule holds). <8m requires local docker
+Neo4j (scripts/env-local.sh; Docker Desktop currently not running).
+
+Pre-existing failures (NOT from this pass, verified on HEAD): 3 doc-contract
+tests (frontend_contract_doc, 2x openapi_contract — docs mid-update) and
+TestSeedImageCuration (seed data has zero character image_url values).
 
 ## What to fix first (a survival order, not a wish list)
 
