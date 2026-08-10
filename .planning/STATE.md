@@ -6,15 +6,15 @@ current_phase: 09
 current_phase_name: feature-expansion-full-audit-remediation
 status: executing
 stopped_at: Phase 9 context gathered
-last_updated: "2026-08-05T17:06:25.015Z"
-last_activity: 2026-08-05
-last_activity_desc: Phase 09 execution started
+last_updated: "2026-08-06T22:03:05.174Z"
+last_activity: 2026-08-07
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 26
   completed_plans: 18
   percent: 33
+last_activity_desc: Phase 09 execution started
 ---
 
 # HD Graf Cehennemi — Project State
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-08-04)
 Phase: 09 (feature-expansion-full-audit-remediation) — EXECUTING
 Plan: 1 of 18
 Status: Executing Phase 09
-Last activity: 2026-08-05 — Completed quick task 260805-te3: visitor (misafir) read-only login
+Last activity: 2026-08-07
 
 Progress: [███░░░░░░░] 33% (v1.3, 1/3 phases); 7 phases complete across v1.0–v1.2
 
@@ -86,6 +86,7 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260805-te3 | Visitor (misafir) read-only login — browse the graph, no node/note writes (backend anon writes already 401; fixed DetailPanel TooltipProvider crash) | 2026-08-05 | 73b87a7 | [260805-te3-add-a-visitor-misafir-read-only-login-vi](./quick/260805-te3-add-a-visitor-misafir-read-only-login-vi/) |
+| 260810-ep1box | Episode-band cluster box is a non-interactive dashed outline — transparent fill (dot-grid shows through), dashed border, events:no (cluster taps no longer open a bogus DetailPanel) | 2026-08-10 | c77874d | — |
 
 ## Deferred Items
 
