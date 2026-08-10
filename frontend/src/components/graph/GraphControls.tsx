@@ -138,14 +138,14 @@ export function GraphControls({
         <TooltipTrigger asChild>
           <button
             type="button"
-            aria-label="Reset zoom"
+            aria-label="Refresh graph"
             className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md bg-card text-muted-foreground shadow-sm ring-1 ring-border hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={onReset}
           >
             <RotateCcw className="h-4 w-4" />
           </button>
         </TooltipTrigger>
-        <TooltipContent side="left">Reset zoom</TooltipContent>
+        <TooltipContent side="left">Refresh graph</TooltipContent>
       </Tooltip>
 
       <Tooltip>

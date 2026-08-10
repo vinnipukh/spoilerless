@@ -63,7 +63,7 @@ const OVERVIEW_MIN_ZOOM = 0.8
 // 08-06+ (product owner): after ANY pointer/touch interaction anywhere in
 // the app, the auto zoom-out (layout fit + zoom floor) is suppressed for
 // this long — the view must not yank away while the user is working. Each
-// touch resets the timer. Explicit view actions (mode switch, reset zoom)
+// touch resets the timer. Explicit view actions (mode switch, refresh graph)
 // still re-fit; only graph-change-driven layouts honour the hold.
 const AUTO_ZOOM_HOLD_MS = 20_000
 
@@ -97,7 +97,7 @@ function runLayout(
   // the screen within AUTO_ZOOM_HOLD_MS), graph-change-driven layouts must
   // NOT yank the viewport — run without fit and skip the zoom floor so the
   // view stays exactly where the user left it. Explicit view actions
-  // (forceRelayout: mode switch / reset zoom) always re-fit.
+  // (forceRelayout: mode switch / refresh graph) always re-fit.
   const holdView = suppressAutoZoom && !forceRelayout
   if (holdView && typeof cy.zoom === 'function' && typeof cy.pan === 'function') {
     // A destructive remount created a fresh cy at the default zoom-1 origin
@@ -461,10 +461,21 @@ export function GraphCanvas({
   // from ever re-laying-out an unchanged graph.
   const lastLayoutGraphRef = useRef<GraphResponse | null>(null)
   const lastLayoutModeRef = useRef<GraphMode>(mode)
+  // 08-10 (product owner): the dedupe guard is keyed to the cy INSTANCE,
+  // not just the graph. StrictMode's dev double-mount (and any real
+  // remount, e.g. the destructive loading unmount) creates a NEW cy while
+  // the refs above survive — the old "already laid out" check would then
+  // skip runLayout on the LIVE canvas, leaving only the declarative
+  // fit:false layout at the default zoom-1 origin ("diagonal" graph on
+  // open). A fresh cy therefore counts as a fresh graph: force the full
+  // layout + fit, exactly like the Refresh graph button.
+  const lastLayoutCyRef = useRef<cytoscape.Core | null>(null)
   useEffect(() => {
     const cy = cyInstanceRef.current
     if (!cy) return
-    const graphChanged = lastLayoutGraphRef.current !== graph
+    const cyChanged = lastLayoutCyRef.current !== cy
+    lastLayoutCyRef.current = cy
+    const graphChanged = lastLayoutGraphRef.current !== graph || cyChanged
     const modeChanged = lastLayoutModeRef.current !== mode
     if (!graphChanged && !modeChanged) return
     if (graphChanged) lastLayoutGraphRef.current = graph
@@ -482,7 +493,7 @@ export function GraphCanvas({
     // user is working.
     const suppressAutoZoom =
       performance.now() - autoZoomHold.lastTouchAt < AUTO_ZOOM_HOLD_MS
-    runLayout(cy, seriesId, graph.visible_until_order, modeChanged, mode, suppressAutoZoom)
+    runLayout(cy, seriesId, graph.visible_until_order, modeChanged || cyChanged, mode, suppressAutoZoom)
   }, [graph, focusedElementIds, revealTarget, seriesId, mode])
 
   // Apply/clear an externally-driven `graph_focus` highlight (RAG-17), keyed

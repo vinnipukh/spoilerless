@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { StrictMode, useMemo } from 'react'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { GraphCanvas } from './GraphCanvas'
@@ -70,8 +71,10 @@ let edgeAdj: Map<string, string[]> = new Map()
 // `evt.target === cy`).
 let capturedCy: unknown = null
 // Layout spy: records the options each cy.layout() call receives (runLayout
-// becomes reachable once the fake exposes `layout`).
-let layoutCalls: Array<{ fit: unknown }> = []
+// becomes reachable once the fake exposes `layout`) — plus the cy instance
+// the layout ran on, so tests can assert the LIVE instance was refreshed
+// (StrictMode double-mount produces a dead cy#1 and a live cy#2).
+let layoutCalls: Array<{ fit: unknown; cy: unknown }> = []
 
 function resetFakeCytoscape() {
   registry = new Map()
@@ -169,6 +172,35 @@ function simulateBackgroundTap(fakeCy: unknown) {
 }
 
 vi.mock('react-cytoscapejs', () => {
+  // 08-10: real react-cytoscapejs hands the SAME cy instance to props.cy on
+  // every update and a NEW one on remount (StrictMode double-mount
+  // included) — GraphCanvas's per-cy layout guard keys on that identity.
+  // Memoize per mount so the fake mirrors the real instance lifecycle.
+  function makeFakeCy() {
+    const fakeCy = {
+      on: (event: string, selectorOrHandler: unknown, maybeHandler?: Handler) => {
+        const selector = typeof selectorOrHandler === 'string' ? selectorOrHandler : undefined
+        const handler = (maybeHandler ?? selectorOrHandler) as Handler
+        const key = selector ? `${event}:${selector}` : event
+        handlers[key] = handlers[key] ?? []
+        handlers[key].push(handler)
+      },
+      container: () => null,
+      elements: () => makeCollection(allIds()),
+      getElementById: (id: string) => makeCollection(registry.has(id) ? [id] : []),
+      collection: () => makeCollection([]),
+      fit: (elements: FakeCollection, padding: unknown) => {
+        fitCalls.push({ ids: elements?.ids ?? [], padding })
+      },
+      // 08-06+ auto-zoom-hold: runLayout is reachable once `layout` exists —
+      // record the options (esp. `fit`) so the suppression is assertable.
+      layout: (opts: Record<string, unknown>) => {
+        layoutCalls.push({ fit: opts.fit, cy: fakeCy })
+        return { one: () => {}, run: () => {} }
+      },
+    }
+    return fakeCy
+  }
   function CytoscapeComponentStub(props: {
     elements: CapturedElement[]
     cy?: (cy: unknown) => void
@@ -191,28 +223,7 @@ vi.mock('react-cytoscapejs', () => {
       }
     }
 
-    const fakeCy = {
-      on: (event: string, selectorOrHandler: unknown, maybeHandler?: Handler) => {
-        const selector = typeof selectorOrHandler === 'string' ? selectorOrHandler : undefined
-        const handler = (maybeHandler ?? selectorOrHandler) as Handler
-        const key = selector ? `${event}:${selector}` : event
-        handlers[key] = handlers[key] ?? []
-        handlers[key].push(handler)
-      },
-      container: () => null,
-      elements: () => makeCollection(allIds()),
-      getElementById: (id: string) => makeCollection(registry.has(id) ? [id] : []),
-      collection: () => makeCollection([]),
-      fit: (elements: FakeCollection, padding: unknown) => {
-        fitCalls.push({ ids: elements?.ids ?? [], padding })
-      },
-      // 08-06+ auto-zoom-hold: runLayout is reachable once `layout` exists —
-      // record the options (esp. `fit`) so the suppression is assertable.
-      layout: (opts: Record<string, unknown>) => {
-        layoutCalls.push({ fit: opts.fit })
-        return { one: () => {}, run: () => {} }
-      },
-    }
+    const fakeCy = useMemo(() => makeFakeCy(), [])
     props.cy?.(fakeCy)
     capturedCy = fakeCy
 
@@ -712,6 +723,26 @@ describe('GraphCanvas', () => {
 
       await user.click(screen.getByRole('button', { name: 'Full mode' }))
       expect(capturedProps.layout).not.toBe(overviewLayout)
+    })
+  })
+
+  describe('fresh cy instance auto-refresh (08-10)', () => {
+    it('a remounted canvas (StrictMode double-mount) gets an automatic fitted layout on the LIVE cy', () => {
+      // The app mounts GraphCanvas under <StrictMode> (main.tsx) — React's
+      // dev double-mount destroys cy#1 and creates cy#2. The old guard
+      // (graph-only dedupe) skipped runLayout on cy#2 → only the declarative
+      // fit:false layout ran → the "diagonal" open view the user had to fix
+      // by hand. The per-cy guard must force a fit:true layout on the LIVE
+      // instance (the one props.cy last handed over).
+      render(
+        <StrictMode>
+          <GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="full" />
+        </StrictMode>,
+      )
+
+      const lastCall = layoutCalls[layoutCalls.length - 1]
+      expect(lastCall?.fit).toBe(true)
+      expect(lastCall?.cy).toBe(capturedCy)
     })
   })
 })
