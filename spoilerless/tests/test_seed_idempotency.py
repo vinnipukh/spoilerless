@@ -16,7 +16,7 @@ from spoilerless.app.graph.seed import (
 )
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="module")
 async def live_database() -> AsyncIterator[Neo4jDatabase]:
     database = Neo4jDatabase()
     database.open()

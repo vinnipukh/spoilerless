@@ -15,7 +15,6 @@ audit in ``test_graph_api.py``.
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Iterator
 from typing import Any
 from uuid import uuid4
@@ -26,31 +25,28 @@ from spoilerless.app.graph.database import Neo4jDatabase
 from spoilerless.app.repository.chat import ChatRepository
 from spoilerless.app.repository.progress import ProgressRepository
 
+from conftest import module_cleanup_fixture  # noqa: E402
+
 SERIES_ID = "series_dexter"
 CLAIM_HARRY_FAMILY = "dexter:claim:s01e03:dexter_harry_family"
 EVIDENCE_S01E03_02 = "dexter:evidence:s01e03:02"
 SOURCE_S01E03 = "dexter:source:s01e03"
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def database() -> Iterator[Neo4jDatabase]:
     db = Neo4jDatabase()
     db.open()
     yield db
 
-    async def _cleanup() -> None:
-        clean = Neo4jDatabase()
-        clean.open()
-        try:
-            await clean.execute_query("MATCH (n:ChatSession) DETACH DELETE n")
-            await clean.execute_query("MATCH (n:ChatMessage) DETACH DELETE n")
-            await clean.execute_query("MATCH (n:UserSeriesProgress) DETACH DELETE n")
-        finally:
-            await clean.close()
 
-    asyncio.run(_cleanup())
+_CHAT_CLEANUP_QUERIES = [
+    "MATCH (n:ChatSession) DETACH DELETE n",
+    "MATCH (n:ChatMessage) DETACH DELETE n",
+    "MATCH (n:UserSeriesProgress) DETACH DELETE n",
+]
 
-
+_cleanup_after_module = module_cleanup_fixture(_CHAT_CLEANUP_QUERIES)
 def _fresh_user_id(label: str) -> str:
     return f"user:{label}-{uuid4()}"
 
@@ -60,7 +56,7 @@ def _fresh_user_id(label: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def test_episode_3_then_episode_1_regression_hides_not_deletes(
+async def test_episode_3_then_episode_1_regression_hides_not_deletes(
     database: Neo4jDatabase,
 ) -> None:
     """The named regression scenario, all five steps in one test body:
@@ -180,7 +176,7 @@ def test_episode_3_then_episode_1_regression_hides_not_deletes(
         assert restored_assistant.id == assistant_message.id
         assert restored_assistant.content == assistant_message.content
 
-    asyncio.run(_run())
+    await _run()
 
 
 def test_no_delete_cypher_targets_chat_message_on_progress_decrease() -> None:
@@ -229,7 +225,7 @@ def test_no_delete_cypher_targets_chat_message_on_progress_decrease() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_boundary_exactness_matrix(database: Neo4jDatabase) -> None:
+async def test_boundary_exactness_matrix(database: Neo4jDatabase) -> None:
     """Equal-to-boundary is visible; one order above is hidden; one order
     below is visible."""
 
@@ -264,7 +260,7 @@ def test_boundary_exactness_matrix(database: Neo4jDatabase) -> None:
         assert above.id not in visible_ids
         assert below.id in visible_ids
 
-    asyncio.run(_run())
+    await _run()
 
 
 # ---------------------------------------------------------------------------
@@ -272,7 +268,7 @@ def test_boundary_exactness_matrix(database: Neo4jDatabase) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_turkish_message_content_round_trips_without_corruption(
+async def test_turkish_message_content_round_trips_without_corruption(
     database: Neo4jDatabase,
 ) -> None:
     """Persisting and re-reading Turkish-language content must not mangle
@@ -300,10 +296,10 @@ def test_turkish_message_content_round_trips_without_corruption(
         )
         assert fetched[0].content == turkish_content
 
-    asyncio.run(_run())
+    await _run()
 
 
-def test_messages_return_in_stable_created_at_ascending_order_across_repeated_reads(
+async def test_messages_return_in_stable_created_at_ascending_order_across_repeated_reads(
     database: Neo4jDatabase,
 ) -> None:
     """Messages come back in stable created_at-ascending order for both the
@@ -343,10 +339,10 @@ def test_messages_return_in_stable_created_at_ascending_order_across_repeated_re
         assert [m.id for m in response_read_2] == expected_order
         assert [m["id"] for m in context_read] == expected_order
 
-    asyncio.run(_run())
+    await _run()
 
 
-def test_sessions_list_newest_updated_first(database: Neo4jDatabase) -> None:
+async def test_sessions_list_newest_updated_first(database: Neo4jDatabase) -> None:
     """``list_sessions`` orders newest-``updated_at`` first."""
 
     async def _run() -> None:
@@ -360,4 +356,4 @@ def test_sessions_list_newest_updated_first(database: Neo4jDatabase) -> None:
         sessions = await chat_repo.list_sessions(user_id, series_id)
         assert [s.id for s in sessions] == [second.id, first.id]
 
-    asyncio.run(_run())
+    await _run()

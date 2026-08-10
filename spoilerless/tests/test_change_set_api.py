@@ -34,21 +34,18 @@ from spoilerless.app.graph.database import Neo4jDatabase
 from spoilerless.app.repository.session import InMemorySessionRepository
 from spoilerless.app.services.auth import AuthService
 
-async def _fresh_query(query: str, **params: Any) -> list[dict[str, Any]]:
-    """Run *query* on a brand-new driver/loop — never the app's shared driver.
+from conftest import cleanup_with_fresh_driver, module_cleanup_fixture, run_query  # noqa: E402
+
+
+def _fresh_query(query: str, **params: Any) -> list[dict[str, Any]]:
+    """Run *query* on the suite-shared helper driver (see conftest.run_query).
 
     The app's async Neo4j driver connections are bound to ``TestClient``'s
     portal loop; reusing them from a bare ``asyncio.run()`` call crashes with
-    a cross-loop error (the same pattern documented in ``test_chat_api.py``'s
-    ``database`` fixture cleanup and ``_true_total``/``_delete_progress``
-    helpers).
+    a cross-loop error. The shared runner keeps one loop for all probes, so
+    the suite pays one TLS handshake instead of one per probe.
     """
-    db = Neo4jDatabase()
-    db.open()
-    try:
-        return await db.execute_query(query, **params)
-    finally:
-        await db.close()
+    return run_query(query, **params)
 
 
 SERIES_ID = "series_dexter"
@@ -166,40 +163,44 @@ class FakeUserRepo:
         return None
 
 
+_CHANGE_SET_CLEANUP_QUERIES: list[tuple[str, dict] | str] = [
+    "MATCH (n:Revision {resource_type: 'ChangeSet'}) DETACH DELETE n",
+    "MATCH (n:ChangeSet) DETACH DELETE n",
+    "MATCH (n:ChatSession) DETACH DELETE n",
+    "MATCH (n:ChatMessage) DETACH DELETE n",
+    "MATCH (n:UserSeriesProgress) DETACH DELETE n",
+    (
+        "MATCH (n:Location {series_id: $series_id}) "
+        "WHERE NOT n.id STARTS WITH 'dexter:location:' DETACH DELETE n",
+        {"series_id": SERIES_ID},
+    ),
+    (
+        "MATCH (n) WHERE n.id STARTS WITH 'user-node:' "
+        "AND n.series_id = $series_id DETACH DELETE n",
+        {"series_id": SERIES_ID},
+    ),
+    ("MATCH (n) WHERE n.id = $id DETACH DELETE n", {"id": CROSS_SERIES_NODE}),
+]
+
+
 @pytest.fixture
 def database() -> Iterator[Neo4jDatabase]:
     db = Neo4jDatabase()
     db.open()
     yield db
 
-    async def _cleanup() -> None:
-        clean = Neo4jDatabase()
-        clean.open()
-        try:
-            await clean.execute_query(
-                "MATCH (n:Revision {resource_type: 'ChangeSet'}) DETACH DELETE n"
-            )
-            await clean.execute_query("MATCH (n:ChangeSet) DETACH DELETE n")
-            await clean.execute_query("MATCH (n:ChatSession) DETACH DELETE n")
-            await clean.execute_query("MATCH (n:ChatMessage) DETACH DELETE n")
-            await clean.execute_query("MATCH (n:UserSeriesProgress) DETACH DELETE n")
-            await clean.execute_query(
-                "MATCH (n:Location {series_id: $series_id}) "
-                "WHERE NOT n.id STARTS WITH 'dexter:location:' DETACH DELETE n",
-                series_id=SERIES_ID,
-            )
-            await clean.execute_query(
-                "MATCH (n) WHERE n.id STARTS WITH 'user-node:' "
-                "AND n.series_id = $series_id DETACH DELETE n",
-                series_id=SERIES_ID,
-            )
-            await clean.execute_query(
-                "MATCH (n) WHERE n.id = $id DETACH DELETE n", id=CROSS_SERIES_NODE
-            )
-        finally:
-            await clean.close()
 
-    asyncio.run(_cleanup())
+
+_cleanup_after_module = module_cleanup_fixture(_CHANGE_SET_CLEANUP_QUERIES)
+@pytest.fixture(autouse=True)
+def _cleanup_cross_series_node() -> Iterator[None]:
+    """The cross-series ghost node has a FIXED id; the next test re-creating
+    it would hit an index conflict (22N80), so it needs per-test cleanup —
+    unlike the uuid-suffixed residue the module-scoped cleanup handles."""
+    yield
+    cleanup_with_fresh_driver(
+        [("MATCH (n) WHERE n.id = $id DETACH DELETE n", {"id": CROSS_SERIES_NODE})]
+    )
 
 
 @pytest.fixture
@@ -304,13 +305,11 @@ def _propose(client: TestClient, session_id: str, operations: list[dict[str, Any
 
 
 def _insert_cross_series_node() -> None:
-    asyncio.run(
-        _fresh_query(
-            "CREATE (n:Character {id: $id, series_id: $series_id, label: 'Cross', "
-            "visible_from_order: 1, origin: 'canonical'})",
-            id=CROSS_SERIES_NODE,
-            series_id=OTHER_SERIES_ID,
-        )
+    _fresh_query(
+        "CREATE (n:Character {id: $id, series_id: $series_id, label: 'Cross', "
+        "visible_from_order: 1, origin: 'canonical'})",
+        id=CROSS_SERIES_NODE,
+        series_id=OTHER_SERIES_ID,
     )
 
 
@@ -320,8 +319,8 @@ def test_propose_requires_authentication(client: TestClient) -> None:
     assert response.json()["detail"]["code"] == "AUTH_UNAUTHENTICATED"
 
 
-async def _location_count(label: str) -> int:
-    rows = await _fresh_query(
+def _location_count(label: str) -> int:
+    rows = _fresh_query(
         "MATCH (n:Location {series_id: $series_id, label: $label}) RETURN count(n) AS c",
         series_id=SERIES_ID,
         label=label,
@@ -329,8 +328,8 @@ async def _location_count(label: str) -> int:
     return rows[0]["c"]
 
 
-async def _change_set_count(session_id: str) -> int:
-    rows = await _fresh_query(
+def _change_set_count(session_id: str) -> int:
+    rows = _fresh_query(
         "MATCH (cs:ChangeSet {series_id: $series_id, chat_session_id: $session_id}) "
         "RETURN count(cs) AS c",
         series_id=SERIES_ID,
@@ -339,8 +338,8 @@ async def _change_set_count(session_id: str) -> int:
     return rows[0]["c"]
 
 
-async def _dexter_debra_works_with_claim_count() -> int:
-    rows = await _fresh_query(
+def _dexter_debra_works_with_claim_count() -> int:
+    rows = _fresh_query(
         "MATCH (c:Claim {series_id: $series_id, subject_id: $subject_id, "
         "object_id: $object_id, predicate: 'WORKS_WITH'}) RETURN count(c) AS c",
         series_id=SERIES_ID,
@@ -368,7 +367,7 @@ def test_propose_create_node_returns_awaiting_confirmation_and_creates_no_target
     assert body["operations"][0]["operation_type"] == "create_node"
     assert body["visible_until_order_snapshot"] == 1
 
-    assert asyncio.run(_location_count(label)) == 0
+    assert _location_count(label) == 0
 
 
 def test_propose_create_relationship_creates_no_claim(
@@ -379,7 +378,7 @@ def test_propose_create_relationship_creates_no_claim(
     _authed(client, fake_user_repo, session_repo, progress=1)
     session = _create_chat_session(client)
 
-    before = asyncio.run(_dexter_debra_works_with_claim_count())
+    before = _dexter_debra_works_with_claim_count()
     response = _propose(
         client,
         session["id"],
@@ -394,7 +393,7 @@ def test_propose_create_relationship_creates_no_claim(
         ],
     )
     assert response.status_code == 201, response.text
-    after = asyncio.run(_dexter_debra_works_with_claim_count())
+    after = _dexter_debra_works_with_claim_count()
     assert after == before
 
 
@@ -462,8 +461,8 @@ def test_propose_operations_validated_in_list_order_no_partial_persistence(
     )
     assert response.status_code == 422
 
-    assert asyncio.run(_location_count(label)) == 0
-    assert asyncio.run(_change_set_count(session["id"])) == 0
+    assert _location_count(label) == 0
+    assert _change_set_count(session["id"]) == 0
 
 
 def test_propose_same_content_twice_creates_distinct_change_sets(
@@ -492,8 +491,8 @@ def _confirm(client: TestClient, change_set_id: str) -> Any:
     return client.post(f"/api/series/{SERIES_ID}/change-sets/{change_set_id}/confirm")
 
 
-async def _revision_count_for_change_set(change_set_id: str) -> int:
-    rows = await _fresh_query(
+def _revision_count_for_change_set(change_set_id: str) -> int:
+    rows = _fresh_query(
         "MATCH (r:Revision {resource_type: 'ChangeSet', resource_id: $id}) "
         "RETURN count(r) AS c",
         id=change_set_id,
@@ -501,8 +500,8 @@ async def _revision_count_for_change_set(change_set_id: str) -> int:
     return rows[0]["c"]
 
 
-async def _location_row(label: str) -> dict[str, Any] | None:
-    rows = await _fresh_query(
+def _location_row(label: str) -> dict[str, Any] | None:
+    rows = _fresh_query(
         "MATCH (n:Location {series_id: $series_id, label: $label}) "
         "RETURN n.id AS id, n.origin AS origin, n.created_by AS created_by, "
         "n.visible_from_order AS visible_from_order",
@@ -512,15 +511,15 @@ async def _location_row(label: str) -> dict[str, Any] | None:
     return rows[0] if rows else None
 
 
-async def _change_set_status(change_set_id: str) -> str | None:
-    rows = await _fresh_query(
+def _change_set_status(change_set_id: str) -> str | None:
+    rows = _fresh_query(
         "MATCH (cs:ChangeSet {id: $id}) RETURN cs.status AS status", id=change_set_id
     )
     return rows[0]["status"] if rows else None
 
 
-async def _revision_before_for_change_set(change_set_id: str) -> Any:
-    rows = await _fresh_query(
+def _revision_before_for_change_set(change_set_id: str) -> Any:
+    rows = _fresh_query(
         "MATCH (r:Revision {resource_type: 'ChangeSet', resource_id: $id}) "
         "RETURN r.before AS before",
         id=change_set_id,
@@ -529,21 +528,19 @@ async def _revision_before_for_change_set(change_set_id: str) -> Any:
 
 
 def _insert_user_node(node_id: str, label: str) -> None:
-    asyncio.run(
-        _fresh_query(
-            "CREATE (n:Location {id: $id, series_id: $series_id, label: $label, "
-            "episode_id: $episode_id, visible_from_order: 1, origin: 'user', "
-            "created_by: 'someone-else', created_at: datetime(), updated_at: datetime()})",
-            id=node_id,
-            series_id=SERIES_ID,
-            label=label,
-            episode_id=EPISODE_1,
-        )
+    _fresh_query(
+        "CREATE (n:Location {id: $id, series_id: $series_id, label: $label, "
+        "episode_id: $episode_id, visible_from_order: 1, origin: 'user', "
+        "created_by: 'someone-else', created_at: datetime(), updated_at: datetime()})",
+        id=node_id,
+        series_id=SERIES_ID,
+        label=label,
+        episode_id=EPISODE_1,
     )
 
 
 def _delete_node_by_id(node_id: str) -> None:
-    asyncio.run(_fresh_query("MATCH (n {id: $id}) DETACH DELETE n", id=node_id))
+    _fresh_query("MATCH (n {id: $id}) DETACH DELETE n", id=node_id)
 
 
 def test_confirm_applies_all_operations_and_logs_exactly_one_revision(
@@ -570,11 +567,11 @@ def test_confirm_applies_all_operations_and_logs_exactly_one_revision(
     assert body["applied_at"] is not None
     assert body["confirmed_at"] is not None
 
-    row_a = asyncio.run(_location_row(label_a))
-    row_b = asyncio.run(_location_row(label_b))
+    row_a = _location_row(label_a)
+    row_b = _location_row(label_b)
     assert row_a is not None and row_b is not None
 
-    assert asyncio.run(_revision_count_for_change_set(change_set_id)) == 1
+    assert _revision_count_for_change_set(change_set_id) == 1
 
 
 def test_confirm_rolls_back_entirely_when_an_operation_fails_apply_time_revalidation(
@@ -612,11 +609,11 @@ def test_confirm_rolls_back_entirely_when_an_operation_fails_apply_time_revalida
 
     # Zero of the ChangeSet's operations were applied — not even the first,
     # otherwise-valid create_node.
-    assert asyncio.run(_location_row(label)) is None
-    assert asyncio.run(_revision_count_for_change_set(change_set_id)) == 0
+    assert _location_row(label) is None
+    assert _revision_count_for_change_set(change_set_id) == 0
     # The ChangeSet itself is untouched — still awaiting_confirmation, not a
     # partial/failed state, so a corrected retry remains possible.
-    assert asyncio.run(_change_set_status(change_set_id)) == "awaiting_confirmation"
+    assert _change_set_status(change_set_id) == "awaiting_confirmation"
 
 
 def test_confirm_assigns_origin_user_and_creator_server_side_never_from_payload(
@@ -634,7 +631,7 @@ def test_confirm_assigns_origin_user_and_creator_server_side_never_from_payload(
     response = _confirm(client, change_set_id)
     assert response.status_code == 200, response.text
 
-    row = asyncio.run(_location_row(label))
+    row = _location_row(label)
     assert row is not None
     assert row["origin"] == "user"
     assert row["created_by"] == user["id"]
@@ -655,7 +652,7 @@ def test_confirm_derives_visible_from_order_from_current_progress(
     response = _confirm(client, change_set_id)
     assert response.status_code == 200, response.text
 
-    row = asyncio.run(_location_row(label))
+    row = _location_row(label)
     assert row is not None
     assert row["visible_from_order"] == 1
 
@@ -674,5 +671,5 @@ def test_confirm_revision_before_snapshot_is_null_for_create_operations(
     response = _confirm(client, change_set_id)
     assert response.status_code == 200, response.text
 
-    before = asyncio.run(_revision_before_for_change_set(change_set_id))
+    before = _revision_before_for_change_set(change_set_id)
     assert before is None

@@ -26,7 +26,6 @@ from spoilerless.app.cache.graph_cache import (
 from spoilerless.app.core.config import get_settings
 from spoilerless.app.domain.graph import GraphResponse
 from spoilerless.app.graph.database import Neo4jDatabase, get_database
-from spoilerless.app.graph.seed import setup_database
 from spoilerless.app.spoiler.policy import filter_public_metadata
 
 
@@ -47,22 +46,24 @@ class UnavailableDatabase:
         pass
 
 
-async def _seed_live_database() -> None:
-    database = Neo4jDatabase()
-    database.open()
-    try:
-        await database.verify_connection()
-        await setup_database(database)
-    finally:
-        await database.close()
-
-
 @pytest.fixture
-def live_client() -> Iterator[TestClient]:
-    asyncio.run(_seed_live_database())
+def cached_live_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[tuple[TestClient, _FakeRedis]]:
+    """live_client with the cache-aside path enabled against a fake Redis.
+
+    A non-empty redis_url would make main's lifespan call
+    init_rate_limiter() and open a real Upstash connection, so that startup
+    hook is neutralized too — the graph endpoint's cache helpers are what
+    these tests exercise, not the rate limiter. The graph is already seeded
+    by the module-scoped conftest ``live_client`` (seed once per module).
+    """
+    fake = _FakeRedis()
+    _enable_cache(monkeypatch, fake)
     main_module = importlib.import_module("spoilerless.app.main")
+    monkeypatch.setattr(main_module, "init_rate_limiter", _async_noop)
     with TestClient(main_module.app) as client:
-        yield client
+        yield client, fake
 
 
 def test_error_responses() -> None:
@@ -1063,26 +1064,6 @@ def _enable_cache(monkeypatch: pytest.MonkeyPatch, fake: _FakeRedis) -> None:
     """Point graph_cache at a fake Redis and enable the cache guard."""
     monkeypatch.setattr(get_settings(), "redis_url", "rediss://fake:6379")
     monkeypatch.setattr(graph_cache, "get_redis", lambda: fake)
-
-
-@pytest.fixture
-def cached_live_client(
-    monkeypatch: pytest.MonkeyPatch,
-) -> Iterator[tuple[TestClient, _FakeRedis]]:
-    """live_client with the cache-aside path enabled against a fake Redis.
-
-    A non-empty redis_url would make main's lifespan call
-    init_rate_limiter() and open a real Upstash connection, so that startup
-    hook is neutralized too — the graph endpoint's cache helpers are what
-    these tests exercise, not the rate limiter.
-    """
-    fake = _FakeRedis()
-    _enable_cache(monkeypatch, fake)
-    main_module = importlib.import_module("spoilerless.app.main")
-    monkeypatch.setattr(main_module, "init_rate_limiter", _async_noop)
-    asyncio.run(_seed_live_database())
-    with TestClient(main_module.app) as client:
-        yield client, fake
 
 
 async def test_get_cached_graph_miss_then_hit(monkeypatch: pytest.MonkeyPatch) -> None:

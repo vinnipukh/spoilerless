@@ -34,6 +34,8 @@ from spoilerless.app.repository.progress import ProgressRepository
 from spoilerless.app.services.auth import AuthService
 from spoilerless.app.services.progress import ProgressNotFoundError, ProgressService
 
+from conftest import helper_db, module_cleanup_fixture, run_async, run_query  # noqa: E402
+
 
 class FakeUserRepo:
     """In-memory user repository keyed by google_sub (mirrors test_auth.py)."""
@@ -71,33 +73,26 @@ class FakeUserRepo:
         return None
 
 
+_ORPHAN_PROGRESS_CLEANUP = [
+    # NEVER delete all rows: the shared live DB also holds the user's real
+    # progress (runbook: data-loss class). Only orphaned rows — progress
+    # whose AppUser does not exist in Neo4j (unit tests use the in-memory
+    # FakeUserRepo, so their rows never have a real :AppUser) — are deleted.
+    "MATCH (p:UserSeriesProgress) "
+    "WHERE NOT EXISTS { MATCH (:AppUser {id: p.user_id}) } "
+    "DETACH DELETE p",
+]
+
+
 @pytest.fixture
 def database() -> Iterator[Neo4jDatabase]:
     db = Neo4jDatabase()
     db.open()
     yield db
 
-    # Clean up test-created progress nodes (fresh driver + loop — the app
-    # driver's connections live in TestClient's portal loop). NEVER delete
-    # all rows: the shared live DB also holds the user's real progress
-    # (runbook: data-loss class). Only orphaned rows — progress whose
-    # AppUser does not exist in Neo4j (unit tests use the in-memory
-    # FakeUserRepo, so their rows never have a real :AppUser) — are deleted.
-    async def _cleanup() -> None:
-        clean = Neo4jDatabase()
-        clean.open()
-        try:
-            await clean.execute_query(
-                "MATCH (p:UserSeriesProgress) "
-                "WHERE NOT EXISTS { MATCH (:AppUser {id: p.user_id}) } "
-                "DETACH DELETE p"
-            )
-        finally:
-            await clean.close()
-
-    asyncio.run(_cleanup())
 
 
+_cleanup_after_module = module_cleanup_fixture(_ORPHAN_PROGRESS_CLEANUP)
 @pytest.fixture
 def fake_user_repo() -> FakeUserRepo:
     return FakeUserRepo()
@@ -145,21 +140,11 @@ def _cleanup_user(user_id: str) -> None:
     an event loop (see test_graph_api.py's _seed_live_database pattern).
     """
 
-    async def _cleanup() -> None:
-        db = Neo4jDatabase()
-        db.open()
-        try:
-            await db.execute_query(
-                "MATCH (p:UserSeriesProgress {user_id: $uid}) DETACH DELETE p",
-                uid=user_id,
-            )
-            await db.execute_query(
-                "MATCH (u:AppUser {id: $uid}) DETACH DELETE u", uid=user_id
-            )
-        finally:
-            await db.close()
-
-    asyncio.run(_cleanup())
+    run_query(
+        "MATCH (p:UserSeriesProgress {user_id: $uid}) DETACH DELETE p",
+        uid=user_id,
+    )
+    run_query("MATCH (u:AppUser {id: $uid}) DETACH DELETE u", uid=user_id)
 
 
 @pytest.fixture
@@ -284,11 +269,11 @@ def test_progress_service_resolve_raises_not_found_for_missing_progress(
     500 (RAG-01)."""
     service = ProgressService(database)
 
-    async def _run() -> None:
+    async def _go() -> None:
         with pytest.raises(ProgressNotFoundError):
             await service.resolve("user:does-not-exist", "series_dexter")
 
-    asyncio.run(_run())
+    run_async(_go)
 
 
 def test_progress_repository_get_is_none_for_missing_record(
@@ -298,10 +283,10 @@ def test_progress_repository_get_is_none_for_missing_record(
     partial/garbage row) when no record exists for the (user, series) pair."""
     repo = ProgressRepository(database)
 
-    async def _run() -> Any:
+    async def _go() -> Any:
         return await repo.get("user:does-not-exist", "series_dexter")
 
-    assert asyncio.run(_run()) is None
+    assert run_async(_go) is None
 
 
 # ---------------------------------------------------------------------------
@@ -375,25 +360,17 @@ def test_progress_null_persisted_split_field_fails_closed_to_422(
     (a 500). The corrupt row is seeded and removed via a dedicated driver."""
     uid = authed_user["id"]
 
-    async def _seed_corrupt_row() -> None:
-        db = Neo4jDatabase()
-        db.open()
-        try:
-            await db.execute_query(
-                "MERGE (u:AppUser {id: $uid}) "
-                "MERGE (s:Series {id: $sid}) "
-                "MERGE (u)-[:HAS_PROGRESS]->(p:UserSeriesProgress "
-                "{user_id: $uid, series_id: $sid}) "
-                "SET p.id = $pid, p.watched_through_order = 3, "
-                "    p.view_as_of_order = NULL, p.visible_until_order = NULL",
-                uid=uid,
-                sid="series_dexter",
-                pid=f"progress:09-04-corrupt:{uuid4()}",
-            )
-        finally:
-            await db.close()
-
-    asyncio.run(_seed_corrupt_row())
+    run_query(
+        "MERGE (u:AppUser {id: $uid}) "
+        "MERGE (s:Series {id: $sid}) "
+        "MERGE (u)-[:HAS_PROGRESS]->(p:UserSeriesProgress "
+        "{user_id: $uid, series_id: $sid}) "
+        "SET p.id = $pid, p.watched_through_order = 3, "
+        "    p.view_as_of_order = NULL, p.visible_until_order = NULL",
+        uid=uid,
+        sid="series_dexter",
+        pid=f"progress:09-04-corrupt:{uuid4()}",
+    )
     try:
         # Read path: GET must 422 via the documented envelope, never 500.
         read = client.get("/api/series/series_dexter/progress")
@@ -439,7 +416,7 @@ def test_concurrent_upserts_for_same_user_series_resolve_without_torn_state(
     user_id = f"user:concurrency-{uuid4()}"
     series_id = "series_dexter"
 
-    async def _run() -> Any:
+    async def _go() -> Any:
         await asyncio.gather(
             repo.upsert(
                 user_id, series_id, watched_through_order=1, view_as_of_order=1
@@ -451,7 +428,7 @@ def test_concurrent_upserts_for_same_user_series_resolve_without_torn_state(
         return await repo.get(user_id, series_id)
 
     try:
-        final = asyncio.run(_run())
+        final = run_async(_go)
         assert final is not None
         assert final.visible_until_order in (1, 3)
         assert final.watched_through_order in (1, 3)
@@ -460,21 +437,11 @@ def test_concurrent_upserts_for_same_user_series_resolve_without_torn_state(
         assert final.series_id == series_id
     finally:
 
-        async def _cleanup() -> None:
-            clean = Neo4jDatabase()
-            clean.open()
-            try:
-                await clean.execute_query(
-                    "MATCH (p:UserSeriesProgress {user_id: $uid}) DETACH DELETE p",
-                    uid=user_id,
-                )
-                await clean.execute_query(
-                    "MATCH (u:AppUser {id: $uid}) DETACH DELETE u", uid=user_id
-                )
-            finally:
-                await clean.close()
-
-        asyncio.run(_cleanup())
+        run_query(
+            "MATCH (p:UserSeriesProgress {user_id: $uid}) DETACH DELETE p",
+            uid=user_id,
+        )
+        run_query("MATCH (u:AppUser {id: $uid}) DETACH DELETE u", uid=user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -642,40 +609,37 @@ def test_migration_backfills_split_fields_and_is_idempotent() -> None:
     user_id = f"user:migration-{uuid4()}"
     series_id = "series_dexter"
 
-    async def _run() -> None:
-        db = Neo4jDatabase()
-        db.open()
-        try:
-            repo = ProgressRepository(db)
-            await db.execute_query(
-                LEGACY_PROGRESS_SEED_QUERY,
-                uid=user_id,
-                sid=series_id,
-                pid=f"progress:legacy-{uuid4()}",
-                legacy=2,
-            )
+    async def _go() -> None:
+        db = helper_db()
+        repo = ProgressRepository(db)
+        await db.execute_query(
+            LEGACY_PROGRESS_SEED_QUERY,
+            uid=user_id,
+            sid=series_id,
+            pid=f"progress:legacy-{uuid4()}",
+            legacy=2,
+        )
 
-            await repo.ensure_migrated()
-            first = await repo.get(user_id, series_id)
-            assert first is not None
-            assert first.watched_through_order == 2
-            assert first.view_as_of_order == 2
-            assert first.effective_view_order == 2
-            assert first.visible_until_order == 2
+        await repo.ensure_migrated()
+        first = await repo.get(user_id, series_id)
+        assert first is not None
+        assert first.watched_through_order == 2
+        assert first.view_as_of_order == 2
+        assert first.effective_view_order == 2
+        assert first.visible_until_order == 2
 
-            # Second run: identical state, no duplicate rows, no drift.
-            await repo.ensure_migrated()
-            second = await repo.get(user_id, series_id)
-            assert second is not None
-            assert second.model_dump() == first.model_dump()
-        finally:
-            await db.execute_query(
-                "MATCH (p:UserSeriesProgress {user_id: $uid}) DETACH DELETE p",
-                uid=user_id,
-            )
-            await db.execute_query(
-                "MATCH (u:AppUser {id: $uid}) DETACH DELETE u", uid=user_id
-            )
-            await db.close()
+        # Second run: identical state, no duplicate rows, no drift.
+        await repo.ensure_migrated()
+        second = await repo.get(user_id, series_id)
+        assert second is not None
+        assert second.model_dump() == first.model_dump()
 
-    asyncio.run(_run())
+        await db.execute_query(
+            "MATCH (p:UserSeriesProgress {user_id: $uid}) DETACH DELETE p",
+            uid=user_id,
+        )
+        await db.execute_query(
+            "MATCH (u:AppUser {id: $uid}) DETACH DELETE u", uid=user_id
+        )
+
+    run_async(_go)

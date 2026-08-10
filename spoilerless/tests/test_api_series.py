@@ -7,33 +7,8 @@ pattern from test_episode_masking.
 
 from __future__ import annotations
 
-import asyncio
-import importlib
-from collections.abc import Iterator
-
 import pytest
 from fastapi.testclient import TestClient
-
-from spoilerless.app.graph.database import Neo4jDatabase
-from spoilerless.app.graph.seed import setup_database
-
-
-async def _seed_live_database() -> None:
-    database = Neo4jDatabase()
-    database.open()
-    try:
-        await database.verify_connection()
-        await setup_database(database)
-    finally:
-        await database.close()
-
-
-@pytest.fixture(scope="module")
-def live_client() -> Iterator[TestClient]:
-    asyncio.run(_seed_live_database())
-    main_module = importlib.import_module("spoilerless.app.main")
-    with TestClient(main_module.app) as client:
-        yield client
 
 
 def test_series_list_returns_dexter(live_client: TestClient) -> None:

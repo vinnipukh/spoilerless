@@ -12,17 +12,14 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import importlib
 import json
 import secrets
 import time
-from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
 
 from spoilerless.app.graph.database import Neo4jDatabase
-from spoilerless.app.graph.seed import setup_database
 from spoilerless.app.services.series import SeriesService
 
 
@@ -56,24 +53,6 @@ def _episode_record(
         "title": title,
         "visible_from_order": visible_from_order,
     }
-
-
-async def _seed_live_database() -> None:
-    database = Neo4jDatabase()
-    database.open()
-    try:
-        await database.verify_connection()
-        await setup_database(database)
-    finally:
-        await database.close()
-
-
-@pytest.fixture
-def live_client() -> Iterator[TestClient]:
-    asyncio.run(_seed_live_database())
-    main_module = importlib.import_module("spoilerless.app.main")
-    with TestClient(main_module.app) as client:
-        yield client
 
 
 # ── Anonymous boundary behavior ──

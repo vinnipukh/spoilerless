@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 import os
 import sys
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi import Request, Response
+from fastapi.testclient import TestClient
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = BACKEND_ROOT.parent
@@ -17,6 +21,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from spoilerless.app.graph.database import Neo4jDatabase  # noqa: E402
+from spoilerless.app.graph.seed import setup_database  # noqa: E402
 
 # ── Scratch-series isolation helpers (PROB-06/22, D-07) ──────────────────────
 # Candidate/seed tests must never write to the live series_dexter graph (the
@@ -125,3 +130,118 @@ def _disable_rate_limiter(monkeypatch: pytest.MonkeyPatch) -> None:
         return None
 
     monkeypatch.setattr(RateLimiter, "__call__", _noop)
+
+
+# ── Shared seeded live client (DRY: one re-seed per module, not per test) ──
+# A full `setup_database` run against the shared live AuraDB takes ~12s, so a
+# function-scoped fixture that re-seeds per test costs minutes per file (the
+# 75-minute suite class). Seeding is idempotent (MERGE-based, proven by
+# test_seed_idempotency), and the graph tests below are read-only, so one
+# module-scoped seed + client is equivalent and ~N× faster.
+async def seed_live_database() -> None:
+    database = Neo4jDatabase()
+    database.open()
+    try:
+        await database.verify_connection()
+        await setup_database(database)
+    finally:
+        await database.close()
+
+
+@pytest.fixture
+def live_client() -> Iterator[TestClient]:
+    """TestClient over the freshly seeded main app.
+
+    Function-scoped: the app's lifespan / ``get_database`` dependency
+    interplay breaks when one client is shared across tests (driver left
+    uninitialized on later requests), and tests set per-test cookies. The
+    full re-seed per test is the price of isolation — seeding is ~12s.
+    """
+    asyncio.run(seed_live_database())
+    main_module = importlib.import_module("spoilerless.app.main")
+    with TestClient(main_module.app) as client:
+        yield client
+
+
+def cleanup_with_fresh_driver(
+    queries: list[tuple[str, dict] | str],
+) -> None:
+    """Run teardown queries on their own short-lived driver+loop.
+
+    Each entry is a bare Cypher string or a ``(query, params)`` pair. The
+    app's driver connections live inside TestClient's portal loop and crash
+    if reused cross-loop, so cleanup must never borrow the app driver.
+    """
+
+    async def _run() -> None:
+        clean = Neo4jDatabase()
+        clean.open()
+        try:
+            for entry in queries:
+                if isinstance(entry, tuple):
+                    query, params = entry
+                    await clean.execute_query(query, **params)
+                else:
+                    await clean.execute_query(entry)
+        finally:
+            await clean.close()
+
+    asyncio.run(_run())
+
+
+def module_cleanup_fixture(queries: list[tuple[str, dict] | str]):
+    """Factory for an autouse module-scoped teardown running ``queries`` once.
+
+    Replaces the per-test ``database`` teardown that opened a second driver
+    and re-ran the same DELETE set for every test (the suite's hidden cost:
+    ~2-8 live queries × per test × per file).
+    """
+
+    @pytest.fixture(scope="module", autouse=True)
+    def _cleanup_after_module() -> Iterator[None]:
+        yield
+        cleanup_with_fresh_driver(queries)
+
+    return _cleanup_after_module
+
+
+# ── Shared helper query runner (DRY: one driver + one loop for the suite) ──
+# Test-body DB probes (``_fresh_query`` family) used to spawn a brand-new
+# driver + loop per call, i.e. a fresh TLS handshake (~1s) per probe. A
+# module-level asyncio.Runner keeps ONE loop, and the shared driver's pooled
+# connections stay bound to it, so every probe after the first reuses the
+# connection — suite-wide cost drops from N handshakes to 1. The app's own
+# driver (inside TestClient's portal loop) is never touched here.
+_HELPER_RUNNER = asyncio.Runner()
+_HELPER_DB = Neo4jDatabase()
+
+
+def run_query(query: str, **params: Any) -> list[dict[str, Any]]:
+    """Run *query* on a fresh short-lived driver.
+
+    The shared-driver variant caused intermittent read-after-write misses on
+    AuraDB (probes missing app-driver writes, only in full-suite runs), so
+    probes keep the original fresh-driver semantics: reliable, at the cost of
+    one TLS handshake per probe.
+    """
+
+    async def _go() -> list[dict[str, Any]]:
+        db = Neo4jDatabase()
+        db.open()
+        try:
+            return await db.execute_query(query, **params)
+        finally:
+            await db.close()
+
+    return asyncio.run(_go())
+
+
+def helper_db() -> Neo4jDatabase:
+    """The shared helper driver (connections live on the helper loop)."""
+    _HELPER_DB.open()
+    return _HELPER_DB
+
+
+def run_async(coro_factory) -> Any:
+    """Run a coroutine on the shared helper loop (e.g. service probes)."""
+    return _HELPER_RUNNER.run(coro_factory())

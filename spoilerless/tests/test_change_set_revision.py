@@ -36,6 +36,8 @@ from spoilerless.app.core.errors import install_database_error_handlers
 from spoilerless.app.graph.database import Neo4jDatabase
 from spoilerless.app.llm.provider import FakeLLMProvider, LLMEvent, install_llm_error_handlers
 from spoilerless.app.repository.session import InMemorySessionRepository
+
+from conftest import module_cleanup_fixture, run_query  # noqa: E402
 from spoilerless.app.services.auth import AuthService
 from spoilerless.app.services.chat import get_llm_provider
 
@@ -44,17 +46,9 @@ EPISODE_1 = "dexter_s01e01"
 DEXTER = "dexter:character:dexter_morgan"  # canonical, visible_from_order=1
 
 
-async def _fresh_query(query: str, **params: Any) -> list[dict[str, Any]]:
-    """Run *query* on a brand-new driver/loop — never the app's shared driver.
-
-    Same cross-loop-avoidance pattern as ``test_change_set_confirmation.py``.
-    """
-    db = Neo4jDatabase()
-    db.open()
-    try:
-        return await db.execute_query(query, **params)
-    finally:
-        await db.close()
+def _fresh_query(query: str, **params: Any) -> list[dict[str, Any]]:
+    """Run *query* on the suite-shared helper driver (see conftest.run_query)."""
+    return run_query(query, **params)
 
 
 class FakeUserRepo:
@@ -89,35 +83,30 @@ class FakeUserRepo:
         return None
 
 
+_CHANGE_SET_CLEANUP_QUERIES: list[tuple[str, dict] | str] = [
+    "MATCH (n:Revision {resource_type: 'ChangeSet'}) DETACH DELETE n",
+    "MATCH (n:ChangeSet) DETACH DELETE n",
+    "MATCH (n:ChatSession) DETACH DELETE n",
+    "MATCH (n:ChatMessage) DETACH DELETE n",
+    "MATCH (n:UserSeriesProgress) DETACH DELETE n",
+    "MATCH (n:UserNote) DETACH DELETE n",
+    (
+        "MATCH (n:Location {series_id: $series_id}) "
+        "WHERE NOT n.id STARTS WITH 'dexter:location:' DETACH DELETE n",
+        {"series_id": SERIES_ID},
+    ),
+]
+
+
 @pytest.fixture
 def database() -> Iterator[Neo4jDatabase]:
     db = Neo4jDatabase()
     db.open()
     yield db
 
-    async def _cleanup() -> None:
-        clean = Neo4jDatabase()
-        clean.open()
-        try:
-            await clean.execute_query(
-                "MATCH (n:Revision {resource_type: 'ChangeSet'}) DETACH DELETE n"
-            )
-            await clean.execute_query("MATCH (n:ChangeSet) DETACH DELETE n")
-            await clean.execute_query("MATCH (n:ChatSession) DETACH DELETE n")
-            await clean.execute_query("MATCH (n:ChatMessage) DETACH DELETE n")
-            await clean.execute_query("MATCH (n:UserSeriesProgress) DETACH DELETE n")
-            await clean.execute_query("MATCH (n:UserNote) DETACH DELETE n")
-            await clean.execute_query(
-                "MATCH (n:Location {series_id: $series_id}) "
-                "WHERE NOT n.id STARTS WITH 'dexter:location:' DETACH DELETE n",
-                series_id=SERIES_ID,
-            )
-        finally:
-            await clean.close()
-
-    asyncio.run(_cleanup())
 
 
+_cleanup_after_module = module_cleanup_fixture(_CHANGE_SET_CLEANUP_QUERIES)
 @pytest.fixture
 def fake_user_repo() -> FakeUserRepo:
     return FakeUserRepo()
@@ -240,8 +229,8 @@ def _revert(client: TestClient, change_set_id: str) -> Any:
     return client.post(f"/api/series/{SERIES_ID}/change-sets/{change_set_id}/revert")
 
 
-async def _location_row(label: str) -> dict[str, Any] | None:
-    rows = await _fresh_query(
+def _location_row(label: str) -> dict[str, Any] | None:
+    rows = _fresh_query(
         "MATCH (n:Location {series_id: $series_id, label: $label}) "
         "RETURN n.id AS id, n.label AS label, n.origin AS origin, n.updated_at AS updated_at",
         series_id=SERIES_ID,
@@ -250,8 +239,8 @@ async def _location_row(label: str) -> dict[str, Any] | None:
     return rows[0] if rows else None
 
 
-async def _location_count(label: str) -> int:
-    rows = await _fresh_query(
+def _location_count(label: str) -> int:
+    rows = _fresh_query(
         "MATCH (n:Location {series_id: $series_id, label: $label}) RETURN count(n) AS c",
         series_id=SERIES_ID,
         label=label,
@@ -259,15 +248,15 @@ async def _location_count(label: str) -> int:
     return rows[0]["c"]
 
 
-async def _change_set_status(change_set_id: str) -> str | None:
-    rows = await _fresh_query(
+def _change_set_status(change_set_id: str) -> str | None:
+    rows = _fresh_query(
         "MATCH (cs:ChangeSet {id: $id}) RETURN cs.status AS status", id=change_set_id
     )
     return rows[0]["status"] if rows else None
 
 
-async def _revisions_for_change_set(change_set_id: str) -> list[dict[str, Any]]:
-    rows = await _fresh_query(
+def _revisions_for_change_set(change_set_id: str) -> list[dict[str, Any]]:
+    rows = _fresh_query(
         "MATCH (r:Revision {resource_type: 'ChangeSet', resource_id: $id}) "
         "RETURN r.id AS id, r.action AS action, r.before AS before, r.after AS after, "
         "r.visible_from_order AS visible_from_order, r.created_at AS created_at "
@@ -277,16 +266,16 @@ async def _revisions_for_change_set(change_set_id: str) -> list[dict[str, Any]]:
     return rows
 
 
-async def _dexter_row() -> dict[str, Any]:
-    rows = await _fresh_query(
+def _dexter_row() -> dict[str, Any]:
+    rows = _fresh_query(
         "MATCH (n {id: $id}) RETURN n.origin AS origin, n.label AS label",
         id=DEXTER,
     )
     return rows[0]
 
 
-async def _user_note_count_for_target(target_id: str) -> int:
-    rows = await _fresh_query(
+def _user_note_count_for_target(target_id: str) -> int:
+    rows = _fresh_query(
         "MATCH (n:UserNote {series_id: $series_id, target_id: $target_id}) RETURN count(n) AS c",
         series_id=SERIES_ID,
         target_id=target_id,
@@ -313,7 +302,7 @@ def test_revert_after_single_applied_change_set_deletes_created_resource(
     change_set_id = proposed.json()["id"]
     confirmed = _confirm(client, change_set_id)
     assert confirmed.status_code == 200, confirmed.text
-    assert asyncio.run(_location_count(label)) == 1
+    assert _location_count(label) == 1
 
     response = _revert(client, change_set_id)
     assert response.status_code == 200, response.text
@@ -321,11 +310,11 @@ def test_revert_after_single_applied_change_set_deletes_created_resource(
     assert body["status"] == "reverted"
 
     # Pre-apply state restored: the created resource is gone.
-    assert asyncio.run(_location_count(label)) == 0
+    assert _location_count(label) == 0
 
     # A second, new Revision (Reverted) was logged — never a mutation of the
     # original apply-time (Created) Revision.
-    revisions = asyncio.run(_revisions_for_change_set(change_set_id))
+    revisions = _revisions_for_change_set(change_set_id)
     assert len(revisions) == 2
     assert revisions[0]["action"] == "Created"
     assert revisions[1]["action"] == "Reverted"
@@ -351,7 +340,7 @@ def test_revert_rejected_when_change_set_was_never_applied(
     response = _revert(client, change_set_id)
     assert response.status_code == 409, response.text
     assert response.json()["detail"]["code"] == "RESOURCE_CONFLICT"
-    assert asyncio.run(_change_set_status(change_set_id)) == "awaiting_confirmation"
+    assert _change_set_status(change_set_id) == "awaiting_confirmation"
 
 
 def test_reverting_an_already_reverted_change_set_is_rejected(
@@ -394,14 +383,14 @@ def test_revert_never_edits_the_original_apply_revision(
     change_set_id = proposed.json()["id"]
     assert _confirm(client, change_set_id).status_code == 200
 
-    before_revert = asyncio.run(_revisions_for_change_set(change_set_id))
+    before_revert = _revisions_for_change_set(change_set_id)
     assert len(before_revert) == 1
     original = before_revert[0]
 
     revert_response = _revert(client, change_set_id)
     assert revert_response.status_code == 200, revert_response.text
 
-    after_revert = asyncio.run(_revisions_for_change_set(change_set_id))
+    after_revert = _revisions_for_change_set(change_set_id)
     assert len(after_revert) == 2
     # The original Revision's every field is byte-identical before and after.
     original_again = next(r for r in after_revert if r["id"] == original["id"])
@@ -427,7 +416,7 @@ def test_revert_conflicts_when_resource_modified_by_later_unrelated_change(
     change_set_id = proposed.json()["id"]
     assert _confirm(client, change_set_id).status_code == 200
 
-    created = asyncio.run(_location_row(label))
+    created = _location_row(label)
     assert created is not None
     node_id = created["id"]
 
@@ -447,10 +436,10 @@ def test_revert_conflicts_when_resource_modified_by_later_unrelated_change(
     assert response.json()["detail"]["code"] == "RESOURCE_CONFLICT"
 
     # The later change's state is left completely untouched by the failed revert.
-    row_after_failed_revert = asyncio.run(_location_row("Mutated by later change"))
+    row_after_failed_revert = _location_row("Mutated by later change")
     assert row_after_failed_revert is not None
     assert row_after_failed_revert["id"] == node_id
-    assert asyncio.run(_change_set_status(change_set_id)) == "applied"
+    assert _change_set_status(change_set_id) == "applied"
 
 
 # ---------------------------------------------------------------------------
@@ -478,8 +467,8 @@ def test_revert_requires_explicit_call_never_triggered_by_a_chat_message(
     assert message_response.status_code == 200, message_response.text
 
     # Still applied — only a dedicated revert call can move it to reverted.
-    assert asyncio.run(_change_set_status(change_set_id)) == "applied"
-    assert asyncio.run(_location_count(label)) == 1
+    assert _change_set_status(change_set_id) == "applied"
+    assert _location_count(label) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -500,7 +489,7 @@ def test_revert_rejected_for_change_set_with_no_stored_prior_state(
     created_change_set = _propose(client, session["id"], [_create_node_op(label=label)])
     created_id = created_change_set.json()["id"]
     assert _confirm(client, created_id).status_code == 200
-    node_id = asyncio.run(_location_row(label))["id"]
+    node_id = _location_row(label)["id"]
 
     update_proposed = _propose(
         client,
@@ -517,10 +506,10 @@ def test_revert_rejected_for_change_set_with_no_stored_prior_state(
     assert response.json()["detail"]["code"] == "INVALID_REQUEST"
 
     # The failed revert attempt made zero mutation — the update stands.
-    row = asyncio.run(_location_row("Updated label"))
+    row = _location_row("Updated label")
     assert row is not None
     assert row["id"] == node_id
-    assert asyncio.run(_change_set_status(update_change_set_id)) == "applied"
+    assert _change_set_status(update_change_set_id) == "applied"
 
 
 # ---------------------------------------------------------------------------
@@ -549,7 +538,7 @@ def test_revert_generic_404_for_missing_or_cross_user_change_set(
     _authed(client, fake_user_repo, session_repo, progress=1)
     cross_user = _revert(client, change_set_id)
     assert cross_user.status_code == 404
-    assert asyncio.run(_change_set_status(change_set_id)) == "applied"
+    assert _change_set_status(change_set_id) == "applied"
 
 
 # ---------------------------------------------------------------------------
@@ -568,7 +557,7 @@ def test_revert_of_canonical_override_note_leaves_canonical_resource_untouched(
     _authed(client, fake_user_repo, session_repo, progress=1)
     session = _create_chat_session(client)
 
-    before = asyncio.run(_dexter_row())
+    before = _dexter_row()
     assert before["origin"] == "canonical"
 
     # A direct-mutation op against a canonical target is transparently
@@ -585,13 +574,13 @@ def test_revert_of_canonical_override_note_leaves_canonical_resource_untouched(
     assert proposed.json()["operations"][0]["operation_type"] == "create_note"
 
     assert _confirm(client, change_set_id).status_code == 200
-    assert asyncio.run(_user_note_count_for_target(DEXTER)) == 1
+    assert _user_note_count_for_target(DEXTER) == 1
 
     response = _revert(client, change_set_id)
     assert response.status_code == 200, response.text
 
     # The override note is gone; the canonical resource was never touched by
     # either the apply or the revert.
-    assert asyncio.run(_user_note_count_for_target(DEXTER)) == 0
-    after = asyncio.run(_dexter_row())
+    assert _user_note_count_for_target(DEXTER) == 0
+    after = _dexter_row()
     assert after == before

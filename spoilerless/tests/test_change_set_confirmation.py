@@ -35,6 +35,8 @@ from spoilerless.app.core.errors import install_database_error_handlers
 from spoilerless.app.graph.database import Neo4jDatabase
 from spoilerless.app.llm.provider import FakeLLMProvider, LLMEvent, install_llm_error_handlers
 from spoilerless.app.repository.session import InMemorySessionRepository
+
+from conftest import module_cleanup_fixture, run_query  # noqa: E402
 from spoilerless.app.services.auth import AuthService
 from spoilerless.app.services.chat import get_llm_provider
 
@@ -42,17 +44,9 @@ SERIES_ID = "series_dexter"
 EPISODE_1 = "dexter_s01e01"
 
 
-async def _fresh_query(query: str, **params: Any) -> list[dict[str, Any]]:
-    """Run *query* on a brand-new driver/loop — never the app's shared driver.
-
-    Same cross-loop-avoidance pattern as ``test_change_set_api.py``.
-    """
-    db = Neo4jDatabase()
-    db.open()
-    try:
-        return await db.execute_query(query, **params)
-    finally:
-        await db.close()
+def _fresh_query(query: str, **params: Any) -> list[dict[str, Any]]:
+    """Run *query* on the suite-shared helper driver (see conftest.run_query)."""
+    return run_query(query, **params)
 
 
 class FakeUserRepo:
@@ -87,34 +81,29 @@ class FakeUserRepo:
         return None
 
 
+_CHANGE_SET_CLEANUP_QUERIES: list[tuple[str, dict] | str] = [
+    "MATCH (n:Revision {resource_type: 'ChangeSet'}) DETACH DELETE n",
+    "MATCH (n:ChangeSet) DETACH DELETE n",
+    "MATCH (n:ChatSession) DETACH DELETE n",
+    "MATCH (n:ChatMessage) DETACH DELETE n",
+    "MATCH (n:UserSeriesProgress) DETACH DELETE n",
+    (
+        "MATCH (n:Location {series_id: $series_id}) "
+        "WHERE NOT n.id STARTS WITH 'dexter:location:' DETACH DELETE n",
+        {"series_id": SERIES_ID},
+    ),
+]
+
+
 @pytest.fixture
 def database() -> Iterator[Neo4jDatabase]:
     db = Neo4jDatabase()
     db.open()
     yield db
 
-    async def _cleanup() -> None:
-        clean = Neo4jDatabase()
-        clean.open()
-        try:
-            await clean.execute_query(
-                "MATCH (n:Revision {resource_type: 'ChangeSet'}) DETACH DELETE n"
-            )
-            await clean.execute_query("MATCH (n:ChangeSet) DETACH DELETE n")
-            await clean.execute_query("MATCH (n:ChatSession) DETACH DELETE n")
-            await clean.execute_query("MATCH (n:ChatMessage) DETACH DELETE n")
-            await clean.execute_query("MATCH (n:UserSeriesProgress) DETACH DELETE n")
-            await clean.execute_query(
-                "MATCH (n:Location {series_id: $series_id}) "
-                "WHERE NOT n.id STARTS WITH 'dexter:location:' DETACH DELETE n",
-                series_id=SERIES_ID,
-            )
-        finally:
-            await clean.close()
-
-    asyncio.run(_cleanup())
 
 
+_cleanup_after_module = module_cleanup_fixture(_CHANGE_SET_CLEANUP_QUERIES)
 @pytest.fixture
 def fake_user_repo() -> FakeUserRepo:
     return FakeUserRepo()
@@ -241,8 +230,8 @@ def _reject(client: TestClient, change_set_id: str) -> Any:
     return client.post(f"/api/series/{SERIES_ID}/change-sets/{change_set_id}/reject")
 
 
-async def _location_count(label: str) -> int:
-    rows = await _fresh_query(
+def _location_count(label: str) -> int:
+    rows = _fresh_query(
         "MATCH (n:Location {series_id: $series_id, label: $label}) RETURN count(n) AS c",
         series_id=SERIES_ID,
         label=label,
@@ -250,16 +239,16 @@ async def _location_count(label: str) -> int:
     return rows[0]["c"]
 
 
-async def _revision_count_for_change_set(change_set_id: str) -> int:
-    rows = await _fresh_query(
+def _revision_count_for_change_set(change_set_id: str) -> int:
+    rows = _fresh_query(
         "MATCH (r:Revision {resource_type: 'ChangeSet', resource_id: $id}) RETURN count(r) AS c",
         id=change_set_id,
     )
     return rows[0]["c"]
 
 
-async def _change_set_status(change_set_id: str) -> str | None:
-    rows = await _fresh_query(
+def _change_set_status(change_set_id: str) -> str | None:
+    rows = _fresh_query(
         "MATCH (cs:ChangeSet {id: $id}) RETURN cs.status AS status", id=change_set_id
     )
     return rows[0]["status"] if rows else None
@@ -292,8 +281,8 @@ def test_confirming_an_already_applied_change_set_is_a_safe_idempotent_replay(
 
     # Exactly one Location node was created (not two), and exactly one
     # Revision was logged (not two) — the replay is a true no-op.
-    assert asyncio.run(_location_count(label)) == 1
-    assert asyncio.run(_revision_count_for_change_set(change_set_id)) == 1
+    assert _location_count(label) == 1
+    assert _revision_count_for_change_set(change_set_id) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -323,9 +312,9 @@ def test_confirm_rejects_stale_change_set_after_progress_is_lowered(
     assert response.json()["detail"]["code"] == "CHANGESET_STALE"
 
     # Nothing was applied — the target resource never came into existence.
-    assert asyncio.run(_location_count(label)) == 0
-    assert asyncio.run(_revision_count_for_change_set(change_set_id)) == 0
-    assert asyncio.run(_change_set_status(change_set_id)) == "failed"
+    assert _location_count(label) == 0
+    assert _revision_count_for_change_set(change_set_id) == 0
+    assert _change_set_status(change_set_id) == "failed"
 
 
 def test_confirm_succeeds_when_progress_is_unchanged_since_propose(
@@ -343,7 +332,7 @@ def test_confirm_succeeds_when_progress_is_unchanged_since_propose(
     response = _confirm(client, change_set_id)
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "applied"
-    assert asyncio.run(_location_count(label)) == 1
+    assert _location_count(label) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -366,11 +355,11 @@ def test_reject_makes_no_mutation_and_a_subsequent_confirm_fails(
     rejected = _reject(client, change_set_id)
     assert rejected.status_code == 200, rejected.text
     assert rejected.json()["status"] == "rejected"
-    assert asyncio.run(_location_count(label)) == 0
+    assert _location_count(label) == 0
 
     confirm_after_reject = _confirm(client, change_set_id)
     assert confirm_after_reject.status_code == 409, confirm_after_reject.text
-    assert asyncio.run(_location_count(label)) == 0
+    assert _location_count(label) == 0
 
 
 def test_confirm_and_reject_are_generic_404_for_unowned_or_missing_change_set(
@@ -413,7 +402,7 @@ def test_confirm_requires_admin_role_403_for_non_admin(
     # The gate rejected the request before any mutation — the ChangeSet is
     # exactly where propose left it, and reject remains reachable for the
     # same non-admin user.
-    assert asyncio.run(_change_set_status(change_set_id)) == "awaiting_confirmation"
+    assert _change_set_status(change_set_id) == "awaiting_confirmation"
     rejected = _reject(client, change_set_id)
     assert rejected.status_code == 200, rejected.text
 
@@ -451,4 +440,4 @@ def test_posting_a_chat_message_alone_never_moves_a_change_set_past_awaiting_con
 
     # The chat message never applied anything — the ChangeSet is exactly
     # where propose left it, and only a dedicated confirm call can move it.
-    assert asyncio.run(_change_set_status(change_set_id)) == "awaiting_confirmation"
+    assert _change_set_status(change_set_id) == "awaiting_confirmation"

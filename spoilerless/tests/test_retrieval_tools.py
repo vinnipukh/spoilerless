@@ -65,7 +65,7 @@ ALL_TEN_TOOLS = (
 SCRATCH_SERIES = "series_scratch_retrieval"
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def database() -> AsyncIterator[Neo4jDatabase]:
     db = Neo4jDatabase()
     db.open()

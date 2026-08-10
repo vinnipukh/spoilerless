@@ -40,6 +40,8 @@ from spoilerless.app.repository.session import InMemorySessionRepository
 from spoilerless.app.services.auth import AuthService
 from spoilerless.app.services.chat import ChatService, get_llm_provider
 
+from conftest import module_cleanup_fixture, run_async, run_query, helper_db  # noqa: E402
+
 SERIES_ID = "series_dexter"
 DEXTER = "dexter:character:dexter_morgan"
 DEBRA = "dexter:character:debra_morgan"
@@ -103,29 +105,22 @@ class MidStreamCrashProvider:
         yield  # pragma: no cover — unreachable; marks this as an async generator
 
 
+_CHAT_CLEANUP_QUERIES = [
+    "MATCH (n:ChatSession) DETACH DELETE n",
+    "MATCH (n:ChatMessage) DETACH DELETE n",
+    "MATCH (n:UserSeriesProgress) DETACH DELETE n",
+]
+
+
 @pytest.fixture
 def database() -> Iterator[Neo4jDatabase]:
     db = Neo4jDatabase()
     db.open()
     yield db
 
-    # Clean up test-created chat/progress nodes so the seed-integrity audit
-    # in test_graph_api.py stays green.  A FRESH driver + loop is required:
-    # the app's driver connections are bound to TestClient's portal loop and
-    # would crash if reused here (cross-loop 'NoneType' send).
-    async def _cleanup() -> None:
-        clean = Neo4jDatabase()
-        clean.open()
-        try:
-            await clean.execute_query("MATCH (n:ChatSession) DETACH DELETE n")
-            await clean.execute_query("MATCH (n:ChatMessage) DETACH DELETE n")
-            await clean.execute_query("MATCH (n:UserSeriesProgress) DETACH DELETE n")
-        finally:
-            await clean.close()
-
-    asyncio.run(_cleanup())
 
 
+_cleanup_after_module = module_cleanup_fixture(_CHAT_CLEANUP_QUERIES)
 @pytest.fixture
 def fake_user_repo() -> FakeUserRepo:
     return FakeUserRepo()
@@ -217,51 +212,21 @@ def _authed(
 def _llm_settings_backup() -> str | None:
     """Read the live :AppSetting {key:'llm'} payload (or None when absent)."""
 
-    async def _read() -> str | None:
-        clean = Neo4jDatabase()
-        clean.open()
-        try:
-            rows = await clean.execute_query(
-                "MATCH (s:AppSetting {key: $k}) RETURN s.value AS value", k="llm"
-            )
-            return rows[0]["value"] if rows and rows[0].get("value") else None
-        finally:
-            await clean.close()
-
-    return asyncio.run(_read())
+    rows = run_query(
+        "MATCH (s:AppSetting {key: $k}) RETURN s.value AS value", k="llm"
+    )
+    return rows[0]["value"] if rows and rows[0].get("value") else None
 
 
 def _llm_settings_clear() -> None:
-    async def _clear() -> None:
-        clean = Neo4jDatabase()
-        clean.open()
-        try:
-            await clean.execute_query(
-                "MATCH (s:AppSetting {key: $k}) DETACH DELETE s", k="llm"
-            )
-        finally:
-            await clean.close()
-
-    asyncio.run(_clear())
+    run_query("MATCH (s:AppSetting {key: $k}) DETACH DELETE s", k="llm")
 
 
 def _llm_settings_restore(backup: str | None) -> None:
-    async def _restore() -> None:
-        clean = Neo4jDatabase()
-        clean.open()
-        try:
-            if backup is None:
-                await clean.execute_query(
-                    "MATCH (s:AppSetting {key: $k}) DETACH DELETE s", k="llm"
-                )
-            else:
-                await clean.execute_query(
-                    "MERGE (s:AppSetting {key: $k}) SET s.value = $v", k="llm", v=backup
-                )
-        finally:
-            await clean.close()
-
-    asyncio.run(_restore())
+    if backup is None:
+        run_query("MATCH (s:AppSetting {key: $k}) DETACH DELETE s", k="llm")
+    else:
+        run_query("MERGE (s:AppSetting {key: $k}) SET s.value = $v", k="llm", v=backup)
 
 
 def _create_session(client: TestClient, title: str = "Test session") -> dict[str, Any]:
@@ -721,20 +686,11 @@ def test_message_without_progress_auto_creates_order_1_progress(
         f"/api/series/{SERIES_ID}/progress", json={"visible_until_order": 1}
     )
     assert reset.status_code == 200
-    from spoilerless.app.graph.database import Neo4jDatabase as _Neo4jDatabase
 
-    async def _delete_progress() -> None:
-        db = _Neo4jDatabase()
-        db.open()
-        try:
-            await db.execute_query(
-                "MATCH (p:UserSeriesProgress {series_id: $sid}) DETACH DELETE p",
-                sid=SERIES_ID,
-            )
-        finally:
-            await db.close()
-
-    asyncio.run(_delete_progress())
+    run_query(
+        "MATCH (p:UserSeriesProgress {series_id: $sid}) DETACH DELETE p",
+        sid=SERIES_ID,
+    )
 
     fake_provider.scripted_events = _neighborhood_scripted_events()
     response = client.post(
@@ -762,20 +718,11 @@ def test_stream_message_without_progress_auto_creates_order_1_progress(
     _authed(client, fake_user_repo, session_repo, progress=1)
     session = _create_session(client)
 
-    from spoilerless.app.graph.database import Neo4jDatabase as _Neo4jDatabase
 
-    async def _delete_progress() -> None:
-        db = _Neo4jDatabase()
-        db.open()
-        try:
-            await db.execute_query(
-                "MATCH (p:UserSeriesProgress {series_id: $sid}) DETACH DELETE p",
-                sid=SERIES_ID,
-            )
-        finally:
-            await db.close()
-
-    asyncio.run(_delete_progress())
+    run_query(
+        "MATCH (p:UserSeriesProgress {series_id: $sid}) DETACH DELETE p",
+        sid=SERIES_ID,
+    )
 
     fake_provider.scripted_events = _neighborhood_scripted_events()
     response = client.post(
@@ -993,26 +940,20 @@ def test_answer_stream_releases_generation_slot_on_client_disconnect(
     session = _create_session(client)
     fake_provider.scripted_events = _neighborhood_scripted_events()
 
-    from spoilerless.app.graph.database import Neo4jDatabase as _Neo4jDatabase
 
-    async def _simulate_disconnect() -> None:
-        db = _Neo4jDatabase()
-        db.open()
-        try:
-            service = ChatService(db)
-            generator = service.answer_stream(
-                user_id=user["id"],
-                series_id=SERIES_ID,
-                chat_session_id=session["id"],
-                question="Who is Dexter related to?",
-                provider=fake_provider,
-            )
-            await generator.__anext__()  # start the generation (slot acquired)
-            await generator.aclose()  # Starlette's client-disconnect path
-        finally:
-            await db.close()
+    async def _go() -> None:
+        service = ChatService(helper_db())
+        generator = service.answer_stream(
+            user_id=user["id"],
+            series_id=SERIES_ID,
+            chat_session_id=session["id"],
+            question="Who is Dexter related to?",
+            provider=fake_provider,
+        )
+        await generator.__anext__()  # start the generation (slot acquired)
+        await generator.aclose()  # Starlette's client-disconnect path
 
-    asyncio.run(_simulate_disconnect())
+    run_async(_go)
 
     # If the slot had leaked, this second generation for the same user would
     # be rejected instead of succeeding.
@@ -1108,22 +1049,12 @@ def test_session_message_count_never_leaks_hidden_message_count(
     visible_count = len(detail.json()["messages"])
     assert visible_count == 2  # only the boundary-1 turn is visible
 
-    from spoilerless.app.graph.database import Neo4jDatabase as _Neo4jDatabase
 
-    async def _true_total() -> int:
-        db = _Neo4jDatabase()
-        db.open()
-        try:
-            rows = await db.execute_query(
-                "MATCH (:ChatSession {id: $sid})-[:HAS_MESSAGE]->(m:ChatMessage) "
-                "RETURN count(m) AS total",
-                sid=session["id"],
-            )
-            return rows[0]["total"]
-        finally:
-            await db.close()
-
-    true_total = asyncio.run(_true_total())
+    true_total = run_query(
+        "MATCH (:ChatSession {id: $sid})-[:HAS_MESSAGE]->(m:ChatMessage) "
+        "RETURN count(m) AS total",
+        sid=session["id"],
+    )[0]["total"]
     assert true_total == 6
     assert visible_count != true_total
 
@@ -1150,19 +1081,11 @@ ENV_MODEL = "env-model-2"
 def _llm_settings_write(payload: dict[str, Any]) -> None:
     """Persist an :AppSetting {key:'llm'} payload (test-created row)."""
 
-    async def _write() -> None:
-        clean = Neo4jDatabase()
-        clean.open()
-        try:
-            await clean.execute_query(
-                "MERGE (s:AppSetting {key: $k}) SET s.value = $v",
-                k="llm",
-                v=json.dumps(payload),
-            )
-        finally:
-            await clean.close()
-
-    asyncio.run(_write())
+    run_query(
+        "MERGE (s:AppSetting {key: $k}) SET s.value = $v",
+        k="llm",
+        v=json.dumps(payload),
+    )
 
 
 class CapturingBYOKProvider:

@@ -27,23 +27,13 @@ from spoilerless.app.api.user_content import router as user_content_router
 from spoilerless.app.core.errors import install_database_error_handlers
 from spoilerless.app.graph.database import Neo4jDatabase
 from spoilerless.app.repository.session import InMemorySessionRepository
+
+from conftest import module_cleanup_fixture, run_query  # noqa: E402
 from spoilerless.app.services.auth import AuthService
 
-async def _fresh_query(query: str, **params: Any) -> list[dict[str, Any]]:
-    """Run *query* on a brand-new driver/loop — never the app's shared driver.
-
-    The app's async Neo4j driver connections are bound to ``TestClient``'s
-    portal loop; reusing them from a bare ``asyncio.run()`` call crashes with
-    a cross-loop error (the same pattern documented in ``test_chat_api.py``'s
-    ``database`` fixture cleanup and ``_true_total``/``_delete_progress``
-    helpers).
-    """
-    db = Neo4jDatabase()
-    db.open()
-    try:
-        return await db.execute_query(query, **params)
-    finally:
-        await db.close()
+def _fresh_query(query: str, **params: Any) -> list[dict[str, Any]]:
+    """Run *query* on the suite-shared helper driver (see conftest.run_query)."""
+    return run_query(query, **params)
 
 
 SERIES_ID = "series_dexter"
@@ -79,36 +69,33 @@ class FakeUserRepo:
         return None
 
 
+_CHANGE_SET_CLEANUP_QUERIES: list[tuple[str, dict] | str] = [
+    "MATCH (n:ChangeSet) DETACH DELETE n",
+    "MATCH (n:ChatSession) DETACH DELETE n",
+    "MATCH (n:ChatMessage) DETACH DELETE n",
+    "MATCH (n:UserSeriesProgress) DETACH DELETE n",
+    (
+        "MATCH (n) WHERE n.series_id = $series_id AND n.origin = 'candidate' "
+        "AND (n.id STARTS WITH 'candidate-test:') DETACH DELETE n",
+        {"series_id": SERIES_ID},
+    ),
+    (
+        "MATCH (n:Claim {series_id: $series_id, origin: 'user'}) "
+        "WHERE n.id STARTS WITH 'user-rel:' DETACH DELETE n",
+        {"series_id": SERIES_ID},
+    ),
+]
+
+
 @pytest.fixture
 def database() -> Iterator[Neo4jDatabase]:
     db = Neo4jDatabase()
     db.open()
     yield db
 
-    async def _cleanup() -> None:
-        clean = Neo4jDatabase()
-        clean.open()
-        try:
-            await clean.execute_query("MATCH (n:ChangeSet) DETACH DELETE n")
-            await clean.execute_query("MATCH (n:ChatSession) DETACH DELETE n")
-            await clean.execute_query("MATCH (n:ChatMessage) DETACH DELETE n")
-            await clean.execute_query("MATCH (n:UserSeriesProgress) DETACH DELETE n")
-            await clean.execute_query(
-                "MATCH (n) WHERE n.series_id = $series_id AND n.origin = 'candidate' "
-                "AND (n.id STARTS WITH 'candidate-test:') DETACH DELETE n",
-                series_id=SERIES_ID,
-            )
-            await clean.execute_query(
-                "MATCH (n:Claim {series_id: $series_id, origin: 'user'}) "
-                "WHERE n.id STARTS WITH 'user-rel:' DETACH DELETE n",
-                series_id=SERIES_ID,
-            )
-        finally:
-            await clean.close()
-
-    asyncio.run(_cleanup())
 
 
+_cleanup_after_module = module_cleanup_fixture(_CHANGE_SET_CLEANUP_QUERIES)
 @pytest.fixture
 def fake_user_repo() -> FakeUserRepo:
     return FakeUserRepo()
@@ -188,30 +175,26 @@ def _propose(client: TestClient, session_id: str, operations: list[dict[str, Any
 
 def _insert_candidate_character() -> str:
     node_id = f"candidate-test:character:{uuid4()}"
-    asyncio.run(
-        _fresh_query(
-            "CREATE (n:Character {id: $id, series_id: $series_id, label: 'Candidate Char', "
-            "visible_from_order: 1, origin: 'candidate'})",
-            id=node_id,
-            series_id=SERIES_ID,
-        )
+    _fresh_query(
+        "CREATE (n:Character {id: $id, series_id: $series_id, label: 'Candidate Char', "
+        "visible_from_order: 1, origin: 'candidate'})",
+        id=node_id,
+        series_id=SERIES_ID,
     )
     return node_id
 
 
 def _insert_candidate_claim() -> str:
     claim_id = f"candidate-test:claim:{uuid4()}"
-    asyncio.run(
-        _fresh_query(
-            "CREATE (c:Claim {id: $id, series_id: $series_id, subject_id: $subject_id, "
-            "object_id: $object_id, predicate: 'WORKS_WITH', claim_type: 'observed_event', "
-            "status: 'candidate', confidence_level: 'medium', visible_from_order: 1, "
-            "origin: 'candidate'})",
-            id=claim_id,
-            series_id=SERIES_ID,
-            subject_id=DEXTER,
-            object_id=ANGEL,
-        )
+    _fresh_query(
+        "CREATE (c:Claim {id: $id, series_id: $series_id, subject_id: $subject_id, "
+        "object_id: $object_id, predicate: 'WORKS_WITH', claim_type: 'observed_event', "
+        "status: 'candidate', confidence_level: 'medium', visible_from_order: 1, "
+        "origin: 'candidate'})",
+        id=claim_id,
+        series_id=SERIES_ID,
+        subject_id=DEXTER,
+        object_id=ANGEL,
     )
     return claim_id
 
