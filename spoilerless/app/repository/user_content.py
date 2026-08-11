@@ -422,14 +422,11 @@ NOTE_DELETE_QUERY = """
     RETURN deleted_id AS id
 """
 
-BOUNDARY_VALIDATION_QUERY = """
-    MATCH (:Series {id: $series_id})<-[:PART_OF]-(episode:Episode)
-    WHERE episode.episode_order = $visible_until_order
-      AND episode.visible_from_order IS NOT NULL
-      AND episode.visible_from_order >= 1
-      AND episode.visible_from_order <= $visible_until_order
-    RETURN episode.id AS episode_id
-"""
+# The episode-order boundary validation is the SAME check as the read-path
+# BOUNDARY_QUERY (spoiler/filter.py) — one definition, merged with the
+# stricter >= 1 guard (PROB-09/#81); this alias keeps the repository's
+# internal call sites unchanged.
+from spoilerless.app.spoiler.filter import BOUNDARY_QUERY as BOUNDARY_VALIDATION_QUERY  # noqa: E402
 
 
 class UserContentRepository:

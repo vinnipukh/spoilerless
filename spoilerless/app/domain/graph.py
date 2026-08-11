@@ -38,7 +38,11 @@ class GraphClaim(BaseModel):
     claim_type: str
     status: str
     confidence_level: str
-    relationship_effect: float
+    # PROB-09/#81: the graph carries BOTH conventions — seed claims store a
+    # float strength (0.9), candidate-origin claims store the
+    # RelationshipEffect string enum ("strengthens"). Either must validate;
+    # missing stays None.
+    relationship_effect: str | float | None = None
     visible_from_order: int = Field(ge=1)
     valid_from_order: int | None = None
     valid_until_order: int | None = None

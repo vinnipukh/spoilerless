@@ -4,6 +4,7 @@ import asyncio
 import sys
 
 from spoilerless.app.graph.database import Neo4jDatabase
+from spoilerless.app.graph.labels import STORY_LABELS
 from spoilerless.app.graph.seed import setup_database
 
 
@@ -12,7 +13,7 @@ from spoilerless.app.graph.seed import setup_database
 # seeding, verify every seeded story node carries a non-null
 # ``visible_from_order`` so drift cannot hide again. Null values are the
 # failure — the seed never ships a null visibility order for a story node.
-STORY_LABELS = ("Character", "Event", "Location", "Organization", "Object", "Claim", "EvidenceFragment", "Source")
+# The story-label inventory lives in graph/labels.py (PROB-09/#81).
 
 
 async def _check_visibility_schema(database: Neo4jDatabase) -> None:

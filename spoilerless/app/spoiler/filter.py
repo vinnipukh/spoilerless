@@ -81,6 +81,7 @@ BOUNDARY_QUERY = """
 MATCH (:Series {id: $series_id})<-[:PART_OF]-(episode:Episode)
 WHERE episode.episode_order = $visible_until_order
   AND episode.visible_from_order IS NOT NULL
+  AND episode.visible_from_order >= 1
   AND episode.visible_from_order <= $visible_until_order
 RETURN episode.id AS episode_id
 """

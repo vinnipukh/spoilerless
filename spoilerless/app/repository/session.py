@@ -298,10 +298,14 @@ class Neo4jSessionRepository:
 
     async def revoke(self, raw_token: str) -> None:
         hashed = _hash_token(raw_token)
+        # PROB-09/#81: revoked_at must match the seconds convention of every
+        # other timestamp on the node — the ms-based Cypher timestamp()
+        # violated the module's own documented rule (see module docstring).
         await self._database.execute_query(
             f"""\
             MATCH (s:{self.LABEL} {{token_hash: $token_hash}})
-            SET s.revoked_at = timestamp()
+            SET s.revoked_at = $revoked_at
             """,
             token_hash=hashed,
+            revoked_at=time.time(),
         )

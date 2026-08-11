@@ -5,26 +5,14 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from spoilerless.app.graph.database import Neo4jDatabase
+from spoilerless.app.graph.labels import NODE_LABELS  # noqa: F401 — inventory re-exported for importers
 from spoilerless.app.graph.ontology import Ontology, load_ontology
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 METADATA_DIR = PROJECT_ROOT / "data" / "dexter" / "metadata"
 SEED_DIR = PROJECT_ROOT / "data" / "dexter" / "seed"
 
-NODE_LABELS = (
-    "Series",
-    "Episode",
-    "Character",
-    "Event",
-    "Location",
-    "Organization",
-    "Object",
-    "Claim",
-    "Source",
-    "EvidenceFragment",
-    "UserNote",
-    "Revision",
-)
+
 RELATIONSHIP_TYPES = (
     "PART_OF",
     "PRECEDES",

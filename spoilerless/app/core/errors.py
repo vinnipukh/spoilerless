@@ -9,7 +9,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from neo4j.exceptions import (
     AuthError,
-    ClientError,
     ConstraintError,
     Neo4jError,
     ServiceUnavailable,
@@ -118,10 +117,14 @@ class ErrorResponse(BaseModel):
     detail: ErrorDetail
 
 
+# Exception types routed to the 503 database handler. PROB-09/#81:
+# ClientError is deliberately EXCLUDED — the neo4j driver raises it for
+# invalid Cypher/parameters (a server bug), and masking that as 503
+# DATABASE_UNAVAILABLE hides app bugs behind an infra excuse. A bad
+# statement now surfaces as the framework's plain 500.
 _SAFE_ERRORS: tuple[type[BaseException], ...] = (
     ServiceUnavailable,
     AuthError,
-    ClientError,
     Neo4jError,
 )
 
