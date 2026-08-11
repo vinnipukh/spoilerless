@@ -88,6 +88,7 @@ None yet.
 | 260805-te3 | Visitor (misafir) read-only login — browse the graph, no node/note writes (backend anon writes already 401; fixed DetailPanel TooltipProvider crash) | 2026-08-05 | 73b87a7 | [260805-te3-add-a-visitor-misafir-read-only-login-vi](./quick/260805-te3-add-a-visitor-misafir-read-only-login-vi/) |
 | 260810-testtime | Backend test suite 75m -> ~40m serial: DRY conftest helpers (seed_live_database, module_cleanup_fixture, run_query/helper_db/run_async), per-test cleanup -> module-scoped, chat_persistence async'd, pytest-asyncio loop_scope=module, ghost-node fixed-id cleanup fix. Parallel chunks on AuraDB measured SLOWER (connection contention); <8m needs local docker Neo4j. Pre-existing reds: 3 doc-contract + 1 seed-image | 2026-08-10 | a56b52f | — |
 | 260810-ep1box | Episode-band cluster box is a non-interactive dashed outline — transparent fill (dot-grid shows through), dashed border, events:no (cluster taps no longer open a bogus DetailPanel) | 2026-08-10 | c77874d | — |
+| 260811-prob09 | PROBLEMS.md NINTH-PASS fixes: #58 pipeline ProgressService imports; #59 path-route boundary resolves from persisted progress (never MAX_PATH_HOPS); #75 BacklinksTab jump-to-node + fresh hover card; #76 onRefreshGraph to GraphCanvas (non-destructive custom-node refresh); #80 dead-code sweep (10 items; 3 of the finding's claims verified FALSE at HEAD) | 2026-08-11 | 3d6dc33 | — |
 
 ## Deferred Items
 

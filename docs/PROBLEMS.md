@@ -457,3 +457,225 @@ Evidence: the two live screenshots (pre- and post-orphan-wiring) show the same h
 6. Update/relax `GraphCanvas.test.tsx` node-count assertions (currently `11`) to the enriched counts or to count-independent checks.
 
 This is a rendering/interaction problem, not a data problem — the enriched seed is correct and validated; the canvas just has no strategy for showing more than a toy graph.
+
+---
+
+## NINTH PASS — thermo-nuclear code quality review (2026-08-11)
+
+Three parallel read-only reviewers + parent verification pass over the whole
+repo (`spoilerless/app`, `frontend/src`, all ~150 files). Every finding below
+cross-checked against live source by the parent; line numbers current at
+HEAD `c2ff7f5`. No files modified.
+
+### 58. BLOCKER — `retrieval/pipeline.py` uses `ProgressService`/`ProgressNotFoundError` without importing them — NameError on the default ctor and on the RAG-01 fail-closed path
+`pipeline.py:595-598` default-constructs `ProgressService(database)` when none
+is passed (imports at lines 26-56 never name it); `pipeline.py:626` catches
+`except ProgressNotFoundError:` which is unconditionally broken — the
+documented "no persisted progress → empty visible set" graceful path raises
+`NameError` → 500. `services/chat.py:193` dodges the ctor only by always
+passing `progress_service=`. Verified by executing the constructor.
+**Fix:** `from spoilerless.app.services.progress import ProgressService, ProgressNotFoundError`
+(or move resolve into a parameter so the pipeline never names the service).
+
+### 59. BLOCKER — `api/graph.py:186` passes `MAX_PATH_HOPS` (4) as the requested episode order to `_resolve_effective_boundary`
+`find_shortest_path` calls `_resolve_effective_boundary(service, progress_service, series_id, user, MAX_PATH_HOPS)` — a hop-count constant used as an episode order. Any authenticated user's spoiler boundary clamps to `min(4, view_as_of)` instead of their real progress; category error. Same route reaches into private `service._database` and calls the retrieval tool `find_path` directly, bypassing the service layer.
+**Fix:** `GraphService.find_path(...)` wrapper; resolve the boundary from persisted progress (or an explicit `visible_until_order` param), never from `MAX_PATH_HOPS`.
+
+### 60. BLOCKER — Cypher transactions authored inside route handlers; repositories are identity pass-throughs
+`api/candidates.py:253-399` (`_approve`/`_reject`/`_edit` closures doing raw `tx.run()` + `RevisionRepository.log_revision`) and `api/revisions.py:126-310` (`_revert_work` with the whole revert business flow: boundary fetch, CANNOT_REVERT guards, snapshot restore, REFERS_TO re-creation, REVERTED logging) — while `graph/candidates.py:182-202` methods are literal `return await self._db.execute_write(work, command)` pass-throughs (comment admits they exist only for a linter rule). The three candidate closures are ~85% duplicated (read → before/after → status write → log revision). API layer owns data-access logic; repository is a wrapper around a route closure.
+**Fix:** real repository/service methods (`approve(series_id, claim_id, user_id, now)`, `service.revert(...)`); routes shrink to try/except + `invalidate_series`; delete the `work`/`command` plumbing and router-level query constants (`_read_claim_query`, `REVISION_*_QUERY`).
+
+### 61. BLOCKER — `App.tsx` dual series-id source of truth — series switch leaves stale graph on screen
+`App.tsx:118` `selectedSeriesId` (useState) vs `App.tsx:120` `useGraph(watchProgress.seriesId, ...)`. `handleSeriesSelect` (358-361) only sets `selectedSeriesId`, so changing the series dropdown (or dashboard "Open series") leaves the OLD series' graph rendering until the user clicks an episode; `episodeSelectorValue` goes null in between. User-visible break in the primary navigation control.
+**Fix:** `watchProgress.seriesId` is the only source; `handleSeriesSelect` = `requestChange(seriesId, currentView)`; delete `selectedSeriesId`.
+
+### 62. MAJOR — visible-claim Cypher predicate+projection copy-pasted 7× (spoiler-drift hotspot)
+`retrieval/tools.py:47-75,169-317` + `spoiler/filter.py:86-215`: the `origin IN ['canonical','candidate'] AND claim_type <> 'user_authored' AND valid_from/valid_until in-range` + ~15-column claim projection appears in `CLAIMS_FOR_FRONTIER_QUERY`, `GET_CLAIMS_QUERY`, `ALL_VISIBLE_CLAIMS_QUERY`, `GRAPH_SUMMARY_COUNTS_QUERY`, `VISIBLE_CLAIMS_QUERY`, `SOURCES_QUERY`, `EVIDENCE_QUERY`. One spoiler-bug fix must be applied seven times.
+**Fix:** `visible_claim_where(frontier_var)` + `claim_projection()` fragment builder in one module.
+
+### 63. MAJOR — `retrieval/pipeline.py` three parallel tool registries + two hot-loop special cases
+`TOOL_SCHEMAS` (395-532), `_TOOL_EXECUTORS`, `_TOOL_INPUT_MODELS` — three tables for the same 11 tools; `propose_changeset` hand-dispatched outside the executor map (774-780) and `get_user_notes` gets bespoke `{"notes": ...}` wrapping (789-800); `_accumulate` shape-sniffs `isinstance(result, list)`. Every new tool touches three tables plus a branch.
+**Fix:** one `TOOL_SPECS: list[ToolSpec]` = `(name, description, input_model, executor, result_bucket)`; executor returns rows for its declared bucket.
+
+### 64. MAJOR — context-section contract exists three times (one dead)
+`pipeline.py:90-100,125-279` (`CONTEXT_SECTIONS` — dead, never referenced) vs `llm/system_prompt.py:782-792` (`CONTEXT_DELIMITERS`) vs the hard-coded section list inside `assemble_context`. Both files carry "keep in sync" comments; the sync has already rotted.
+**Fix:** one `retrieval/context.py` section registry `(name → tag → formatter)` imported by both; delete `CONTEXT_SECTIONS` + the comments.
+
+### 65. MAJOR — Python BFS duplicated in `get_neighborhood` + `find_path` (4-8 round trips each)
+`retrieval/tools.py:360-461,519-606`: two hand-rolled BFSes (frontier/visited/parent/edge_to) over per-depth claim queries — 4-8 sequential DB round trips per call, same scaffolding twice.
+**Fix:** one Cypher variable-length traversal under the shared visibility predicate, or one shared `_walk_visible_claims(tx, frontier, depth)` helper.
+
+### 66. MAJOR — `repository/user_content.py` shotgun label-variant probes + 6 inline capture-old-state copies
+`get/update/delete_custom_node` loop over `CUSTOM_NODE_*_QUERIES.values()` running up to 5 sequential `tx.run` probes per request, near-identical f-strings differing only in the interpolated label (a closed server-owned enum); six inline "SELECT old state before mutation" copies (522-529, 569-576, 620-627, 666-673, 725-733, 772-780); `NOTE_UPDATE_QUERY`/`NOTE_DELETE_QUERY` imported into `repository/change_set.py:56` — cross-package query-constant import, the layering inversion the rest of the package avoids by keeping Cypher in `graph/*.py`.
+**Fix:** label-agnostic `MATCH (node {id, series_id})` with `labels(node)` projection (or UNION like `get_note`); one `_capture_old_state(tx, id, series_id, kind)`; move user_content query maps to `graph/user_content_queries.py`.
+
+### 67. MAJOR — `repository/change_set.py` 246-line 12-case apply dispatch
+`_apply_one_operation` (596-842): 5 cases repeat `derive_visible_from_order(episode.get("visible_from_order"), current_progress)`, 5 repeat `(operation.properties or {}).get("description")`, 5 repeat the `f"user-{kind}:{uuid4()}"` id template; every case = `require_visible(...) → _run_apply(...)`. Plus 5 exception classes for one state machine and a duplicate `_normalize`.
+**Fix:** table-driven dispatch `operation_type → (query, required_targets, require_user_origin, id_prefix)`; one `_visible_from_episode(tx, op, progress)`; dispatch → ~40 lines.
+
+### 68. MAJOR — canonical row/token helpers duplicated 2-4× across repositories
+`_normalize` byte-identical in `repository/change_set.py:166-179`, `chat.py:36-49`, `progress.py:30-49`, `user.py:17-38` (+ divergent `_native` in user_content.py:57-62); `_hash_token`/`_generate_token` in `session.py:96-101` + `share.py:13-18`; `_run_create` vs `_run_apply` same helper twice.
+**Fix:** `neo4j_row_to_python()` in `graph/database.py`, one `tokens.py`, one `_run_single(tx, query, error_msg, **params)`.
+
+### 69. MAJOR — two LLM-config resolution sources of truth
+`services/chat.py:77-178` (`get_llm_provider`: 100 lines of BYOK-header branching, `stored.get(k) or settings.llm_k` fallback chain, gemini/openai_compatible/vllm/ollama string dispatch) re-implements `SettingsService.get_llm` (`services/settings.py:30-49`). The `LLMSettingsUpdate(base_url=...)` validation reuse (chat.py:126) is duct tape over the split.
+**Fix:** one `SettingsService.resolve_llm()` → `LLMConfig`; `get_llm_provider` = BYOK override or `resolve_llm()`; delete the duplicated chain.
+
+### 70. MAJOR — per-router exception boilerplate: 9×4-clause try/except + `_not_found` defined 4× (disagreeing)
+`api/user_content.py:59-304` — 9 write handlers repeat the identical 4-clause try/except (ValidationError→422, Conflict→409, NotFound→404, Forbidden→403); `_not_found` exists in 4 routers (change_set/chat `raise`, revisions/user_content `return`); `_invalid`/`_conflict`/`_stale`/`_forbidden`/`_too_many_requests` copies; helpers take `exc` and never use it.
+**Fix:** one FastAPI exception-handler registry mapping repo sentinels → envelope once in `core/errors.py`; handlers collapse to one-liners.
+
+### 71. MAJOR — `api/candidates.py` catch-all `except Exception` → 422 + `str(exc)` leak
+Four sites (155-163, 281-286, 333-338, 391-398) map any failure (DB down, constraint, network) to `422 INVALID_EXTRACTION_PAYLOAD` and interpolate raw `str(exc)` into the client response — wrong status semantics for approve/reject/edit and info disclosure.
+**Fix:** catch only the validation exceptions the repo raises; let the global Neo4j/500 handlers take the rest; never interpolate `{exc}` client-facing.
+
+### 72. MAJOR — frontend: four parallel cytoscape highlight implementations
+`GraphCanvas.tsx:521-570,576-614,623-687` + `focusReducer.ts:26-64` + 741-746: (a) inline tap-handler class juggling, (b) `focusedElementIds` effect, (c) `revealTarget` effect, (d) `newlyRevealedIds` effect — identical removeClass-all → getElementById → merge → addClass shape; a node tap applies focus twice.
+**Fix:** one `applyHighlight(cy, ids, {classes, fit, fadeOthers})` in `graph/highlight.ts`; unify the three props + `localReveal` into one `highlightRequest` consumed by ONE effect. Deletes focusReducer.ts + ~150 lines.
+
+### 73. MAJOR — frontend: six hand-rolled fetch-hook state machines + ~12 prevKey render-time resets
+`useGraph`/`useChatSessions`/`useNotes`/`useRevisions`/`useEpisodes`/`useSeries` — each its own `idle|loading|error|success` machine, key/prevKey reset, cancelled guard; `useNotes`/`useRevisions` are twins differing only in the fetch fn; the prevKey pattern hand-copied ~12× in components (App 304/332, DetailPanel 490, ChangeSetCard 247, ChatPanel 79/103, CommandPalette 100, both create-dialogs).
+**Fix:** `useFetchState<T>(key, fetcher)` + `useDerivedState(key, compute)`; wrappers → ~350 lines deleted.
+
+### 74. MAJOR — frontend: canvas destructively unmounted on refetch → module-level singleton hacks
+`autoZoomHold.ts` (module-level `lastTouchAt`/`lastViewport`) and `filterState.ts:64-83` (`positionCache`: unbounded `Map` keyed `seriesId:order:mode`, never evicted — per-episode-advance memory leak) exist only to survive `useGraph.refetch()`'s unmount; plus `lastLayoutCyRef` cyChanged dance (472-496).
+**Fix:** render loading state as overlay above last-known-good graph; deletes autoZoomHold.ts, viewport-restore, the cyChanged dance; `positionCache` becomes bounded. Also `get/setCachedPositions` default `mode: string = 'full'` (66-83) is dead — callers always pass `GraphMode`.
+
+### 75. MAJOR — frontend: stale-closure hover card + dead `onSelectNode` (BacklinksTab "Open" closes inspector)
+`GraphCanvas.tsx:766-867` — `cy` callback registers `cy.on('mouseover', ...)` once per instance closing over mount-time `graph`; after in-place `refresh()` the hover card reads first-render payload (stale labels, misses new nodes). `DetailPanel.tsx:140,843-846` — `onSelectNode?` threaded to BacklinksTab but `App.tsx:557-568` never passes it → backlink "Open" always falls into `else onDeselect()`.
+**Fix:** `graphRef` synced in effect (or re-register keyed on `[graph]`); pass `handleJumpToNode` (App:396) or delete the prop; delete the now-unreachable structural-edge branch (DetailPanel 821-835).
+
+### 76. MAJOR — frontend: `onRefreshGraph` not passed to GraphCanvas → custom-node dialog always destructive-refetches
+`App.tsx:526-541` passes `onRefreshGraph={graphState.refresh}` to DetailPanel but not GraphCanvas; `CreateCustomNodeDialog`'s `onSuccess` (`(onRefreshGraph ?? onRefetchGraph)?.()`, GraphCanvas:945) always takes the destructive refetch (loading unmount + full relayout), defeating the documented non-destructive `refresh` intent.
+**Fix:** add `onRefreshGraph={graphState.refresh}` at App.tsx:526.
+
+### 77. MAJOR — `ChangeSetService`/`ChatService` session passthroughs + `AuthService` silent fallbacks
+`services/change_set.py:186-242` — confirm/reject/revert are command-dataclass pass-throughs (docstring admits the layer only "translates repository sentinel exceptions", which the API layer then translates again); `_validate_and_protect` (248-253) does N serial `get_visible_target` awaits (should be `asyncio.gather`). `services/chat.py:197-224` — create/list/delete_session one-line passthroughs; `acquire/release_generation_slot` identity wrappers. `services/auth.py:119-127` — `session_repo or InMemorySessionRepository()` / `verifier or ProductionGoogleVerifier()` silent in-memory substitution in production if DI misses.
+**Fix:** fold ChangeSetService into routes→repository or move sentinel→HTTP translation into it; delete the three chat passthroughs; make both AuthService params required.
+
+### 78. MAJOR — `pipeline.py:812-846` — graph-edit feature logic inside retrieval layer
+`_propose_changeset` instantiates a fresh `ChangeSetService(self._database)` per tool call and re-resolves progress via `ProgressService` even though `answer()` resolved `boundary` at turn start (line 625) — second DB read per propose call + boundary drift between model context and draft snapshot; errors serialized into model-visible tool result as raw `str(exc)` (845).
+**Fix:** tool returns validated "propose intent" only; chat service executes `ChangeSetService.propose` after the turn with the already-resolved boundary.
+
+### 79. MAJOR — file-size decomposition (1k rule), all with concrete splits
+- `DetailPanel.tsx` 1001: extract CharacterPortrait / NoteItem+NoteEditor / CreateRelationshipDialog / OverviewTab → ~350.
+- `GraphCanvas.tsx` 954: extract `useCytoscapeGraph` (5 effects + runLayout), `CreateCustomNodeDialog`, `useCyEvents`; collapse `wiredCyRef`+`cyInstanceRef`.
+- `App.tsx` 667: icons → `lib/icons.tsx`; `useGraphWorkspace()` hook; delete empty `handleExportGraph` (411-413, no-op CommandPalette row).
+- `pipeline.py` 1016: schemas → `retrieval/tool_specs.py`; formatters+context → `retrieval/context.py`.
+- `repository/user_content.py` 867: query maps → `graph/user_content_queries.py`; capture-old-state helper.
+- `repository/change_set.py` 842: apply/revert dispatch → table-driven module.
+- `retrieval/tools.py` 852: query constants → `graph/retrieval_queries.py`; BFS → shared traversal.
+
+### 80. MINOR — dead code sweep (delete in one pass)
+`model_records` (domain/graph.py:98), `ChatEventPayload` alias (domain/chat.py:116), `install_database_error_handlers` compat alias (core/errors.py:240-242), `CONTEXT_SECTIONS`, `INSUFFICIENT_EVIDENCE_RESPONSE_TEMPLATE` (pipeline.py:69), `SYSTEM_PROMPT_VERSION` (system_prompt.py:14), `emitted` (provider.py:369), `get_driver`, unused `question` param in `_fallback_for`, `handleExportGraph` (App 411-413), unused API exports (`proposeChangeSet`, `revertChangeSet`, non-streaming `sendMessage`, `getRevision`, `deleteCustomNode`, `deleteCustomRelationship`, `graphStylesheet` legacy re-export), `getCachedPositions`/`setCachedPositions` dead `mode='full'` default, `warningsFor` + cast (ChangeSetCard 196-198, `warnings?` isn't a backend field), `rate_limit_callback`'s `pexpire` (never used).
+
+### 81. MINOR — other high-value items
+- `core/errors.py:121-126`: `ClientError` in `_SAFE_ERRORS` → bad Cypher = `503 DATABASE_UNAVAILABLE`, hides server bugs as infra.
+- `GraphCanvas.tsx:908-921` + `DetailPanel.tsx:607-624`: byte-identical export fallback → `exportGraphMarkdown()` in lib/exportMarkdown.ts.
+- `ChangeSetCard.tsx:339-353`: fake `Citation` objects (`episode_code: ref.id`) to reuse CitationChip = contract abuse → lean `{kind, label}` chip variant.
+- `App.tsx:124` + `DetailPanel.tsx:524`: two live `useNotes` per series; every selection re-fires target-scoped fetch → one NotesProvider, client-side filter.
+- `lib/nodeTypes.ts` vs GraphCanvas:254-260,435: four node-type registries (`NODE_TYPES`/`ALLOWED_NODE_TYPES`/inline array/`CustomNodeType`) → derive from `NODE_TYPES`.
+- `App.tsx:210-240` vs `ChangeSetCard.tsx:157-189`: `focusTargetsForAppliedChangeSet`/`affectedRefsFor` same operation→ids switch in two files → `operationTargetRefs(op)` in types/changeSet.ts.
+- `layoutConfig.ts:19-47` + `overviewTiers.ts:26-104`: hardcoded `DEXTER_NODE_ID` repulsion + Dexter S01E01-03 tier table — other series render flat; move `display_tier` to backend payload.
+- `repository/session.py:303-311`: `revoked_at = timestamp()` (ms epoch) on a node whose other timestamps are seconds — module docstring itself warns against it.
+- `spoiler/filter.py:40-46` vs `repository/user_content.py:380-387`: `BOUNDARY_QUERY`/`BOUNDARY_VALIDATION_QUERY` same check twice; story-label inventory exists 3× (seed.py:14-27, setup.py:15, tools.py:24) → one `graph/labels.py`.
+- `graph/seed.py:395-415` vs `graph/setup.py:18-43`: two visibility audits with different exclusion lists (one misses ChatMessage; other hardcodes `series_id="series_dexter"`) → one parameterized audit.
+- `services/settings.py:51-93`: ad-hoc blank-string conditionals hand-merged into a dict → typed optional fields with explicit unset-vs-blank semantics.
+- `domain/graph.py:41`: `GraphClaim.relationship_effect: float` while the system stores/treats it as string enum — `"strengthens"` fails `model_validate`.
+- `api/auth.py:93-95`: `verify_origin` silent `"*" in origins → return` bypass disables CSRF for the whole auth surface if `FRONTEND_ORIGINS` ever contains `*`.
+- `api/share.py:33-60,180-199`: request/response models in the router (domain/share.py holds `ShareTokenRecord`); tri-mode revoke lookup (raw token OR hash OR id) → normalize to one identifier.
+
+**Survival order for this pass:**
+1. #58 + #59 (two one-line-class bugs: missing import, category error) — smallest diffs, highest blast radius.
+2. #75 + #76 (BacklinksTab close, destructive-refetch) + stale hover card — user-visible, tiny.
+3. #80 dead-code sweep (~20 items, zero risk).
+4. #62/#63/#64/#65/#66/#67/#68 backend dedup wave (fragment builder, tool registry, row helpers).
+5. #72/#73/#74/#77 frontend structural wave (highlight, useFetchState, no-unmount, capabilities).
+6. #60/#70/#71 layering wave (repo methods, exception registry, no catch-all 422).
+
+Estimated delete: 1,500-2,000 lines across the full set, plus 3 real bugs fixed.
+
+---
+
+## TENTH PASS — NINTH-PASS fixes applied (2026-08-11)
+
+Follow-up to NINTH PASS: the survival-order items #58/#59/#75/#76/#80 were
+verified against live source (current layout `spoilerless/app`), fixed,
+tested, and committed in one autonomous session. Every fix below was
+reproduced before editing; nothing was speculative.
+
+### #58 — FIXED (commit 28a486a)
+`retrieval/pipeline.py` used `ProgressService` (default ctor) and
+`ProgressNotFoundError` (RAG-01 except clause) without importing them.
+Reproduced: `RetrievalPipeline(database=None)` →
+`NameError: name 'ProgressService' is not defined`. Added the import.
+
+### #59 — FIXED (commit 29ffeeb)
+`api/graph.py` passed `MAX_PATH_HOPS` (4) as the requested episode order to
+`_resolve_effective_boundary`: every authenticated reader clamped to
+`min(4, view_as_of)`, and users with NO progress record were granted an
+unearned boundary of 4. `_resolve_effective_boundary` now accepts
+`requested_order=None` (no client boundary): path route resolves from
+persisted progress alone; no record fails closed to 1; anonymous stays 1;
+the graph-GET/export min-clamp is unchanged. 5 new unit tests (fake
+boundary/progress services) — the seed persists only 3 episodes, so the
+bug is latent on the test DB and needed a direct resolver test.
+
+### #75 — FIXED (commit d28020b)
+- `GraphCanvas` cy callbacks (registered once per cy instance) closed over
+  the mount-time `graph`: after an in-place `refresh()` the hover card read
+  first-render payloads. `graphRef` synced via effect now feeds the handler.
+- `DetailPanel.onSelectNode` was never passed by `App.tsx` — BacklinksTab
+  "Open" always fell into `onDeselect()`. App now wires an adapter that
+  jumps through `handleJumpToNode` (same path as search/palette).
+- NOT deleted (finding's "unreachable" claim wrong at HEAD): DetailPanel's
+  `selected.kind === 'edge' && !activeClaim` branch is reached by
+  user-origin edges (`origin: 'user'` routes around App's
+  StructuralEdgeCard branch).
+
+### #76 — FIXED (commit d28020b)
+`App.tsx` passed only `onRefetchGraph` to GraphCanvas, so
+`CreateCustomNodeDialog.onSuccess` always took the destructive refetch
+(loading unmount + full relayout). Added
+`onRefreshGraph={graphState.refresh}` — the dialog now refreshes in place.
+
+### #80 — PARTIALLY FIXED (commit 3d6dc33); three claims FALSE at HEAD
+Deleted (verified 0 non-definition references, tests included):
+`model_records` (domain/graph), `ChatEventPayload` (domain/chat),
+`get_driver` (graph/database, + now-unused `Annotated`/`Depends` imports),
+`SYSTEM_PROMPT_VERSION` (llm/system_prompt), `getRevision`
+(api/revisions), `deleteCustomNode`/`deleteCustomRelationship`
+(api/userContent), legacy `graphStylesheet` re-export, no-op
+`handleExportGraph` + CommandPalette "Export graph" row (FEAT-05 export
+landed in GraphControls; the palette row was a dead menu item).
+
+**Finding corrections (all verified live at HEAD c2ff7f5):**
+- `CONTEXT_SECTIONS` is NOT dead — it is the section-order contract asserted
+  by `test_prompt_injection.py:62,295-297` and
+  `test_retrieval_pipeline.py:20,225`. The "never referenced" claim missed
+  the tests directory.
+- `INSUFFICIENT_EVIDENCE_RESPONSE_TEMPLATE` is NOT dead — asserted by
+  `test_citations.py` as the canonical expected string.
+- `install_database_error_handlers` is NOT dead — it is the installed
+  entry point (main.py:206 + 26 test refs).
+- `emitted` (provider.py), `warningsFor` (ChangeSetCard, forward-looking
+  by design), `pexpire` (called at rate_limit.py:90) are live. Skipped.
+- `proposeChangeSet`/`revertChangeSet`/non-streaming `sendMessage` are
+  dead in-app but covered by their own api tests — left in place rather
+  than delete tested wire contracts in a zero-risk sweep.
+
+### Verification (all green)
+- Backend: `test_graph_api.py` 38 passed (2 pre-existing seed-image
+  failures, EIGHTH PASS class); `test_database` + `test_retrieval_pipeline`
+  + `test_prompt_injection` + `test_error_handlers` 40/40; local docker
+  Neo4j (`hdgraf-neo4j`) used throughout — no shared-AuraDB runs.
+- Frontend: `tsc -b` clean; GraphCanvas/App/CommandPalette/chat/changeSet
+  suites 89/89 pass.
+- No concurrent pytest on the shared AuraDB; `:AppSetting`/`:Session`/
+  real user rows untouched.
+
+### Remaining from NINTH PASS (given up this session — size/time)
+#62/#63/#64/#65/#66/#67/#68 backend dedup wave, #72/#73/#74/#77 frontend
+structural wave, #60/#70/#71 layering wave, #61 series-switch stale graph.
+All are refactors with no runtime bug (except #61, a UX regression); the
+runtime bugs in the pass are now fixed.
