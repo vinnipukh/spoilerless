@@ -136,6 +136,71 @@ describe('useWatchProgress', () => {
     expect(result.current.confirmedOrder).toBe(2)
   })
 
+  it('switchSeries moves to the new series at a NULL boundary without opening the modal (PROB-09/#61)', () => {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 3 }))
+
+    const { result } = renderHook(() => useWatchProgress())
+    expect(result.current.seriesId).toBe('series_dexter')
+    expect(result.current.confirmedOrder).toBe(3)
+
+    act(() => {
+      result.current.switchSeries('series_other')
+    })
+
+    expect(result.current.seriesId).toBe('series_other')
+    // Fail-closed: nothing revealed for the new series until the user picks
+    // an episode — viewAsOfOrder=1 would pre-select S01E01 and Radix Select
+    // swallows re-selected values, killing the first unlock click.
+    expect(result.current.confirmedOrder).toBeNull()
+    expect(result.current.viewAsOfOrder).toBeNull()
+    // Navigation-only: never a watch action, so no pending confirmation.
+    expect(result.current.pendingChange).toBeNull()
+    expect(mockedUpdateProgress).not.toHaveBeenCalled()
+    expect(JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? '{}')).toEqual({
+      seriesId: 'series_other',
+      visibleUntilOrder: 1,
+    })
+  })
+
+  it('switchSeries to the already-current series is a no-op', () => {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 2 }))
+
+    const { result } = renderHook(() => useWatchProgress())
+
+    act(() => {
+      result.current.switchSeries('series_dexter')
+    })
+
+    expect(result.current.seriesId).toBe('series_dexter')
+    expect(result.current.confirmedOrder).toBe(2)
+  })
+
+  it('after switchSeries, the first episode click still surfaces the unlock dialog (PROB-09/#61 regression)', () => {
+    // switchSeries leaves the boundary NULL; clicking S01E01 must open the
+    // confirm flow (currentView null → unlock path), never be swallowed.
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ seriesId: 'series_other', visibleUntilOrder: 1 }))
+
+    const { result } = renderHook(() => useWatchProgress())
+
+    act(() => {
+      result.current.switchSeries('series_dexter')
+    })
+    expect(result.current.seriesId).toBe('series_dexter')
+    expect(result.current.viewAsOfOrder).toBeNull()
+    expect(result.current.pendingChange).toBeNull()
+
+    act(() => {
+      result.current.requestChange('series_dexter', 1)
+    })
+
+    expect(result.current.pendingChange).toEqual({
+      seriesId: 'series_dexter',
+      nextOrder: 1,
+      direction: 'forward',
+    })
+    expect(mockedUpdateProgress).not.toHaveBeenCalled()
+  })
+
   it('confirmChange awaits updateProgress before committing local state, then persists the backend value to sessionStorage', async () => {
     const { result } = renderHook(() => useWatchProgress())
 

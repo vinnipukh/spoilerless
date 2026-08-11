@@ -358,6 +358,11 @@ function AuthenticatedApp() {
   function handleSeriesSelect(seriesId: string) {
     setSelectedSeriesId(seriesId)
     setSelectedElement(null)
+    // PROB-09/#61: the graph follows watchProgress.seriesId, so a series
+    // switch must move the watch-progress series too — otherwise the OLD
+    // series' graph stays rendered until an episode click. switchSeries is
+    // navigation-only (never opens the unlock modal).
+    if (seriesId !== watchProgress.seriesId) watchProgress.switchSeries(seriesId)
   }
 
   function handleEpisodeSelect(episodeOrder: number) {
@@ -411,6 +416,9 @@ function AuthenticatedApp() {
   const handleOpenSeries = (seriesId: string) => {
     setSelectedSeriesId(seriesId)
     setDashboardOpen(false)
+    // PROB-09/#61: same stale-graph fix as handleSeriesSelect — the graph
+    // follows watchProgress.seriesId and must move with the dashboard row.
+    if (seriesId !== watchProgress.seriesId) watchProgress.switchSeries(seriesId)
     // Reset the episode selector to that series' watched boundary through
     // the existing watchProgress flow (T-09-10-02 — never a second
     // boundary mechanism).

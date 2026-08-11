@@ -262,6 +262,32 @@ export function useWatchProgress(options?: { persist?: boolean }) {
     setState((prev) => ({ ...prev, pendingChange: null }))
   }
 
+  // PROB-09/#61: navigation-only series switch — the dropdown/dashboard
+  // "Open series" must move the graph to the new series IMMEDIATELY (a
+  // stale old-series graph otherwise stays on screen until an episode
+  // click). This is NOT a watch action: never opens ConfirmAdvanceModal,
+  // resets the boundary to the fail-closed NULL (same empty state as the
+  // mount-time initial render — no reveal until the user picks an episode,
+  // which then goes through the normal unlock flow), leaves nothing watched,
+  // and cancels any in-flight pending change. Setting viewAsOfOrder=1 here
+  // would pre-select S01E01 in the episode selector, and Radix Select does
+  // not fire onValueChange for a re-selected value — the first unlock click
+  // would be swallowed entirely.
+  function switchSeries(seriesId: string) {
+    userInteractedRef.current = true
+    writeStored(seriesId, 1)
+    setState((prev) =>
+      prev.seriesId === seriesId
+        ? prev
+        : {
+            seriesId,
+            watchedThroughOrder: null,
+            viewAsOfOrder: null,
+            pendingChange: null,
+          },
+    )
+  }
+
   return {
     seriesId: state.seriesId,
     // Current view (effective boundary) — kept under the legacy name so App
@@ -273,5 +299,6 @@ export function useWatchProgress(options?: { persist?: boolean }) {
     requestChange,
     confirmChange,
     cancelChange,
+    switchSeries,
   }
 }
