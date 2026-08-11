@@ -599,10 +599,10 @@ Estimated delete: 1,500-2,000 lines across the full set, plus 3 real bugs fixed.
 
 ## TENTH PASS — NINTH-PASS fixes applied (2026-08-11)
 
-Follow-up to NINTH PASS: the survival-order items #58/#59/#75/#76/#80 were
-verified against live source (current layout `spoilerless/app`), fixed,
-tested, and committed in one autonomous session. Every fix below was
-reproduced before editing; nothing was speculative.
+Follow-up to NINTH PASS: the survival-order items #58/#59/#75/#76/#80 (and
+#61, attempted) were verified against live source (current layout
+`spoilerless/app`), fixed, tested, and committed in one autonomous session.
+Every fix below was reproduced before editing; nothing was speculative.
 
 ### #58 — FIXED (commit 28a486a)
 `retrieval/pipeline.py` used `ProgressService` (default ctor) and
@@ -664,6 +664,28 @@ landed in GraphControls; the palette row was a dead menu item).
   dead in-app but covered by their own api tests — left in place rather
   than delete tested wire contracts in a zero-risk sweep.
 
+### #61 — IN PROGRESS (code written, uncommitted; verification blocked)
+`App.tsx` kept a dual series-id source of truth — `selectedSeriesId` (dropdown/
+dashboard) vs `watchProgress.seriesId` (graph/episodes/notes keys). Switching
+series only set `selectedSeriesId`, so the OLD series' graph stayed rendered
+until an episode click; `episodeSelectorValue` went null in between.
+
+Fix written but NOT yet committed (session ended at iteration cap):
+- `useWatchProgress.ts`: new `switchSeries(seriesId)` — navigation-only series
+  switch: sets `seriesId` + `viewAsOfOrder=1` (fail-closed boundary), clears
+  `pendingChange`, writes sessionStorage, NEVER opens ConfirmAdvanceModal,
+  never POSTs (the backend clamps every read server-side anyway).
+- `App.tsx::handleSeriesSelect` + `handleOpenSeries`: call
+  `watchProgress.switchSeries(seriesId)` when the series differs.
+- Behavior: series switch renders the new series' graph at episode 1
+  immediately instead of leaving the stale graph on screen.
+- Verification: `tsc -b` clean; `useWatchProgress.test.ts` 24/24 (incl. 2 new
+  switchSeries tests), `.wire.test.ts` 3/3. **BLOCKED:** `App.test.tsx`
+  2 failures ("Unlock S01E01?" / "Yes, unlock episode" not found) — the App
+  suite's mocked `useWatchProgress` almost certainly lacks `switchSeries`,
+  so `handleSeriesSelect` throws mid-render. Next step: add
+  `switchSeries: vi.fn()` to the App.test hook mock, re-run, commit.
+
 ### Verification (all green)
 - Backend: `test_graph_api.py` 38 passed (2 pre-existing seed-image
   failures, EIGHTH PASS class); `test_database` + `test_retrieval_pipeline`
@@ -676,6 +698,7 @@ landed in GraphControls; the palette row was a dead menu item).
 
 ### Remaining from NINTH PASS (given up this session — size/time)
 #62/#63/#64/#65/#66/#67/#68 backend dedup wave, #72/#73/#74/#77 frontend
-structural wave, #60/#70/#71 layering wave, #61 series-switch stale graph.
-All are refactors with no runtime bug (except #61, a UX regression); the
-runtime bugs in the pass are now fixed.
+structural wave, #60/#70/#71 layering wave (#61 is above: fix written,
+blocked on the App.test hook mock — finish before this list is touched).
+All are refactors with no runtime bug; the runtime bugs in the pass are
+now fixed.
