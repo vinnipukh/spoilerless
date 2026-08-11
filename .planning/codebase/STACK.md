@@ -1,33 +1,33 @@
 ---
-last_mapped: 2026-08-02
+last_mapped: 2026-08-12
 focus: tech
-last_mapped_commit: 0b4c83c8ca7c8c0004552cb55b53a5050978c30c
+last_mapped_commit: 1710d57db7c048a83299cadc072e0779f80f246d
 ---
 
 # Technology Stack
 
-**Analysis Date:** 2026-08-02
+**Analysis Date:** 2026-08-12
 
 ## Languages
 
 **Primary:**
-- Python 3.13+ - FastAPI application, Neo4j repositories, domain models, graph seeding, spoiler filtering, retrieval, and LLM orchestration under `backend/app/`; the requirement is declared in `pyproject.toml` and locked in `uv.lock`.
+- Python 3.13+ - FastAPI application, Neo4j repositories, domain models, graph seeding, spoiler filtering, retrieval, and LLM orchestration under `spoilerless/app/`; the requirement is declared in `pyproject.toml` and locked in `uv.lock`.
 - TypeScript 6.0.3 - Browser application and tooling under `frontend/src/`; use strict, bundler-oriented ES modules configured by `frontend/tsconfig.app.json`.
 - TSX / React JSX - React components, providers, hooks, and tests under `frontend/src/`; JSX uses the `react-jsx` transform from `frontend/tsconfig.app.json`.
 
 **Secondary:**
 - CSS - Tailwind v4 entry styles and application-specific styling in `frontend/src/index.css` and `frontend/src/App.css`.
-- YAML - Graph ontology declarations in `ontology/node_types.yaml`, `ontology/relation_types.yaml`, and `ontology/claim_types.yaml`; seed/setup code loads them through `backend/app/graph/ontology.py`.
+- YAML - Graph ontology declarations in `ontology/node_types.yaml`, `ontology/relation_types.yaml`, and `ontology/claim_types.yaml`; seed/setup code loads them through `spoilerless/app/graph/ontology.py`.
 - JSON - Dexter seed and metadata under `data/dexter/`, npm metadata in `frontend/package.json`, and UI generator configuration in `frontend/components.json`.
-- Cypher - Embedded Neo4j queries live primarily in `backend/app/repository/`, `backend/app/retrieval/tools.py`, and `backend/app/graph/`.
+- Cypher - Embedded Neo4j queries live primarily in `spoilerless/app/repository/`, `spoilerless/app/retrieval/tools.py`, and `spoilerless/app/graph/`.
 
 ## Source Inventory
 
 **Application and test source, excluding generated, vendor, planning, documentation, and data trees:**
-- Python: 93 files / 22,793 lines under `backend/` and repository Python support files.
-- TSX: 57 files / 8,754 lines under `frontend/src/`.
-- TypeScript: 43 files / 3,169 lines under `frontend/src/` plus frontend configuration.
-- CSS: 2 files / 166 lines under `frontend/src/`.
+- Python: 122 files / 32,332 lines under `spoilerless/` (75 app, 46 tests, 1 script).
+- TSX: 79 files / 13,257 lines under `frontend/src/`.
+- TypeScript: 65 files / 6,239 lines under `frontend/src/` plus frontend configuration.
+- CSS: 2 files / 174 lines under `frontend/src/`.
 
 Use these counts as a scale baseline when estimating changes; do not count `frontend/node_modules/`, build output, or `.planning/` as product source.
 
@@ -35,9 +35,9 @@ Use these counts as a scale baseline when estimating changes; do not count `fron
 
 **Environment:**
 - CPython 3.13 or newer is required by `pyproject.toml`; `uv.lock` resolves for Python 3.13+.
-- Node.js `^20.19.0 || >=22.12.0` is required by the locked Vite package in `frontend/package-lock.json`.
+- Node.js `^22.13.0 || >=24.0.0` is required by the locked Vite package in `frontend/package-lock.json`.
 - Browser runtime targets ES2023 and DOM APIs through `frontend/tsconfig.app.json`.
-- Neo4j Community is the only containerized runtime service; `docker-compose.yml` resolves to the single service `neo4j` using image `neo4j:2026-community`.
+- Neo4j Community is the only containerized runtime service; `docker-compose.yml` resolves to the single service `neo4j` using image `neo4j:2026.06.0-community`. An optional Upstash Redis instance (`REDIS_URL`) backs rate limiting and the graph cache.
 
 **Package Manager:**
 - uv manages Python environments and dependencies from `pyproject.toml`; exact resolution is committed in `uv.lock`.
@@ -47,49 +47,53 @@ Use these counts as a scale baseline when estimating changes; do not count `fron
 ## Frameworks
 
 **Core:**
-- FastAPI 0.140.7 - ASGI REST API, dependency injection, OpenAPI, middleware, lifecycle, and SSE entry points in `backend/app/main.py` and `backend/app/api/`.
-- Pydantic 2.13.4 - strict request/response and domain models under `backend/app/domain/`.
-- pydantic-settings 2.14.2 - environment-backed backend settings in `backend/app/core/config.py`.
+- FastAPI 0.140.7 - ASGI REST API, dependency injection, OpenAPI, middleware, lifecycle, and SSE entry points in `spoilerless/app/main.py` and `spoilerless/app/api/`.
+- Pydantic 2.13.4 - strict request/response and domain models under `spoilerless/app/domain/`.
+- pydantic-settings 2.14.2 - environment-backed backend settings in `spoilerless/app/core/config.py`.
 - React 19.2.8 and React DOM 19.2.8 - single-page browser UI rooted at `frontend/src/main.tsx` and `frontend/src/App.tsx`.
 - Tailwind CSS 4.3.3 with `@tailwindcss/vite` 4.3.3 - styling pipeline registered in `frontend/vite.config.ts`.
 - shadcn 4.16.0 / Radix UI 1.6.7 / Lucide React 1.28.0 - component conventions and primitives configured by `frontend/components.json` and implemented under `frontend/src/components/ui/`.
-- Cytoscape.js 3.34.0, react-cytoscapejs 2.0.0, and cose-bilkent 4.1.0 - interactive graph rendering and layout in `frontend/src/components/graph/GraphCanvas.tsx`.
+- Cytoscape.js 3.34.0, react-cytoscapejs 2.0.0, cytoscape-fcose 2.2.0 (primary layout), and cose-bilkent 4.1.0 (runtime fallback) - interactive graph rendering and layout in `frontend/src/components/graph/GraphCanvas.tsx` and `frontend/src/components/graph/layoutConfig.ts`.
 
 **Testing:**
-- pytest 9.1.1 and pytest-asyncio 1.4.0 - backend test runner configured in `pyproject.toml`; tests are under `backend/tests/`.
+- pytest 9.1.1 and pytest-asyncio 1.4.0 - backend test runner configured in `pyproject.toml`; tests are under `spoilerless/tests/`.
 - HTTPX 0.28.1 - FastAPI test/client support and injectable transport for LLM-provider tests; declared in the dev dependency group in `pyproject.toml`.
 - Vitest 4.1.10 with jsdom 30.0.1 - frontend tests configured in `frontend/vite.config.ts` and initialized by `frontend/src/test/setup.ts`.
 - Testing Library React 16.3.2, jest-dom 7.0.0, and user-event 14.6.1 - component interaction and DOM assertions declared in `frontend/package.json`.
 
 **Build/Dev:**
-- Uvicorn 0.51.0 - ASGI development/runtime server for `backend.app.main:app`, declared in `pyproject.toml`.
+- Uvicorn 0.51.0 - ASGI development/runtime server for `spoilerless.app.main:app`, declared in `pyproject.toml`.
 - Vite 8.1.5 and `@vitejs/plugin-react` 6.0.3 - frontend development server and production bundle configured in `frontend/vite.config.ts`.
 - TypeScript compiler 6.0.3 - `npm run build` performs `tsc -b` before `vite build`, as defined in `frontend/package.json`.
 - ESLint 10.8.0 with typescript-eslint and React hook/refresh plugins - frontend static analysis configured in `frontend/eslint.config.js`.
-- The `hdgraf-setup` console entry point maps to `backend.app.graph.setup:main` in `pyproject.toml`; use it to create constraints and seed the graph after Neo4j is available.
+- The `spoilerless-setup` console entry point maps to `spoilerless.app.graph.setup:main` in `pyproject.toml`; use it to create constraints and seed the graph after Neo4j is available.
 
 ## Key Dependencies
 
 **Critical:**
-- neo4j 6.2.0 - async Bolt driver; application-owned lifecycle and query helpers are implemented in `backend/app/graph/database.py`.
-- google-auth 2.56.2 with requests support - verifies Google ID tokens in `backend/app/services/auth.py`.
-- HTTPX 0.28.1 - asynchronous streaming HTTP transport for Gemini and OpenAI-compatible providers in `backend/app/llm/provider.py`.
-- PyYAML 6.0.3 - loads ontology and seed-support YAML through `backend/app/graph/ontology.py`.
+- neo4j 6.2.0 - async Bolt driver; application-owned lifecycle and query helpers are implemented in `spoilerless/app/graph/database.py`.
+- google-auth 2.56.2 with requests support - verifies Google ID tokens in `spoilerless/app/services/auth.py`.
+- HTTPX 0.28.1 - asynchronous streaming HTTP transport for Gemini and OpenAI-compatible providers in `spoilerless/app/llm/provider.py`.
+- PyYAML 6.0.3 - loads ontology and seed-support YAML through `spoilerless/app/graph/ontology.py`.
 - python-dotenv 1.2.2 - supports local environment loading alongside pydantic-settings, declared in `pyproject.toml`.
+- redis 8.1.0 - async Redis client for rate limiting and graph caching in `spoilerless/app/cache/redis_client.py`.
+- fastapi-limiter 0.2.0 (with pyrate-limiter) - Redis-backed request throttling in `spoilerless/app/services/rate_limit.py`.
 
 **Infrastructure:**
-- Neo4j stores canonical graph data, user-created graph data, revisions, users, sessions, progress, chat history, change sets, and runtime `AppSetting` configuration; access stays behind `backend/app/repository/` and `backend/app/graph/database.py`.
-- FastAPI publishes OpenAPI automatically. A direct `app.openapi()` probe at this commit reports 32 path templates and 44 method/path operations from `backend/app/main.py`.
+- Neo4j stores canonical graph data, user-created graph data, revisions, users, sessions, progress, chat history, change sets, share tokens, and runtime `AppSetting` configuration; access stays behind `spoilerless/app/repository/` and `spoilerless/app/graph/database.py`.
+- Redis (optional, Upstash `rediss://`) backs rate limiting and a cache-aside graph-response cache; all Redis access flows through `spoilerless/app/cache/`.
+- FastAPI publishes OpenAPI automatically. A direct `app.openapi()` probe at this commit reports 37 path templates and 50 method/path operations from `spoilerless/app/main.py`.
 - Vite proxies `/api` to the host FastAPI server during development via `frontend/vite.config.ts`; this proxy is a development facility, not a production reverse proxy.
 
 ## Configuration
 
 **Environment:**
-- Backend configuration uses `Settings` in `backend/app/core/config.py`: process environment overrides root `.env`, defaults fill optional fields, unknown variables are ignored, and `get_settings()` caches one process-wide instance.
+- Backend configuration uses `Settings` in `spoilerless/app/core/config.py`: process environment overrides root `.env`, defaults fill optional fields, unknown variables are ignored, and `get_settings()` caches one process-wide instance.
 - A root `.env` file is present and sensitive; note existence only and never read, quote, or commit it. Use the safe variable-name template `.env.example` when documenting setup.
 - Required database variable names are `NEO4J_URI`, `NEO4J_USERNAME`, and `NEO4J_PASSWORD`; optional database selection uses `NEO4J_DATABASE`. Keep values out of code and documentation.
-- Authentication configuration uses `GOOGLE_CLIENT_ID`, `SESSION_COOKIE_NAME`, `SESSION_TTL_SECONDS`, `SESSION_COOKIE_SECURE`, and `FRONTEND_ORIGINS`; definitions and defaults live in `backend/app/core/config.py`.
-- Optional chat configuration uses the `LLM_*` fields in `backend/app/core/config.py`; runtime graph-stored overrides are resolved by `backend/app/services/settings.py` and `backend/app/services/chat.py`.
+- Authentication configuration uses `GOOGLE_CLIENT_ID`, `SESSION_COOKIE_NAME`, `SESSION_TTL_SECONDS`, `SESSION_COOKIE_SECURE`, and `FRONTEND_ORIGINS`; definitions and defaults live in `spoilerless/app/core/config.py`.
+- Optional rate-limit/cache configuration uses `REDIS_URL` (Upstash `rediss://` connection string) in `spoilerless/app/core/config.py`; an empty value disables all Redis-backed features.
+- Optional chat configuration uses the `LLM_*` fields in `spoilerless/app/core/config.py`; runtime graph-stored overrides are resolved by `spoilerless/app/services/settings.py` and `spoilerless/app/services/chat.py`.
 - Frontend build-time configuration is templated in `frontend/.env.example`. `VITE_GOOGLE_CLIENT_ID` is consumed by `frontend/src/components/auth/LoginPage.tsx`; `VITE_API_BASE_URL` is declared but current API modules still use literal `/api` paths under `frontend/src/api/`.
 
 **Build:**
@@ -103,15 +107,16 @@ Use these counts as a scale baseline when estimating changes; do not count `fron
 **Development:**
 - Install Python 3.13+, uv, Node.js satisfying Vite 8, npm, Docker, and Docker Compose; authoritative manifests are `pyproject.toml`, `uv.lock`, `frontend/package.json`, and `frontend/package-lock.json`.
 - Start only Neo4j with `docker-compose.yml`, then run setup, backend, and frontend separately. Do not infer a full-container stack from the Compose file.
-- Keep Neo4j available for backend integration tests: `backend/tests/conftest.py` and repository tests are designed around a real graph rather than an ORM or embedded substitute.
-- Preserve the spoiler boundary in backend data access; frontend filtering is not a substitute for repository/retrieval filtering under `backend/app/spoiler/`, `backend/app/repository/`, and `backend/app/retrieval/`.
+- Keep Neo4j available for backend integration tests: `spoilerless/tests/conftest.py` and repository tests are designed around a real graph rather than an ORM or embedded substitute.
+- Preserve the spoiler boundary in backend data access; frontend filtering is not a substitute for repository/retrieval filtering under `spoilerless/app/spoiler/`, `spoilerless/app/repository/`, and `spoilerless/app/retrieval/`.
 
 **Production:**
-- Production hosting, reverse-proxy, container images for backend/frontend, Kubernetes/Helm manifests, and platform-specific deployment configuration are not detected in tracked repository files.
-- CI workflow configuration is not detected: there are no tracked `.github/workflows/`, GitLab CI, Jenkins, or Azure Pipelines definitions.
-- A production deployment must provide HTTPS, set secure cookie behavior, route `/api` to FastAPI, host the built frontend, and supply external Neo4j and provider configuration; none of those deployment choices are encoded by the current repository.
-- No tracked `LICENSE` or `COPYING` file is present. Treat the README demo disclaimer in `README.md` as project prose, not as a recognized software license grant.
+- Render deployment is defined by `render.yaml`: a free-tier `spoilerless-api` web service (`uv sync --frozen`, `uv run uvicorn spoilerless.app.main:app`) that auto-deploys on git push. No Kubernetes/Helm manifests or other cloud targets are tracked.
+- CI is configured as GitHub Actions in `.github/workflows/ci.yml` plus a separate `release.yml`; no GitLab CI, Jenkins, or Azure Pipelines definitions are tracked.
+- `frontend/vercel.json` defines a Vercel-style SPA rewrite for static hosting; no production API base URL or reverse-proxy manifest is tracked.
+- A production deployment must provide HTTPS, set secure cookie behavior, route `/api` to FastAPI, host the built frontend, and supply external Neo4j, optional Upstash Redis, and provider configuration.
+- `LICENSE` is present (MIT, Spoilerless Team); the README demo disclaimer in `README.md` remains project prose.
 
 ---
 
-*Stack analysis: 2026-08-02*
+*Stack analysis: 2026-08-12*

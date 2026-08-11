@@ -1,12 +1,12 @@
 ---
-last_mapped: 2026-08-02
+last_mapped: 2026-08-12
 focus: tech
-last_mapped_commit: 0b4c83c8ca7c8c0004552cb55b53a5050978c30c
+last_mapped_commit: 1710d57db7c048a83299cadc072e0779f80f246d
 ---
 
 # External Integrations
 
-**Analysis Date:** 2026-08-02
+**Analysis Date:** 2026-08-12
 
 ## APIs & External Services
 
@@ -14,35 +14,37 @@ last_mapped_commit: 0b4c83c8ca7c8c0004552cb55b53a5050978c30c
 - The browser loads Google Identity Services from `https://accounts.google.com/gsi/client` in `frontend/index.html` and initializes popup sign-in in `frontend/src/components/auth/LoginPage.tsx`.
   - SDK/Client: browser GIS global (`window.google.accounts.id`); no npm Google identity package is used.
   - Frontend configuration: `VITE_GOOGLE_CLIENT_ID`, declared in `frontend/.env.example` and consumed only by `frontend/src/components/auth/LoginPage.tsx`.
-  - Backend client: `google-auth[requests]` 2.56.2, declared in `pyproject.toml` and called by `ProductionGoogleVerifier` in `backend/app/services/auth.py`.
-  - Backend configuration: `GOOGLE_CLIENT_ID` in `backend/app/core/config.py`; it must identify the same web client as the frontend value.
-  - Flow: browser obtains an ID token, `POST /api/auth/google` in `backend/app/api/auth.py` verifies signature, audience, issuer, and expiry, then upserts the local user and creates a server-side session.
+  - Backend client: `google-auth[requests]` 2.56.2, declared in `pyproject.toml` and called by `ProductionGoogleVerifier` in `spoilerless/app/services/auth.py`.
+  - Backend configuration: `GOOGLE_CLIENT_ID` in `spoilerless/app/core/config.py`; it must identify the same web client as the frontend value.
+  - Flow: browser obtains an ID token, `POST /api/auth/google` in `spoilerless/app/api/auth.py` verifies signature, audience, issuer, and expiry, then upserts the local user and creates a server-side session.
   - No Google client secret is consumed by the implementation; do not introduce one into `.env`, frontend variables, or source.
 
 **Optional LLM Providers:**
-- OpenAI-compatible chat completions are implemented directly over HTTPX in `backend/app/llm/provider.py`.
+- OpenAI-compatible chat completions are implemented directly over HTTPX in `spoilerless/app/llm/provider.py`.
   - Endpoint: configurable base URL plus `POST /chat/completions`.
   - Auth: bearer token assembled from the effective API key inside `OpenAICompatibleProvider`; never send this key to `frontend/`.
-  - Configuration: effective `provider`, `base_url`, `api_key`, `model`, and `enabled` are resolved by `backend/app/services/chat.py`.
+  - Configuration: effective `provider`, `base_url`, `api_key`, `model`, and `enabled` are resolved by `spoilerless/app/services/chat.py`.
   - Compatibility: any service matching the expected streaming chat-completions/tool-call protocol may be used; there is no vendor-specific OpenAI Python SDK dependency in `pyproject.toml`.
-  - Special handling: models whose identifier starts with `deepseek` receive thinking mode disabled in `backend/app/llm/provider.py` so tool-call round trips use the supported message shape.
-- Google Gemini REST is implemented directly over HTTPX in `backend/app/llm/provider.py`.
+  - Special handling: models whose identifier starts with `deepseek` receive thinking mode disabled in `spoilerless/app/llm/provider.py` so tool-call round trips use the supported message shape.
+- Google Gemini REST is implemented directly over HTTPX in `spoilerless/app/llm/provider.py`.
   - Endpoint: `POST /v1beta/models/{model}:streamGenerateContent?alt=sse` against the configured base URL.
-  - Default host: `https://generativelanguage.googleapis.com`, defined in `backend/app/domain/settings.py`.
+  - Default host: `https://generativelanguage.googleapis.com`, defined in `spoilerless/app/domain/settings.py`.
   - Auth: `x-goog-api-key` request header applied by `GeminiProvider`; the full key remains backend-only.
-  - Translation: `backend/app/llm/provider.py` converts OpenAI-shaped pipeline messages/tools into Gemini `contents`, `functionCall`, and `functionResponse` structures.
-- Both provider paths are optional and fail closed when disabled or incompletely configured; selection is limited to `gemini` and `openai_compatible` by `backend/app/domain/settings.py`.
+  - Translation: `spoilerless/app/llm/provider.py` converts OpenAI-shaped pipeline messages/tools into Gemini `contents`, `functionCall`, and `functionResponse` structures.
+- Both provider paths are optional and fail closed when disabled or incompletely configured; selection is limited to `gemini` and `openai_compatible` by `spoilerless/app/domain/settings.py`.
+- BYOK overrides: the browser may send provider/key/base URL/model as per-request `X-LLM-Provider`/`X-LLM-Api-Key`/`X-LLM-Base-URL`/`X-LLM-Model` headers from `frontend/src/lib/byok.ts` (localStorage key `spoilerless:byok-llm-settings`); header values then replace stored/environment settings for that request. CORS and the allowlist are in `spoilerless/app/main.py`.
 
 **Application HTTP API:**
-- FastAPI exposes the local application contract from `backend/app/main.py`; direct OpenAPI generation reports 32 path templates and 44 method/path operations.
+- FastAPI exposes the local application contract from `spoilerless/app/main.py`; direct OpenAPI generation reports 37 path templates and 50 method/path operations.
   - Machine contract: `/openapi.json`; interactive docs: `/docs` and `/redoc`, generated by FastAPI.
   - Browser client: relative `fetch` wrappers in `frontend/src/api/client.ts` and feature modules under `frontend/src/api/`.
   - Credentials: every shared API fetch sends `credentials: 'include'` from `frontend/src/api/client.ts`.
   - Development routing: Vite proxies `/api` to `http://127.0.0.1:8000` in `frontend/vite.config.ts`.
   - Production routing: provide a reverse proxy or same-origin gateway for `/api`; no production base URL or routing manifest is tracked.
+  - Read-only sharing: token-based share links expose a shareable graph view via `spoilerless/app/api/share.py`; raw tokens are stored only as hashes by `spoilerless/app/repository/share.py` and expired/revoked tokens are swept with sessions.
 
 **Server-Sent Events:**
-- Chat streaming uses `StreamingResponse` with `text/event-stream` in `backend/app/api/chat.py`.
+- Chat streaming uses `StreamingResponse` with `text/event-stream` in `spoilerless/app/api/chat.py`.
   - Client: streaming `fetch`, `ReadableStream`, and a custom SSE parser in `frontend/src/api/chat.ts`; native `EventSource` is not used because the request is a credentialed POST with a JSON body.
   - Protocol: ordinary `data:` frames carry deltas, `event: done` carries the final envelope, and `event: error` carries terminal provider/concurrency failures.
   - Keep backend terminal events and frontend EOF handling synchronized whenever the stream contract changes.
@@ -56,57 +58,60 @@ last_mapped_commit: 0b4c83c8ca7c8c0004552cb55b53a5050978c30c
 
 **Databases:**
 - Neo4j Community is the sole application database.
-  - Local service: one `neo4j` Compose service using `neo4j:2026-community`, defined by `docker-compose.yml`.
-  - Connection configuration: `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, and optional `NEO4J_DATABASE`, modeled in `backend/app/core/config.py`.
-  - Client: Neo4j Python Driver 6.2.0 using `AsyncGraphDatabase` in `backend/app/graph/database.py`.
-  - Lifecycle: `backend/app/main.py` opens one application-owned async driver during FastAPI lifespan and closes it at shutdown.
-  - Access pattern: use repositories under `backend/app/repository/` and managed write transactions from `backend/app/graph/database.py`; there is no ORM or relational migration framework.
+  - Local service: one `neo4j` Compose service using `neo4j:2026.06.0-community`, defined by `docker-compose.yml`.
+  - Connection configuration: `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, and optional `NEO4J_DATABASE`, modeled in `spoilerless/app/core/config.py`.
+  - Client: Neo4j Python Driver 6.2.0 using `AsyncGraphDatabase` in `spoilerless/app/graph/database.py`.
+  - Lifecycle: `spoilerless/app/main.py` opens one application-owned async driver during FastAPI lifespan and closes it at shutdown.
+  - Access pattern: use repositories under `spoilerless/app/repository/` and managed write transactions from `spoilerless/app/graph/database.py`; there is no ORM or relational migration framework.
   - Local persistence: Compose-mounted Neo4j data/log/import/plugin directories are defined by `docker-compose.yml`; do not treat them as an application file-storage API.
 - Neo4j also stores application infrastructure state rather than only narrative entities:
-  - Users and opaque-token session hashes via `backend/app/repository/user.py` and `backend/app/repository/session.py`.
-  - Watch progress, user content, revisions, candidates, chat sessions/messages, and change sets through repositories under `backend/app/repository/`.
-  - Shared runtime LLM settings in one `:AppSetting {key: 'llm'}` node via `backend/app/repository/settings.py`.
+  - Users, opaque-token session hashes, and share-token hashes via `spoilerless/app/repository/user.py`, `spoilerless/app/repository/session.py`, and `spoilerless/app/repository/share.py`.
+  - Watch progress, user content, revisions, candidates, chat sessions/messages, and change sets through repositories under `spoilerless/app/repository/`.
+  - Shared runtime LLM settings in one `:AppSetting {key: 'llm'}` node via `spoilerless/app/repository/settings.py`.
 
 **File Storage:**
 - No external file-storage provider or upload pipeline is detected.
-- Curated seed content is repository-local JSON/YAML under `data/dexter/` and ontology YAML under `ontology/`; `backend/app/graph/setup.py` imports it into Neo4j.
-- Runtime user notes and graph edits are database records, not files; keep new persistent user content behind `backend/app/repository/`.
+- Curated seed content is repository-local JSON/YAML under `data/dexter/` and ontology YAML under `ontology/`; `spoilerless/app/graph/setup.py` imports it into Neo4j.
+- Runtime user notes and graph edits are database records, not files; keep new persistent user content behind `spoilerless/app/repository/`.
 
 **Caching:**
-- No Redis, Memcached, CDN cache API, or distributed application cache is detected.
-- `get_settings()` uses process-local `functools.lru_cache` in `backend/app/core/config.py`; this is configuration memoization, not shared caching.
-- The chat concurrency guard is a process-local dictionary in `backend/app/services/chat.py`; do not assume coordination across multiple workers.
+- Redis is integrated via Upstash (`REDIS_URL`, `rediss://`): one shared `redis.asyncio` singleton in `spoilerless/app/cache/redis_client.py` (lru_cache, mirroring `get_settings`).
+- Graph responses are cached cache-aside with boundary-aware keys in `spoilerless/app/cache/graph_cache.py` (INFRA-02); an empty `REDIS_URL` or any Redis error degrades to always querying Neo4j.
+- Rate limiting uses fastapi-limiter 0.2.0 / pyrate-limiter Redis buckets in `spoilerless/app/services/rate_limit.py`, initialized at startup only when `REDIS_URL` is set; empty URL means unthrottled local dev.
+- `get_settings()` uses process-local `functools.lru_cache` in `spoilerless/app/core/config.py`; this is configuration memoization, not shared caching.
+- The chat concurrency guard remains a process-local dictionary in `spoilerless/app/services/chat.py`; do not assume coordination across multiple workers.
 
 ## Authentication & Identity
 
 **Auth Provider:**
 - Google Identity Services provides the external identity assertion; local authorization uses a custom Neo4j-backed session.
   - Browser implementation: `frontend/src/components/auth/LoginPage.tsx` receives the Google credential and submits it through auth code under `frontend/src/api/` and `frontend/src/providers/`.
-  - Token verification: `ProductionGoogleVerifier` in `backend/app/services/auth.py` calls `google.oauth2.id_token.verify_oauth2_token` with the configured audience.
-  - User persistence: `AuthService` in `backend/app/services/auth.py` keys local identity from the verified Google `sub` and delegates persistence to `backend/app/repository/user.py`.
-  - Session persistence: production FastAPI wiring installs `Neo4jSessionRepository` in `backend/app/main.py`; `backend/app/api/deps.py` resolves the current user from the configured cookie.
-  - Session tokens: generated as opaque random values and stored only as SHA-256 hashes by `backend/app/repository/session.py`.
-  - Cookie policy: HttpOnly, SameSite Lax, path `/`, and configurable Secure behavior in `backend/app/api/auth.py`.
-  - CORS: credentialed origins come from `FRONTEND_ORIGINS` and are installed by `backend/app/main.py`.
-  - Origin check: Google sign-in validates `Origin` or `Referer` against the same configured origin list in `backend/app/api/auth.py` when either header is supplied.
-- There is no separate authorization provider, RBAC service, JWT issuer, or Google client-secret exchange in the current code.
+  - Token verification: `ProductionGoogleVerifier` in `spoilerless/app/services/auth.py` calls `google.oauth2.id_token.verify_oauth2_token` with the configured audience.
+  - User persistence: `AuthService` in `spoilerless/app/services/auth.py` keys local identity from the verified Google `sub` and delegates persistence to `spoilerless/app/repository/user.py`.
+  - Session persistence: production FastAPI wiring installs `Neo4jSessionRepository` and `Neo4jShareRepository` in `spoilerless/app/main.py`; `spoilerless/app/api/deps.py` resolves the current user from the configured cookie. `AuthService` now requires user/session repositories plus a verifier with no silent fallback (PROB-09/#77).
+  - Session tokens: generated as opaque random values and stored only as SHA-256 hashes by `spoilerless/app/repository/session.py`.
+  - Cookie policy: HttpOnly, SameSite Lax, path `/`, and configurable Secure behavior in `spoilerless/app/api/auth.py`.
+  - CORS: credentialed origins come from `FRONTEND_ORIGINS` and are installed by `spoilerless/app/main.py`.
+  - Origin check: Google sign-in validates `Origin` or `Referer` against the same configured origin list in `spoilerless/app/api/auth.py` when either header is supplied.
+- There is no separate authorization provider, RBAC service, JWT issuer, or Google client-secret exchange in the current code; candidate review and ChangeSet confirmation use the role gate `RequireAdminDependency` in `spoilerless/app/api/deps.py`.
+- Redis-backed rate limits throttle login, chat send, and content-write routes when `REDIS_URL` is configured (`spoilerless/app/services/rate_limit.py`).
 
 ## Runtime Configuration Integration
 
 **Backend environment settings:**
-- `Settings` in `backend/app/core/config.py` loads root `.env` plus process environment. Process environment wins; required Neo4j settings have no defaults.
+- `Settings` in `spoilerless/app/core/config.py` loads root `.env` plus process environment. Process environment wins; required Neo4j settings have no defaults.
 - A sensitive root `.env` exists; its contents were not read. Document only variable names from `.env.example`, and never copy real values into `.planning/`, logs, tests, or frontend code.
-- LLM bootstrap variables are `LLM_ENABLED`, `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, and tuning limits defined in `backend/app/core/config.py`.
+- LLM bootstrap variables are `LLM_ENABLED`, `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, and tuning limits defined in `spoilerless/app/core/config.py`.
 
 **Neo4j-stored LLM overrides:**
-- `GET /api/settings/llm` and `PUT /api/settings/llm` are authenticated routes in `backend/app/api/settings.py`.
-- `SettingsRepository` serializes the shared settings payload to JSON in `backend/app/repository/settings.py` because Neo4j properties cannot store dictionaries.
-- Effective-field precedence is stored `AppSetting` value first, then `LLM_*` environment value. This is implemented independently for provider, key, model, base URL, and enabled state in `backend/app/services/settings.py` and `backend/app/services/chat.py`.
-- Gemini receives `DEFAULT_GEMINI_BASE_URL` from `backend/app/domain/settings.py` when neither stored nor environment configuration supplies a base URL.
-- `system_prompt_language` is graph-stored with an English default and controls English/Turkish prompt selection through `backend/app/services/chat.py` and `backend/app/llm/system_prompt.py`.
-- A null or blank key update preserves the stored key; response models expose only configured status and a masked suffix through `backend/app/domain/settings.py`.
-- Base URLs accepted by the settings model must use HTTP or HTTPS and include a host; validation is in `backend/app/domain/settings.py`. Loopback/private hosts remain allowed for local compatible servers.
-- Treat runtime LLM settings as shared application configuration: `backend/app/api/settings.py` requires a session but does not implement an admin role beyond authentication.
+- `GET /api/settings/llm` and `PUT /api/settings/llm` are authenticated routes in `spoilerless/app/api/settings.py`.
+- `SettingsRepository` serializes the shared settings payload to JSON in `spoilerless/app/repository/settings.py` because Neo4j properties cannot store dictionaries.
+- Effective-field precedence is stored `AppSetting` value first, then `LLM_*` environment value. This is implemented independently for provider, key, model, base URL, and enabled state in `spoilerless/app/services/settings.py` and `spoilerless/app/services/chat.py`.
+- Gemini receives `DEFAULT_GEMINI_BASE_URL` from `spoilerless/app/domain/settings.py` when neither stored nor environment configuration supplies a base URL.
+- `system_prompt_language` is graph-stored with an English default and controls English/Turkish prompt selection through `spoilerless/app/services/chat.py` and `spoilerless/app/llm/system_prompt.py`.
+- A null or blank key update preserves the stored key; response models expose only configured status and a masked suffix through `spoilerless/app/domain/settings.py`.
+- Base URLs accepted by the settings model must use HTTP or HTTPS and include a host; validation is in `spoilerless/app/domain/settings.py`. Loopback/private hosts remain allowed for local compatible servers.
+- Treat runtime LLM settings as shared application configuration: `spoilerless/app/api/settings.py` requires a session but does not implement an admin role beyond authentication.
 
 **Frontend build-time settings:**
 - `frontend/.env.example` is the safe template. Vite variables are embedded into the browser bundle and must never contain provider keys or database credentials.
@@ -117,55 +122,57 @@ last_mapped_commit: 0b4c83c8ca7c8c0004552cb55b53a5050978c30c
 
 **Error Tracking:**
 - No Sentry, Rollbar, Datadog, OpenTelemetry collector/exporter, or other managed error-tracking integration is detected in `pyproject.toml`, `frontend/package.json`, or tracked configuration.
-- FastAPI centralizes database and LLM exception mapping in `backend/app/core/errors.py`, `backend/app/llm/provider.py`, and registration calls in `backend/app/main.py`; these are API error handlers, not external telemetry.
+- FastAPI centralizes database and LLM exception mapping in `spoilerless/app/core/errors.py`, `spoilerless/app/llm/provider.py`, and registration calls in `spoilerless/app/main.py`; these are API error handlers, not external telemetry. `ClientError` (invalid Cypher) is deliberately excluded from the 503 mapping so app bugs surface as plain 500s.
 
 **Logs:**
-- Backend code uses Python standard-library logging, for example in `backend/app/api/auth.py` and `backend/app/services/auth.py`; Uvicorn supplies server/access logging when launched.
-- Provider-facing errors are sanitized before reaching API/SSE clients in `backend/app/api/chat.py`; preserve this boundary and never log API keys, ID tokens, raw session tokens, or full stored settings payloads.
+- Backend code uses Python standard-library logging, for example in `spoilerless/app/api/auth.py` and `spoilerless/app/services/auth.py`; Uvicorn supplies server/access logging when launched.
+- Provider-facing errors are sanitized before reaching API/SSE clients in `spoilerless/app/api/chat.py`; preserve this boundary and never log API keys, ID tokens, raw session tokens, or full stored settings payloads.
 - Neo4j container log persistence is a local Compose concern in `docker-compose.yml`; no centralized log shipping is configured.
 
 **Health:**
-- `GET /health` in `backend/app/main.py` probes Neo4j connectivity and returns connected/degraded service state.
+- `GET /health` and `HEAD /health` in `spoilerless/app/main.py` probe Neo4j connectivity and return connected/degraded service state; the HEAD variant serves uptime monitors.
 - No external uptime monitor, metrics endpoint, tracing backend, or alerting integration is configured.
 
 ## CI/CD & Deployment
 
 **Hosting:**
-- Not detected. The repository contains local execution instructions and a Neo4j-only `docker-compose.yml`, but no production backend/frontend container build, PaaS manifest, Kubernetes/Helm configuration, or cloud target.
-- Neo4j Aura is compatible with the configurable driver URI in `backend/app/core/config.py`, but no concrete Aura instance or production provider is configured in tracked files.
+- Render is configured by `render.yaml`: a free-tier `spoilerless-api` web service (Python runtime, `uv sync --frozen`, `uv run uvicorn spoilerless.app.main:app`) that auto-deploys on git push to the connected branch.
+- `frontend/vercel.json` provides a Vercel-style SPA rewrite; no container images, Kubernetes/Helm manifests, or other cloud targets are tracked.
+- Neo4j Aura is compatible with the configurable driver URI in `spoilerless/app/core/config.py`, but no concrete Aura instance is configured in tracked files.
 
 **CI Pipeline:**
-- None detected. There are no tracked GitHub Actions workflows, GitLab CI files, Jenkinsfile, or Azure Pipelines configuration.
-- Until CI is added, run backend pytest and frontend test/build/lint commands from `pyproject.toml` and `frontend/package.json` explicitly before release.
+- GitHub Actions is configured in `.github/workflows/ci.yml` and `.github/workflows/release.yml`; no GitLab CI, Jenkinsfile, or Azure Pipelines configuration is present.
+- Keep backend pytest and frontend test/build/lint commands runnable from `pyproject.toml` and `frontend/package.json`; CI invokes them through the workflow files.
 
 **Production Edge:**
 - No reverse-proxy, TLS termination, static hosting, domain, or production API base URL is defined.
 - A production integrator must route `/api` to FastAPI because the Vite proxy in `frontend/vite.config.ts` exists only during development.
-- No tracked `LICENSE` file is present; deployment or distribution review must not infer a license from dependency licenses or the disclaimer in `README.md`.
+- A tracked MIT `LICENSE` (Spoilerless Team, 2026) is present; deployment review should still not infer licensing from dependency licenses.
 
 ## Environment Configuration
 
 **Required env vars:**
-- Database: `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`; optional `NEO4J_DATABASE` in `backend/app/core/config.py`.
-- Sign-in: backend `GOOGLE_CLIENT_ID` and frontend `VITE_GOOGLE_CLIENT_ID`; session/origin controls are declared in `.env.example` and `backend/app/core/config.py`.
-- Optional LLM: `LLM_ENABLED`, `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, plus tuning fields in `backend/app/core/config.py`, unless effective values are stored through `backend/app/api/settings.py`.
+- Database: `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`; optional `NEO4J_DATABASE` in `spoilerless/app/core/config.py`.
+- Sign-in: backend `GOOGLE_CLIENT_ID` and frontend `VITE_GOOGLE_CLIENT_ID`; session/origin controls are declared in `.env.example` and `spoilerless/app/core/config.py`.
+- Optional LLM: `LLM_ENABLED`, `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, plus tuning fields in `spoilerless/app/core/config.py`, unless effective values are stored through `spoilerless/app/api/settings.py` or sent per-request as `X-LLM-*` headers.
+- Rate limiting/cache: optional `REDIS_URL` (Upstash `rediss://`) in `spoilerless/app/core/config.py`; empty disables Redis-backed features.
 
 **Secrets location:**
 - Local backend secrets belong in the gitignored root `.env`; a sensitive file is present, but its contents must never be inspected or documented.
 - Frontend local environment files are build inputs, not secret stores; only public `VITE_*` values belong there, as shown by `frontend/.env.example`.
-- Runtime LLM API keys may be stored server-side in the Neo4j `AppSetting` payload through `backend/app/repository/settings.py`; responses mask them in `backend/app/domain/settings.py`.
-- Raw session tokens live only in HttpOnly browser cookies; Neo4j stores their hashes through `backend/app/repository/session.py`.
+- Runtime LLM API keys may be stored server-side in the Neo4j `AppSetting` payload through `spoilerless/app/repository/settings.py`; responses mask them in `spoilerless/app/domain/settings.py`.
+- Raw session tokens live only in HttpOnly browser cookies; Neo4j stores their hashes through `spoilerless/app/repository/session.py`.
 
 ## Webhooks & Callbacks
 
 **Incoming:**
-- No third-party webhook receiver is detected among the 32 OpenAPI path templates generated from `backend/app/main.py`.
-- Google sign-in is a browser credential POST to `backend/app/api/auth.py`, not an OAuth redirect/callback or server-to-server webhook endpoint.
+- No third-party webhook receiver is detected among the 37 OpenAPI path templates generated from `spoilerless/app/main.py`.
+- Google sign-in is a browser credential POST to `spoilerless/app/api/auth.py`, not an OAuth redirect/callback or server-to-server webhook endpoint.
 
 **Outgoing:**
 - No webhook delivery, message queue, email, SMS, payment, or notification integration is detected.
-- Outbound network calls are limited to Google token-verification support in `backend/app/services/auth.py`, optional LLM HTTP requests in `backend/app/llm/provider.py`, and browser-loaded Google identity/media resources referenced by `frontend/index.html` and graph data.
+- Outbound network calls are limited to Google token-verification support in `spoilerless/app/services/auth.py`, optional LLM HTTP requests in `spoilerless/app/llm/provider.py`, the optional Upstash Redis connection, and browser-loaded Google identity/media resources referenced by `frontend/index.html` and graph data.
 
 ---
 
-*Integration audit: 2026-08-02*
+*Integration audit: 2026-08-12*
