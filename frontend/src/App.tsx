@@ -118,6 +118,17 @@ function AuthenticatedApp() {
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(watchProgress.seriesId)
   const episodesState = useEpisodes(selectedSeriesId, watchProgress.viewAsOfOrder)
   const graphState = useGraph(watchProgress.seriesId, watchProgress.confirmedOrder)
+  // PROB-09/#74: the last successfully loaded graph survives refetch and
+  // boundary loads so GraphCanvas never unmounts (loading/error render as
+  // an OVERLAY above it — no destructive unmount + full relayout on every
+  // refresh, and the autoZoomHold/positionCache module-level singletons
+  // lose their reason to exist).
+  const lastGoodGraphRef = useRef<GraphResponse | null>(null)
+  const graphData = graphState.status === 'success' ? graphState.data : null
+  useEffect(() => {
+    if (graphData) lastGoodGraphRef.current = graphData
+  }, [graphData])
+  const activeGraph = graphData ?? lastGoodGraphRef.current
   // FEAT-07 (09-09): raw notes for the current series, fed to NodeSearch's
   // Notes & Claims mode (search is payload-local over already-filtered
   // data — the hook already exposes the raw list via `data`).
@@ -523,13 +534,26 @@ function AuthenticatedApp() {
         />
       )}
 
-      {graphState.status === 'loading' && <GraphLoadingState />}
-      {graphState.status === 'error' && <GraphErrorState onRetry={graphState.refetch} />}
-      {graphState.status === 'success' && graphState.data.nodes.length === 0 && <GraphEmptyState />}
-      {graphState.status === 'success' && graphState.data.nodes.length > 0 && (
+      {graphState.status === 'idle' && <GraphEmptyState />}
+      {/* PROB-09/#74: the canvas stays mounted once a graph has loaded —
+          loading/error render as an OVERLAY above the last-known-good graph
+          instead of unmounting it (no destructive relayout on refresh). */}
+      {activeGraph == null && graphState.status === 'loading' && <GraphLoadingState />}
+      {activeGraph == null && graphState.status === 'error' && <GraphErrorState onRetry={graphState.refetch} />}
+      {activeGraph != null && activeGraph.nodes.length === 0 && <GraphEmptyState />}
+      {activeGraph != null && activeGraph.nodes.length > 0 && (
         <>
+          {graphState.status !== 'success' && (
+            <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/70 backdrop-blur-[2px]">
+              {graphState.status === 'loading' ? (
+                <GraphLoadingState />
+              ) : (
+                <GraphErrorState onRetry={graphState.refetch} />
+              )}
+            </div>
+          )}
           <GraphCanvas
-            graph={graphState.data}
+            graph={activeGraph}
             onSelect={handleSelectElement}
             seriesId={watchProgress.seriesId}
             onRefetchGraph={graphState.refetch}
@@ -550,19 +574,19 @@ function AuthenticatedApp() {
               '/' hotkey focuses it via searchInputRef; rows select through
               handleJumpToNode (existing onSelect + graphFocus paths). */}
           <NodeSearch
-            graph={graphState.data}
+            graph={activeGraph}
             notes={notes}
             onSelect={handleJumpToNode}
             inputRef={searchInputRef}
           />
           {selectedElement?.kind === 'edge' &&
-          graphState.data.edges.find((edge) => edge.id === selectedElement.id)?.claim_id == null &&
-          graphState.data.edges.find((edge) => edge.id === selectedElement.id)?.origin !== 'user' ? (
-            <StructuralEdgeCard selected={selectedElement} nodes={graphState.data.nodes} />
+          activeGraph.edges.find((edge) => edge.id === selectedElement.id)?.claim_id == null &&
+          activeGraph.edges.find((edge) => edge.id === selectedElement.id)?.origin !== 'user' ? (
+            <StructuralEdgeCard selected={selectedElement} nodes={activeGraph.nodes} />
           ) : (
             <DetailPanel
               selected={selectedElement}
-              graph={graphState.data}
+              graph={activeGraph}
               seriesId={watchProgress.seriesId}
               visibleUntilOrder={watchProgress.confirmedOrder}
               onRefetchGraph={graphState.refetch}
@@ -575,7 +599,7 @@ function AuthenticatedApp() {
                 // PROB-09/#75: BacklinksTab "Open" must jump to the node via
                 // the SAME selection path as search/palette (select + frame),
                 // not fall into DetailPanel's onDeselect() fallback.
-                const node = graphState.data.nodes.find((n) => n.id === nodeId)
+                const node = activeGraph.nodes.find((n) => n.id === nodeId)
                 if (node) {
                   handleJumpToNode({
                     id: nodeId,
@@ -591,7 +615,7 @@ function AuthenticatedApp() {
               open={chatOpen}
               onClose={() => setChatOpen(false)}
               seriesId={watchProgress.seriesId}
-              seriesTitle={graphState.data.series.title}
+              seriesTitle={activeGraph.series.title}
               viewAsOfOrder={watchProgress.viewAsOfOrder}
               currentEpisodeCode={
                 episodes.find((episode) => episode.episode_order === watchProgress.confirmedOrder)?.code ?? null
@@ -603,7 +627,6 @@ function AuthenticatedApp() {
           )}
         </>
       )}
-      {graphState.status === 'idle' && <GraphEmptyState />}
         </>
       )}
       {/* FEAT-08 (09-09): ⌘K command palette — available in every view;
