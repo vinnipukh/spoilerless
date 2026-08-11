@@ -528,6 +528,7 @@ function AuthenticatedApp() {
             onSelect={handleSelectElement}
             seriesId={watchProgress.seriesId}
             onRefetchGraph={graphState.refetch}
+            onRefreshGraph={graphState.refresh}
             episodes={episodes}
             focusedElementIds={graphFocus}
             onClearFocus={handleClearFocus}
@@ -565,6 +566,19 @@ function AuthenticatedApp() {
               episodes={episodes}
               open={selectedElement !== null}
               onDeselect={() => setSelectedElement(null)}
+              onSelectNode={(nodeId) => {
+                // PROB-09/#75: BacklinksTab "Open" must jump to the node via
+                // the SAME selection path as search/palette (select + frame),
+                // not fall into DetailPanel's onDeselect() fallback.
+                const node = graphState.data.nodes.find((n) => n.id === nodeId)
+                if (node) {
+                  handleJumpToNode({
+                    id: nodeId,
+                    label: node.label,
+                    nodeType: node.type,
+                  })
+                }
+              }}
             />
           )}
           {!isVisitor && (

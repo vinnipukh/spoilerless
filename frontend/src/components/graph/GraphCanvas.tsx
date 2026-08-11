@@ -397,6 +397,15 @@ export function GraphCanvas({
 
 
   const [mode, setMode] = useState<GraphMode>(initialMode)
+  // PROB-09/#75: the cy event callbacks are registered once per cy instance
+  // and would close over the mount-time `graph` forever. Keep a ref synced to
+  // the latest payload so the hover card reads fresh data after an in-place
+  // `refresh()` (a stale closure showed first-render labels and missed newly
+  // added nodes).
+  const graphRef = useRef(graph)
+  useEffect(() => {
+    graphRef.current = graph
+  }, [graph])
   const elements = useMemo(() => graphToElements(graph, mode), [graph, mode])
   // Memoized layout options for the declarative CytoscapeComponent prop: the
   // object reference must stay stable across re-renders or react-cytoscapejs
@@ -775,7 +784,7 @@ export function GraphCanvas({
               evt.target.connectedEdges().addClass('hovered')
 
               const nodeId = evt.target.id()
-              const matchedNode = graph.nodes.find((n) => n.id === nodeId)
+              const matchedNode = graphRef.current.nodes.find((n) => n.id === nodeId)
               if (matchedNode) {
                 const renderedPos = evt.target.renderedPosition()
                 const containerRect = cy.container()?.getBoundingClientRect()
