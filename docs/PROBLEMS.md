@@ -702,3 +702,151 @@ structural wave, #60/#70/#71 layering wave (#61 is above: fix written,
 blocked on the App.test hook mock — finish before this list is touched).
 All are refactors with no runtime bug; the runtime bugs in the pass are
 now fixed.
+
+---
+
+## ELEVENTH PASS — NINTH-PASS wave executed (2026-08-11, one session)
+
+The entire survival-order list from NINTH PASS (plus the EIGHTH-PASS 503
+mystery) was executed in one autonomous session. Every fix verified
+against live source first; tests green on local docker Neo4j
+(`hdgraf-neo4j`) — no shared-AuraDB runs; `:AppSetting`/`:Session`/real
+user rows untouched.
+
+### #61 — FIXED (commit 201f347)
+The TENTH-PASS "blocked on App.test mock" diagnosis was WRONG — App.test
+never mocks useWatchProgress. Real root cause: `switchSeries` pre-set
+`viewAsOfOrder=1`, so the episode selector showed S01E01 as already
+selected, and Radix Select does not fire `onValueChange` for a re-selected
+value — the first unlock click was swallowed entirely (no modal, no
+graph). Fix: `switchSeries` resets the boundary to fail-closed `null`
+(the same empty state as the mount-time initial render; a first click
+then goes through the normal unlock flow). App.test 17/17 + hook suite
+26/26 + full FE 333/333.
+
+### #62 — FIXED (commit d5d94f7)
+`visible_claim_where()` + `claim_projection()` in `spoiler/filter.py` —
+the 7× copy-pasted claim visibility predicate + 12-column projection
+collapsed to one definition; filter.py (3 queries) and retrieval/tools.py
+(4 queries) compose from it. D-20 static scan intact (constants keep
+their names + boundary strings).
+
+### #63 — FIXED (commit adf2fb1)
+`ToolSpec` dataclass + `TOOL_SPECS` — the three parallel tool tables
+(TOOL_SCHEMAS/_TOOL_EXECUTORS/_TOOL_INPUT_MODELS) are one registry;
+TOOL_SCHEMAS derives from it. `_propose_changeset` became a module-level
+executor; the dispatcher wraps bare lists per declared bucket. **Latent
+bug fixed by the bucket model:** get_claims/get_evidence/get_sources/
+get_timeline bare lists were shape-sniffed into the NODES bucket —
+claim/evidence/source rows polluted `<nodes>`; they now land in their own
+buckets (get_timeline rows no longer accumulate at all).
+
+### #64 — FIXED (commit 57ecb76)
+`retrieval/context.py` — one section registry (CONTEXT_SECTIONS,
+derived CONTEXT_DELIMITERS, ITEM_SECTION_FORMATTERS). assemble_context
+renders in registry order; `llm/system_prompt.py` imports the delimiters
+(USER-OWNED prose untouched; name re-exported for tests).
+
+### #65 — FIXED (commit 6a64eec)
+`_walk_visible_claims` — one BFS shared by get_neighborhood (full depth)
+and find_path (early_exit_ids={target}); same query counts, one round
+earlier break on all-seen rounds. 122 passed.
+
+### #66 — FIXED (commit cd0b2a6)
+CUSTOM_NODE_READ/UPDATE/DELETE_QUERIES label-variant probe maps (up to 5
+sequential tx.run per request) replaced by one label-agnostic query each
+(labels(node) projection against the closed enum literal — same pattern
+NOTE_GET_QUERIES already used); the six byte-identical capture-old-state
+copies became `_capture_old_node/_capture_old_claim/_capture_old_note`.
+35 + 40 passed; the 9 change_set_revision failures at that point were the
+pre-existing local-5.x 503 class.
+
+### EIGHTH-PASS 503 class — ROOT-CAUSED AND FIXED (commit bacd536)
+The 28 local-docker change-set failures were ONE missing `WITH`:
+`CHANGE_SET_CREATE_QUERY` ran `MERGE (u) MERGE (s) MATCH ...` — Neo4j 5
+requires `WITH` between MERGE and MATCH (42N24); the newer AuraDB engine
+tolerates the omission, which is why Aura stayed green. Added
+`WITH u, s` (valid on both engines): change-set family 28 failed →
+39 passed on local docker; full local suite 584 passed / 7 failed
+(documented pre-existing: 3 doc-contract, 2 seed-image, 2 seed_idempotency
+constraint-name-set) in 2:03. **Local docker is now a viable full-suite
+target for the change-set family**, removing the AuraDB-only dependency
+the EIGHTH PASS flagged.
+
+### #67 — FIXED (commit 5765168)
+`_apply_one_operation` 246-line 12-case match → `_APPLY_SPECS` table
+(query/targets/require_user_origin/requires_episode/id_kind/error_msg/
+param builder) + generic executor; `_visible_from_episode` +
+`_op_description` + `_create_params` killed the 5× derive/description/id
+repetition. Behavior 1:1 (same validation order, ids, derives, errors).
+
+### #68 — FIXED (commit 2846d3f)
+`neo4j_row_to_python()` (the 4 byte-identical `_normalize` copies) +
+`run_single(tx, query, error_msg, exc_type=...)` (the `_run_create`/
+`_run_apply` duplicate) in `graph/database.py`; `core/tokens.py`
+(hash_token/generate_token — session 48-byte + share 32-byte copies
+consolidated). 92 + 63 passed.
+
+### #72 — FIXED (commit d7e47d1)
+`lib/graph/highlight.ts` — `applyHighlight(cy, request, {classes,
+labelEdges, fadeOthers, clearClasses, fit})` (custom-complement fade for
+the closedNeighborhood convention); the three GraphCanvas highlight
+effects + focusReducer's applyFocusToCytoscape rebuilt on it with
+byte-identical semantics. focusReducer.ts = state machine + re-export.
+~120 lines deleted. 333/333.
+
+### #73 — FIXED (commit f230921)
+`useFetchState<T>(key, enabled, fetcher)` — the shared idle|loading|
+error|success machine + key/prevKey render reset + run-id stale guard;
+all six fetch hooks migrated (useNotes/useRevisions twins, useEpisodes,
+useSeries, useChatSessions, useGraph — useGraph's key carries retryToken
+for the Retry re-loading, and the shared refetch IS the in-place refresh:
+fetch without status flip, so ChangeSet-apply keeps the canvas mounted).
+-171 lines. 333/333.
+
+### #74 — FIXED (commit 9cbbe45, core)
+App.tsx keeps `lastGoodGraphRef` and renders loading/error as an OVERLAY
+(z-40 translucent backdrop) above the still-mounted canvas once a graph
+has loaded; the initial load keeps the plain loading/error states.
+GraphCanvas/NodeSearch/DetailPanel/StructuralEdgeCard/ChatSheet read
+`activeGraph`. `filterState.ts` positionCache bounded to 20 keys (oldest
+evicted); dead `mode='full'` default dropped. **Follow-up (NOT deleted):
+autoZoomHold.ts + the lastLayoutCyRef dance** now only matter for
+StrictMode dev double-mounts — removing them needs a runLayout test
+touch; they no longer serve the destructive-unmount case.
+
+### #77 — FIXED (commit e0ab05a, core)
+AuthService `__init__` requires session_repo + verifier (the silent
+`or InMemorySessionRepository()` / `or ProductionGoogleVerifier()`
+fallbacks hid DI wiring bugs); deps.py passes ProductionGoogleVerifier()
+explicitly; the 4 change-set test files get a no-op verifier stub.
+`_validate_and_protect` per-target visibility reads now run via
+asyncio.gather (were serial). **Not folded (documented rationale):** the
+ChatService session passthroughs + slot wrappers — the thin
+routes→service→repository layer is the documented architecture and the
+slot wrappers are exercised by test_chat_api; folding inverts the layering
+with no runtime win.
+
+### #81 — PARTIALLY FIXED (commit 00fbcb6)
+- `repository/session.py` revoke(): revoked_at was ms (`timestamp()`) on
+  a node whose other timestamps are seconds — the module's own docstring
+  documented the seconds rule. Now `$revoked_at = time.time()`.
+- `domain/graph.py` GraphClaim.relationship_effect: float → `str | float
+  | None` — seed stores float strength (0.9), candidate-origin claims
+  store the RelationshipEffect enum string; a candidate claim in the
+  graph GET previously failed model_validate (whole-response 422/500).
+- `core/errors.py`: ClientError removed from the 503-mask list — bad
+  Cypher is a server bug, not infra; now surfaces as a plain 500.
+- `graph/labels.py`: NODE_LABELS + STORY_LABELS single inventory (was
+  seed.py/setup.py duplicates); spoiler/filter.py BOUNDARY_QUERY merged
+  with user_content's stricter `>= 1` guard (one definition, alias).
+- NOT touched (deferred): FE export-fallback dedup, CitationChip contract
+  abuse, useNotes provider, nodeTypes registries, operationTargetRefs,
+  DEXTER tier table, settings typed fields, share models, verify_origin
+  `"*"` bypass (deliberate — documented, explicit setting required).
+
+### Remaining from NINTH PASS (not yet started)
+#60/#70/#71 layering wave (candidates.py repo methods + per-router
+exception registry + no catch-all 422). No runtime bugs in the pass
+remain unfixed.
+
