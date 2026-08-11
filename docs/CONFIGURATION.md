@@ -13,6 +13,7 @@
 - [Runtime LLM Settings & BYOK Overrides](#runtime-llm-settings--byok-overrides)
 - [Session Storage](#session-storage)
 - [Docker Compose (Neo4j)](#docker-compose-neo4j)
+- [Deployment Configuration](#deployment-configuration)
 - [Frontend Configuration](#frontend-configuration)
 - [Ontology Configuration](#ontology-configuration)
 - [Common Workflows](#common-workflows)
@@ -28,7 +29,7 @@ The backend reads configuration from the current working directory's `.env` file
 cp .env.example .env
 ```
 
-> **Verified against the repo:** `.env.example` (project root) was read directly. `VITE_GOOGLE_CLIENT_ID` and `VITE_API_BASE_URL` are included in the root template for Vite frontend configuration (via `envDir: '..'`). `SESSION_COOKIE_SAMESITE`, `ALLOWED_EMAILS`, `ADMIN_EMAILS`, `REDIS_URL`, `LLM_FALLBACK_EN`, and `LLM_FALLBACK_TR` exist as fields on the `Settings` class but are **not** listed in `.env.example` (they are optional overrides/additions with in-code defaults). Local secret-bearing `.env` files were intentionally not read. Secret values are never documented here.
+> **Verified against the repo:** `.env.example` (project root) was read directly. `VITE_GOOGLE_CLIENT_ID` and `VITE_API_BASE_URL` are included in the root template for Vite frontend configuration (via `envDir: '..'`). `SESSION_COOKIE_SAMESITE`, `ALLOWED_EMAILS`, `ADMIN_EMAILS`, `REDIS_URL`, `LLM_FALLBACK_EN`, and `LLM_FALLBACK_TR` exist as fields on the `Settings` class but are **not** listed in `.env.example` (they are optional overrides/additions with in-code defaults). `frontend/.env.example` remains a reference template, but Vite's configured environment directory is the repository root. Secret-bearing `.env` files were not read and no secret values are documented here.
 
 ### Variable Reference
 
@@ -39,17 +40,17 @@ cp .env.example .env
 | `NEO4J_PASSWORD` | _(none — must be set)_ | Yes | Neo4j authentication password. Must match `NEO4J_AUTH` in `docker-compose.yml` for local development. Can also be configured via `AURA_PASSWORD`. |
 | `NEO4J_DATABASE` | `neo4j` | No | Neo4j database name to connect to. Can also be configured via `AURA_DATABASE`. |
 | `GOOGLE_CLIENT_ID` | `""` (empty) | No — but sign-in fails without it | Google OAuth 2.0 Web Client ID used to verify Google ID tokens. When unset, `POST /api/auth/google` returns `401 AUTH_DISABLED`. Must match `VITE_GOOGLE_CLIENT_ID`. |
-| `VITE_GOOGLE_CLIENT_ID` | `""` (empty) | Yes — for frontend sign-in | Google OAuth 2.0 Web Client ID loaded by Vite from root `.env` (`envDir: '..'`). Must match `GOOGLE_CLIENT_ID`; backend startup enforces equality via `verify_google_client_id_equality()`. |
-| `VITE_API_BASE_URL` | `/api` | No | Base API endpoint prefix for frontend fetch calls (`/api` routes requests through Vite dev proxy; set to absolute URL e.g. `https://api.spoilerless.net` in production). |
+| `VITE_GOOGLE_CLIENT_ID` | unset at runtime; placeholder in both templates | Yes — for frontend sign-in | Google OAuth 2.0 Web Client ID loaded by Vite from the root environment directory (`envDir: '..'`). It must equal `GOOGLE_CLIENT_ID`. The backend equality check reads this value from the **process environment**, not from Pydantic's `.env` parsing; see [startup validation](#behaviour). |
+| `VITE_API_BASE_URL` | `""` when unset; root template currently declares `/api` | No | Origin prepended to frontend API paths, which already begin with `/api`. Leave unset/empty for local Vite proxying; use an origin such as `https://api.example.com` for a separately hosted backend. The root template's current `/api` value would produce `/api/api/...` requests and should be removed or overridden with an empty value for local development. |
 | `SESSION_COOKIE_NAME` | `session` | No | Name of the HttpOnly session cookie. |
 | `SESSION_TTL_SECONDS` | `604800` (7 days) | No — but sign-in fails if `<= 0` | Session time-to-live in seconds. `POST /api/auth/google` returns `401 AUTH_DISABLED` if this is explicitly set to a non-positive value; when unset, the default applies. |
-| `SESSION_COOKIE_SAMESITE` | `lax` | No — not in `.env.example` | `SameSite` policy applied to the session cookie by `_make_cookie`/`_delete_cookie` in `spoilerless/app/api/auth.py`. `lax` is correct for the same-site custom-domain layout; use `strict` or `none` (with `SESSION_COOKIE_SECURE=true`) deliberately per environment. |
-| `SESSION_COOKIE_SECURE` | `true` | No | Sets the `Secure` flag on the session cookie. Defaults to `true` (Render/Vercel are HTTPS-only); local HTTP dev must explicitly set `SESSION_COOKIE_SECURE=false`. |
-| `FRONTEND_ORIGINS` | `http://localhost:5173` | No | Comma-separated list of allowed CORS origins for the FastAPI backend. Also used by `verify_origin` in `spoilerless/app/api/auth.py` for CSRF `Origin`/`Referer` validation on `POST /api/auth/google`; `POST /api/auth/logout` does not apply that dependency. |
+| `SESSION_COOKIE_SAMESITE` | `lax` | No — not in `.env.example` | `SameSite` policy applied to the session cookie by `_make_cookie`/`_delete_cookie` in `spoilerless/app/api/auth.py`. Use `strict` or `none` deliberately per environment; `none` requires a secure cookie in modern browsers. |
+| `SESSION_COOKIE_SECURE` | `true` | No | Sets the `Secure` flag on the session cookie. Local plain-HTTP development can explicitly set `SESSION_COOKIE_SECURE=false`. |
+| `FRONTEND_ORIGINS` | `http://localhost:5173` | No | Comma-separated list of allowed CORS origins for the FastAPI backend. Also used by `verify_origin` in `spoilerless/app/api/auth.py` for CSRF `Origin`/`Referer` validation on both `POST /api/auth/google` and `POST /api/auth/logout`. |
 | `ALLOWED_EMAILS` | `""` (empty) | No — not in `.env.example` | Comma-separated, case-insensitive allowlist of emails permitted to sign in. Empty disables the allowlist (any verified Google account may sign in) — never leave empty in production. A verified-but-unlisted email raises `EmailNotAllowedError`, returned as `403 AUTH_EMAIL_NOT_ALLOWED`. |
 | `ADMIN_EMAILS` | `""` (empty) | No — not in `.env.example` | Comma-separated, case-insensitive allowlist of emails granted the `admin` application role at login (`spoilerless/app/services/auth.py`). Empty means no admin exists yet. Role is re-derived from this variable on every login, so removing an email demotes that user on their next sign-in. |
 | `REDIS_URL` | `""` (empty) | No | Upstash-style `rediss://` Redis connection string used for rate-limit counters (`spoilerless/app/services/rate_limit.py`) and the graph query response cache (`spoilerless/app/cache/graph_cache.py`). Empty disables both features — rate limiting becomes a no-op and caching always falls through to Neo4j. See [Rate Limiting & Redis Cache](#rate-limiting--redis-cache). |
-| `LLM_ENABLED` | `false` | No | Master switch for the GraphRAG chat/retrieval endpoints. When `false`, chat calls raise `LLMProviderDisabled`, mapped to HTTP 503 with code `LLM_DISABLED`. |
+| `LLM_ENABLED` | `false` | No | Fallback enable switch for server-managed (stored/env) LLM configuration. When no stored `enabled` value exists and no BYOK key is supplied, `false` raises `LLMProviderDisabled`, mapped to HTTP 503 with code `LLM_DISABLED`. A request with a non-blank `X-LLM-Api-Key` uses the BYOK branch before this switch is checked. |
 | `LLM_PROVIDER` | `openai_compatible` | No | Environment fallback for the active provider selector. Two implementations exist: `openai_compatible` and `gemini`. The PUT request model defaults an omitted `provider` field to `gemini`, which is then stored; that request default is distinct from this env/runtime fallback. |
 | `LLM_BASE_URL` | `""` (empty) | Effectively required for `openai_compatible` if `LLM_ENABLED=true` and no runtime override is stored; optional for Gemini | Base URL for the OpenAI-compatible `/chat/completions` endpoint, or the Gemini API base when `LLM_PROVIDER=gemini` (defaults to `https://generativelanguage.googleapis.com` if left empty for Gemini). |
 | `LLM_API_KEY` | `""` (empty) | Effectively required if `LLM_ENABLED=true` and no runtime override is stored | LLM provider API key. The full key is accessed by settings masking, chat provider resolution, and provider implementations; API responses expose only the masked key, and the full key is never logged or returned to the frontend. |
@@ -125,13 +126,12 @@ class Settings(BaseSettings):
 
 ### Behaviour
 
-- **File precedence:** `.env` relative to the process's current working directory, then process environment variables (process env takes
-  precedence — pydantic-settings default behavior). The `AURA_*` aliases take precedence over `NEO4J_*` names when both are present.
+- **Source precedence:** process environment variables override values from `.env`; `.env` is resolved relative to the process's current working directory. Within one settings source, each `AURA_*` alias is checked before its corresponding `NEO4J_*` name. Source precedence still wins across sources: for example, process `NEO4J_URI` overrides `.env` `AURA_URI`.
 - **`extra="ignore"`:** Unknown variables present in `.env` are silently ignored rather than raising an error.
 - **`@lru_cache`:** `get_settings()` caches a single `Settings` instance for the process lifetime.
-- **No startup validation beyond Pydantic's type coercion:** `neo4j_uri`, `neo4j_username`, and
+- **Required-field and Google-ID startup validation:** `neo4j_uri`, `neo4j_username`, and
   `neo4j_password` have no default, so `Settings()` raises a `pydantic.ValidationError` at import time if
-  they are missing. All other fields have defaults and will not block startup. `verify_google_client_id_equality()` validates that `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID` match when both are set.
+  they are missing. All other fields have defaults. During lifespan startup, `verify_google_client_id_equality()` compares the resolved backend `GOOGLE_CLIENT_ID` with `os.environ["VITE_GOOGLE_CLIENT_ID"]` only when both are non-empty. Because Pydantic reading root `.env` does not populate `os.environ`, two values that exist only in `.env` are **not** compared by this function; deployment environments should set both as process/build environment variables and keep them equal.
 
 ### Database connection
 
@@ -160,7 +160,7 @@ honored on cross-origin requests from any listed origin.
 ### CSRF protection
 
 The same `FRONTEND_ORIGINS` value also drives `verify_origin()` in `spoilerless/app/api/auth.py`, a FastAPI
-dependency applied to `POST /api/auth/google` but not `POST /api/auth/logout`. It compares the request's `Origin` (or, if absent,
+dependency applied to both `POST /api/auth/google` and `POST /api/auth/logout`. It compares the request's `Origin` (or, if absent,
 `Referer`) header against the configured origin list and rejects mismatches with `403 AUTH_ORIGIN_NOT_ALLOWED`.
 A request with neither header is also rejected (fail-closed). Setting `FRONTEND_ORIGINS=*` disables this
 check entirely (not recommended). `SESSION_COOKIE_SAMESITE` (see below) is the complementary cookie-level
@@ -195,11 +195,13 @@ plus a server-controlled env var — never by unverified client input.
 
 Two independent features share the single `REDIS_URL` setting and the one shared `redis.asyncio` client in
 `spoilerless/app/cache/redis_client.py` (`get_redis()`, `lru_cache`-decorated). Both are guarded on a non-empty
-`REDIS_URL` and degrade to a no-op (not a crash) when it is unset — local development without Redis runs
-unthrottled and always queries Neo4j directly:
+`REDIS_URL`; when it is unset, local development runs unthrottled and always queries Neo4j directly. Graph-cache
+operations catch Redis errors and fall through to Neo4j. Rate-limiter initialization is awaited during startup
+when `REDIS_URL` is non-empty, so an invalid or unreachable configured Redis service can fail startup rather than
+silently disabling throttling:
 
 - **Rate limiting** (`spoilerless/app/services/rate_limit.py`) — `RateLimiter` dependencies backed by
-  `pyrate-limiter`'s Redis `RedisBucket` (one ZSET per window, atomic across multiple backend workers). Bound
+  `pyrate-limiter`'s Redis `RedisBucket` (one bucket key per window). Bound
   once at FastAPI startup by `init_rate_limiter()` (`spoilerless/app/main.py`'s `lifespan()`) when `REDIS_URL` is
   set. Configured windows:
 
@@ -215,8 +217,9 @@ unthrottled and always queries Neo4j directly:
   with a `300`-second TTL (`DEFAULT_GRAPH_TTL_SECONDS`); any Redis error or unset `REDIS_URL` falls through
   to querying Neo4j directly rather than surfacing a request failure.
 
-`REDIS_URL` is expected to be an Upstash-style `rediss://` TLS connection string; it is not declared in
-`.env.example` and is not read anywhere except these two modules.
+`REDIS_URL` is expected to be an Upstash-style `rediss://` TLS connection string and is not declared in
+`.env.example`. It is consumed by the startup guard in `main.py`, the shared Redis client, the rate limiter,
+and the graph cache.
 
 ### Health check
 
@@ -231,20 +234,25 @@ Neo4j is reachable, or `{"status": "degraded", "database": "unavailable", ...}` 
 
 ## Per-Environment Overrides
 
-There are no `.env.development` / `.env.production` / `.env.test` files and no `NODE_ENV`-style
-conditional loading. The backend has a single `.env` file and no `ENVIRONMENT` setting, so per-environment
-configuration is done by maintaining a separate `.env` per deployment:
+No `.env.development`, `.env.production`, or `.env.test` files are committed. The backend's
+`SettingsConfigDict` names only `.env` and has no `ENVIRONMENT` setting, so backend per-environment values come
+from the current working directory's `.env` and/or the process environment. Vite uses the repository root as
+its environment directory and may receive build-mode or hosting-process `VITE_*` values even though no
+mode-specific files are committed:
 
 - **Local development** — `cp .env.example .env`; set `NEO4J_PASSWORD` (the same value is substituted into
   `docker-compose.yml`'s `NEO4J_AUTH`, defaulting to `change-me` if unset — see
   [Docker Compose](#docker-compose-neo4j)); keep `NEO4J_URI=neo4j://localhost:7687` and
-  `FRONTEND_ORIGINS=http://localhost:5173`. `.env.example` ships `SESSION_COOKIE_SECURE=true`; set it to
-  `false` if the local backend is served over plain HTTP on a non-`localhost` host.
+  `FRONTEND_ORIGINS=http://localhost:5173`. Remove or blank the root template's `VITE_API_BASE_URL=/api` so
+  frontend calls use their existing `/api/...` paths through the Vite proxy. `.env.example` ships
+  `SESSION_COOKIE_SECURE=true`; set it to `false` if the local backend is served over plain HTTP on a
+  non-`localhost` host.
 - **Production / Neo4j Aura** — set `NEO4J_URI=neo4j+s://<instance>.databases.neo4j.io:7687`, real
   credentials, `SESSION_COOKIE_SECURE=true`, and the deployed frontend origin(s) in `FRONTEND_ORIGINS`.
   <!-- VERIFY: The exact production Neo4j Aura instance URI and cloud region are deployment-specific and
   not discoverable from the repository. -->
-- **Frontend** — since the 09-05 envDir consolidation, the frontend reads its `VITE_*` variables from the **root `.env`** via `envDir: '..'` in `frontend/vite.config.ts` — there is no `frontend/.env` or `frontend/.env.local` anymore (`frontend/.env.example` still exists as a reference template for the two `VITE_*` variables). `VITE_*` variables are inlined into the bundle at build time, so production values must be present when `npm run build` runs — they cannot be injected at runtime.
+- **Frontend** — the frontend reads `VITE_*` variables from the repository root via `envDir: '..'` in `frontend/vite.config.ts`. `frontend/.env.example` is only a reference template; creating `frontend/.env` or `frontend/.env.local` will not override the configured root environment directory. `VITE_*` variables are inlined into the bundle at build time, so production values must be present when `npm run build` runs — they cannot be injected at runtime.
+- **Local test helper** — `source scripts/env-local.sh` exports the four `NEO4J_*` variables for the local Docker database before a test command. Because process variables outrank `.env`, this intentionally overrides database values from the root file for that shell. The script contains a fixed local-only password; keep it aligned with the local container rather than reusing it for any deployed database.
 
 ---
 
@@ -289,19 +297,20 @@ set at runtime through the API (persisted in Neo4j) or passed on a per-request b
   scheme and a hostname (`_validate_base_url` in `spoilerless/app/domain/settings.py`) — an SSRF-via-scheme
   guard. It deliberately does **not** block private/loopback addresses, since local vLLM/Ollama endpoints
   (`http://127.0.0.1:...`) are a supported deployment target.
-- **System prompt:** The assistant prompt is user-owned in `spoilerless/app/llm/system_prompt.py`, versioned
-  via `SYSTEM_PROMPT_VERSION = "v1"`, with two localized variants: `SYSTEM_PROMPT_ENG` (English) and
-  `SYSTEM_PROMPT_TR` (Turkish).
+- **System prompt:** The assistant prompt lives in `spoilerless/app/llm/system_prompt.py` with two localized
+  variants: `SYSTEM_PROMPT_ENG` (English) and `SYSTEM_PROMPT_TR` (Turkish), selected through the
+  `SYSTEM_PROMPTS` mapping (English is the fallback for any unknown language).
 - **Assistant language:** `system_prompt_language` (`"english"` or `"turkish"`, default `"english"`) is
   also stored/updated through this endpoint. It controls both which system prompt variant is sent to the
   LLM (`spoilerless/app/services/chat.py` reads the stored value per turn) and which localized fallback text
   is used for a turn — see `_fallback_for()` in `spoilerless/app/retrieval/pipeline.py`, which selects `"tr"`
-  when `system_prompt_language == "turkish"` and otherwise `"en"` (this is a direct selection, not
-  automatic detection of the user's message language — `detect_language()` was deleted from
-  `spoilerless/app/llm/fallbacks.py` as it was superseded by the prompt-language rule in PROB-28/#52).
-- **Secret write semantics:** `PUT /api/settings/llm` accepts `api_key: str | None`; sending `None` or an
-  empty string preserves the previously stored key rather than clearing it, since `GET` never returns the
-  full key for a client to round-trip.
+  when `system_prompt_language == "turkish"` and otherwise `"en"`. This is a direct selection — there is
+  no automatic detection of the user's message language anywhere in the codebase (`detect_language()` no
+  longer exists in `spoilerless/app/llm/fallbacks.py`).
+- **Secret write semantics:** `PUT /api/settings/llm` accepts `api_key: str | None`. `None` preserves the
+  previously stored key. Blank/whitespace also preserves an existing stored key, but is rejected with
+  `422 INVALID_REQUEST` when no key is stored. There is currently no API operation that clears a stored key;
+  `GET` never returns the full key for a client to round-trip.
 
 ### Request-Scoped BYOK (Bring-Your-Own-Key) Header Overrides
 
@@ -310,7 +319,7 @@ In addition to stored graph settings and environment variables, the backend supp
 | Header | Description |
 |---|---|
 | `X-LLM-Api-Key` | Per-request LLM API key. When present and non-blank, triggers BYOK resolution. |
-| `X-LLM-Provider` | LLM provider implementation (`openai_compatible`, `gemini`, `vllm`, `ollama`). Defaults to `openai_compatible`. |
+| `X-LLM-Provider` | LLM provider selector. Missing/blank defaults to `openai_compatible`; `gemini` selects `GeminiProvider`. The current header path does not validate the other strings against `LLM_PROVIDERS`: every non-`gemini` value follows the OpenAI-compatible branch. Clients should send only `openai_compatible`, `vllm`, or `ollama` there. |
 | `X-LLM-Base-URL` | Custom base URL for the LLM endpoint (validated for HTTP/HTTPS scheme and hostname). |
 | `X-LLM-Model` | LLM model identifier. |
 
@@ -327,7 +336,7 @@ Two `SessionRepository` implementations exist in `spoilerless/app/repository/ses
 
 | Implementation | Storage | Used when |
 |---|---|---|
-| `InMemorySessionRepository` | In-process Python dict | `AuthService`'s constructor default when no `session_repo` is explicitly passed (used directly by some tests). |
+| `InMemorySessionRepository` | In-process Python dict | Development/testing only — used directly by tests and dev scripts. It is **not** an `AuthService` constructor default: `AuthService` requires explicit repository arguments (PROB-09/#77 removed the old silent `InMemorySessionRepository()` fallback). |
 | `Neo4jSessionRepository` | `(:Session)` nodes in Neo4j, linked via `(:AppUser)-[:HAS_SESSION]->(:Session)` | The actual FastAPI app — `spoilerless/app/main.py`'s `lifespan()` sets `app.state.session_repo = Neo4jSessionRepository(database)` at startup, and `get_auth_service()` (`spoilerless/app/api/deps.py`) always injects it. |
 
 Only the raw session token's SHA-256 hash is ever persisted (`token_hash`); the raw token returned to the
@@ -336,7 +345,7 @@ revoked (`revoked_at IS NOT NULL`) sessions.
 
 ### Periodic Session Cleanup
 
-Automated background cleanup is active in production and local runtime:
+Automated background cleanup is active whenever Neo4j is reachable during application startup:
 - During application `lifespan()` startup in `spoilerless/app/main.py`, an asyncio background task (`_session_sweep_loop`) is launched if Neo4j is reachable on startup.
 - The sweep runs periodically every **3,600 seconds (1 hour)** (`SESSION_SWEEP_INTERVAL_SECONDS`).
 - Each iteration calls `app.state.session_repo.sweep_expired()` and `app.state.share_repo.sweep_expired()`, deleting expired or revoked `(:Session)` and `(:ShareToken)` nodes from Neo4j.
@@ -383,11 +392,11 @@ services:
 
 | Property | Value | Notes |
 |---|---|---|
-| **Image** | `neo4j:2026.06.0-community` | Calendar-versioned tag (`YYYY.MM.PATCH`), Neo4j's current release scheme. |
+| **Image** | `neo4j:2026.06.0-community` | Exact image tag committed in `docker-compose.yml`. |
 | **Bolt port** | `7687`, bound to `127.0.0.1` only | Used by the Python driver — set `NEO4J_URI=neo4j://localhost:7687` to match. Not reachable from outside the host. |
 | **HTTP port** | `7474`, bound to `127.0.0.1` only | Neo4j Browser UI at `http://localhost:7474`. |
 | **Credentials** | `neo4j` / value of the host's `NEO4J_PASSWORD` env var, defaulting to `change-me` if unset | `NEO4J_AUTH` is substituted from the shell/`.env` `NEO4J_PASSWORD` via Compose's `${VAR:-default}` syntax — it must match the backend's own `NEO4J_PASSWORD` for the driver to authenticate. Docker Compose reads `.env` at the project root automatically for this substitution. |
-| **APOC** | — | The `./neo4j_plugins` volume is mounted but no plugin JAR is auto-installed. To enable APOC, place `apoc-*-core.jar` in `neo4j_plugins/` and add `NEO4J_PLUGINS='["apoc"]'` to the `environment` block. |
+| **APOC** | Not configured | The `./neo4j_plugins` volume is mounted, but the Compose file neither installs APOC nor declares a Neo4j plugin environment setting. |
 
 ### Starting Neo4j
 
@@ -396,6 +405,40 @@ docker compose up -d
 docker compose ps neo4j
 # Or open http://localhost:7474 in a browser
 ```
+
+---
+
+## Deployment Configuration
+
+### Render backend (`render.yaml`)
+
+The committed Render Blueprint declares one free Python web service:
+
+| Setting | Repository value |
+|---|---|
+| Service name | `spoilerless-api` |
+| Runtime / plan | `python` / `free` |
+| Auto-deploy | `true` |
+| Build command | `uv sync --frozen` |
+| Start command | `uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT` |
+
+`render.yaml` does not declare an `envVars` block. Configure the required `NEO4J_URI`, `NEO4J_USERNAME`, and
+`NEO4J_PASSWORD` values in the deployment environment, plus any optional settings from the table above. Keep
+secrets server-side: do not expose Neo4j, Redis, or LLM credentials through `VITE_*` variables. `PORT` is read by
+the committed start command from the hosting process environment.
+
+<!-- VERIFY: The connected Render branch and the currently configured Render environment-variable values live
+outside the repository; confirm them in the Render service settings before deployment. -->
+
+### Vercel frontend (`frontend/vercel.json`)
+
+The Vercel configuration contains a single SPA fallback rewrite from `/(.*)` to `/index.html`, allowing
+client-side paths to load the frontend entry point. The frontend build is controlled by `frontend/package.json`:
+`npm run build` runs `tsc -b && vite build`, and Vite emits build-time `VITE_*` values into the bundle.
+
+<!-- VERIFY: The Vercel project's Root Directory, production domain, and build-time `VITE_GOOGLE_CLIENT_ID` /
+`VITE_API_BASE_URL` values are external project settings. If Root Directory is `frontend`, the committed
+`frontend/vercel.json` is the applicable deployment config. -->
 
 ---
 
@@ -429,20 +472,19 @@ export default defineConfig({
 ```
 
 The dev server runs on the Vite default port (`5173`) and proxies `/api/*` requests to the FastAPI backend
-at `http://127.0.0.1:8000`. In local development the frontend calls `fetch('/api/...')` with relative paths
-(see `frontend/src/api/client.ts`), relying on this proxy, since `VITE_API_BASE_URL` is unset. In production
-(the backend and frontend are hosted on separate origins — see `VITE_API_BASE_URL` below), the frontend
-instead issues an absolute cross-origin request directly to the hosted backend; Vite's dev proxy does not
-exist outside `vite dev`.
+at `http://127.0.0.1:8000`. Frontend API call sites already pass paths beginning with `/api`; with
+`VITE_API_BASE_URL` unset or empty, those paths use this proxy. For a separately hosted backend,
+`VITE_API_BASE_URL` should be the backend **origin** (without a trailing `/api` path), so the frontend issues
+absolute cross-origin requests. Vite's dev proxy does not exist outside `vite dev`.
 
 ### Frontend environment variables
 
-Since the 09-05 envDir consolidation, `frontend/vite.config.ts` sets `envDir: '..'`, so the frontend reads its `VITE_*` variables from the **root `.env`** — `frontend/.env.local` was deleted and must not be recreated. `frontend/.env.example` (verified) remains as a reference template declaring the two variables:
+`frontend/vite.config.ts` sets `envDir: '..'`, so Vite reads its `VITE_*` variables from the repository-root environment files. `frontend/.env.example` is a reference template only and declares the same two public variables:
 
 | Variable | Required | Description |
 |---|---|---|
-| `VITE_GOOGLE_CLIENT_ID` | Yes, for sign-in | Google OAuth client ID, read via `import.meta.env.VITE_GOOGLE_CLIENT_ID` in `frontend/src/components/auth/LoginPage.tsx`. Must match the backend's `GOOGLE_CLIENT_ID`. When unset, the login page renders a "Google Sign-In is not configured" message instead of the sign-in button. |
-| `VITE_API_BASE_URL` | No — set to `/api` in root `.env.example` | Read via `import.meta.env.VITE_API_BASE_URL ?? ''` in `frontend/src/api/client.ts` (used by `apiFetch`, the shared client for every non-streaming API call) and again in `frontend/src/api/chat.ts` for the raw SSE `streamMessage` fetch. A value of `/api` (as in `.env.example`) preserves relative-URL requests through the Vite dev proxy; setting it prefixes every request with an absolute origin so a hosted frontend can reach a backend on another origin (e.g., `https://api.spoilerless.net`). <!-- VERIFY: The exact production API origin is deployment-specific; confirm the current value in the Vercel project's build-time environment variables. --> |
+| `VITE_GOOGLE_CLIENT_ID` | Yes, for sign-in | Google OAuth client ID, read via `import.meta.env.VITE_GOOGLE_CLIENT_ID` in `frontend/src/components/auth/LoginPage.tsx`. It must match the backend's `GOOGLE_CLIENT_ID`. When unset, the login page renders a configuration error instead of the Google sign-in button. |
+| `VITE_API_BASE_URL` | No — runtime fallback is empty | Read via `import.meta.env.VITE_API_BASE_URL ?? ''` in `frontend/src/api/client.ts`, `frontend/src/api/chat.ts`, and `frontend/src/api/export.ts`. Leave empty for local proxying. For a hosted backend use an origin such as `https://api.example.com`, without `/api`, because every call site already supplies `/api/...`. The root `.env.example` currently declares `/api`; that template value is inconsistent with the consumers and creates `/api/api/...` URLs. <!-- VERIFY: The exact production API origin is deployment-specific; confirm the current value in the Vercel project's build-time environment variables. --> |
 
 > **Security:** Vite inlines `VITE_*` variables into the built JavaScript bundle at build time — never
 > store secrets in the root `.env`. `VITE_GOOGLE_CLIENT_ID` is a public OAuth client identifier
@@ -618,7 +660,7 @@ confidence_levels:
 
 ### Validation at load time
 
-`load_ontology()`:
+`load_ontology()` (cached by `@lru_cache(maxsize=None)` per directory argument):
 
 1. Reads all three YAML files from the `ontology/` directory.
 2. Validates each file's `ontology_version` matches `"0.1"`.
@@ -627,8 +669,10 @@ confidence_levels:
    `require_claim_status()`, and `require_confidence_level()`, each raising `OntologyValidationError` for
    an undeclared value.
 
-Seed data validation (`spoilerless/app/graph/setup.py`) calls these `require_*()` methods before any data is
-written to Neo4j.
+Seed data validation calls these `require_*()` methods before any data is written to Neo4j: the
+`setup_database()` routine in `spoilerless/app/graph/seed.py` (invoked by `spoilerless/app/graph/setup.py`)
+validates every seeded node type, relationship type, claim type/status, and confidence level against the
+loaded ontology.
 
 ---
 
@@ -637,22 +681,22 @@ written to Neo4j.
 ### 1. First-time setup
 
 ```bash
-# 1. Copy the environment template (frontend VITE_* vars live in this same
-#    root .env — there is no frontend/.env.local anymore)
+# 1. Copy the environment template (Vite reads VITE_* from this root file)
 cp .env.example .env
 # Edit .env — set NEO4J_PASSWORD (docker-compose.yml substitutes this same
 # value into NEO4J_AUTH, defaulting to "change-me" if left unset),
 # GOOGLE_CLIENT_ID and VITE_GOOGLE_CLIENT_ID (same value), optionally
 # ADMIN_EMAILS to grant yourself the admin role (required for the LLM
-# settings endpoints) and SESSION_COOKIE_SECURE=false if serving the
-# backend over plain HTTP on a non-localhost host.
+# settings endpoints). Remove or blank VITE_API_BASE_URL=/api for local
+# proxying; the frontend call paths already include /api.
 
 # 2. Start Neo4j
 docker compose up -d
 
 # 3. Install Python deps and seed the database
 uv sync
-uv run spoilerless-setup
+uv run python -m spoilerless.app.graph.setup
+#   (equivalent: uv run spoilerless-setup — the console script declared in the root pyproject.toml)
 
 # 4. Start the backend
 uv run uvicorn spoilerless.app.main:app --reload
@@ -666,10 +710,10 @@ cd frontend && npm install && npm run dev
 Change `NEO4J_URI` (and credentials) to point at a different Neo4j instance, e.g. Neo4j Aura:
 
 ```env
-NEO4J_URI=neo4j+s://your-instance.databases.neo4j.io:7687
-NEO4J_USERNAME=neo4j
-NEO4J_PASSWORD=your-password
-NEO4J_DATABASE=neo4j
+NEO4J_URI=neo4j+s://<instance>.databases.neo4j.io:7687
+NEO4J_USERNAME=<database-username>
+NEO4J_PASSWORD=<database-password>
+NEO4J_DATABASE=<database-name>
 ```
 
 ### 3. Adding a new ontology type
@@ -677,10 +721,15 @@ NEO4J_DATABASE=neo4j
 1. Edit the appropriate YAML file in `ontology/`.
 2. Add any required indexes in `spoilerless/app/graph/seed.py` (`create_constraints()`).
 3. Add seed data if needed under `data/dexter/seed/` or `data/dexter/metadata/`.
-4. If the new label/type is used by seed data, update the relevant `NODE_LABELS` or `RELATIONSHIP_TYPES` tuple in `spoilerless/app/graph/seed.py`; these tuples cover seeded types, not every ontology declaration.
-5. Restart the backend so modules that loaded an ontology at import time see the change. `load_ontology()` itself is uncached and independently called by several modules.
+4. If the new label/type is used by seed data, update the relevant tuple: `NODE_LABELS` in
+   `spoilerless/app/graph/labels.py` (re-exported by `seed.py`) or `RELATIONSHIP_TYPES` in
+   `spoilerless/app/graph/seed.py`; these tuples cover seeded types, not every ontology declaration.
+5. Restart the backend so modules that loaded an ontology at import time see the change. `load_ontology()` is `lru_cache`-cached by directory argument for the process lifetime.
 
 ### 4. Setting up authentication (required to sign in)
+
+<!-- VERIFY: Google Cloud Console labels and OAuth setup screens are external infrastructure and can change;
+confirm the current Web application client workflow in the Google Cloud Console. -->
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials.
 2. Create an **OAuth 2.0 Client ID** of type **Web application**.
@@ -688,18 +737,19 @@ NEO4J_DATABASE=neo4j
 4. Copy the **Client ID** and set it in both places:
 
 ```bash
-# Backend + frontend, both in the root .env (envDir consolidation — no
-# frontend/.env.local)
+# Backend + frontend, both in the root .env (`envDir: '..'`)
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 ```
 
 5. Restart the backend and rebuild/restart the frontend dev server.
 
-**Important:** The `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID` values in the root `.env` must match
-exactly. The backend verifies the token audience against its configured `GOOGLE_CLIENT_ID`; a mismatch
-causes `google_auth()` to raise `GoogleVerificationError("audience_mismatch")`, returned to the client as
-`401 AUTH_INVALID_GOOGLE_CREDENTIAL`. Startup runs `verify_google_client_id_equality()` — when **both** variables are set and differ, startup fails with a `RuntimeError` instead of shipping a broken login flow (a missing `VITE_GOOGLE_CLIENT_ID` in local dev does not crash).
+**Important:** `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID` must match exactly. The backend verifies the token
+audience against `GOOGLE_CLIENT_ID`; a mismatch is returned as `401 AUTH_INVALID_GOOGLE_CREDENTIAL`. Startup
+runs `verify_google_client_id_equality()`, but that function reads `VITE_GOOGLE_CLIENT_ID` directly from the
+process environment. It catches differing process-level values when both are set; it does not read that frontend
+value from Pydantic's `.env` source. Keep the root `.env` values aligned for local development and configure both
+deployment/build environment values explicitly in hosted environments.
 
 > `GOOGLE_CLIENT_SECRET` is **not** used anywhere in this codebase. Never add it to any configuration file.
 
@@ -719,7 +769,8 @@ causes `google_auth()` to raise `GoogleVerificationError("audience_mismatch")`, 
    once signed in as an admin (see [above](#5-restricting-sign-in-and-granting-the-admin-role)) — the
    runtime setting takes precedence over the env value. Alternatively, send BYOK request headers (`X-LLM-Api-Key`, `X-LLM-Provider`, etc.) on chat requests to override both env and stored graph settings for that request.
 2. Provide `LLM_API_KEY` and `LLM_MODEL` — either in `.env` or through the same `PUT /api/settings/llm`
-   call. `LLM_PROVIDER` has a default; an explicit base URL is required only for `openai_compatible` because Gemini supplies its default URL.
+   call. `LLM_PROVIDER` has a default; an explicit base URL is required for the OpenAI-compatible branch
+   (`openai_compatible`, `vllm`, and `ollama`), while Gemini supplies its default URL.
 3. For `LLM_PROVIDER=gemini` with an empty `LLM_BASE_URL`, the service automatically uses
    `https://generativelanguage.googleapis.com`.
 4. Restart the backend if changes were made via `.env`; runtime-settings changes via the API or request headers take effect on the next chat call without a restart.

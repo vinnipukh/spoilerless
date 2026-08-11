@@ -14,14 +14,14 @@ Explore characters, events, locations, claims, and relationships through an inte
 ## Deployment & Environment Quick Reference
 
 <!-- VERIFY: Production stack endpoints (app.spoilerless.net, api.spoilerless.net), Neo4j AuraDB instance ID (03a8623b), Upstash Redis instance (darling-rat-221809), and Cloudflare DNS setup are external infrastructure details. -->
-**Production stack (live):** Vercel `app.spoilerless.net` (frontend) · Render `api.spoilerless.net` (backend) · Neo4j AuraDB Free `03a8623b` · Upstash Redis `darling-rat-221809` · Cloudflare DNS + apex redirect.
+**Documented production target:** Vercel `app.spoilerless.net` (frontend) · Render `api.spoilerless.net` (backend) · Neo4j AuraDB Free `03a8623b` · Upstash Redis `darling-rat-221809` · Cloudflare DNS + apex redirect.
 
 ### Where configuration lives
 
 | Location | Holds | Notes |
 |---|---|---|
-| `.env` (repo root) | Backend settings (`NEO4J_*`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`, `ADMIN_EMAILS`, `REDIS_URL`, `LLM_*`) AND the frontend's `VITE_GOOGLE_CLIENT_ID` | Read by `spoilerless/app/core/config.py` via pydantic-settings; Vite reads it too via `envDir: '..'` in `frontend/vite.config.ts`. **Never committed.** Points at the shared AuraDB by default. |
-| `scripts/env-local.sh` | Local-Docker Neo4j credentials (`localhost:7687`, password `hdgraf-local-password`) | `source scripts/env-local.sh` before running the spoilerless/tests against the local Docker Neo4j — **never** edit `.env` to switch databases. The password must match the running container's `NEO4J_AUTH`, not the Compose default. |
+| `.env` (repo root) | Backend settings (`NEO4J_*`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`, `ADMIN_EMAILS`, `REDIS_URL`, `LLM_*`) and frontend `VITE_*` values | Read by `spoilerless/app/core/config.py` via pydantic-settings; Vite reads the same root file via `envDir: '..'` in `frontend/vite.config.ts`. **Never committed.** `.env.example` provides the local-Neo4j, auth, and LLM baseline; `ALLOWED_EMAILS`, `ADMIN_EMAILS`, and `REDIS_URL` are optional settings declared in code but are not currently listed in that template. |
+| `scripts/env-local.sh` | Compatibility credentials for an existing local Neo4j container (`localhost:7687`, password `hdgraf-local-password`) | Use only when the running container was created with that password. A fresh Compose deployment instead uses `NEO4J_PASSWORD` from the shell or `.env`, defaulting to `change-me`. |
 | `docker-compose.yml` | Local Neo4j Community container (`spoilerless-neo4j`, auth `neo4j` / `${NEO4J_PASSWORD:-change-me}`) | Only for local testing; production uses AuraDB. |
 
 ### Platform environment variables
@@ -31,7 +31,7 @@ Explore characters, events, locations, claims, and relationships through an inte
 
 ```
 NEO4J_URI=neo4j+s://03a8623b.databases.neo4j.io
-NEO4J_USERNAME=neo4j
+NEO4J_USERNAME=<AuraDB username>
 NEO4J_PASSWORD=<AuraDB password>
 NEO4J_DATABASE=03a8623b
 GOOGLE_CLIENT_ID=<Google OAuth web client ID>
@@ -60,8 +60,8 @@ Build settings: Framework Preset **Vite**, Root Directory **`frontend/`**, Build
 
 1. `git clone https://github.com/vinnipukh/hdgrafcehennemi.git`
 2. `uv sync` (backend deps) and `cd frontend && npm install`
-3. `cp .env.example .env` → fill in real values (AuraDB creds, Google Client ID, emails, Redis URL) — `VITE_GOOGLE_CLIENT_ID` lives in this same root `.env` (no `frontend/.env.local` anymore)
-4. Optional local DB: `docker compose up -d neo4j`, then use `source scripts/env-local.sh` before local runs
+3. `cp .env.example .env` → for local development, keep the matching Neo4j defaults, set `VITE_API_BASE_URL=` (empty, so `/api` paths use the Vite proxy), and add Google/allowlist/Redis values only if those features are needed; `VITE_GOOGLE_CLIENT_ID` lives in this same root `.env`. In production, set `VITE_API_BASE_URL` to the full backend origin instead.
+4. Start the local database with `docker compose up -d neo4j`
 5. Backend: `uv run uvicorn spoilerless.app.main:app --reload` · Frontend: `cd frontend && npm run dev`
 
 Full platform-specific procedures, rollback, and monitoring: [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md).
@@ -79,21 +79,23 @@ Coding agents should use [`docs/PROJECT-SPEC.md`](./docs/PROJECT-SPEC.md) for pr
 ## Features
 
 - **Interactive knowledge graph** — Browse a Cytoscape.js-powered graph of narrative entities (characters, events, locations, organizations, objects) and their relationships.
-- **Spoiler-aware filtering** — Set your watch progress by episode. Graph and boundary-aware user-content reads enforce visibility at the backend data-access layer; candidate review reads are an exception because their boundary is optional or absent.
+- **Spoiler-aware filtering** — Set your watch progress by episode. Graph, boundary-aware user-content, and candidate review reads enforce visibility at the backend data-access layer; candidate list and detail reads require a positive boundary validated against a persisted episode.
 - **Source-grounded claims** — Curated canonical claims are backed by evidence fragments whose sources include type, episode, locator, and retrieval date metadata; user-authored relationship claims may have no evidence. Confidence and status are tracked separately from relationship semantics.
 - **User notes & custom content** — Add plain-text notes attached to characters or claims. Create custom nodes and relationships that are visually distinct from canonical seed data.
 - **Revision history** — All user edits, corrections, and rejections are recorded in a revision log, enabling inspect-and-revert workflows.
 - **Candidate claim review** — Extraction candidates go through a review workflow before entering the canonical graph.
 - **Change sets** — Batched, confirmable edits with revision tracking and protection against conflicting changes.
-- **Google OAuth authentication** — Sign in with Google ID tokens. Sessions are managed via HttpOnly cookies with configurable TTL. A Google Cloud OAuth client is required to log in. A user's role (`admin` or `user`) is derived server-side at login from the `ADMIN_EMAILS` allowlist; the admin role gates candidate review commits, change-set commits, and the application settings endpoints.
-- **Spoiler-grounded LLM chat (optional, BYOK)** — Disabled by default. When enabled, an OpenAI-compatible chat model answers questions using only the spoiler-filtered, tool-allowlisted graph context for the user's watch progress. The frontend sends its own key via `X-LLM-Api-Key`/`X-LLM-Provider`/`X-LLM-Base-URL`/`X-LLM-Model` headers — the backend holds no LLM secret.
+- **Google OAuth + visitor mode** — Sign in with Google ID tokens for persisted progress and write features, or continue as a read-only visitor without an account. Authenticated sessions use HttpOnly cookies with configurable TTL. A user's role (`admin` or `user`) is derived server-side at login from the `ADMIN_EMAILS` allowlist; the admin role gates candidate review commits, change-set commits, and the application settings endpoints.
+- **Spoiler-grounded LLM chat (optional, BYOK)** — Disabled by default. When enabled, an OpenAI-compatible chat model answers questions using only spoiler-filtered, tool-allowlisted graph context for the user's watch progress. Browser-stored BYOK settings travel per request in `X-LLM-*` headers; when those headers are absent, the backend can fall back to its own `LLM_*` configuration.
 - **Redis-backed rate limiting and caching (optional)** — When `REDIS_URL` is set, login, chat-send, and content-write routes are rate-limited, and spoiler-filtered graph responses are cached. An empty `REDIS_URL` disables both features rather than failing startup.
+- **Stale-while-refetch graph** — Refetching keeps the last-known-good graph on screen; loading/error/empty states render as overlays above the canvas instead of unmounting it.
 - **Command palette (⌘K)** — Jump to any node, episode, or action from a keyboard-first palette; `/` focuses the floating search bar.
 - **Node search + Notes & Claims search** — Zero-dependency substring search over the loaded graph payload (nodes, notes, and claims) with spoiler-safe results.
 - **Timeline view** — A chronological, episode-grouped timeline of visible events; selecting an event frames it in the graph.
 - **Series dashboard** — A dialog listing all available series with watch-progress bars; opens any series through the existing progress flow.
 - **Markdown export** — Export the visible graph (or a single resource) as Markdown from the same filtered read path.
 - **Path finder** — Pick two nodes to highlight the shortest visible path between them (server-resolved boundary, capped hops).
+- **Read-only share links** — Authenticated users can create, list, and revoke expiring snapshot links; recipients can open the token-gated spoiler boundary without signing in.
 
 ---
 
@@ -117,7 +119,7 @@ React + TypeScript frontend
 (Cytoscape.js interactive graph)
 ```
 
-The **spoiler boundary** is the system's core architectural invariant. Every story-sensitive entity carries a `visible_from_order` field. When a user sets their watch progress to episode N, graph and GraphRAG queries return only data with `visible_from_order <= N`; candidate review reads remain the documented exception because their boundary is optional or absent.
+The **spoiler boundary** is the system's core architectural invariant. Every story-sensitive entity carries a `visible_from_order` field. When a user sets their watch progress to episode N, graph and GraphRAG queries return only data with `visible_from_order <= N`; candidate list and detail reads likewise require a positive boundary that the server validates against a persisted episode.
 
 See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the full system breakdown.
 
@@ -128,13 +130,14 @@ See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the full system breakdo
 | Layer | Technology |
 |---|---|
 | **Backend** | Python 3.13+, FastAPI, Pydantic v2 |
-| **Database** | Neo4j Community (via Docker Compose) |
+| **Database** | Neo4j Community via Docker Compose locally; Neo4j Aura-compatible deployment configuration |
 | **Frontend** | React 19, TypeScript, Vite, Tailwind CSS v4 |
 | **Graph visualization** | Cytoscape.js + react-cytoscapejs |
 | **UI components** | shadcn/ui (Radix UI primitives, Lucide icons) |
 | **Python deps** | uv |
 | **Frontend deps** | npm |
-| **Rate limiting / caching** | Redis (Upstash) via `fastapi-limiter` — optional, disabled when `REDIS_URL` is empty |
+| **Rate limiting / caching** | Redis (Upstash); rate limiting uses a custom FastAPI dependency built on `pyrate-limiter` — optional, disabled when `REDIS_URL` is empty |
+| **Tests** | pytest (backend, live Neo4j) · Vitest + React Testing Library (frontend) |
 | **Orchestration** | Docker Compose (Neo4j container) |
 
 ---
@@ -159,7 +162,7 @@ Edit `.env` to set `NEO4J_PASSWORD` so it matches `docker-compose.yml` (the Comp
 
 ### 2. Set up Google OAuth
 
-This application **requires** a Google OAuth 2.0 client to log in.
+Google OAuth is required for authenticated sessions, persisted progress, chat, and write features. It is not required for read-only visitor browsing.
 <!-- VERIFY: Google Cloud Console OAuth 2.0 client setup steps (console.cloud.google.com) are external service details. -->
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials
@@ -210,9 +213,9 @@ npm install
 npm run dev
 ```
 
-Make sure `VITE_GOOGLE_CLIENT_ID` is set in the root `.env` (set in step 2).
+For Google sign-in, make sure `VITE_GOOGLE_CLIENT_ID` is set in the root `.env` (step 2). Visitor browsing works without it.
 
-The frontend opens at `http://localhost:5173` and immediately shows the login screen. Sign in with your Google account to access the graph.
+The frontend opens at `http://localhost:5173` and shows the entry screen. Sign in with Google for the full application, or choose **Continue as visitor** for read-only graph browsing.
 
 For a full walkthrough with troubleshooting, see [`docs/GETTING-STARTED.md`](./docs/GETTING-STARTED.md).
 
@@ -221,28 +224,32 @@ For a full walkthrough with troubleshooting, see [`docs/GETTING-STARTED.md`](./d
 ## Project Structure
 
 ```
-spoilerless/
+.
 ├── spoilerless/
 │   ├── app/
-│   │   ├── api/            # Route handlers (series, graph, user_content, auth,
-│   │   │                   #   revisions, candidates, progress, chat, change_set, settings)
-│   │   ├── cache/          # Redis client, graph response cache (optional)
-│   │   ├── core/           # Config, error handling
+│   │   ├── api/            # Route handlers (auth, graph, share, chat, candidates, change sets, writes)
+│   │   ├── cache/          # Redis client and graph response cache (optional)
+│   │   ├── core/           # Configuration, error handling, token helpers (core/tokens.py)
 │   │   ├── domain/         # Pydantic models / schemas
-│   │   ├── graph/          # Neo4j database, ontology, seed, setup
-│   │   ├── llm/            # LLM provider, fallbacks, system prompt (GraphRAG chat)
-│   │   ├── repository/     # Data access layer (sessions, users, user content, etc.)
-│   │   ├── retrieval/      # Retrieval pipeline and tools for chat context
-│   │   ├── revisions/      # Revision history model
-│   │   ├── services/       # Business logic
+│   │   ├── graph/          # Neo4j driver (single row normalizer / executor in database.py),
+│   │   │                   #   label constants (labels.py), ontology, seed, setup
+│   │   ├── llm/            # LLM providers, fallbacks, and GraphRAG prompt
+│   │   ├── repository/     # Data access (sessions, users, user content, shares, etc.)
+│   │   ├── retrieval/      # Chat retrieval pipeline: context section registry (context.py),
+│   │   │                   #   ToolSpec tool registry (pipeline.py), shared BFS (tools.py)
+│   │   ├── revisions/      # Revision history repository
+│   │   ├── services/       # Business logic (auth, change sets, graph, chat, progress, …)
 │   │   ├── spoiler/        # Spoiler-aware filtering logic
 │   │   └── main.py         # FastAPI application entry point
-│   └── tests/              # pytest test suite
+│   ├── scripts/            # Backend maintenance utilities
+│   └── tests/              # pytest suite
 ├── frontend/
 │   └── src/
 │       ├── api/            # API client calls
-│       ├── components/     # React components
-│       ├── hooks/          # Custom React hooks
+│       ├── components/     # React components (graph/ includes canvas + status overlays)
+│       ├── hooks/          # Custom React hooks (shared useFetchState fetch machine)
+│       ├── lib/            # Graph highlight helper, search index, BYOK, export (lib/graph/highlight.ts)
+│       ├── providers/      # React context providers
 │       └── types/          # TypeScript type definitions
 ├── data/dexter/            # Seed data for Dexter S01E01–03
 │   ├── metadata/           # Series and episode metadata
@@ -256,6 +263,13 @@ spoilerless/
 ├── pyproject.toml          # Python project config & dependencies
 └── .env.example            # Environment variable template
 ```
+
+### Recent structural consolidations
+
+- **Repository layer** — One row normalizer (`neo4j_row_to_python`) and one query executor (`run_single`) in `graph/database.py` replace per-repository duplicates; token helpers live in `core/tokens.py` and label constants in `graph/labels.py`.
+- **Chat retrieval** — `retrieval/context.py` defines a single `CONTEXT_SECTIONS` registry whose delimiters are derived from it (they cannot drift); `retrieval/pipeline.py` registers all allowlisted tools as a single `ToolSpec` list (replacing three parallel schema/executor/input-model tables); neighborhood and path reads share one `_walk_visible_claims` BFS in `retrieval/tools.py`.
+- **Change sets** — `services/change_set.py` applies operations through a table-driven dispatch and validates targets in parallel; `AuthService` now requires an explicit `session_repo` and verifier at construction (a missing dependency is a wiring bug, never a silent fallback).
+- **Frontend** — All fetch hooks run on one shared `useFetchState` machine (`hooks/useFetchState.ts`); a single `applyHighlight` helper in `lib/graph/highlight.ts` replaces four cytoscape class-juggling copies; the graph canvas never unmounts on refetch — loading/error/empty overlays render above the last-known-good graph.
 
 ---
 
@@ -278,8 +292,9 @@ The backend exposes REST endpoints grouped by area, documented via OpenAPI at `/
 | Chat | `/api/series/{series_id}/chat` | Spoiler-grounded LLM chat (enabled through stored application settings or the `LLM_ENABLED` environment fallback) |
 | Change sets | `/api/series/{series_id}/change-sets` | Batched, confirmable graph edits |
 | Settings | `/api/settings` | Application settings |
+| Share links | `/api/share` | Create/list/revoke snapshots and read a token-gated graph |
 
-Spoiler boundaries vary by endpoint: graph and boundary-aware user-content reads require a positive `visible_until_order` query parameter, chat resolves persisted watch progress server-side, the candidate list accepts an optional boundary, and candidate detail has no boundary parameter.
+Spoiler boundaries vary by endpoint: graph and boundary-aware user-content reads require a positive `visible_until_order` query parameter, chat resolves persisted watch progress server-side, and both candidate list and detail require `visible_until_order`, rejecting omission or a non-persisted episode order with 422.
 
 ---
 
@@ -295,7 +310,7 @@ curl http://localhost:8000/api/series
 curl "http://localhost:8000/api/series/series_dexter/graph?visible_until_order=2"
 ```
 
-Watch progress is persisted per user via `GET/POST /api/series/{series_id}/progress`. Progress and chat endpoints require the Google OAuth session cookie; note and custom-content routes currently have no session dependency. See [`docs/API.md`](./docs/API.md) for the full reference.
+Watch progress is persisted per user via `GET/POST /api/series/{series_id}/progress`. Progress, chat, user-content writes, candidate ingestion/review writes, revision reverts, change-set writes, settings, and share-link management require an authenticated session; selected operations additionally require the server-derived admin role. Visitor mode remains read-only. See [`docs/API.md`](./docs/API.md) for the full authorization matrix.
 
 ---
 
@@ -322,6 +337,7 @@ Watch progress is persisted per user via `GET/POST /api/series/{series_id}/progr
 | [`docs/TESTING.md`](./docs/TESTING.md) | Test framework, running tests, coverage |
 | [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) | Deployment targets and pipeline |
 | [`docs/RUNBOOK.md`](./docs/RUNBOOK.md) | Operations runbook — zombie sweep, DB-pollution gate, CI checks |
+| [`docs/PROBLEMS.md`](./docs/PROBLEMS.md) | Audit ledger — findings and fixes across passes (ELEVENTH PASS: repository-layer consolidation, ToolSpec registry, shared BFS, change-set refactor, AuthService wiring, frontend fetch-state/highlight/graph-overlay refactors) |
 | [`docs/frontend-api-contract.md`](./docs/frontend-api-contract.md) | Frontend-facing API contract |
 
 ### Enabling the GraphRAG chat locally (optional)

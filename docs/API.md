@@ -32,6 +32,7 @@ All paths below are relative to the backend origin. JSON field names use `snake_
     "email": "user@example.com",
     "display_name": "Example User",
     "avatar_url": "https://example.invalid/avatar.png",
+    "role": "user",
     "created_at": "2026-08-02T12:00:00Z",
     "updated_at": "2026-08-02T12:00:00Z"
   }
@@ -60,7 +61,7 @@ The cookie has these attributes:
 | `Path` | `/` |
 | `Domain` | Not set |
 
-The raw cookie value is generated with `secrets.token_urlsafe(48)`. Only its SHA-256 hash is stored in a Neo4j `Session` node linked from the owning `AppUser` by `HAS_SESSION`. The server-side TTL is `SESSION_TTL_SECONDS` (default 604800 seconds, seven days). Validating a session never extends its expiry (no slide-on-read); expiry is enforced by an `expires_at` check at read time, and a background sweep deletes expired and revoked `Session` nodes hourly (started only when the database is reachable at startup).
+The raw cookie value is generated with `secrets.token_urlsafe(48)`. Only its SHA-256 hash is stored in a Neo4j `Session` node linked from the owning `AppUser` by `HAS_SESSION`. The server-side TTL is `SESSION_TTL_SECONDS` (default 604800 seconds, seven days). Validating a session never extends its expiry (no slide-on-read); expiry is enforced by an `expires_at` check at read time, and a background sweep deletes expired and revoked `Session` and `ShareToken` nodes hourly (started only when the database is reachable at startup).
 
 - `GET /api/auth/me` requires a valid session and returns `UserResponse`.
 - `POST /api/auth/logout` revokes a supplied session and deletes the cookie. It returns `204` even when no cookie is supplied. It is not session-gated but carries the same `verify_origin` dependency as sign-in.
@@ -77,10 +78,11 @@ Routes using `CurrentUserDependency` (directly, or transitively via `RequireAdmi
 - candidate ingest, edit, approve, and reject operations
 - all user-content write operations: create/update/delete for notes, custom nodes, and custom relationships
 - `POST /api/series/{series_id}/revisions/{revision_id}/revert`
+- create, list, and revoke share-link operations
 
-User-content writes and revision revert are additionally owner-scoped: mutating a resource owned by another user returns `403 FORBIDDEN` (admins bypass the check; legacy resources with no stored owner are admin-only, fail-closed).
+User-content writes and revision revert are additionally owner-scoped: mutating a resource with a known different owner returns `403 FORBIDDEN`, and admins bypass the check. Direct user-content mutations treat legacy resources with no stored owner as admin-only and fail closed. Revision revert currently differs: in both its `Updated` live-resource branch and its `Deleted` snapshot branch, a missing `user_id` skips the non-admin owner check, so legacy ownerless revisions are not admin-only. Share-token revocation is limited to the creator or an admin.
 
-Series and episode reads, the graph read, shortest-path, and Markdown export routes, notes/custom-node/custom-relationship reads, revision reads, candidate list/read, health, Google sign-in, and logout do not require a session. The graph, episodes, shortest-path, and export routes take an optional session (`OptionalUserDependency`): anonymous readers are fixed at spoiler boundary order 1, while authenticated readers' effective boundary is clamped to their persisted watch progress.
+Series and episode reads, the graph read, shortest-path, Markdown export, public share-token graph, notes/custom-node/custom-relationship reads, revision reads, candidate list/read, health, Google sign-in, and logout do not require a session. The graph, episodes, shortest-path, and export routes take an optional session (`OptionalUserDependency`): anonymous readers are fixed at spoiler boundary order 1. When an authenticated reader has persisted progress, the effective boundary is clamped to that split progress; without a progress row, each route keeps its requested or route-default boundary (the shortest-path route's fallback is detailed below). The public share-token graph does not resolve a session; it always uses the boundary captured in the token record.
 
 ### Which endpoints require the admin role?
 
@@ -94,6 +96,8 @@ Series and episode reads, the graph read, shortest-path, and Markdown export rou
 - `PUT /api/settings/llm`
 
 Candidate read, and ChangeSet propose/reject/revert, are intentionally **not** admin-gated — only the routes that commit candidate claims or an AI-proposed ChangeSet to the shared canonical graph, or mutate the shared LLM settings, require the admin role. Candidate ingest and user-content writes require a valid session but not the admin role.
+
+Share-link creation and listing require a session but not the admin role. Revocation normally requires the token creator; an admin may revoke another user's token, but the route is not admin-only.
 
 ## Endpoints Overview
 
@@ -145,6 +149,10 @@ Candidate read, and ChangeSet propose/reject/revert, are intentionally **not** a
 | POST | `/api/series/{series_id}/change-sets/{change_set_id}/revert` | Revert an applied ChangeSet | Yes |
 | GET | `/api/settings/llm` | Read effective LLM settings with the key masked | Yes (admin) |
 | PUT | `/api/settings/llm` | Update LLM settings | Yes (admin) |
+| POST | `/api/share` | Create a token-gated graph snapshot | Yes |
+| GET | `/api/share` | List the current user's active share tokens | Yes |
+| GET | `/api/share/{token}/graph` | Read a token-gated graph snapshot | No (valid token) |
+| DELETE | `/api/share/{token}` | Revoke a share token | Yes (owner or admin) |
 
 ## Request and Response Formats
 
@@ -153,7 +161,7 @@ Candidate read, and ChangeSet propose/reject/revert, are intentionally **not** a
 - Normal request and response bodies use `application/json`.
 - Successful reads and updates normally return `200`.
 - Resource creation returns `201`, except candidate batch ingestion and progress upsert, which return `200`.
-- Deletes and logout return `204` with no body.
+- User-content deletes, chat-session deletion, and logout return `204` with no body. Share-token revocation is the exception: `DELETE /api/share/{token}` returns `200` with `{"status":"revoked"}`.
 - Pydantic request models configured with `extra="forbid"` reject unknown request fields; response typing, including an untyped `dict` response, does not affect request validation.
 - The SSE chat route returns `text/event-stream`; the Markdown export route returns `text/markdown`.
 
@@ -171,14 +179,15 @@ Candidate read, and ChangeSet propose/reject/revert, are intentionally **not** a
 
 The `503` body has the same shape with `"status": "degraded"` and `"database": "unavailable"`. A `HEAD /health` variant (omitted from the OpenAPI schema) returns the same status codes for uptime monitors.
 
-`GET /api/series` returns `SeriesResponse[]`; a single series has `id`, `title`, and `slug`. `GET /api/series/{series_id}/episodes` returns `EpisodeResponse[]` with `id`, `series_id`, season and episode numbers, `episode_order`, `code`, `title`, and `visible_from_order`.
+`GET /api/series` returns `SeriesResponse[]`; a single series has `id`, `title`, and `slug`. `GET /api/series/{series_id}/episodes` returns `EpisodeResponse[]` with `id`, `series_id`, season and episode numbers, `episode_order`, `code`, `title`, `visible_from_order`, and nullable `display_title`, `is_unlocked`, and `is_current_view` display fields. The service masks episode metadata above the effective boundary; the frontend is not expected to perform spoiler masking itself.
 
-`GET /api/series/{series_id}/graph` requires the positive integer query parameter `visible_until_order`. The value must identify a persisted episode order for that series. Anonymous readers are fixed at order 1 regardless of the parameter — a client-chosen boundary never widens the spoiler window without a session, and the persisted-episode check resolves against the effective order. Authenticated readers' effective boundary is clamped to their persisted watch progress. The response is:
+`GET /api/series/{series_id}/graph` requires the positive integer query parameter `visible_until_order`. The value must identify a persisted episode order for that series. Anonymous readers are fixed at order 1 regardless of the parameter — a client-chosen boundary never widens the spoiler window without a session, and the persisted-episode check resolves against the effective order. Authenticated readers with a progress row are clamped to their persisted split progress; without one, the requested boundary is used. The response is:
 
 ```json
 {
   "series": {"id": "series_dexter", "title": "Dexter", "slug": "dexter"},
   "visible_until_order": 1,
+  "effective_view_order": 1,
   "nodes": [],
   "edges": [],
   "claims": [],
@@ -201,7 +210,7 @@ Every graph node and narrative item is filtered by `visible_from_order`. Claims 
 }
 ```
 
-`source_entity_id` and `target_entity_id` are required. `max_hops` is optional, defaults to the server ceiling `MAX_PATH_HOPS` (4), and is capped at 4 by the request model. The spoiler boundary is resolved server-side through the same path the graph GET uses — anonymous readers are fixed at order 1 and authenticated readers are clamped to their persisted progress — so the client cannot widen the visible window. The walk traverses only visible claims, so a path that exists only through a hidden intermediate node is indistinguishable from no path at all. The response shape is `{"found", "path", "edges", "hops"}`; when either endpoint is missing or not visible at the boundary, `found` is `false` with empty arrays, and a self-path returns `found: true` with zero hops. Errors: `404 SERIES_NOT_FOUND`, `422 INVALID_VISIBLE_UNTIL_ORDER`, `503 DATABASE_UNAVAILABLE`.
+`source_entity_id` and `target_entity_id` are required. `max_hops` is optional, defaults to the server ceiling `MAX_PATH_HOPS` (4), and is capped at 4 by the request model. The request has no boundary field: since PROB-09/#59, the effective boundary resolves from the caller's persisted progress alone — never from the `MAX_PATH_HOPS` hop constant. Anonymous readers are fixed at order 1, and authenticated readers without a progress row are likewise fail-closed to order 1 (the same read surface an anonymous visitor gets); with a progress row, the boundary is `effective_view_order(view_as_of_order, watched_through_order)` from the persisted split. The resolved order must identify a persisted episode of the series, or the route returns `422 INVALID_VISIBLE_UNTIL_ORDER`. The walk traverses only visible claims, so a path that exists only through a hidden intermediate node is indistinguishable from no path at all. The response shape is `{"found", "path", "edges", "hops"}`; when either endpoint is missing or not visible at the boundary, `found` is `false` with empty arrays, and a self-path returns `found: true` with zero hops. Errors: `404 SERIES_NOT_FOUND`, `422 INVALID_VISIBLE_UNTIL_ORDER`, `503 DATABASE_UNAVAILABLE`.
 
 #### Markdown export
 
@@ -225,7 +234,7 @@ Create a note:
 | `target_id` | 1–255 characters |
 | `content` | 1–4000 characters |
 
-The server creates `id`, `series_id`, `origin: "user"`, `visible_from_order`, `created_at`, and `updated_at`. PATCH accepts only `{"content":"..."}`. `GET /notes` requires `visible_until_order`; optional `target_type` and `target_id` filters must be supplied together. Creating, updating, and deleting notes require a valid session; a note is owned by its creator, and mutating another user's note returns `403 FORBIDDEN`.
+The server creates `id`, `series_id`, owner `user_id`, `origin: "user"`, `visible_from_order`, `created_at`, and `updated_at`. PATCH accepts only `{"content":"..."}`. `GET /notes` requires `visible_until_order`; optional `target_type` and `target_id` filters must be supplied together. Creating, updating, and deleting notes require a valid session; a note is owned by its creator, and mutating another user's note returns `403 FORBIDDEN`.
 
 ### Custom nodes
 
@@ -260,15 +269,15 @@ The response uses `source`, `target`, and `type` rather than the request names `
 
 ### Revisions
 
-All revision operations require `visible_until_order` as a positive query integer. Unlike graph, note, and direct custom-content reads, revision routes do **not** verify that a positive value matches a persisted Episode order; they apply it directly to revision visibility queries.
+All revision operations require `visible_until_order` as a positive query integer. Like note and direct custom-content reads, but unlike graph, candidate-read, progress-update, and share-create routes, revision routes do **not** verify that a positive value matches a persisted Episode order; they apply it directly to revision visibility queries.
 
 - `GET /revisions` accepts optional `resource_type` and `resource_id` filters and returns newest revisions first.
 - `GET /revisions/{revision_id}` returns a visible `RevisionResponse` or an indistinguishable `404 RESOURCE_NOT_FOUND`.
-- `POST /revisions/{revision_id}/revert` restores an `Updated` user resource from `before`, or recreates a `Deleted` resource. It emits a new `Reverted` revision. The route requires a valid session and is owner-scoped: reverting a resource owned by another user returns `403 FORBIDDEN` (admins bypass the check; legacy resources with no stored owner are admin-only).
+- `POST /revisions/{revision_id}/revert` restores an `Updated` user resource from `before`, or recreates a `Deleted` resource. It emits a new `Reverted` revision. The route requires a valid session and is owner-scoped: a known owner that differs from the actor produces `403 FORBIDDEN`, while admins bypass the check. In the current implementation, however, the `Updated` branch checks ownership only when the live resource has a non-null `user_id`, and the `Deleted` branch only when the `before` snapshot has one; a missing legacy owner skips the check and lets a non-admin proceed.
 - Reverting a `Created` revision returns `422 CANNOT_REVERT_CREATE`.
 - Reverting an `Updated` resource whose current origin is canonical or candidate returns `409 CANNOT_REVERT_CANONICAL`. The `Deleted` branch does not check the saved snapshot's origin before recreating it.
 
-A revision contains `id`, `series_id`, `resource_type`, `resource_id`, `action`, nullable `before` and `after` snapshots, `created_at`, and `visible_from_order`.
+A revision contains `id`, `series_id`, `resource_type`, `resource_id`, `action`, nullable `before` and `after` snapshots, actor `user_id`, `created_at`, and `visible_from_order`.
 
 ### Candidate extraction and review
 
@@ -301,7 +310,7 @@ A revision contains `id`, `series_id`, `resource_type`, `resource_id`, `action`,
 }
 ```
 
-Ingestion returns `200` with `created` and `errors` arrays. Candidate IDs are deterministic hashes of normalized claim content. Per-claim failures do not fail the batch; they are reported in the 200 body's `errors` array with `code: "INGEST_ERROR"` (a body-level code, not an HTTP error). Listing accepts an optional positive `visible_until_order`; omitting it returns candidates at all visibility levels.
+Ingestion returns `200` with `created` and `errors` arrays. Candidate IDs are deterministic hashes of normalized claim content. Per-claim failures do not fail the batch; they are reported in the 200 body's `errors` array with `code: "INGEST_ERROR"` (a body-level code, not an HTTP error). Both candidate reads require a positive `visible_until_order` query parameter. Omitting it returns `422 INVALID_REQUEST`; a value that is not a persisted episode order for the series returns `422 INVALID_VISIBLE_UNTIL_ORDER`. A candidate hidden above the resolved boundary is indistinguishable from a missing candidate (`404 CANDIDATE_NOT_FOUND`).
 
 PATCH accepts at least one of `label`, `predicate`, `claim_type`, `confidence_level`, `relationship_effect`, `valid_from_order`, `valid_until_order`, `evidence_text`, `evidence_locator`, `source_type`, or `source_locator`. Approve changes `status` to `canonical` while retaining `origin: "candidate"`; reject changes `status` to `rejected`. Candidate edit, approve, and reject operations log revisions.
 
@@ -309,15 +318,18 @@ Edit, approve, and reject each require `RequireAdminDependency`: a valid session
 
 ### Watch progress
 
-`POST /api/series/{series_id}/progress` accepts only:
+`POST /api/series/{series_id}/progress` accepts a strict object with three nullable boundary fields. To confirm progress, send the current split-field form:
 
 ```json
 {
-  "visible_until_order": 3
+  "watched_through_order": 3,
+  "view_as_of_order": 2
 }
 ```
 
-The integer must be greater than zero. The authenticated user and path supply `user_id` and `series_id`; clients cannot submit them. The operation upserts and returns `UserSeriesProgressResponse`. GET returns `404 RESOURCE_NOT_FOUND` when no row exists.
+`visible_until_order` remains a deprecated alias for `watched_through_order`, so `{"visible_until_order":3}` is also accepted. Do not send both confirmation fields. A request containing only `view_as_of_order` is a view-only change: it requires an existing progress row and never lowers `watched_through_order`. When a confirmation omits `view_as_of_order`, the view defaults to the confirmed watched order. Every supplied order must be positive, must identify a persisted episode order for the series, and the resulting invariant is `1 <= view_as_of_order <= watched_through_order`.
+
+The authenticated user and path supply `user_id` and `series_id`; clients cannot submit them. The operation upserts and returns `UserSeriesProgressResponse` with `id`, `user_id`, `series_id`, the backward-compatible `visible_until_order` echo, `watched_through_order`, `view_as_of_order`, computed `effective_view_order`, and `updated_at`. GET returns `404 RESOURCE_NOT_FOUND` when no row exists.
 
 ### Chat
 
@@ -348,7 +360,8 @@ The non-streaming response is a `MessageResponseEnvelope`:
     "role": "assistant",
     "content": "A grounded answer.",
     "created_at": "2026-08-02T12:00:00Z",
-    "visible_until_order_snapshot": 1
+    "visible_until_order_snapshot": 1,
+    "status": "completed"
   },
   "citations": [],
   "graph_focus": {"node_ids": [], "edge_ids": []},
@@ -356,7 +369,7 @@ The non-streaming response is a `MessageResponseEnvelope`:
 }
 ```
 
-LLM configuration is per-request and bring-your-own-key (BYOK): the client may override the effective provider settings by sending the `X-LLM-Api-Key`, `X-LLM-Provider`, `X-LLM-Base-URL`, and `X-LLM-Model` headers. When `X-LLM-Api-Key` is present and non-blank, the provider is built exclusively from these header values — the persisted LLM settings and the `LLM_*` environment fallback are never consulted for that request, and the backend holds no LLM secret of its own. Header values reach only the provider constructor: they never appear in a response model, a log line, or a persisted record. `X-LLM-Provider` selects the wire protocol: `gemini` uses Google's REST API (`x-goog-api-key` auth; `base_url` is optional and falls back to the official Gemini endpoint), while a missing/blank value or `openai_compatible`/`vllm`/`ollama` uses a plain OpenAI-compatible `/chat/completions` call. Without BYOK headers, resolution falls back to persisted stored settings, then the `LLM_*` environment values. A malformed BYOK `base_url` fails with `422 INVALID_REQUEST`.
+LLM configuration supports per-request bring-your-own-key (BYOK): the client may override the effective provider settings by sending the `X-LLM-Api-Key`, `X-LLM-Provider`, `X-LLM-Base-URL`, and `X-LLM-Model` headers. When `X-LLM-Api-Key` is present and non-blank, the provider is built exclusively from these header values — the persisted LLM settings and the `LLM_*` environment fallback are not consulted for that request. This request-local bypass does not mean the backend holds no secrets: it also supports an API key persisted in Neo4j through `SettingsService`/`SettingsRepository` and the `LLM_API_KEY` environment fallback. BYOK header values reach only the provider constructor: they never appear in a response model, a log line, or a persisted record. `X-LLM-Provider` selects the wire protocol: `gemini` uses Google's REST API (`x-goog-api-key` auth; `base_url` is optional and falls back to the official Gemini endpoint), while a missing/blank value or `openai_compatible`/`vllm`/`ollama` uses a plain OpenAI-compatible `/chat/completions` call. Without BYOK headers, resolution falls back to persisted stored settings, then the `LLM_*` environment values. A malformed BYOK `base_url` fails with `422 INVALID_REQUEST`.
 
 The server reads the spoiler boundary from persisted progress. If progress is absent on a message path, it creates a progress record at order 1. Chat-session ownership is scoped to the authenticated user and series; foreign, cross-series, and missing sessions all produce `404 RESOURCE_NOT_FOUND`.
 
@@ -371,6 +384,8 @@ data: {"message":{},"citations":[],"graph_focus":{},"proposed_change_set":null}
 ```
 
 After streaming starts, failures are reported with `event: error` and a JSON object containing `code` and `message`. Possible in-stream codes include `TOO_MANY_REQUESTS`, `LLM_PROVIDER_UNAVAILABLE`, and `LLM_STREAM_FAILED`.
+
+Persisted user messages move from `pending` to `completed` when the final done envelope is delivered, or to `failed` if generation terminates. Session-detail responses expose that `status` on every message.
 
 ### ChangeSets
 
@@ -401,6 +416,25 @@ Propose validates the complete batch and persists only an `awaiting_confirmation
 
 Only confirm requires `RequireAdminDependency` — applying an AI-proposed ChangeSet to the shared canonical graph is admin-only, so a non-admin authenticated user gets `403 FORBIDDEN` before any mutation. Propose, reject, and revert require only a valid session (`CurrentUserDependency`), open to any authenticated user.
 
+### Share links
+
+`POST /api/share` requires a session and accepts:
+
+```json
+{
+  "series_id": "series_dexter",
+  "visible_until_order": 2
+}
+```
+
+The boundary must be positive and identify a persisted episode order. The route currently validates the requested order but does **not** clamp it to the creator's persisted watch progress. It generates a `secrets.token_urlsafe(32)` raw token, stores only its SHA-256 hash in a Neo4j `ShareToken`, and returns `201` with `token`, `expires_at`, frontend-relative `url` (`/share/{token}`), `series_id`, `visible_until_order`, and `created_at`. The fixed repository TTL is 2,592,000 seconds (30 days).
+
+`GET /api/share` requires a session and returns only the caller's active, unexpired tokens, newest first. Each item contains `id`, `token_hash`, `series_id`, `visible_until_order`, `created_at`, and `expires_at`; the raw token is returned only at creation.
+
+`GET /api/share/{token}/graph` is unauthenticated but requires a valid raw token. It returns the ordinary `GraphResponse` assembled by the same filtered graph service at the token's captured boundary. Invalid, expired, and revoked tokens all return `404 TOKEN_NOT_FOUND`.
+
+`DELETE /api/share/{token}` requires a session and accepts a raw token or token hash. The creator or an admin may revoke it; a different non-admin receives `403 FORBIDDEN`. Success returns `200 {"status":"revoked"}`. Missing or already-revoked tokens return `404 TOKEN_NOT_FOUND`.
+
 ### LLM settings
 
 `GET /api/settings/llm` returns the resolved provider, model, stored-or-environment base URL (or `null`), enabled state, prompt language, whether a key is configured, and a masked key. The Gemini default base URL is applied later during runtime provider construction and is not reflected by this response. The full API key is never returned.
@@ -418,7 +452,7 @@ Only confirm requires `RequireAdminDependency` — applying an AI-proposed Chang
 }
 ```
 
-`provider` is `gemini` or `openai_compatible`; these are available implementations, not a statement that both are active. The provider used for a chat request is the effective non-empty stored value, falling back to `LLM_PROVIDER`; disabled or incomplete configuration is rejected before use. OpenAI-compatible requests post to `/chat/completions`. Gemini uses the `generateContent`/`streamGenerateContent` action family rather than that path; the current streaming provider posts to `/v1beta/models/{model}:streamGenerateContent?alt=sse`. `system_prompt_language` is `english` or `turkish`. A null or empty-string `api_key` retains the stored key; a whitespace-only string is truthy and is persisted as the new key. `enabled: null` retains the stored enabled state. Responses expose only `api_key_configured` and `api_key_masked`.
+`provider` is one of `gemini`, `openai_compatible`, `vllm`, or `ollama`. `vllm` and `ollama` currently route through the same `OpenAICompatibleProvider` implementation as `openai_compatible`; they do not yet have dedicated provider classes. The provider used for a chat request is the effective non-empty stored value, falling back to `LLM_PROVIDER`; disabled or incomplete configuration is rejected before use. OpenAI-compatible requests post to `/chat/completions`. Gemini uses the `generateContent`/`streamGenerateContent` action family rather than that path; the current streaming provider posts to `/v1beta/models/{model}:streamGenerateContent?alt=sse`. `system_prompt_language` is `english` or `turkish`. API keys are stripped before persistence: a non-blank value is stored without surrounding whitespace; an empty or whitespace-only value retains an existing stored key but returns `422 INVALID_REQUEST` when no key is already stored; whitespace-only input is never persisted. `api_key: null` leaves the merged stored key state unchanged. `enabled: null` retains the stored enabled state. Responses expose only `api_key_configured` and `api_key_masked`.
 
 Both routes require `RequireAdminDependency`: a non-admin authenticated user gets `403 FORBIDDEN`; an unauthenticated caller gets `401 AUTH_UNAUTHENTICATED`.
 
@@ -435,9 +469,9 @@ Normal HTTP errors use this envelope:
 }
 ```
 
-FastAPI request-validation failures are sanitized to `422 INVALID_REQUEST`; Pydantic field details are not returned by the installed handler. Database exceptions and constraint failures are also mapped centrally. Candidate ingestion is an exception: its `INVALID_EXTRACTION_PAYLOAD` message may include batch or claim validation context, and per-claim failures are reported in the 200 body with `INGEST_ERROR` rather than as HTTP errors.
+FastAPI request-validation failures are sanitized to `422 INVALID_REQUEST`; Pydantic field details are not returned by the installed handler. Database exceptions and constraint failures are also mapped centrally. Candidate ingestion is an exception: the envelope is pydantic-validated at the route boundary (a malformed batch returns the sanitized `422 INVALID_REQUEST`), and per-claim failures are reported in the 200 body with `INGEST_ERROR` rather than as HTTP errors. Since PROB-09/#81, the Neo4j driver's `ClientError` (invalid Cypher or parameters — a server bug, not infrastructure) is deliberately excluded from the 503 database mask: a bad statement surfaces as the framework's plain 500 with no error envelope, while `ServiceUnavailable`, `AuthError`, and `Neo4jError` still map to 503.
 
-Every code the API emits is `UPPERCASE_SNAKE_CASE`, enforced by the canonical `ERROR_CODES` registry (31 codes in `spoilerless/app/core/errors.py`): `ErrorDetail.code` must match `^[A-Z][A-Z0-9_]*$` and be registered, so a new or legacy-lowercase code fails fast instead of silently drifting. The shared envelope maps each status to a default code — `401 UNAUTHENTICATED`, `403 FORBIDDEN`, `404 RESOURCE_NOT_FOUND`, `409 RESOURCE_CONFLICT`, `422 INVALID_REQUEST`, `429 TOO_MANY_REQUESTS`, `503 DATABASE_UNAVAILABLE` — and routes override the default with the specific codes below.
+Every code the API emits is `UPPERCASE_SNAKE_CASE`, enforced by the canonical `ERROR_CODES` registry (32 codes in `spoilerless/app/core/errors.py`): `ErrorDetail.code` must match `^[A-Z][A-Z0-9_]*$` and be registered, so a new or legacy-lowercase code fails fast instead of silently drifting. The shared envelope maps each status to a default code — `401 UNAUTHENTICATED`, `403 FORBIDDEN`, `404 RESOURCE_NOT_FOUND`, `409 RESOURCE_CONFLICT`, `422 INVALID_REQUEST`, `429 TOO_MANY_REQUESTS`, `503 DATABASE_UNAVAILABLE` — and routes override the default with the specific codes below. Registry membership does not imply live emission: `AUTH_SESSION_EXPIRED` and `AUTH_SESSION_INVALID` remain registered constants but are not raised by the current routes; `INGEST_ERROR` appears only inside a successful candidate-ingest body.
 
 | Status | Code | Meaning |
 |---|---|---|
@@ -450,6 +484,7 @@ Every code the API emits is `UPPERCASE_SNAKE_CASE`, enforced by the canonical `E
 | 404 | `SERIES_NOT_FOUND` | Series lookup failed |
 | 404 | `RESOURCE_NOT_FOUND` | Resource is absent, foreign, cross-series, or hidden at the boundary |
 | 404 | `CANDIDATE_NOT_FOUND` | Candidate claim lookup failed |
+| 404 | `TOKEN_NOT_FOUND` | Share token is invalid, expired, revoked, or absent |
 | 409 | `RESOURCE_CONFLICT` | Resource state, ownership, dependency, or ChangeSet state conflicts |
 | 409 | `CONSTRAINT_VIOLATION` | A Neo4j uniqueness or other database constraint failed |
 | 409 | `CHANGESET_STALE` | Progress was lowered after a ChangeSet was proposed |
@@ -458,7 +493,7 @@ Every code the API emits is `UPPERCASE_SNAKE_CASE`, enforced by the canonical `E
 | 409 | `CANNOT_APPROVE_NON_CANDIDATE` | Approval target does not have candidate origin |
 | 422 | `INVALID_REQUEST` | Request-model or repository validation failed |
 | 422 | `INVALID_VISIBLE_UNTIL_ORDER` | Boundary does not identify a persisted episode order |
-| 422 | `INVALID_EXTRACTION_PAYLOAD` | Candidate batch, candidate edit, approval, or rejection failed validation |
+| 422 | `INVALID_EXTRACTION_PAYLOAD` | Candidate edit failed mutable-field validation (since PROB-09/#71, ingest/approve/reject no longer map failures to this code) |
 | 422 | `CANNOT_REVERT_CREATE` | A creation revision has no prior state to restore |
 | 422 | `INVALID_ACTION` | Revision action cannot be reverted by the route |
 | 429 | `TOO_MANY_REQUESTS` | A rate-limit window was exceeded, or a chat generation is already in flight for the user |
@@ -467,9 +502,10 @@ Every code the API emits is `UPPERCASE_SNAKE_CASE`, enforced by the canonical `E
 | 503 | `AUTH_SERVICE_UNAVAILABLE` | Google verification infrastructure failed |
 | 503 | `LLM_DISABLED` | Effective LLM configuration is disabled |
 | 503 | `LLM_PROVIDER_UNAVAILABLE` | LLM configuration or provider request is unavailable |
-| 503 | `LLM_STREAM_FAILED` | The streaming LLM call failed mid-stream |
+| 500 | — (no envelope) | Unhandled internal error, including invalid Cypher or parameters (driver `ClientError`) — deliberately not masked as 503 since PROB-09/#81 |
+| SSE (HTTP 200) | `LLM_STREAM_FAILED` | The streaming LLM call failed after the response opened; emitted only in an `event: error` frame |
 
-An SSE response that has already sent HTTP headers cannot change its status; it uses an `event: error` frame instead.
+An SSE response that has already sent HTTP headers cannot change its status; it uses an `event: error` frame instead. `LLM_STREAM_FAILED` is therefore SSE-only after HTTP `200`, not an HTTP `503` response code.
 
 ## Rate Limits
 
