@@ -54,6 +54,7 @@ from spoilerless.app.llm.fallbacks import (
 )
 from spoilerless.app.domain.change_set import ChangeSetCreateRequest, ChangeSetOperation
 from spoilerless.app.services.change_set import ChangeSetService
+from spoilerless.app.services.progress import ProgressNotFoundError, ProgressService
 
 # Answer used when the model cited only IDs that were never retrieved this
 # turn: the response is ungrounded, so it is replaced with an explicit
