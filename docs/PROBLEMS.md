@@ -821,7 +821,15 @@ AuthService `__init__` requires session_repo + verifier (the silent
 fallbacks hid DI wiring bugs); deps.py passes ProductionGoogleVerifier()
 explicitly; the 4 change-set test files get a no-op verifier stub.
 `_validate_and_protect` per-target visibility reads now run via
-asyncio.gather (were serial). **Not folded (documented rationale):** the
+asyncio.gather (were serial). **Follow-up (commit 683092b):** the
+required-verifier change initially broke seven test fixtures (settings/
+progress/chat/change-set files built AuthService without a verifier →
+dependency-resolution TypeError → 500s, surfacing as a 66-failure storm
+on the full suite); consolidated into one shared
+`NoopGoogleVerifier` in tests/conftest.py. Full local-docker suite back
+to the exact documented baseline: 584 passed / 7 failed
+(3 doc-contract, 2 seed-image, 2 seed_idempotency constraint-name) on
+consecutive runs. **Not folded (documented rationale):** the
 ChatService session passthroughs + slot wrappers — the thin
 routes→service→repository layer is the documented architecture and the
 slot wrappers are exercised by test_chat_api; folding inverts the layering
