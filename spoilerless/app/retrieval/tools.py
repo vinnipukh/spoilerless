@@ -327,6 +327,80 @@ async def get_entity(
     return records[0] if records else None
 
 
+async def _walk_visible_claims(
+    database: Neo4jDatabase,
+    *,
+    start_ids: list[str],
+    series_id: str,
+    visible_until_order: int,
+    max_depth: int,
+    early_exit_ids: set[str] | None = None,
+) -> dict[str, Any]:
+    """BFS over the visible claim graph from *start_ids* (PROB-09/#65).
+
+    The single traversal shared by ``get_neighborhood`` (all reachable
+    material) and ``find_path`` (source→target reconstruction). One
+    ``CLAIMS_FOR_FRONTIER_QUERY`` round per depth, exactly like the two
+    hand-rolled copies it replaces. Returns:
+
+    - ``claims``: deduplicated claim rows in discovery order
+    - ``visited``: every node id reachable through those claims
+    - ``parent``: ``{node: predecessor}`` (path reconstruction)
+    - ``edge_to``: ``{node: claim id used to reach it}``
+
+    ``early_exit_ids`` stops the walk as soon as every id in the set is
+    discovered (find_path's target); ``None`` walks the full depth
+    (get_neighborhood).
+    """
+    claims: list[dict[str, Any]] = []
+    claim_ids: set[str] = set()
+    visited: set[str] = set(start_ids)
+    frontier = list(start_ids)
+    parent: dict[str, str | None] = {start: None for start in start_ids}
+    edge_to: dict[str, str] = {}
+
+    for _ in range(max_depth):
+        rows = await database.execute_query(
+            CLAIMS_FOR_FRONTIER_QUERY,
+            series_id=series_id,
+            visible_until_order=visible_until_order,
+            frontier=frontier,
+        )
+        new_claims = [row for row in rows if row["id"] not in claim_ids]
+        if not new_claims:
+            break
+        claims.extend(new_claims)
+        claim_ids.update(row["id"] for row in new_claims)
+
+        next_frontier: set[str] = set()
+        for row in new_claims:
+            subject_id, object_id = row["subject_id"], row["object_id"]
+            if subject_id not in visited:
+                visited.add(subject_id)
+                next_frontier.add(subject_id)
+                if subject_id not in parent:
+                    parent[subject_id] = object_id
+                    edge_to[subject_id] = row["id"]
+            if object_id not in visited:
+                visited.add(object_id)
+                next_frontier.add(object_id)
+                if object_id not in parent:
+                    parent[object_id] = subject_id
+                    edge_to[object_id] = row["id"]
+        if early_exit_ids is not None and early_exit_ids <= visited:
+            break
+        if not next_frontier:
+            break
+        frontier = sorted(next_frontier)
+
+    return {
+        "claims": claims,
+        "visited": visited,
+        "parent": parent,
+        "edge_to": edge_to,
+    }
+
+
 async def get_neighborhood(
     database: Neo4jDatabase,
     *,
@@ -360,34 +434,16 @@ async def get_neighborhood(
             "sources": [],
         }
 
-    frontier: list[str] = [entity_id]
-    visited: set[str] = {entity_id}
-    claims: list[dict[str, Any]] = []
-    claim_ids: set[str] = set()
-
-    for _ in range(depth):
-        rows = await database.execute_query(
-            CLAIMS_FOR_FRONTIER_QUERY,
-            series_id=series_id,
-            visible_until_order=visible_until_order,
-            frontier=frontier,
-        )
-        new_claims = [row for row in rows if row["id"] not in claim_ids]
-        if not new_claims:
-            break
-        claims.extend(new_claims)
-        claim_ids.update(row["id"] for row in new_claims)
-
-        next_frontier: set[str] = set()
-        for row in new_claims:
-            if row["subject_id"] not in visited:
-                next_frontier.add(row["subject_id"])
-            if row["object_id"] not in visited:
-                next_frontier.add(row["object_id"])
-        if not next_frontier:
-            break
-        visited.update(next_frontier)
-        frontier = sorted(next_frontier)
+    walk = await _walk_visible_claims(
+        database,
+        start_ids=[entity_id],
+        series_id=series_id,
+        visible_until_order=visible_until_order,
+        max_depth=depth,
+    )
+    claims: list[dict[str, Any]] = walk["claims"]
+    visited: set[str] = walk["visited"]
+    claim_ids: set[str] = {row["id"] for row in claims}
 
     nodes = await database.execute_query(
         NODES_BY_IDS_QUERY,
@@ -529,33 +585,16 @@ async def find_path(
     # current frontier (which is a subset of already-discovered nodes), so a
     # claim can never connect two brand-new nodes and the parent chain always
     # terminates at the source.
-    parent: dict[str, str | None] = {source_entity_id: None}
-    edge_to: dict[str, str] = {}
-    frontier: list[str] = [source_entity_id]
-
-    for _ in range(hops):
-        rows = await database.execute_query(
-            CLAIMS_FOR_FRONTIER_QUERY,
-            series_id=series_id,
-            visible_until_order=visible_until_order,
-            frontier=frontier,
-        )
-        if not rows:
-            break
-        next_frontier: list[str] = []
-        for row in rows:
-            subject_id, object_id = row["subject_id"], row["object_id"]
-            if subject_id not in parent:
-                parent[subject_id] = object_id
-                edge_to[subject_id] = row["id"]
-                next_frontier.append(subject_id)
-            if object_id not in parent:
-                parent[object_id] = subject_id
-                edge_to[object_id] = row["id"]
-                next_frontier.append(object_id)
-        if target_entity_id in parent:
-            break
-        frontier = next_frontier
+    walk = await _walk_visible_claims(
+        database,
+        start_ids=[source_entity_id],
+        series_id=series_id,
+        visible_until_order=visible_until_order,
+        max_depth=hops,
+        early_exit_ids={target_entity_id},
+    )
+    parent: dict[str, str | None] = walk["parent"]
+    edge_to: dict[str, str] = walk["edge_to"]
 
     if target_entity_id not in parent:
         return {"found": False, "path": [], "edges": [], "hops": 0}
