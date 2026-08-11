@@ -17,6 +17,7 @@ from typing import Any
 from spoilerless.app.core.config import get_settings
 from spoilerless.app.graph.database import Neo4jDatabase
 from spoilerless.app.graph.ontology import load_ontology
+from spoilerless.app.spoiler.filter import claim_projection, visible_claim_where
 
 # Server-owned allowlist of story node labels, derived from the ontology's
 # narrative group (Character, Location, Organization, Object, Event).
@@ -44,35 +45,25 @@ RETURN node.id AS id,
        node.origin AS origin
 """
 
-CLAIMS_FOR_FRONTIER_QUERY = """\
+CLAIMS_FOR_FRONTIER_QUERY = (
+    """\
 MATCH (claim:Claim {series_id: $series_id})
-WHERE claim.visible_from_order IS NOT NULL
-  AND claim.visible_from_order <= $visible_until_order
-  AND claim.origin IN ['canonical', 'candidate']
-  AND claim.claim_type <> 'user_authored'
+WHERE """
+    + visible_claim_where()
+    + """
   AND (claim.subject_id IN $frontier OR claim.object_id IN $frontier)
-  AND (claim.valid_from_order IS NULL OR claim.valid_from_order <= $visible_until_order)
-  AND (claim.valid_until_order IS NULL OR claim.valid_until_order >= $visible_until_order)
 MATCH (subject {id: claim.subject_id, series_id: $series_id})
 MATCH (object {id: claim.object_id, series_id: $series_id})
 WHERE subject.visible_from_order IS NOT NULL
   AND subject.visible_from_order <= $visible_until_order
   AND object.visible_from_order IS NOT NULL
   AND object.visible_from_order <= $visible_until_order
-RETURN claim.id AS id,
-       claim.label AS label,
-       claim.subject_id AS subject_id,
-       claim.object_id AS object_id,
-       claim.predicate AS predicate,
-       claim.claim_type AS claim_type,
-       claim.status AS status,
-       claim.confidence_level AS confidence_level,
-       claim.episode_id AS episode_id,
-       claim.source_id AS source_id,
-       claim.visible_from_order AS visible_from_order,
-       claim.origin AS origin
+RETURN """
+    + claim_projection()
+    + """
 ORDER BY claim.visible_from_order, claim.id
 """
+)
 
 NODES_BY_IDS_QUERY = """\
 MATCH (node)
@@ -166,36 +157,26 @@ LIMIT $limit
 
 # Standalone list variants of the shared queries with a server-bounded LIMIT
 # (the shared forms are used by get_neighborhood, which bounds per level).
-GET_CLAIMS_QUERY = """\
+GET_CLAIMS_QUERY = (
+    """\
 MATCH (claim:Claim {series_id: $series_id})
-WHERE claim.visible_from_order IS NOT NULL
-  AND claim.visible_from_order <= $visible_until_order
-  AND claim.origin IN ['canonical', 'candidate']
-  AND claim.claim_type <> 'user_authored'
+WHERE """
+    + visible_claim_where()
+    + """
   AND (claim.subject_id IN $entity_ids OR claim.object_id IN $entity_ids)
-  AND (claim.valid_from_order IS NULL OR claim.valid_from_order <= $visible_until_order)
-  AND (claim.valid_until_order IS NULL OR claim.valid_until_order >= $visible_until_order)
 MATCH (subject {id: claim.subject_id, series_id: $series_id})
 MATCH (object {id: claim.object_id, series_id: $series_id})
 WHERE subject.visible_from_order IS NOT NULL
   AND subject.visible_from_order <= $visible_until_order
   AND object.visible_from_order IS NOT NULL
   AND object.visible_from_order <= $visible_until_order
-RETURN claim.id AS id,
-       claim.label AS label,
-       claim.subject_id AS subject_id,
-       claim.object_id AS object_id,
-       claim.predicate AS predicate,
-       claim.claim_type AS claim_type,
-       claim.status AS status,
-       claim.confidence_level AS confidence_level,
-       claim.episode_id AS episode_id,
-       claim.source_id AS source_id,
-       claim.visible_from_order AS visible_from_order,
-       claim.origin AS origin
+RETURN """
+    + claim_projection()
+    + """
 ORDER BY claim.visible_from_order, claim.id
 LIMIT $limit
 """
+)
 
 GET_EVIDENCE_QUERY = """\
 MATCH (claim:Claim {series_id: $series_id})-[supported:SUPPORTED_BY]->(evidence:EvidenceFragment)
@@ -236,7 +217,8 @@ ORDER BY source.visible_from_order, source.id
 LIMIT $limit
 """
 
-GRAPH_SUMMARY_COUNTS_QUERY = """\
+GRAPH_SUMMARY_COUNTS_QUERY = (
+    """\
 MATCH (node)
 WHERE node.series_id = $series_id
   AND any(label IN labels(node) WHERE label IN $allowed_labels)
@@ -244,12 +226,9 @@ WHERE node.series_id = $series_id
   AND node.visible_from_order <= $visible_until_order
 WITH count(node) AS entities
 OPTIONAL MATCH (claim:Claim {series_id: $series_id})
-WHERE claim.visible_from_order IS NOT NULL
-  AND claim.visible_from_order <= $visible_until_order
-  AND claim.origin IN ['canonical', 'candidate']
-  AND claim.claim_type <> 'user_authored'
-  AND (claim.valid_from_order IS NULL OR claim.valid_from_order <= $visible_until_order)
-  AND (claim.valid_until_order IS NULL OR claim.valid_until_order >= $visible_until_order)
+WHERE """
+    + visible_claim_where()
+    + """
   AND EXISTS {
     MATCH (subject {id: claim.subject_id, series_id: $series_id})
     WHERE subject.visible_from_order IS NOT NULL
@@ -270,6 +249,7 @@ WHERE source.visible_from_order IS NOT NULL
   AND source.visible_from_order <= $visible_until_order
 RETURN entities, claims, evidence, count(source) AS sources
 """
+)
 
 ALL_VISIBLE_NODES_QUERY = """\
 MATCH (node)
@@ -286,35 +266,25 @@ ORDER BY node.visible_from_order, node.id
 LIMIT $limit
 """
 
-ALL_VISIBLE_CLAIMS_QUERY = """\
+ALL_VISIBLE_CLAIMS_QUERY = (
+    """\
 MATCH (claim:Claim {series_id: $series_id})
-WHERE claim.visible_from_order IS NOT NULL
-  AND claim.visible_from_order <= $visible_until_order
-  AND claim.origin IN ['canonical', 'candidate']
-  AND claim.claim_type <> 'user_authored'
-  AND (claim.valid_from_order IS NULL OR claim.valid_from_order <= $visible_until_order)
-  AND (claim.valid_until_order IS NULL OR claim.valid_until_order >= $visible_until_order)
+WHERE """
+    + visible_claim_where()
+    + """
 MATCH (subject {id: claim.subject_id, series_id: $series_id})
 MATCH (object {id: claim.object_id, series_id: $series_id})
 WHERE subject.visible_from_order IS NOT NULL
   AND subject.visible_from_order <= $visible_until_order
   AND object.visible_from_order IS NOT NULL
   AND object.visible_from_order <= $visible_until_order
-RETURN claim.id AS id,
-       claim.label AS label,
-       claim.subject_id AS subject_id,
-       claim.object_id AS object_id,
-       claim.predicate AS predicate,
-       claim.claim_type AS claim_type,
-       claim.status AS status,
-       claim.confidence_level AS confidence_level,
-       claim.episode_id AS episode_id,
-       claim.source_id AS source_id,
-       claim.visible_from_order AS visible_from_order,
-       claim.origin AS origin
+RETURN """
+    + claim_projection()
+    + """
 ORDER BY claim.visible_from_order, claim.id
 LIMIT $limit
 """
+)
 
 USER_NOTES_QUERY = """\
 MATCH (note:UserNote {series_id: $series_id, origin: 'user'})

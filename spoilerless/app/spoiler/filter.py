@@ -1,5 +1,45 @@
 """Parameterized Cypher for fail-closed spoiler and temporal filtering."""
 
+
+def visible_claim_where(claim_var: str = "claim") -> str:
+    """Fail-closed visibility + temporal predicate for story claims (D-20).
+
+    The single spoiler-drift hotspot (PROB-09/#62): every claim-selecting
+    query must gate on non-null boundary, the canonical/candidate origin
+    allowlist, a non-user claim type, and the validity window. One
+    definition, seven call sites — a spoiler-bug fix applies once, not
+    seven times. The fragment is an f-string over a literal variable name;
+    no runtime value is ever interpolated (D-20 plain-constant rule).
+    """
+    return f"""{claim_var}.visible_from_order IS NOT NULL
+  AND {claim_var}.visible_from_order <= $visible_until_order
+  AND {claim_var}.origin IN ['canonical', 'candidate']
+  AND {claim_var}.claim_type <> 'user_authored'
+  AND ({claim_var}.valid_from_order IS NULL OR {claim_var}.valid_from_order <= $visible_until_order)
+  AND ({claim_var}.valid_until_order IS NULL OR {claim_var}.valid_until_order >= $visible_until_order)"""
+
+
+def claim_projection(claim_var: str = "claim") -> str:
+    """The 12-column compact claim row shared by the retrieval tools.
+
+    Semantically identical to VISIBLE_CLAIMS_QUERY's richer projection
+    (which additionally carries relationship_effect, the validity window,
+    and joined evidence/source ids for the graph response — kept inline).
+    """
+    return f"""{claim_var}.id AS id,
+       {claim_var}.label AS label,
+       {claim_var}.subject_id AS subject_id,
+       {claim_var}.object_id AS object_id,
+       {claim_var}.predicate AS predicate,
+       {claim_var}.claim_type AS claim_type,
+       {claim_var}.status AS status,
+       {claim_var}.confidence_level AS confidence_level,
+       {claim_var}.episode_id AS episode_id,
+       {claim_var}.source_id AS source_id,
+       {claim_var}.visible_from_order AS visible_from_order,
+       {claim_var}.origin AS origin"""
+
+
 SERIES_LIST_QUERY = """\
 MATCH (series:Series)
 RETURN series.id AS id,
@@ -83,16 +123,16 @@ RETURN edge.id AS id,
 ORDER BY edge.visible_from_order, id
 """
 
-VISIBLE_CLAIMS_QUERY = """
+VISIBLE_CLAIMS_QUERY = (
+    """\
 MATCH (claim:Claim {series_id: $series_id})
 MATCH (subject {id: claim.subject_id})
 MATCH (object {id: claim.object_id})
 MATCH (claim)-[supported:SUPPORTED_BY]->(evidence:EvidenceFragment)
 MATCH (claim)-[ref:REFERS_TO]->(source:Source {id: evidence.source_id})
-WHERE claim.visible_from_order IS NOT NULL
-  AND claim.visible_from_order <= $visible_until_order
-  AND claim.origin IN ['canonical', 'candidate']
-  AND claim.claim_type <> 'user_authored'
+WHERE """
+    + visible_claim_where()
+    + """
   AND subject.visible_from_order IS NOT NULL
   AND subject.visible_from_order <= $visible_until_order
   AND object.visible_from_order IS NOT NULL
@@ -105,8 +145,6 @@ WHERE claim.visible_from_order IS NOT NULL
   AND evidence.visible_from_order <= $visible_until_order
   AND source.visible_from_order IS NOT NULL
   AND source.visible_from_order <= $visible_until_order
-  AND (claim.valid_from_order IS NULL OR claim.valid_from_order <= $visible_until_order)
-  AND (claim.valid_until_order IS NULL OR claim.valid_until_order >= $visible_until_order)
 RETURN claim.id AS id,
        claim.label AS label,
        claim.subject_id AS subject_id,
@@ -124,6 +162,7 @@ RETURN claim.id AS id,
        claim.origin AS origin
 ORDER BY claim.visible_from_order, id
 """
+)
 
 VISIBLE_USER_RELATIONSHIPS_QUERY = """
 MATCH (claim:Claim {series_id: $series_id, origin: 'user', claim_type: 'user_authored'})
@@ -150,14 +189,14 @@ RETURN claim.id AS id,
 ORDER BY claim.visible_from_order, id
 """
 
-SOURCES_QUERY = """
+SOURCES_QUERY = (
+    """\
 MATCH (claim:Claim {series_id: $series_id})-[ref:REFERS_TO]->(source:Source {series_id: $series_id})
 MATCH (subject {id: claim.subject_id})
 MATCH (object {id: claim.object_id})
-WHERE claim.visible_from_order IS NOT NULL
-  AND claim.visible_from_order <= $visible_until_order
-  AND claim.origin IN ['canonical', 'candidate']
-  AND claim.claim_type <> 'user_authored'
+WHERE """
+    + visible_claim_where()
+    + """
   AND subject.visible_from_order IS NOT NULL
   AND subject.visible_from_order <= $visible_until_order
   AND object.visible_from_order IS NOT NULL
@@ -166,8 +205,6 @@ WHERE claim.visible_from_order IS NOT NULL
   AND ref.visible_from_order <= $visible_until_order
   AND source.visible_from_order IS NOT NULL
   AND source.visible_from_order <= $visible_until_order
-  AND (claim.valid_from_order IS NULL OR claim.valid_from_order <= $visible_until_order)
-  AND (claim.valid_until_order IS NULL OR claim.valid_until_order >= $visible_until_order)
 RETURN DISTINCT source.id AS id,
        source.label AS label,
        source.episode_id AS episode_id,
@@ -178,16 +215,17 @@ RETURN DISTINCT source.id AS id,
        source.origin AS origin
 ORDER BY source.visible_from_order, id
 """
+)
 
-EVIDENCE_QUERY = """
+EVIDENCE_QUERY = (
+    """\
 MATCH (claim:Claim {series_id: $series_id})-[supported:SUPPORTED_BY]->(evidence:EvidenceFragment {series_id: $series_id})
 MATCH (claim)-[ref:REFERS_TO]->(source:Source {id: evidence.source_id})
 MATCH (subject {id: claim.subject_id})
 MATCH (object {id: claim.object_id})
-WHERE claim.visible_from_order IS NOT NULL
-  AND claim.visible_from_order <= $visible_until_order
-  AND claim.origin IN ['canonical', 'candidate']
-  AND claim.claim_type <> 'user_authored'
+WHERE """
+    + visible_claim_where()
+    + """
   AND subject.visible_from_order IS NOT NULL
   AND subject.visible_from_order <= $visible_until_order
   AND object.visible_from_order IS NOT NULL
@@ -200,8 +238,6 @@ WHERE claim.visible_from_order IS NOT NULL
   AND evidence.visible_from_order <= $visible_until_order
   AND source.visible_from_order IS NOT NULL
   AND source.visible_from_order <= $visible_until_order
-  AND (claim.valid_from_order IS NULL OR claim.valid_from_order <= $visible_until_order)
-  AND (claim.valid_until_order IS NULL OR claim.valid_until_order >= $visible_until_order)
 RETURN DISTINCT evidence.id AS id,
        evidence.label AS label,
        evidence.episode_id AS episode_id,
@@ -213,3 +249,4 @@ RETURN DISTINCT evidence.id AS id,
        evidence.origin AS origin
 ORDER BY evidence.visible_from_order, id
 """
+)
