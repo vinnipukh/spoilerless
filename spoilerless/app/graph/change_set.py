@@ -43,6 +43,7 @@ from spoilerless.app.domain.user_content import CustomNodeType, NoteTargetType
 CHANGE_SET_CREATE_QUERY = """\
 MERGE (u:AppUser {id: $user_id})
 MERGE (s:Series {id: $series_id})
+WITH u, s
 MATCH (u)-[:HAS_CHAT_SESSION]->(session:ChatSession {id: $chat_session_id, series_id: $series_id})
 CREATE (u)-[:PROPOSED_CHANGE_SET]->(cs:ChangeSet {
     id: $id,
