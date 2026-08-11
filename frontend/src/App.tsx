@@ -408,9 +408,6 @@ function AuthenticatedApp() {
   const handleOpenDashboard = () => {
     setDashboardOpen(true)
   }
-  const handleExportGraph = () => {
-    // FEAT-05 markdown export (plan 09-11) fills this seam.
-  }
   const handleOpenSeries = (seriesId: string) => {
     setSelectedSeriesId(seriesId)
     setDashboardOpen(false)
@@ -616,7 +613,6 @@ function AuthenticatedApp() {
         onOpenTimeline={handleOpenTimeline}
         onOpenSettings={() => setView('settings')}
         onOpenDashboard={handleOpenDashboard}
-        onExportGraph={handleExportGraph}
       />
       {/* FEAT-04 (09-10): series dashboard dialog — augments the dropdown,
           never replaces it. */}

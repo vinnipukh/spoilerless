@@ -38,7 +38,6 @@ function renderPalette(props: Partial<Parameters<typeof CommandPalette>[0]> = {}
     onOpenTimeline: vi.fn(),
     onOpenSettings: vi.fn(),
     onOpenDashboard: vi.fn(),
-    onExportGraph: vi.fn(),
   }
   const merged = { ...base, ...props }
   return render(<CommandPalette {...merged} />)
@@ -62,7 +61,6 @@ describe('CommandPalette (FEAT-08 ⌘K)', () => {
           onOpenTimeline={vi.fn()}
           onOpenSettings={vi.fn()}
           onOpenDashboard={vi.fn()}
-          onExportGraph={vi.fn()}
         />
       )
     }

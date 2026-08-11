@@ -49,12 +49,6 @@ export function createCustomNode(seriesId: string, body: CustomNodeCreate): Prom
   })
 }
 
-export function deleteCustomNode(seriesId: string, nodeId: string): Promise<void> {
-  return apiFetch(`/api/series/${seriesId}/custom-nodes/${encodeURIComponent(nodeId)}`, {
-    method: 'DELETE',
-  })
-}
-
 // ── Custom Relationships ──
 
 export function createCustomRelationship(
@@ -64,11 +58,5 @@ export function createCustomRelationship(
   return apiFetch(`/api/series/${seriesId}/custom-relationships`, {
     method: 'POST',
     body,
-  })
-}
-
-export function deleteCustomRelationship(seriesId: string, relId: string): Promise<void> {
-  return apiFetch(`/api/series/${seriesId}/custom-relationships/${encodeURIComponent(relId)}`, {
-    method: 'DELETE',
   })
 }

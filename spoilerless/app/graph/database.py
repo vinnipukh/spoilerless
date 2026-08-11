@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Annotated, Any, Awaitable, Callable, TypeVar
+from typing import Any, Awaitable, Callable, TypeVar
 
 import certifi
-from fastapi import Depends, Request
+from fastapi import Request
 from neo4j import AsyncDriver, AsyncGraphDatabase, TrustCustomCAs
 
 from spoilerless.app.core.config import Settings, get_settings
@@ -91,7 +91,3 @@ class Neo4jDatabase:
 
 def get_database(request: Request) -> Neo4jDatabase:
     return request.app.state.neo4j
-
-
-def get_driver(database: Annotated[Neo4jDatabase, Depends(get_database)]) -> AsyncDriver:
-    return database.driver

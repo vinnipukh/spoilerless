@@ -4,15 +4,14 @@
 // payload-local searchIndex with NodeSearch; episode rows route through the
 // palette's `onRequestChange` prop, which App wires to watchProgress
 // requestChange (PROB-31 semantics: locked episodes → unlock dialog, never
-// a silent no-op); action rows open chat/timeline/settings/dashboard and
-// trigger the export seam. Keyboard: ↑/↓/Enter/Esc.
+// a silent no-op); action rows open chat/timeline/settings/dashboard.
+// Keyboard: ↑/↓/Enter/Esc.
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import {
   CalendarClock,
   Clapperboard,
   Command,
-  Download,
   LayoutGrid,
   MessageSquare,
   Settings,
@@ -65,7 +64,6 @@ type Props = {
   onOpenTimeline: () => void
   onOpenSettings: () => void
   onOpenDashboard: () => void
-  onExportGraph: () => void
 }
 
 const GROUP_LABELS: Record<Row['group'], string> = {
@@ -89,7 +87,6 @@ export function CommandPalette({
   onOpenTimeline,
   onOpenSettings,
   onOpenDashboard,
-  onExportGraph,
 }: Props) {
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
@@ -115,9 +112,8 @@ export function CommandPalette({
       { id: 'timeline', label: 'Open timeline', icon: CalendarClock, run: onOpenTimeline },
       { id: 'settings', label: 'Open settings', icon: Settings, run: onOpenSettings },
       { id: 'dashboard', label: 'Open dashboard', icon: LayoutGrid, run: onOpenDashboard },
-      { id: 'export', label: 'Export graph', icon: Download, run: onExportGraph },
     ],
-    [onOpenChat, onOpenTimeline, onOpenSettings, onOpenDashboard, onExportGraph],
+    [onOpenChat, onOpenTimeline, onOpenSettings, onOpenDashboard],
   )
 
   const needle = query.trim().toLowerCase()

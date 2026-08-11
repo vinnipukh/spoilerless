@@ -337,7 +337,3 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
     },
   ]
 }
-
-// Legacy re-export for callers not yet migrated to buildGraphStylesheet().
-// New code should call buildGraphStylesheet() directly.
-export const graphStylesheet = buildGraphStylesheet(false)

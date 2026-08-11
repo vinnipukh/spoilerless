@@ -110,7 +110,3 @@ class ChatMessageCreateRequest(StrictModel):
 class ChatSessionDetailResponse(StrictModel):
     session: ChatSessionResponse
     messages: list[ChatMessageResponse] = Field(default_factory=list)
-
-
-# Re-exported for callers that need the raw dict shape of a done event.
-ChatEventPayload = dict[str, Any]

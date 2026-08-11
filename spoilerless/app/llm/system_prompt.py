@@ -11,8 +11,6 @@ context sections in.
 
 from __future__ import annotations
 
-SYSTEM_PROMPT_VERSION = "v1"
-
 SYSTEM_PROMPT_ENG = """CONVERSATIONAL TONE, INTERPRETATION, AND SPOILER-SAFE SPECULATION
 
 You are not a cold database interface. You are a friendly, attentive viewing

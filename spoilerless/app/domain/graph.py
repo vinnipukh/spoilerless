@@ -93,7 +93,3 @@ class GraphResponse(BaseModel):
         if dangling:
             raise ValueError(f"Graph contains dangling edges: {', '.join(dangling)}")
         return self
-
-
-def model_records(model: type[BaseModel], rows: list[dict[str, Any]]) -> list[Any]:
-    return [model.model_validate(row) for row in rows]

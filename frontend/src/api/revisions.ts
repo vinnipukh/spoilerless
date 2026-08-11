@@ -13,16 +13,6 @@ export function getRevisions(
   return apiFetch<RevisionResponse[]>(url)
 }
 
-export function getRevision(
-  seriesId: string,
-  revisionId: string,
-  visibleUntilOrder: number,
-): Promise<RevisionResponse> {
-  return apiFetch<RevisionResponse>(
-    `/api/series/${encodeURIComponent(seriesId)}/revisions/${encodeURIComponent(revisionId)}?visible_until_order=${visibleUntilOrder}`,
-  )
-}
-
 export function revertRevision(
   seriesId: string,
   revisionId: string,
