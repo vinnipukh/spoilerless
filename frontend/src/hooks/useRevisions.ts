@@ -1,13 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError } from '../api/client'
 import { getRevisions } from '../api/revisions'
 import type { RevisionResponse } from '../types/revision'
-
-type State =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'error'; error: ApiError }
-  | { status: 'success'; data: RevisionResponse[] }
+import { useFetchState } from './useFetchState'
 
 type Props = {
   seriesId: string | null
@@ -17,48 +10,12 @@ type Props = {
 }
 
 export function useRevisions({ seriesId, visibleUntilOrder, resourceType, resourceId }: Props) {
-  const [state, setState] = useState<State>(() =>
-    seriesId && visibleUntilOrder != null ? { status: 'loading' } : { status: 'idle' },
-  )
-
   const key = `${seriesId ?? ''}:${visibleUntilOrder ?? ''}:${resourceType ?? ''}:${resourceId ?? ''}`
-  const [prevKey, setPrevKey] = useState(key)
-  if (prevKey !== key) {
-    setPrevKey(key)
-    setState(seriesId && visibleUntilOrder != null ? { status: 'loading' } : { status: 'idle' })
-  }
+  const enabled = Boolean(seriesId && visibleUntilOrder != null)
 
-  const fetchKeyRef = useRef(key)
-  // Sync the ref from an effect, never from the render body: a render-time
-  // write is a stale-ref correctness bug under React 19 double-render
-  // (react-hooks/refs). Declared BEFORE the fetch effect below so the ref is
-  // updated before a key-change fetch fires.
-  useEffect(() => {
-    fetchKeyRef.current = key
-  }, [key])
-
-  const fetchRevisions = useCallback(() => {
-    if (!seriesId || visibleUntilOrder == null) return
-    getRevisions(seriesId, visibleUntilOrder, resourceType, resourceId)
-      .then((data) => {
-        if (fetchKeyRef.current === key) {
-          setState({ status: 'success', data })
-        }
-      })
-      .catch((error) => {
-        if (fetchKeyRef.current === key) {
-          setState({
-            status: 'error',
-            error: error instanceof ApiError ? error : new ApiError({ code: 'unknown_error', message: 'Request failed.' }),
-          })
-        }
-      })
-  }, [seriesId, visibleUntilOrder, resourceType, resourceId, key])
-
-  useEffect(() => {
-    if (!seriesId || visibleUntilOrder == null) return
-    fetchRevisions()
-  }, [fetchRevisions, seriesId, visibleUntilOrder])
-
-  return { ...state, refetch: fetchRevisions }
+  return useFetchState<RevisionResponse[]>(
+    key,
+    enabled,
+    () => getRevisions(seriesId!, visibleUntilOrder!, resourceType, resourceId),
+  )
 }
