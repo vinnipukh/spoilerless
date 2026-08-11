@@ -776,18 +776,10 @@ Geleceğe yönelik, duygusal veya yorumsal bir soruya cevap vermeden önce sessi
  """
 
 # The exact delimiter tags the retrieval pipeline wraps context sections in.
-# The prompt above references them by name — keep the two in sync.
-CONTEXT_DELIMITERS = (
-    "<series_context>",
-    "<boundary>",
-    "<entities>",
-    "<relationships>",
-    "<claims>",
-    "<evidence>",
-    "<sources>",
-    "<notes>",
-    "<chat_history>",
-)
+# The prompt above references them by name — single source of truth:
+# spoilerless/app/retrieval/context.py (PROB-09/#64); this import keeps the
+# name importable from here for the prompt-injection tests.
+from spoilerless.app.retrieval.context import CONTEXT_DELIMITERS  # noqa: F401
 
 # Anti-prompt-injection framing (RAG-06). Kept as a separate constant and
 # appended at runtime so the user-editable prose prompts above stay clean:

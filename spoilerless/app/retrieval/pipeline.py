@@ -85,20 +85,15 @@ def _fallback_for(question: str, settings: Any, prompt_language: str) -> str:
     )
     return (override or "").strip() or DEFAULT_FALLBACKS[lang]
 
-# Delimiter tags the context-assembly step wraps context sections in.  These
-# exact names are referenced by SYSTEM_PROMPT_V1 (keep the two in sync) and by
-# the prompt-injection tests.  The first eight are the documented fixed-order
-# sections (06-CONTEXT.md RAG-05); chat_history is the trailing ninth.
-CONTEXT_SECTIONS = (
-    "series_context",
-    "boundary",
-    "entities",
-    "relationships",
-    "claims",
-    "evidence",
-    "sources",
-    "notes",
-    "chat_history",
+# Delimiter tags the context-assembly step wraps context sections in. These
+# exact names are referenced by the system prompt and by the prompt-injection
+# tests. Single source of truth: spoilerless/app/retrieval/context.py
+# (PROB-09/#64) — CONTEXT_SECTIONS is the fixed-order contract
+# (06-CONTEXT.md RAG-05); chat_history is the trailing ninth.
+from spoilerless.app.retrieval.context import (
+    CONTEXT_DELIMITERS,  # noqa: F401 — re-exported for tests/importers
+    CONTEXT_SECTIONS,
+    ITEM_SECTION_FORMATTERS,
 )
 
 
@@ -126,40 +121,6 @@ def _bounded_tool_result(result: Any) -> str:
 
 def _tag(name: str) -> str:
     return f"<{name}>"
-
-
-def _entity_line(item: dict[str, Any]) -> str:
-    return f"- {item.get('label') or item.get('id')} ({item.get('id')}, {item.get('type')})"
-
-
-def _edge_line(item: dict[str, Any]) -> str:
-    return (
-        f"- {item.get('source')} -[{item.get('type')}]-> "
-        f"{item.get('target')} ({item.get('id')})"
-    )
-
-
-def _claim_line(item: dict[str, Any]) -> str:
-    return (
-        f"- {item.get('label') or item.get('id')} ({item.get('id')}): "
-        f"{item.get('subject_id')} {item.get('predicate')} {item.get('object_id')}"
-    )
-
-
-def _evidence_line(item: dict[str, Any]) -> str:
-    return f"- {item.get('label') or item.get('id')} ({item.get('id')}): {item.get('text') or ''}"
-
-
-def _source_line(item: dict[str, Any]) -> str:
-    return (
-        f"- {item.get('label') or item.get('id')} ({item.get('id')}, "
-        f"{item.get('source_type')}): {item.get('locator') or ''}"
-    )
-
-
-def _note_line(item: dict[str, Any]) -> str:
-    content = (item.get("content") or "").strip()
-    return f"- {content or item.get('id')}"
 
 
 def _visible_at(items: list[dict[str, Any]], boundary: int | None) -> list[dict[str, Any]]:
@@ -233,13 +194,22 @@ def assemble_context(
     their section.
     """
 
-    item_sections: list[tuple[str, list[dict[str, Any]], Any]] = [
-        ("entities", _by_distance(_dedupe_by_id(_visible_at(nodes, boundary))), _entity_line),
-        ("relationships", _by_distance(_dedupe_by_id(_visible_at(edges or [], boundary))), _edge_line),
-        ("claims", _by_distance(_dedupe_by_id(_visible_at(claims, boundary))), _claim_line),
-        ("evidence", _by_distance(_dedupe_by_id(_visible_at(evidence, boundary))), _evidence_line),
-        ("sources", _by_distance(_dedupe_by_id(_visible_at(sources, boundary))), _source_line),
-        ("notes", _dedupe_by_id(_visible_at(notes, boundary)), _note_line),
+    item_sections: list[tuple[str, list[dict[str, Any]], Any]] = []
+    rows = {
+        "entities": _by_distance(_dedupe_by_id(_visible_at(nodes, boundary))),
+        "relationships": _by_distance(_dedupe_by_id(_visible_at(edges or [], boundary))),
+        "claims": _by_distance(_dedupe_by_id(_visible_at(claims, boundary))),
+        "evidence": _by_distance(_dedupe_by_id(_visible_at(evidence, boundary))),
+        "sources": _by_distance(_dedupe_by_id(_visible_at(sources, boundary))),
+        "notes": _dedupe_by_id(_visible_at(notes, boundary)),
+    }
+    # Section order comes from the shared registry (PROB-09/#64) — the
+    # item-list sections render in CONTEXT_SECTIONS order; the three
+    # bespoke sections (series_context/boundary/chat_history) render below.
+    item_sections = [
+        (name, rows[name], ITEM_SECTION_FORMATTERS[name])
+        for name in CONTEXT_SECTIONS
+        if name in ITEM_SECTION_FORMATTERS
     ]
     remaining = max_items
     sections: list[str] = []
