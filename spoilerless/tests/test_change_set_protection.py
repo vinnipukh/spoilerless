@@ -43,6 +43,13 @@ ANGEL = "dexter:character:angel_batista"  # canonical Character
 CANONICAL_CLAIM = "dexter:claim:s01e01:dexter_debra_family"  # canonical Claim
 
 
+class _NoopVerifier:
+    """AuthService requires a verifier (PROB-09/#77); these tests never
+    exercise Google verification, so a no-op satisfies the dependency."""
+
+    async def verify(self, credential: str, client_id: str) -> dict[str, object]:
+        return {}
+
 class FakeUserRepo:
     def __init__(self) -> None:
         self._store: dict[str, dict[str, Any]] = {}
@@ -118,7 +125,7 @@ def client(
     app.state.session_repo = session_repo
 
     def _override_auth_service() -> AuthService:
-        return AuthService(user_repo=fake_user_repo, session_repo=session_repo)
+        return AuthService(user_repo=fake_user_repo, session_repo=session_repo, verifier=_NoopVerifier())
 
     app.dependency_overrides[deps.get_auth_service] = _override_auth_service
     app.include_router(progress_router)

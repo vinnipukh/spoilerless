@@ -7,7 +7,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from spoilerless.app.repository.session import SessionRepository, InMemorySessionRepository
+from spoilerless.app.repository.session import SessionRepository
 from spoilerless.app.repository.user import UserRepository
 
 logger = logging.getLogger(__name__)
@@ -119,12 +119,17 @@ class AuthService:
     def __init__(
         self,
         user_repo: UserRepository,
-        session_repo: SessionRepository | None = None,
-        verifier: GoogleTokenVerifier | None = None,
+        session_repo: SessionRepository,
+        verifier: GoogleTokenVerifier,
     ) -> None:
+        # PROB-09/#77: no silent in-memory/production substitutions when DI
+        # misses — a missing repository or verifier is a wiring bug and must
+        # fail at startup, not swap in a fallback that hides it (the old
+        # ``session_repo or InMemorySessionRepository()`` / ``verifier or
+        # ProductionGoogleVerifier()`` defaults did exactly that).
         self._user_repo = user_repo
-        self._session_repo = session_repo or InMemorySessionRepository()
-        self._verifier = verifier or ProductionGoogleVerifier()
+        self._session_repo = session_repo
+        self._verifier = verifier
 
     async def authenticate(
         self,

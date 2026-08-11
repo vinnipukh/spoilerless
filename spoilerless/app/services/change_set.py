@@ -23,6 +23,7 @@ API layer, exactly like ``propose`` already does for
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -244,9 +245,17 @@ class ChangeSetService:
     async def _validate_and_protect(
         self, operation: ChangeSetOperation, series_id: str, boundary: int
     ) -> ChangeSetOperation:
+        # PROB-09/#77: the per-target visibility checks ran serially; run
+        # them concurrently (they are independent single-row reads).
+        target_ids = _operation_target_ids(operation)
+        rows = await asyncio.gather(
+            *(
+                self._repository.get_visible_target(target_id, series_id, boundary)
+                for target_id in target_ids
+            )
+        )
         resolved: dict[str, dict[str, object]] = {}
-        for target_id in _operation_target_ids(operation):
-            row = await self._repository.get_visible_target(target_id, series_id, boundary)
+        for target_id, row in zip(target_ids, rows):
             if row is None:
                 raise ChangeSetValidationError(
                     f"Target {target_id} is not a currently visible resource in this series."

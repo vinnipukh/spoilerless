@@ -19,7 +19,7 @@ from spoilerless.app.graph.database import Neo4jDatabase, get_database
 from spoilerless.app.repository.session import SessionRepository
 from spoilerless.app.repository.share import ShareRepository
 from spoilerless.app.repository.user import UserRepository
-from spoilerless.app.services.auth import AuthService
+from spoilerless.app.services.auth import AuthService, ProductionGoogleVerifier
 
 AUTH_UNAUTHENTICATED = "AUTH_UNAUTHENTICATED"
 
@@ -40,6 +40,9 @@ def get_auth_service(
     return AuthService(
         user_repo=UserRepository(database),
         session_repo=session_repo,
+        # Explicit production verifier — AuthService has no silent fallback
+        # (PROB-09/#77); a missed dependency now fails at startup.
+        verifier=ProductionGoogleVerifier(),
     )
 
 
