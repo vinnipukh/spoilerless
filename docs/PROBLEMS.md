@@ -873,3 +873,57 @@ dedup, CitationChip contract abuse, useNotes provider, nodeTypes
 registries, operationTargetRefs, DEXTER tier table, settings typed
 fields, share models) — all cleanup, no runtime bug.
 
+---
+
+## TWELFTH PASS — canonical docs refreshed against the post-ELEVENTH codebase (2026-08-12)
+
+Full `gsd-docs-update` run (9 canonical docs, 5 waves of gsd-doc-writer
+agents, max 2 parallel per operator constraint; every claim verified
+against live source before writing; commit b30ccc5, +1043/−464).
+
+- **README.md** — new "Recent structural consolidations" section
+  (neo4j_row_to_python/run_single, core/tokens.py, graph/labels.py,
+  retrieval/context.py, ToolSpec registry, shared BFS, useFetchState,
+  applyHighlight, canvas-no-unmount overlay); project tree + feature
+  bullets refreshed.
+- **docs/ARCHITECTURE.md** — TOOL_SPECS registry, CONTEXT_SECTIONS
+  registry, visible_claim_where/claim_projection fragments, shared row
+  helpers, AuthService explicit deps, `WITH u, s` 503-class fix; new
+  design decisions D-13…D-19. Directly retires the stale-claim family
+  (#22/#23: "proposed_change_set: null" and the "known gaps" museum).
+- **docs/API.md** — endpoint inventory re-derived from live routers +
+  `.openapi()`: **50 operations / 37 path templates**, exact set-match
+  against OpenAPI (fixes #21's stale-count class); error-code table
+  updated for PROB-09/#71 (`INVALID_EXTRACTION_PAYLOAD` only on
+  candidate edit) + a `500 — (no envelope)` row for the ClientError
+  change (#81).
+- **docs/CONFIGURATION.md** — fixed `SYSTEM_PROMPT_VERSION` (constant
+  deleted in #80), AuthService `InMemorySessionRepository` fallback
+  (gone in #77), seed command forms (`uv run python -m
+  spoilerless.app.graph.setup`), `NODE_LABELS` location (graph/labels.py).
+- **docs/GETTING-STARTED.md** — post-rename backend/seed commands,
+  env-local.sh first-run flow, compose password coupling
+  (`NEO4J_PASSWORD=hdgraf-local-password`), GOOGLE_CLIENT_ID mismatch
+  check.
+- **docs/DEVELOPMENT.md** — `spoilerless.app.*` layout + 09-01 rename
+  note, local Neo4j password pitfall, PYTHONPATH shadow pitfall,
+  openapi-contract stale-gate caveat.
+- **docs/TESTING.md** — "never chase the 7" baseline section (full
+  paths), chunked runner (`scripts/run_backend_tests.py`), `NODE_ENV=test
+  CI=1`, conftest fixture list (incl. NoopGoogleVerifier).
+- **docs/DEPLOYMENT.md** — Render dashboard override trap
+  (`backend.app.main:app` → stale build keeps serving /health 200 while
+  deploys fail; operator-touch fix, no RENDER_API_KEY in repo),
+  `aura_*` env aliases, `/health` `service` field as build marker; 15
+  VERIFY markers on operator-only infra claims.
+- **CONTRIBUTING.md** — PROBLEMS.md ledger workflow (PROB-09/#NN atomic
+  commits, numbered passes), 584/7 baseline policy, live-Neo4j hygiene.
+
+Verification: full local-docker suite 584 passed / 7 failed (the
+documented pre-existing baseline: 3 doc-contract, 2 seed-image,
+2 seed_idempotency constraint-name) on 6 consecutive runs across the
+session; no code changes in this pass. The two doc-contract baseline
+failures (`test_openapi_contract` ×2) remain open — they assert the
+older 45-op contract while the live surface is 50/37; they stay red by
+policy (pre-existing), but the docs they guard are now current.
+
