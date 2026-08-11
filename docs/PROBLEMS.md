@@ -845,8 +845,23 @@ with no runtime win.
   DEXTER tier table, settings typed fields, share models, verify_origin
   `"*"` bypass (deliberate — documented, explicit setting required).
 
+### #71 — FIXED (commit 3a3ae40)
+All four candidate routes wrapped repo calls in
+`except Exception → 422 INVALID_EXTRACTION_PAYLOAD` with `str(exc)`
+interpolated into the client response: a DB outage was relabeled as a
+payload problem and internal error details leaked. Now: ingest bare
+await (envelope is pydantic-validated at the route boundary — malformed
+payloads already 422 there); approve/reject bare await (the closures'
+HTTPException 404/409 propagates; driver/Neo4j errors reach the global
+handlers); edit keeps only `except ValueError` (mutable-field
+validation). 21/21 candidate tests on local docker.
+
 ### Remaining from NINTH PASS (not yet started)
-#60/#70/#71 layering wave (candidates.py repo methods + per-router
-exception registry + no catch-all 422). No runtime bugs in the pass
-remain unfixed.
+#60 (candidate/revision routes → real repository methods) and #70
+(per-router exception registry instead of module-level
+install_error_handlers) — both structural-only refactors, no runtime
+bug; deliberately deferred. #81 deferred tail (FE export-fallback
+dedup, CitationChip contract abuse, useNotes provider, nodeTypes
+registries, operationTargetRefs, DEXTER tier table, settings typed
+fields, share models) — all cleanup, no runtime bug.
 
