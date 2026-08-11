@@ -38,6 +38,7 @@ import { createCustomNode } from '../../api/userContent'
 import type { CustomNodeResponse, CustomNodeType } from '../../types/userContent'
 import { fetchExportMarkdown, downloadMarkdownBlob } from '@/api/export'
 import { renderGraphMarkdown, exportFilename } from '@/lib/exportMarkdown'
+import { applyHighlight } from '@/lib/graph/highlight'
 
 
 
@@ -523,59 +524,23 @@ export function GraphCanvas({
   // multiple nodes/edges simultaneously; documented here exactly as
   // 03.1-UI-SPEC.md documented its own hover-color supersession of Phase 2.
   //
-  // Guarded via `typeof` checks (not a bare call) so a test double's fake
-  // `cy` (GraphCanvas.test.tsx's stub only implements `on`/`container`) never
-  // throws into this effect — the same defensive style `runLayout` already
-  // uses for `cy.layout`.
+  // The shared applyHighlight helper (lib/graph/highlight.ts, PROB-09/#72)
+  // guards against a test double's fake `cy` (GraphCanvas.test.tsx's stub
+  // only implements `on`/`container`) internally — same defensive style
+  // `runLayout` uses for `cy.layout`.
   useEffect(() => {
     const cy = cyInstanceRef.current
     if (!cy) return
-    if (
-      typeof cy.elements !== 'function' ||
-      typeof cy.getElementById !== 'function' ||
-      typeof cy.collection !== 'function'
-    ) {
-      return
-    }
-
-    // Always start from a clean slate — clears whatever the previous
-    // `focusedElementIds` value (or a manual tap) left behind, identically
-    // to tapping empty canvas.
-    cy.elements().removeClass('selected-dominant faded edge-active label-visible')
-
-    if (!focusedElementIds) return
-
-    const requestedIds = [...focusedElementIds.nodeIds, ...focusedElementIds.edgeIds]
-    const focused = cy.collection()
-    for (const id of requestedIds) {
-      // A `graph_focus` reference to an element the frontend cannot resolve
-      // in the currently-loaded graph (defensively, should be
-      // architecturally impossible per RAG-08) is silently dropped rather
-      // than causing a render error.
-      const element = cy.getElementById(id)
-      if (element && element.length > 0) focused.merge(element)
-    }
-    if (focused.length === 0) return
-
-    focused.addClass('selected-dominant')
-    // 08-06+: labels of the focused edges + edges incident to focused nodes
-    // become visible (stylesheet `edge.label-visible`).
-    for (const nodeId of focusedElementIds.nodeIds) {
-      const el = cy.getElementById(nodeId)
-      if (el && el.length > 0 && typeof el.connectedEdges === 'function') {
-        el.connectedEdges().addClass('label-visible')
-      }
-    }
-    for (const edgeId of focusedElementIds.edgeIds) {
-      const el = cy.getElementById(edgeId)
-      if (el && el.length > 0) el.addClass('label-visible')
-    }
-    cy.elements().difference(focused).addClass('faded')
-
-    // Gentle re-frame on the focused subgraph — same 48px padding
-    // convention GraphControls.tsx's fit-to-view button already uses, not a
-    // hard viewport reset that would discard the user's zoom/pan.
-    if (typeof cy.fit === 'function') cy.fit(focused, 48)
+    applyHighlight(
+      cy,
+      focusedElementIds ?? { nodeIds: [], edgeIds: [] },
+      {
+        labelEdges: true,
+        fadeOthers: true,
+        fit: 48,
+        clearClasses: ['selected-dominant', 'faded', 'edge-active', 'label-visible'],
+      },
+    )
   }, [focusedElementIds])
 
   // Transient reveal of freshly created elements (new edge / custom node):
@@ -585,30 +550,23 @@ export function GraphCanvas({
   useEffect(() => {
     const cy = cyInstanceRef.current
     if (!cy || !revealTarget) return
-    if (
-      typeof cy.elements !== 'function' ||
-      typeof cy.getElementById !== 'function' ||
-      typeof cy.collection !== 'function' ||
-      typeof cy.fit !== 'function'
-    ) {
-      return
-    }
 
-    cy.elements().removeClass('selected-dominant faded edge-active label-visible')
-    const requestedIds = [...revealTarget.nodeIds, ...revealTarget.edgeIds]
-    const revealed = cy.collection()
-    for (const id of requestedIds) {
-      const element = cy.getElementById(id)
-      if (element && element.length > 0) revealed.merge(element)
-    }
-    if (revealed.length === 0) return
-
-    revealed.addClass('selected-dominant edge-active')
-    cy.elements().difference(revealed).addClass('faded')
+    const revealed = applyHighlight(
+      cy,
+      revealTarget,
+      {
+        classes: ['selected-dominant', 'edge-active'],
+        fadeOthers: true,
+        clearClasses: ['selected-dominant', 'faded', 'edge-active', 'label-visible'],
+      },
+    )
+    if (!revealed || revealed.length === 0) return
     // Let the just-updated element data land before framing — the layout
     // effect above skips re-running while a reveal is pending, so this fit
     // is not undone by a layout animation.
-    const frame = requestAnimationFrame(() => cy.fit(revealed, 60))
+    const frame = requestAnimationFrame(() => {
+      if (typeof cy.fit === 'function') cy.fit(revealed, 60)
+    })
 
     const timer = window.setTimeout(() => {
       cy.elements().removeClass('selected-dominant faded edge-active label-visible')
@@ -632,27 +590,15 @@ export function GraphCanvas({
   useEffect(() => {
     const cy = cyInstanceRef.current
     if (!cy || !newlyRevealedIds) return
-    if (
-      typeof cy.elements !== 'function' ||
-      typeof cy.getElementById !== 'function' ||
-      typeof cy.collection !== 'function'
-    ) {
-      return
-    }
 
     // A second advance replaces the first glow — never leave the class on
     // elements that are no longer in the new set.
-    cy.elements().removeClass('newly-revealed')
-
-    const requestedIds = [...newlyRevealedIds.nodeIds, ...newlyRevealedIds.edgeIds]
-    const revealed = cy.collection()
-    for (const id of requestedIds) {
-      const element = cy.getElementById(id)
-      if (element && element.length > 0) revealed.merge(element)
-    }
-    if (revealed.length === 0) return
-
-    revealed.addClass('newly-revealed')
+    const revealed = applyHighlight(
+      cy,
+      newlyRevealedIds,
+      { classes: ['newly-revealed'], clearClasses: ['newly-revealed'] },
+    )
+    if (!revealed || revealed.length === 0) return
 
     let cancelled = false
 

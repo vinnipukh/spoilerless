@@ -1,4 +1,6 @@
-import type cytoscape from 'cytoscape'
+// Focus state machine only — the cytoscape application side lives in
+// lib/graph/highlight.ts (PROB-09/#72).
+export { applyFocusToCytoscape } from '../../lib/graph/highlight'
 
 export type FocusState = {
   focusedId: string | null
@@ -20,45 +22,5 @@ export function focusReducer(state: FocusState, action: FocusAction): FocusState
       return { focusedId: null }
     default:
       return state
-  }
-}
-
-export function applyFocusToCytoscape(cy: cytoscape.Core, focusedId: string | null) {
-  if (!cy) return
-
-  const apply = () => {
-    if (typeof cy.elements === 'function') {
-      cy.elements().removeClass('faded selected-dominant label-visible')
-    }
-
-    if (!focusedId || typeof cy.getElementById !== 'function') return
-
-    const target = cy.getElementById(focusedId)
-    if (!target || target.length === 0) return
-
-    if (typeof target.addClass === 'function') {
-      target.addClass('selected-dominant')
-    }
-
-    // 08-06+: the focused node's incident edges reveal their labels.
-    if (typeof target.connectedEdges === 'function') {
-      target.connectedEdges().addClass('label-visible')
-    }
-
-    if (typeof target.closedNeighborhood === 'function' && typeof cy.elements === 'function') {
-      const neighborhood = target.closedNeighborhood()
-      if (neighborhood && typeof cy.elements().difference === 'function') {
-        const outside = cy.elements().difference(neighborhood)
-        if (outside && typeof outside.addClass === 'function') {
-          outside.addClass('faded')
-        }
-      }
-    }
-  }
-
-  if (typeof cy.batch === 'function') {
-    cy.batch(apply)
-  } else {
-    apply()
   }
 }
