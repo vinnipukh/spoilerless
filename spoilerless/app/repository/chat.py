@@ -26,27 +26,14 @@ from spoilerless.app.graph.chat import (
     CHAT_SESSION_GET_QUERY,
     CHAT_SESSION_LIST_QUERY,
 )
-from spoilerless.app.graph.database import Neo4jDatabase
+from spoilerless.app.graph.database import Neo4jDatabase, neo4j_row_to_python
+
+# Single row-normalization definition (PROB-09/#68).
+_normalize = neo4j_row_to_python
 
 
 class ChatSessionNotFound(LookupError):
     """The session is missing, or belongs to another user (indistinguishable)."""
-
-
-def _normalize(record: dict[str, Any]) -> dict[str, Any]:
-    """Convert Neo4j temporal types to Pydantic-compatible values."""
-    result: dict[str, Any] = {}
-    for key, value in record.items():
-        if isinstance(value, bytes):
-            result[key] = value
-        elif hasattr(value, "iso_format"):
-            result[key] = value.iso_format()
-        elif hasattr(value, "to_native"):
-            native = value.to_native()
-            result[key] = native.isoformat() if hasattr(native, "isoformat") else str(native)
-        else:
-            result[key] = value
-    return result
 
 
 class ChatRepository:

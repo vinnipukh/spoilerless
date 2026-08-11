@@ -11,31 +11,11 @@ from datetime import datetime, timezone
 from uuid import uuid4
 from typing import Any
 
-from spoilerless.app.graph.database import Neo4jDatabase
+from spoilerless.app.graph.database import Neo4jDatabase, neo4j_row_to_python
 
-
-def _normalize(record: dict[str, Any]) -> dict[str, Any]:
-    """Convert Neo4j-specific types to plain Python/Pydantic-compatible types.
-
-    The Neo4j Python driver returns ``neo4j.time.DateTime`` for nodes
-    that were stored with Python ``datetime`` values.  Pydantic's strict
-    ``datetime`` validators reject this type, so we normalise to ISO-8601
-    strings here at the repository boundary.
-    """
-    result: dict[str, Any] = {}
-    for k, v in record.items():
-        if isinstance(v, bytes):
-            result[k] = v
-        elif hasattr(v, "iso_format"):
-            # neo4j.time.DateTime / neo4j.time.Date / neo4j.time.Time
-            result[k] = v.iso_format()
-        elif hasattr(v, "to_native"):
-            # Fallback for other Neo4j temporal types
-            native = v.to_native()
-            result[k] = native.isoformat() if hasattr(native, "isoformat") else str(native)
-        else:
-            result[k] = v
-    return result
+# Single row-normalization definition (PROB-09/#68) — the byte-identical
+# per-repo copies moved to graph/database.neo4j_row_to_python.
+_normalize = neo4j_row_to_python
 
 
 UPSERT_USER_QUERY = """

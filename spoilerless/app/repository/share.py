@@ -1,21 +1,20 @@
 from __future__ import annotations
 
-import hashlib
-import secrets
 import time
 from typing import Protocol
 from uuid import uuid4
 
+from spoilerless.app.core.tokens import generate_token, hash_token
 from spoilerless.app.domain.share import ShareTokenRecord
 from spoilerless.app.graph.database import Neo4jDatabase
 
-
-def _hash_token(raw: str) -> str:
-    return hashlib.sha256(raw.encode()).hexdigest()
+# Token hashing/generation live in core/tokens.py (PROB-09/#68); share
+# tokens carry 32 bytes of entropy (sessions use the 48-byte default).
+_hash_token = hash_token
 
 
 def _generate_token() -> str:
-    return secrets.token_urlsafe(32)
+    return generate_token(32)
 
 
 class ShareRepository(Protocol):

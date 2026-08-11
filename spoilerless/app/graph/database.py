@@ -13,6 +13,49 @@ T = TypeVar("T")
 ManagedWork = Callable[[Any, T], Awaitable[Any]]
 
 
+def neo4j_row_to_python(record: dict[str, Any]) -> dict[str, Any]:
+    """Convert Neo4j temporal types to plain Python/Pydantic-compatible values.
+
+    The driver returns ``neo4j.time.DateTime`` (and friends) for properties
+    stored as Python ``datetime``; Pydantic's strict validators reject that
+    type, so every repository normalizes to ISO-8601 strings at the boundary.
+    One definition instead of the four byte-identical copies (PROB-09/#68).
+    """
+    result: dict[str, Any] = {}
+    for key, value in record.items():
+        if isinstance(value, bytes):
+            result[key] = value
+        elif hasattr(value, "iso_format"):
+            result[key] = value.iso_format()
+        elif hasattr(value, "to_native"):
+            native = value.to_native()
+            result[key] = native.isoformat() if hasattr(native, "isoformat") else str(native)
+        else:
+            result[key] = value
+    return result
+
+
+async def run_single(
+    tx: Any,
+    query: str,
+    error_msg: str,
+    *,
+    exc_type: type[Exception] = LookupError,
+    **params: Any,
+) -> dict[str, Any]:
+    """Run ``tx.run``, consume one result, raise ``exc_type(error_msg)`` on miss.
+
+    The shared run → single → raise → normalize pattern that used to be
+    duplicated as ``_run_create`` (user_content) and ``_run_apply``
+    (change_set); each repository aliases it with its own exception type
+    (PROB-09/#68).
+    """
+    record = await (await tx.run(query, **params)).single()
+    if record is None:
+        raise exc_type(error_msg)
+    return neo4j_row_to_python(record.data())
+
+
 class Neo4jDatabase:
     """Application-owned async Neo4j driver with no import-time side effects."""
 

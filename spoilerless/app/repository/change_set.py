@@ -22,6 +22,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import datetime
+from functools import partial
 from typing import Any
 from uuid import uuid4
 
@@ -52,7 +53,10 @@ from spoilerless.app.graph.change_set import (
     MARK_CHANGE_SET_REVERTED_QUERY,
     TARGET_VISIBILITY_QUERY,
 )
-from spoilerless.app.graph.database import Neo4jDatabase
+from spoilerless.app.graph.database import Neo4jDatabase, neo4j_row_to_python, run_single
+
+# Single row-normalization definition (PROB-09/#68).
+_normalize = neo4j_row_to_python
 from spoilerless.app.repository.user_content import NOTE_DELETE_QUERY, NOTE_UPDATE_QUERY
 from spoilerless.app.revisions import RevisionRepository
 from spoilerless.app.spoiler.visibility import derive_visible_from_order
@@ -161,22 +165,6 @@ class RevertChangeSetCommand:
     user_id: str
     series_id: str
     now: datetime
-
-
-def _normalize(record: dict[str, Any]) -> dict[str, Any]:
-    """Convert Neo4j temporal types to Pydantic-compatible values."""
-    result: dict[str, Any] = {}
-    for key, value in record.items():
-        if isinstance(value, bytes):
-            result[key] = value
-        elif hasattr(value, "iso_format"):
-            result[key] = value.iso_format()
-        elif hasattr(value, "to_native"):
-            native = value.to_native()
-            result[key] = native.isoformat() if hasattr(native, "isoformat") else str(native)
-        else:
-            result[key] = value
-    return result
 
 
 def _to_response(record: dict[str, Any]) -> ChangeSetResponse:
@@ -580,17 +568,11 @@ async def _require_visible(
     return row
 
 
-async def _run_apply(tx: Any, query: str, error_msg: str, **params: Any) -> dict[str, Any]:
-    """Run one apply-stage write, raising ``ChangeSetOperationInvalid`` on no match.
-
-    Any raised exception here propagates out of the ``execute_write``
-    callback, giving Neo4j's automatic rollback-on-exception semantics —
-    zero partial writes for the whole ChangeSet (Task 1 acceptance criteria).
-    """
-    record = await (await tx.run(query, **params)).single()
-    if record is None:
-        raise ChangeSetOperationInvalid(error_msg)
-    return _normalize(record.data())
+# Shared run → single → raise → normalize helper (PROB-09/#68), bound to
+# the ChangeSet exception type. Errors propagate out of the execute_write
+# callback, giving Neo4j's automatic rollback-on-exception semantics — zero
+# partial writes for the whole ChangeSet (Task 1 acceptance criteria).
+_run_apply = partial(run_single, exc_type=ChangeSetOperationInvalid)
 
 
 def _op_description(operation: ChangeSetOperation) -> Any:

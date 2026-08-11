@@ -19,15 +19,19 @@ never the ms-based Cypher ``timestamp()``.
 
 from __future__ import annotations
 
-import hashlib
-import secrets
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import uuid4
 
+from spoilerless.app.core.tokens import generate_token, hash_token
 from spoilerless.app.graph.database import Neo4jDatabase
+
+# Token hashing/generation live in core/tokens.py (PROB-09/#68); these
+# aliases keep the repository's internal call sites unchanged.
+_hash_token = hash_token
+_generate_token = generate_token
 
 
 @dataclass(frozen=True)
@@ -91,14 +95,6 @@ class SessionRepository(Protocol):
     async def revoke(self, raw_token: str) -> None:
         """Mark the session as revoked.  Noop on unknown tokens."""
         ...
-
-
-def _hash_token(raw: str) -> str:
-    return hashlib.sha256(raw.encode()).hexdigest()
-
-
-def _generate_token() -> str:
-    return secrets.token_urlsafe(48)
 
 
 # ===================================================================

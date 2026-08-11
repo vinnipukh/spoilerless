@@ -18,35 +18,20 @@ from typing import Any
 from uuid import uuid4
 
 from spoilerless.app.domain.progress import UserSeriesProgressResponse
-from spoilerless.app.graph.database import Neo4jDatabase
+from spoilerless.app.graph.database import Neo4jDatabase, neo4j_row_to_python
+
+# Single row-normalization definition (PROB-09/#68): the driver returns
+# ``neo4j.time.DateTime`` for properties stored as Python ``datetime``;
+# Pydantic's strict datetime validators reject that type, so rows are
+# normalized to ISO-8601 strings at the repository boundary (same pattern
+# as repository/user.py).
+_normalize = neo4j_row_to_python
 from spoilerless.app.graph.progress import (
     PROGRESS_GET_QUERY,
     PROGRESS_MIGRATE_QUERY,
     PROGRESS_UPSERT_QUERY,
 )
 from spoilerless.app.spoiler.policy import effective_view_order
-
-
-def _normalize(record: dict[str, Any]) -> dict[str, Any]:
-    """Convert Neo4j temporal types to Pydantic-compatible values.
-
-    The Neo4j Python driver returns ``neo4j.time.DateTime`` for properties
-    stored as Python ``datetime`` values; Pydantic's strict datetime
-    validators reject that type, so we normalise to ISO-8601 strings here at
-    the repository boundary (same pattern as ``repository/user.py``).
-    """
-    result: dict[str, Any] = {}
-    for key, value in record.items():
-        if isinstance(value, bytes):
-            result[key] = value
-        elif hasattr(value, "iso_format"):
-            result[key] = value.iso_format()
-        elif hasattr(value, "to_native"):
-            native = value.to_native()
-            result[key] = native.isoformat() if hasattr(native, "isoformat") else str(native)
-        else:
-            result[key] = value
-    return result
 
 
 class ProgressRepository:

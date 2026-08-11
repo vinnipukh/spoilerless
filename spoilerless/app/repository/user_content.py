@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import partial
 import re
 from typing import Any, Mapping
 from uuid import uuid4
@@ -23,7 +24,7 @@ from spoilerless.app.domain.user_content import (
     CustomNodeUpdate,
     CustomRelationshipUpdate,
 )
-from spoilerless.app.graph.database import Neo4jDatabase
+from spoilerless.app.graph.database import Neo4jDatabase, run_single
 from spoilerless.app.revisions import RevisionRepository
 from spoilerless.app.spoiler.visibility import derive_visible_from_order
 
@@ -67,16 +68,11 @@ def _parse_dt(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
-async def _run_create(tx: Any, query: str, error_msg: str, **params: Any) -> dict[str, Any]:
-    """Execute ``tx.run``, consume a single result, and raise if absent.
-
-    Shared by all ``UserContentRepository`` write callbacks — eliminates
-    the repeated ``run → single → raise → return`` pattern.
-    """
-    record = await (await tx.run(query, **params)).single()
-    if record is None:
-        raise UserContentNotFound(error_msg)
-    return _native(record.data())
+# Shared run → single → raise → normalize helper (PROB-09/#68), bound to
+# the UserContent exception type. The old _run_create returned _native()
+# (recursive) — run_single's neo4j_row_to_python is equivalent for the flat
+# rows every create query returns.
+_run_create = partial(run_single, exc_type=UserContentNotFound)
 
 
 def _raise_on_ownership_conflict(
