@@ -131,30 +131,59 @@ async def _resolve_effective_boundary(
     progress_service: ProgressService,
     series_id: str,
     user: dict | None,
-    requested_order: int,
+    requested_order: int | None = None,
 ) -> int:
     """Resolve the effective boundary for a client request.
 
     Mirrors the graph GET exactly: anonymous readers are FIXED at order 1
     (PROB-04/#12); authenticated readers are clamped to their persisted
-    progress. Returns the effective order.
+    progress. ``requested_order=None`` (no client-chosen boundary — e.g. the
+    path route) resolves the boundary from persisted progress alone, never
+    from a hop-count constant (PROB-09/#59). Returns the effective order.
     """
-    requested = 1 if user is None else requested_order
-    boundary_episode = await service.resolve_boundary(series_id, requested)
+    if user is None:
+        requested = 1
+        boundary_episode = await service.resolve_boundary(series_id, requested)
+        if boundary_episode is None:
+            raise _error(
+                422,
+                "INVALID_VISIBLE_UNTIL_ORDER",
+                "visible_until_order must identify a persisted episode order.",
+            )
+        return requested
+
+    record = await progress_service.get(user["id"], series_id)
+    if record is None:
+        # No persisted progress: fail closed to the same read surface an
+        # anonymous visitor gets (boundary 1), never an unbounded guess.
+        requested = 1
+        boundary_episode = await service.resolve_boundary(series_id, requested)
+        if boundary_episode is None:
+            raise _error(
+                422,
+                "INVALID_VISIBLE_UNTIL_ORDER",
+                "visible_until_order must identify a persisted episode order.",
+            )
+        return requested
+
+    if requested_order is None:
+        # No client boundary: the persisted progress IS the boundary.
+        effective = effective_view_order(
+            record.view_as_of_order, record.watched_through_order
+        )
+    else:
+        requested_view = min(requested_order, record.view_as_of_order)
+        effective = effective_view_order(
+            requested_view, record.watched_through_order
+        )
+
+    boundary_episode = await service.resolve_boundary(series_id, effective)
     if boundary_episode is None:
         raise _error(
             422,
             "INVALID_VISIBLE_UNTIL_ORDER",
             "visible_until_order must identify a persisted episode order.",
         )
-    effective = requested
-    if user is not None:
-        record = await progress_service.get(user["id"], series_id)
-        if record is not None:
-            requested_view = min(requested_order, record.view_as_of_order)
-            effective = effective_view_order(
-                requested_view, record.watched_through_order
-            )
     return effective
 
 
@@ -182,8 +211,12 @@ async def find_shortest_path(
     if series is None:
         raise _error(404, "SERIES_NOT_FOUND", "Series not found.")
 
+    # PROB-09/#59: no client-chosen boundary exists on this route, so the
+    # effective boundary resolves from persisted progress alone — never from
+    # the MAX_PATH_HOPS hop constant (which would clamp every authenticated
+    # reader to order 4).
     effective = await _resolve_effective_boundary(
-        service, progress_service, series_id, user, MAX_PATH_HOPS
+        service, progress_service, series_id, user
     )
     result = await find_path(
         service._database,

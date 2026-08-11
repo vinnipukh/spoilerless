@@ -6,6 +6,7 @@ import importlib
 import json
 import secrets
 import time
+import types
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -1162,6 +1163,69 @@ def test_path_route_rejects_max_hops_above_ceiling(live_client: TestClient) -> N
     # Server ceiling MAX_PATH_HOPS=4 — the strict model rejects >4 (422).
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "INVALID_REQUEST"
+
+
+# --- PROB-09/#59: path-route boundary resolves from persisted progress ------
+# Regression: find_shortest_path previously passed MAX_PATH_HOPS (4) as the
+# requested episode order, clamping every authenticated reader to min(4,
+# view_as_of) — and granting users WITHOUT a progress record an unearned
+# boundary of 4. With requested_order=None the resolver must return the
+# persisted progress itself, and fail closed to 1 when no record exists.
+
+
+class _FakeBoundaryService:
+    """resolve_boundary accepts any order (every order is \"persisted\")."""
+
+    async def resolve_boundary(self, series_id: str, visible_until_order: int) -> dict:
+        return {"id": f"ep:{visible_until_order}"}
+
+
+class _FakeProgressService:
+    def __init__(self, record) -> None:
+        self._record = record
+
+    async def get(self, user_id: str, series_id: str):
+        return self._record
+
+
+def _run_resolve(user, record, requested_order=None) -> int:
+    from spoilerless.app.api.graph import _resolve_effective_boundary
+
+    service = _FakeBoundaryService()
+    progress = _FakeProgressService(record)
+    return asyncio.run(
+        _resolve_effective_boundary(
+            service, progress, "series_dexter", user, requested_order
+        )
+    )
+
+
+def test_path_boundary_uses_persisted_progress_not_max_hops() -> None:
+    # watched/view beyond MAX_PATH_HOPS=4: old code clamped to 4 (the bug);
+    # the fix must return the persisted progress (7) unchanged.
+    record = types.SimpleNamespace(view_as_of_order=7, watched_through_order=7)
+    assert _run_resolve({"id": "u1"}, record) == 7
+
+
+def test_path_boundary_respects_view_below_watched() -> None:
+    # D-05 min rule still applies when no client boundary is present.
+    record = types.SimpleNamespace(view_as_of_order=2, watched_through_order=7)
+    assert _run_resolve({"id": "u1"}, record) == 2
+
+
+def test_path_boundary_fails_closed_without_progress_record() -> None:
+    # New user with no persisted progress: boundary 1, NOT MAX_PATH_HOPS=4.
+    assert _run_resolve({"id": "u1"}, None) == 1
+
+
+def test_path_boundary_anonymous_is_fixed_at_one() -> None:
+    assert _run_resolve(None, None) == 1
+
+
+def test_boundary_clamp_still_applies_with_client_requested_order() -> None:
+    # The graph-GET path (requested_order set) keeps its min-clamp behavior.
+    record = types.SimpleNamespace(view_as_of_order=7, watched_through_order=9)
+    assert _run_resolve({"id": "u1"}, record, requested_order=10) == 7
 
 
 def test_export_returns_markdown_with_visible_content(
