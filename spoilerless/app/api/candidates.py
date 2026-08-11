@@ -152,15 +152,12 @@ async def ingest_candidates(
     stays admin-gated; actor attribution lands on the revisions those
     actions log (PROB-33, #33).
     """
-    try:
-        result = await repo.ingest_batch(series_id, envelope)
-        return result
-    except Exception as exc:
-        raise http_error(
-            status_code=422,
-            code="INVALID_EXTRACTION_PAYLOAD",
-            message=f"Batch validation error: {exc}",
-        )
+    # PROB-09/#71: no catch-all 422 — the envelope is pydantic-validated at
+    # the route boundary (malformed payloads already 422 there), and a
+    # driver/Neo4j failure inside the transaction must reach the global
+    # error handlers, not be relabeled as a payload problem with raw
+    # str(exc) interpolated into the response.
+    return await repo.ingest_batch(series_id, envelope)
 
 
 @router.get(
@@ -278,12 +275,12 @@ async def approve_candidate(
         # (PROB-12, #34) — never a fabricated hash. GET /revisions/{id} resolves it.
         return {"id": cmd["claim_id"], "status": "canonical", "origin": "candidate", "revision_id": revision["id"]}
 
-    try:
-        result = await repo.approve_claim(_approve, {"series_id": series_id, "claim_id": claim_id, "now": datetime.now(timezone.utc), "user_id": _admin["id"]})
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise http_error(422, "INVALID_EXTRACTION_PAYLOAD", f"Approve error: {exc}")
+    # PROB-09/#71: no catch-all 422 — the closure raises HTTPException
+    # (404/409) which propagates, and any Neo4j/driver error reaches the
+    # global error handlers. A DB failure must never be mislabeled as an
+    # extraction-payload problem, and raw str(exc) is never interpolated
+    # into the client response.
+    result = await repo.approve_claim(_approve, {"series_id": series_id, "claim_id": claim_id, "now": datetime.now(timezone.utc), "user_id": _admin["id"]})
     await invalidate_series(series_id)
     return result
 
@@ -330,12 +327,8 @@ async def reject_candidate(
             created_at=now, user_id=cmd["user_id"])
         return {"id": cmd["claim_id"], "status": "rejected", "origin": "candidate", "revision_id": revision["id"]}
 
-    try:
-        result = await repo.reject_claim(_reject, {"series_id": series_id, "claim_id": claim_id, "now": datetime.now(timezone.utc), "user_id": _admin["id"]})
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise http_error(422, "INVALID_EXTRACTION_PAYLOAD", f"Reject error: {exc}")
+    # PROB-09/#71: no catch-all 422 (see approve_candidate).
+    result = await repo.reject_claim(_reject, {"series_id": series_id, "claim_id": claim_id, "now": datetime.now(timezone.utc), "user_id": _admin["id"]})
     await invalidate_series(series_id)
     return result
 
@@ -388,13 +381,11 @@ async def edit_candidate(
             created_at=now, user_id=cmd["user_id"])
         return {"id": cmd["claim_id"], "status": "edited", "origin": "candidate", "revision_id": revision["id"], "updates_applied": list(cmd["updates"].keys())}
 
+    # PROB-09/#71: only ValueError (mutable-field validation) maps to 422;
+    # HTTPException (404) and driver/Neo4j errors propagate — no catch-all.
     try:
         result = await repo.edit_claim(_edit, {"series_id": series_id, "claim_id": claim_id, "updates": updates, "now": datetime.now(timezone.utc), "user_id": _admin["id"]})
-    except HTTPException:
-        raise
     except ValueError as exc:
         raise http_error(422, "INVALID_EXTRACTION_PAYLOAD", str(exc))
-    except Exception as exc:
-        raise http_error(422, "INVALID_EXTRACTION_PAYLOAD", f"Edit error: {exc}")
     await invalidate_series(series_id)
     return result
