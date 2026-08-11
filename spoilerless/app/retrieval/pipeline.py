@@ -26,7 +26,8 @@ Deterministic pipeline for one assistant turn:
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncIterator
+from dataclasses import dataclass
+from typing import Any, AsyncIterator, Awaitable, Callable
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -393,144 +394,176 @@ class ProposeChangesetInput(BaseModel):
     )
 
 
+async def _propose_changeset_executor(
+    database: Neo4jDatabase,
+    *,
+    user_id: str,
+    series_id: str,
+    chat_session_id: str,
+    **args: Any,
+) -> dict[str, Any]:
+    """Persist a ChangeSet draft via the service at the effective boundary.
+
+    The one state-changing tool (D-13): nothing is applied until the user
+    confirms. Visibility is always derived server-side from the current
+    effective view — never accepted from the model. Validation/session
+    errors surface as a model-visible error string so the turn can
+    continue, exactly like the read-only tools. ``visible_until_order``
+    rides in ``**args`` and is popped — the proposal never stamps a
+    model-supplied boundary (the service re-resolves it).
+    """
+    args.pop("visible_until_order", None)
+    try:
+        parsed = ProposeChangesetInput.model_validate(args)
+    except ValidationError:
+        return {"error": "invalid arguments for propose_changeset"}
+    try:
+        proposed = await ChangeSetService(database).propose(
+            user_id,
+            series_id,
+            ChangeSetCreateRequest(
+                series_id=series_id,
+                chat_session_id=chat_session_id,
+                summary=parsed.summary,
+                operations=parsed.operations,
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001 — tool errors stay turn-continuable
+        return {"error": f"propose_changeset failed: {exc}"}
+    return {"proposed_change_set": proposed.model_dump(mode="json")}
+
+
+@dataclass(frozen=True)
+class ToolSpec:
+    """One allowlisted tool: schema, input model, executor, and result bucket.
+
+    The single tool registry (PROB-09/#63) — replaces the three parallel
+    tables (TOOL_SCHEMAS / _TOOL_EXECUTORS / _TOOL_INPUT_MODELS). The
+    executor returns rows for its declared ``result_bucket``; a bare list
+    is wrapped by the dispatcher, so ``_accumulate`` never shape-sniffs
+    lists. ``requires_user`` / ``requires_chat_session`` tools receive the
+    authenticated context kwargs the read-only tools never see.
+    """
+
+    name: str
+    description: str
+    input_model: type[BaseModel]
+    executor: Callable[..., Awaitable[Any]]
+    result_bucket: str | None = None
+    requires_user: bool = False
+    requires_chat_session: bool = False
+
+
+TOOL_SPECS: list[ToolSpec] = [
+    ToolSpec(
+        name="search_entities",
+        description="Search visible entities by label substring (bounded, deterministic order).",
+        input_model=SearchEntitiesInput,
+        executor=search_entities,
+        result_bucket="nodes",
+    ),
+    ToolSpec(
+        name="get_entity",
+        description="Fetch a single visible story entity (Character, Event, Location, Organization, Object).",
+        input_model=GetEntityInput,
+        executor=get_entity,
+    ),
+    ToolSpec(
+        name="get_neighborhood",
+        description="Fetch the visible neighborhood (nodes, claims, evidence, sources) around an entity.",
+        input_model=GetNeighborhoodInput,
+        executor=get_neighborhood,
+    ),
+    ToolSpec(
+        name="find_path",
+        description="Find a visible path between two entities (bounded hops).",
+        input_model=FindPathInput,
+        executor=find_path,
+    ),
+    ToolSpec(
+        name="get_timeline",
+        description="Fetch the visible episode timeline up to the watched boundary.",
+        input_model=GetTimelineInput,
+        executor=get_timeline,
+    ),
+    ToolSpec(
+        name="get_character_context",
+        description=(
+            "Fetch the visible interpretation pack for a Character: the "
+            "character, its most recent visible Events, visible "
+            "relationships, claims, evidence and sources. Use for "
+            "future-looking, opinion, motivation, or 'what do you think' "
+            "questions."
+        ),
+        input_model=GetCharacterContextInput,
+        executor=get_character_context,
+    ),
+    ToolSpec(
+        name="get_claims",
+        description="Fetch visible claims touching the given entities.",
+        input_model=GetClaimsInput,
+        executor=get_claims,
+        result_bucket="claims",
+    ),
+    ToolSpec(
+        name="get_evidence",
+        description="Fetch visible evidence supporting the given claims.",
+        input_model=GetEvidenceInput,
+        executor=get_evidence,
+        result_bucket="evidence",
+    ),
+    ToolSpec(
+        name="get_sources",
+        description="Fetch visible sources referenced by the given claims.",
+        input_model=GetSourcesInput,
+        executor=get_sources,
+        result_bucket="sources",
+    ),
+    ToolSpec(
+        name="get_current_visible_graph_summary",
+        description="Summarize the currently visible graph (counts + bounded samples).",
+        input_model=GetGraphSummaryInput,
+        executor=get_current_visible_graph_summary,
+    ),
+    ToolSpec(
+        name="get_user_notes",
+        description="Fetch the requesting user's own notes on visible entities/claims.",
+        input_model=GetUserNotesInput,
+        executor=get_user_notes,
+        result_bucket="notes",
+        requires_user=True,
+    ),
+    ToolSpec(
+        name="propose_changeset",
+        description=(
+            "Propose a graph edit (create/update/delete node, "
+            "relationship, claim, or note) for the user to review and "
+            "confirm — nothing is written until the user confirms. "
+            "Returns the persisted draft proposal for the UI to render."
+        ),
+        input_model=ProposeChangesetInput,
+        executor=_propose_changeset_executor,
+        requires_user=True,
+        requires_chat_session=True,
+    ),
+]
+
+_TOOL_SPECS_BY_NAME: dict[str, ToolSpec] = {spec.name: spec for spec in TOOL_SPECS}
+
+# OpenAI-shaped function schemas, derived from the single registry. The
+# Gemini provider re-shapes these (llm/provider.py) — the registry order
+# is the allowlist order (and the model-visible tool order).
 TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "search_entities",
-            "description": "Search visible entities by label substring (bounded, deterministic order).",
-            "parameters": SearchEntitiesInput.model_json_schema(),
+            "name": spec.name,
+            "description": spec.description,
+            "parameters": spec.input_model.model_json_schema(),
         },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_entity",
-            "description": "Fetch a single visible story entity (Character, Event, Location, Organization, Object).",
-            "parameters": GetEntityInput.model_json_schema(),
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_neighborhood",
-            "description": "Fetch the visible neighborhood (nodes, claims, evidence, sources) around an entity.",
-            "parameters": GetNeighborhoodInput.model_json_schema(),
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "find_path",
-            "description": "Find a visible path between two entities (bounded hops).",
-            "parameters": FindPathInput.model_json_schema(),
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_timeline",
-            "description": "Fetch the visible episode timeline up to the watched boundary.",
-            "parameters": GetTimelineInput.model_json_schema(),
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_character_context",
-            "description": (
-                "Fetch the visible interpretation pack for a Character: the "
-                "character, its most recent visible Events, visible "
-                "relationships, claims, evidence and sources. Use for "
-                "future-looking, opinion, motivation, or 'what do you think' "
-                "questions."
-            ),
-            "parameters": GetCharacterContextInput.model_json_schema(),
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_claims",
-            "description": "Fetch visible claims touching the given entities.",
-            "parameters": GetClaimsInput.model_json_schema(),
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_evidence",
-            "description": "Fetch visible evidence supporting the given claims.",
-            "parameters": GetEvidenceInput.model_json_schema(),
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_sources",
-            "description": "Fetch visible sources referenced by the given claims.",
-            "parameters": GetSourcesInput.model_json_schema(),
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_current_visible_graph_summary",
-            "description": "Summarize the currently visible graph (counts + bounded samples).",
-            "parameters": GetGraphSummaryInput.model_json_schema(),
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_user_notes",
-            "description": "Fetch the requesting user's own notes on visible entities/claims.",
-            "parameters": GetUserNotesInput.model_json_schema(),
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "propose_changeset",
-            "description": (
-                "Propose a graph edit (create/update/delete node, "
-                "relationship, claim, or note) for the user to review and "
-                "confirm — nothing is written until the user confirms. "
-                "Returns the persisted draft proposal for the UI to render."
-            ),
-            "parameters": ProposeChangesetInput.model_json_schema(),
-        },
-    },
+    }
+    for spec in TOOL_SPECS
 ]
-
-_TOOL_EXECUTORS: dict[str, Any] = {
-    "search_entities": search_entities,
-    "get_entity": get_entity,
-    "get_neighborhood": get_neighborhood,
-    "find_path": find_path,
-    "get_timeline": get_timeline,
-    "get_character_context": get_character_context,
-    "get_claims": get_claims,
-    "get_evidence": get_evidence,
-    "get_sources": get_sources,
-    "get_current_visible_graph_summary": get_current_visible_graph_summary,
-    "get_user_notes": get_user_notes,
-}
-
-_TOOL_INPUT_MODELS: dict[str, type[BaseModel]] = {
-    "search_entities": SearchEntitiesInput,
-    "get_entity": GetEntityInput,
-    "get_neighborhood": GetNeighborhoodInput,
-    "find_path": FindPathInput,
-    "get_timeline": GetTimelineInput,
-    "get_character_context": GetCharacterContextInput,
-    "get_claims": GetClaimsInput,
-    "get_evidence": GetEvidenceInput,
-    "get_sources": GetSourcesInput,
-    "get_current_visible_graph_summary": GetGraphSummaryInput,
-    "get_user_notes": GetUserNotesInput,
-    "propose_changeset": ProposeChangesetInput,
-}
 
 
 def _citation_survives(raw: dict[str, Any], retrieved: dict[str, Any]) -> bool:
@@ -771,93 +804,42 @@ class RetrievalPipeline:
         server-side (D-13).
         """
         name = call.tool_name or ""
-        arguments = call.arguments or {}
-        if name == "propose_changeset":
-            return await self._propose_changeset(
-                arguments,
-                user_id=user_id,
-                series_id=series_id,
-                chat_session_id=chat_session_id,
-            )
-        executor = _TOOL_EXECUTORS.get(name)
-        input_model = _TOOL_INPUT_MODELS.get(name)
-        if executor is None or input_model is None:
+        spec = _TOOL_SPECS_BY_NAME.get(name)
+        if spec is None:
             return {"error": f"unknown tool: {name}"}
         try:
-            parsed = input_model.model_validate(arguments)
+            parsed = spec.input_model.model_validate(call.arguments or {})
         except ValidationError:
             return {"error": f"invalid arguments for {name}"}
-        if name == "get_user_notes":
-            notes = await get_user_notes(
-                self._database,
-                **parsed.model_dump(),
-                user_id=user_id,
-                series_id=series_id,
-                visible_until_order=boundary,
-            )
-            # Wrap the bare note-row list under a ``notes`` key so the
-            # accumulator routes it into the notes bucket (PROB-24/#48) —
-            # a bare list would otherwise be mis-bucketed as node rows.
-            result: dict[str, Any] = {"notes": notes}
-        else:
-            result = await executor(
-                self._database,
-                **parsed.model_dump(),
-                series_id=series_id,
-                visible_until_order=boundary,
-            )
+        kwargs = dict(parsed.model_dump())
+        # Server-resolved context is always authoritative — never
+        # overridable by model arguments (StrictModel forbids these keys
+        # anyway; this is defense-in-depth).
+        kwargs["series_id"] = series_id
+        kwargs["visible_until_order"] = boundary
+        if spec.requires_user:
+            kwargs["user_id"] = user_id
+        if spec.requires_chat_session:
+            kwargs["chat_session_id"] = chat_session_id
+        result = await spec.executor(self._database, **kwargs)
 
-        self._accumulate(retrieved, result)
+        if spec.result_bucket is not None and isinstance(result, list):
+            # The executor declared its bucket; wrap a bare row list so
+            # _accumulate routes it there (search_entities → nodes,
+            # get_claims → claims, ...) instead of shape-sniffing lists.
+            result = {spec.result_bucket: result}
+        if isinstance(result, dict) and "proposed_change_set" not in result:
+            self._accumulate(retrieved, result)
         return result
-
-    async def _propose_changeset(
-        self,
-        arguments: dict[str, Any],
-        *,
-        user_id: str,
-        series_id: str,
-        chat_session_id: str,
-    ) -> dict[str, Any]:
-        """Persist a ChangeSet draft via the service at the effective boundary.
-
-        The operation payload mirrors the API's closed ChangeSet op union
-        (``domain/change_set.py``); visibility is always derived server-side
-        from the current effective view — never accepted from the model
-        (D-13). Validation/session errors surface as a model-visible error
-        string so the turn can continue, exactly like the read-only tools;
-        nothing is applied until the user confirms the proposal.
-        """
-        try:
-            parsed = ProposeChangesetInput.model_validate(arguments)
-        except ValidationError:
-            return {"error": "invalid arguments for propose_changeset"}
-        try:
-            proposed = await ChangeSetService(self._database).propose(
-                user_id,
-                series_id,
-                ChangeSetCreateRequest(
-                    series_id=series_id,
-                    chat_session_id=chat_session_id,
-                    summary=parsed.summary,
-                    operations=parsed.operations,
-                ),
-            )
-        except Exception as exc:  # noqa: BLE001 — tool errors stay turn-continuable
-            return {"error": f"propose_changeset failed: {exc}"}
-        return {"proposed_change_set": proposed.model_dump(mode="json")}
 
     @staticmethod
     def _accumulate(retrieved: dict[str, Any], result: Any) -> None:
-        """Merge one tool result into the turn's retrieved-context accumulator."""
-        if isinstance(result, list):
-            # search_entities returns a list of entity rows
-            # (id/type/label/visible_from_order/origin) — the same shape as
-            # node rows — so they merge into the entities bucket for context
-            # assembly (07-05, D-15). Every row is already boundary-filtered
-            # by SEARCH_ENTITIES_QUERY; the assemble_context boundary drop
-            # re-checks them defensively, so a hidden entity can never reach
-            # the provider call through the search channel.
-            result = {"nodes": result}
+        """Merge one tool result into the turn's retrieved-context accumulator.
+
+        Every row list arrives pre-bucketed by the dispatcher (ToolSpec
+        result_bucket — search_entities rows ride the ``nodes`` bucket,
+        07-05 D-15); a bare list here is simply not accumulated.
+        """
         if not isinstance(result, dict):
             return
         seen_nodes = {row["id"] for row in retrieved["nodes"]}
