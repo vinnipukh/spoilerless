@@ -593,6 +593,228 @@ async def _run_apply(tx: Any, query: str, error_msg: str, **params: Any) -> dict
     return _normalize(record.data())
 
 
+def _op_description(operation: ChangeSetOperation) -> Any:
+    """The single description extraction — was repeated in five cases."""
+    return (operation.properties or {}).get("description")
+
+
+def _visible_from_episode(episode: dict[str, Any] | None, current_progress: int) -> int:
+    """The single visibility-derivation rule for every create op.
+
+    ``visible_from_order`` is always derived from the server-re-read episode
+    (or, for notes, the current-progress floor) — never from the operation
+    payload (RAG-12: there is no code path that could bind a higher value).
+    """
+    return derive_visible_from_order(
+        episode.get("visible_from_order") if episode else None, current_progress
+    )
+
+
+@dataclass(frozen=True)
+class _ApplySpec:
+    """Apply-stage dispatch row (PROB-09/#67).
+
+    ``targets`` are operation field names re-validated at apply time via
+    ``_require_visible`` (RAG-14 fresh re-validation); ``requires_episode``
+    additionally fetches the operation's episode row once as the derivation
+    base; ``id_kind`` generates the ``user-{kind}:{uuid4()}`` id; ``params``
+    builds the exact write params (the per-op parameter shapes genuinely
+    differ, so they stay in small builders instead of forcing one giant
+    signature).
+    """
+
+    query: str | Callable[[ChangeSetOperation], str | None]
+    targets: tuple[str, ...] = ()
+    require_user_origin: bool = False
+    requires_episode: bool = False
+    id_kind: str | None = None
+    error_msg: str = "operation target is not currently visible."
+    query_error: str = ""
+    params: Callable[[ChangeSetOperation, dict[str, Any], dict[str, Any] | None], dict[str, Any]] | None = None
+
+
+def _create_params(
+    operation: ChangeSetOperation,
+    ctx: dict[str, Any],
+    episode: dict[str, Any] | None,
+    *,
+    with_description: bool = True,
+    **extra: Any,
+) -> dict[str, Any]:
+    """Shared create-op params: generated id, derivation, description."""
+    base: dict[str, Any] = {
+        "id": ctx["id_value"],
+        "series_id": ctx["series_id"],
+        "user_id": ctx["user_id"],
+        "now": ctx["now"],
+        "visible_from_order": _visible_from_episode(episode, ctx["current_progress"]),
+    }
+    if with_description:
+        base["description"] = _op_description(operation)
+    base.update(extra)
+    return base
+
+
+def _params_create_node(op: ChangeSetOperation, ctx: dict[str, Any], episode: dict[str, Any] | None) -> dict[str, Any]:
+    return _create_params(op, ctx, episode, label=op.label, episode_id=op.episode_id)
+
+
+def _params_update_node(op: ChangeSetOperation, ctx: dict[str, Any], episode: dict[str, Any] | None) -> dict[str, Any]:
+    return {
+        "node_id": op.node_id, "series_id": ctx["series_id"], "label": op.label,
+        "description": _op_description(op), "now": ctx["now"],
+    }
+
+
+def _params_delete_node(op: ChangeSetOperation, ctx: dict[str, Any], episode: dict[str, Any] | None) -> dict[str, Any]:
+    return {"node_id": op.node_id, "series_id": ctx["series_id"]}
+
+
+def _params_create_relationship(op: ChangeSetOperation, ctx: dict[str, Any], episode: dict[str, Any] | None) -> dict[str, Any]:
+    return _create_params(
+        op, ctx, episode,
+        source_id=op.source_id, target_id=op.target_id,
+        relationship_type=op.relationship_type.value, episode_id=op.episode_id,
+    )
+
+
+def _params_update_relationship(op: ChangeSetOperation, ctx: dict[str, Any], episode: dict[str, Any] | None) -> dict[str, Any]:
+    return {
+        "relationship_id": op.relationship_id, "series_id": ctx["series_id"],
+        "relationship_type": op.relationship_type.value if op.relationship_type else None,
+        "description": _op_description(op), "now": ctx["now"],
+    }
+
+
+def _params_delete_relationship(op: ChangeSetOperation, ctx: dict[str, Any], episode: dict[str, Any] | None) -> dict[str, Any]:
+    return {"relationship_id": op.relationship_id, "series_id": ctx["series_id"]}
+
+
+def _params_create_claim(op: ChangeSetOperation, ctx: dict[str, Any], episode: dict[str, Any] | None) -> dict[str, Any]:
+    return _create_params(
+        op, ctx, episode,
+        subject_id=op.subject_id, object_id=op.object_id,
+        predicate=op.predicate.value, claim_type=op.claim_type.value,
+        confidence_level=op.confidence_level.value, episode_id=op.episode_id,
+    )
+
+
+def _params_update_claim(op: ChangeSetOperation, ctx: dict[str, Any], episode: dict[str, Any] | None) -> dict[str, Any]:
+    return {
+        "claim_id": op.claim_id, "series_id": ctx["series_id"],
+        "predicate": op.predicate.value if op.predicate else None,
+        "confidence_level": op.confidence_level.value if op.confidence_level else None,
+        "description": _op_description(op), "now": ctx["now"],
+    }
+
+
+def _params_delete_claim(op: ChangeSetOperation, ctx: dict[str, Any], episode: dict[str, Any] | None) -> dict[str, Any]:
+    return {"claim_id": op.claim_id, "series_id": ctx["series_id"]}
+
+
+def _params_attach_evidence(op: ChangeSetOperation, ctx: dict[str, Any], episode: dict[str, Any] | None) -> dict[str, Any]:
+    return _create_params(
+        op, ctx, episode, with_description=False,
+        claim_id=op.claim_id, source_id=op.source_id, episode_id=op.episode_id,
+        locator=op.locator, text=op.text,
+        content_hash=hashlib.sha256(op.text.encode("utf-8")).hexdigest(),
+    )
+
+
+def _params_create_note(op: ChangeSetOperation, ctx: dict[str, Any], episode: dict[str, Any] | None) -> dict[str, Any]:
+    # A note carries no episode signal — its visibility follows the current
+    # progress floor through the same shared rule.
+    return _create_params(
+        op, ctx, None, with_description=False,
+        target_type=op.target_type.value, target_id=op.target_id, content=op.content,
+    )
+
+
+def _params_update_note(op: ChangeSetOperation, ctx: dict[str, Any], episode: dict[str, Any] | None) -> dict[str, Any]:
+    return {"id": op.note_id, "series_id": ctx["series_id"], "content": op.content, "updated_at": ctx["now"]}
+
+
+def _params_delete_note(op: ChangeSetOperation, ctx: dict[str, Any], episode: dict[str, Any] | None) -> dict[str, Any]:
+    return {"id": op.note_id, "series_id": ctx["series_id"]}
+
+
+def _node_type_query(operation: ChangeSetOperation) -> str | None:
+    return CHANGE_SET_CREATE_NODE_QUERIES.get(operation.node_type)
+
+
+def _note_target_query(operation: ChangeSetOperation) -> str | None:
+    return CHANGE_SET_CREATE_NOTE_QUERIES.get(operation.target_type)
+
+
+# Table-driven apply dispatch (PROB-09/#67): one row per operation type —
+# query (fixed or per-node-type map), apply-time re-validation targets,
+# episode derivation base, generated id, error copy, and the param builder.
+_APPLY_SPECS: dict[str, _ApplySpec] = {
+    "create_node": _ApplySpec(
+        _node_type_query, requires_episode=True, id_kind="node",
+        error_msg="create_node: episode target is not currently visible.",
+        query_error="Unsupported node type: {node_type}", params=_params_create_node,
+    ),
+    "update_node": _ApplySpec(
+        CHANGE_SET_UPDATE_NODE_QUERY, targets=("node_id",), require_user_origin=True,
+        error_msg="update_node: target not found or not user-owned.", params=_params_update_node,
+    ),
+    "delete_node": _ApplySpec(
+        CHANGE_SET_DELETE_NODE_QUERY, targets=("node_id",), require_user_origin=True,
+        error_msg="delete_node: target not found or not user-owned.", params=_params_delete_node,
+    ),
+    "create_relationship": _ApplySpec(
+        CHANGE_SET_CREATE_RELATIONSHIP_QUERY, targets=("source_id", "target_id"),
+        requires_episode=True, id_kind="rel",
+        error_msg="create_relationship: an endpoint or episode is not currently visible.",
+        params=_params_create_relationship,
+    ),
+    "update_relationship": _ApplySpec(
+        CHANGE_SET_UPDATE_RELATIONSHIP_QUERY, targets=("relationship_id",), require_user_origin=True,
+        error_msg="update_relationship: target not found or not user-owned.",
+        params=_params_update_relationship,
+    ),
+    "delete_relationship": _ApplySpec(
+        CHANGE_SET_DELETE_RELATIONSHIP_QUERY, targets=("relationship_id",), require_user_origin=True,
+        error_msg="delete_relationship: target not found or not user-owned.",
+        params=_params_delete_relationship,
+    ),
+    "create_claim": _ApplySpec(
+        CHANGE_SET_CREATE_CLAIM_QUERY, targets=("subject_id", "object_id"),
+        requires_episode=True, id_kind="claim",
+        error_msg="create_claim: subject, object, or episode is not currently visible.",
+        params=_params_create_claim,
+    ),
+    "update_claim": _ApplySpec(
+        CHANGE_SET_UPDATE_CLAIM_QUERY, targets=("claim_id",), require_user_origin=True,
+        error_msg="update_claim: target not found or not user-owned.", params=_params_update_claim,
+    ),
+    "delete_claim": _ApplySpec(
+        CHANGE_SET_DELETE_CLAIM_QUERY, targets=("claim_id",), require_user_origin=True,
+        error_msg="delete_claim: target not found or not user-owned.", params=_params_delete_claim,
+    ),
+    "attach_evidence": _ApplySpec(
+        CHANGE_SET_ATTACH_EVIDENCE_QUERY, targets=("claim_id", "source_id"),
+        requires_episode=True, id_kind="evidence",
+        error_msg="attach_evidence: claim, source, or episode is not currently visible.",
+        params=_params_attach_evidence,
+    ),
+    "create_note": _ApplySpec(
+        _note_target_query, targets=("target_id",), id_kind="note",
+        error_msg="create_note: target is not currently visible.",
+        query_error="Unsupported note target type: {target_type}", params=_params_create_note,
+    ),
+    "update_note": _ApplySpec(
+        NOTE_UPDATE_QUERY, targets=("note_id",), require_user_origin=True,
+        error_msg="update_note: target not found.", params=_params_update_note,
+    ),
+    "delete_note": _ApplySpec(
+        NOTE_DELETE_QUERY, targets=("note_id",), require_user_origin=True,
+        error_msg="delete_note: target not found.", params=_params_delete_note,
+    ),
+}
+
+
 async def _apply_one_operation(
     tx: Any,
     operation: ChangeSetOperation,
@@ -604,239 +826,43 @@ async def _apply_one_operation(
 ) -> dict[str, Any]:
     """Dispatch one operation to its apply-stage Cypher (RAG-12).
 
-    ``visible_from_order`` is always ``current_progress`` — a server-computed
-    parameter re-read fresh inside this same transaction — never a value
-    derived from the operation payload (satisfies "derived visible_from_order
-    exactly equal to current progress is accepted" by construction: there is
-    no code path that could ever bind a higher value).
+    ``visible_from_order`` is always ``current_progress``-derived — a
+    server-computed parameter re-read fresh inside this same transaction —
+    never a value from the operation payload (satisfies \"derived
+    visible_from_order exactly equal to current progress is accepted\" by
+    construction).
     """
-    match operation.operation_type:
-        case "create_node":
-            episode = await _require_visible(tx, operation.episode_id, series_id, current_progress)
-            query = CHANGE_SET_CREATE_NODE_QUERIES.get(operation.node_type)
-            if query is None:
-                raise ChangeSetOperationInvalid(f"Unsupported node type: {operation.node_type}")
-            return await _run_apply(
-                tx,
-                query,
-                "create_node: episode target is not currently visible.",
-                id=f"user-node:{uuid4()}",
-                series_id=series_id,
-                label=operation.label,
-                episode_id=operation.episode_id,
-                description=(operation.properties or {}).get("description"),
-                visible_from_order=derive_visible_from_order(
-                    episode.get("visible_from_order"), current_progress
-                ),
-                user_id=user_id,
-                now=now,
-            )
-        case "update_node":
-            await _require_visible(
-                tx, operation.node_id, series_id, current_progress, require_user_origin=True
-            )
-            return await _run_apply(
-                tx,
-                CHANGE_SET_UPDATE_NODE_QUERY,
-                "update_node: target not found or not user-owned.",
-                node_id=operation.node_id,
-                series_id=series_id,
-                label=operation.label,
-                description=(operation.properties or {}).get("description"),
-                now=now,
-            )
-        case "delete_node":
-            await _require_visible(
-                tx, operation.node_id, series_id, current_progress, require_user_origin=True
-            )
-            return await _run_apply(
-                tx,
-                CHANGE_SET_DELETE_NODE_QUERY,
-                "delete_node: target not found or not user-owned.",
-                node_id=operation.node_id,
-                series_id=series_id,
-            )
-        case "create_relationship":
-            await _require_visible(tx, operation.source_id, series_id, current_progress)
-            await _require_visible(tx, operation.target_id, series_id, current_progress)
-            episode = await _require_visible(tx, operation.episode_id, series_id, current_progress)
-            return await _run_apply(
-                tx,
-                CHANGE_SET_CREATE_RELATIONSHIP_QUERY,
-                "create_relationship: an endpoint or episode is not currently visible.",
-                id=f"user-rel:{uuid4()}",
-                series_id=series_id,
-                source_id=operation.source_id,
-                target_id=operation.target_id,
-                relationship_type=operation.relationship_type.value,
-                episode_id=operation.episode_id,
-                description=(operation.properties or {}).get("description"),
-                visible_from_order=derive_visible_from_order(
-                    episode.get("visible_from_order"), current_progress
-                ),
-                user_id=user_id,
-                now=now,
-            )
-        case "update_relationship":
-            await _require_visible(
-                tx,
-                operation.relationship_id,
-                series_id,
-                current_progress,
-                require_user_origin=True,
-            )
-            relationship_type = (
-                operation.relationship_type.value if operation.relationship_type else None
-            )
-            return await _run_apply(
-                tx,
-                CHANGE_SET_UPDATE_RELATIONSHIP_QUERY,
-                "update_relationship: target not found or not user-owned.",
-                relationship_id=operation.relationship_id,
-                series_id=series_id,
-                relationship_type=relationship_type,
-                description=(operation.properties or {}).get("description"),
-                now=now,
-            )
-        case "delete_relationship":
-            await _require_visible(
-                tx,
-                operation.relationship_id,
-                series_id,
-                current_progress,
-                require_user_origin=True,
-            )
-            return await _run_apply(
-                tx,
-                CHANGE_SET_DELETE_RELATIONSHIP_QUERY,
-                "delete_relationship: target not found or not user-owned.",
-                relationship_id=operation.relationship_id,
-                series_id=series_id,
-            )
-        case "create_claim":
-            await _require_visible(tx, operation.subject_id, series_id, current_progress)
-            await _require_visible(tx, operation.object_id, series_id, current_progress)
-            episode = await _require_visible(tx, operation.episode_id, series_id, current_progress)
-            return await _run_apply(
-                tx,
-                CHANGE_SET_CREATE_CLAIM_QUERY,
-                "create_claim: subject, object, or episode is not currently visible.",
-                id=f"user-claim:{uuid4()}",
-                series_id=series_id,
-                subject_id=operation.subject_id,
-                object_id=operation.object_id,
-                predicate=operation.predicate.value,
-                claim_type=operation.claim_type.value,
-                confidence_level=operation.confidence_level.value,
-                episode_id=operation.episode_id,
-                description=(operation.properties or {}).get("description"),
-                visible_from_order=derive_visible_from_order(
-                    episode.get("visible_from_order"), current_progress
-                ),
-                user_id=user_id,
-                now=now,
-            )
-        case "update_claim":
-            await _require_visible(
-                tx, operation.claim_id, series_id, current_progress, require_user_origin=True
-            )
-            predicate = operation.predicate.value if operation.predicate else None
-            confidence_level = (
-                operation.confidence_level.value if operation.confidence_level else None
-            )
-            return await _run_apply(
-                tx,
-                CHANGE_SET_UPDATE_CLAIM_QUERY,
-                "update_claim: target not found or not user-owned.",
-                claim_id=operation.claim_id,
-                series_id=series_id,
-                predicate=predicate,
-                confidence_level=confidence_level,
-                description=(operation.properties or {}).get("description"),
-                now=now,
-            )
-        case "delete_claim":
-            await _require_visible(
-                tx, operation.claim_id, series_id, current_progress, require_user_origin=True
-            )
-            return await _run_apply(
-                tx,
-                CHANGE_SET_DELETE_CLAIM_QUERY,
-                "delete_claim: target not found or not user-owned.",
-                claim_id=operation.claim_id,
-                series_id=series_id,
-            )
-        case "attach_evidence":
-            await _require_visible(tx, operation.claim_id, series_id, current_progress)
-            await _require_visible(tx, operation.source_id, series_id, current_progress)
-            episode = await _require_visible(tx, operation.episode_id, series_id, current_progress)
-            content_hash = hashlib.sha256(operation.text.encode("utf-8")).hexdigest()
-            return await _run_apply(
-                tx,
-                CHANGE_SET_ATTACH_EVIDENCE_QUERY,
-                "attach_evidence: claim, source, or episode is not currently visible.",
-                id=f"user-evidence:{uuid4()}",
-                series_id=series_id,
-                claim_id=operation.claim_id,
-                source_id=operation.source_id,
-                episode_id=operation.episode_id,
-                locator=operation.locator,
-                text=operation.text,
-                content_hash=content_hash,
-                visible_from_order=derive_visible_from_order(
-                    episode.get("visible_from_order"), current_progress
-                ),
-                user_id=user_id,
-                now=now,
-            )
-        case "create_note":
-            # A note carries no episode signal — its visibility follows the
-            # current progress floor through the same shared rule (episode
-            # order absent → derive_visible_from_order returns current_progress).
-            await _require_visible(tx, operation.target_id, series_id, current_progress)
-            query = CHANGE_SET_CREATE_NOTE_QUERIES.get(operation.target_type)
-            if query is None:
-                raise ChangeSetOperationInvalid(
-                    f"Unsupported note target type: {operation.target_type}"
-                )
-            return await _run_apply(
-                tx,
-                query,
-                "create_note: target is not currently visible.",
-                id=f"user-note:{uuid4()}",
-                series_id=series_id,
-                target_type=operation.target_type.value,
-                target_id=operation.target_id,
-                content=operation.content,
-                visible_from_order=derive_visible_from_order(None, current_progress),
-                user_id=user_id,
-                now=now,
-            )
-        case "update_note":
-            await _require_visible(
-                tx, operation.note_id, series_id, current_progress, require_user_origin=True
-            )
-            return await _run_apply(
-                tx,
-                NOTE_UPDATE_QUERY,
-                "update_note: target not found.",
-                id=operation.note_id,
-                series_id=series_id,
-                content=operation.content,
-                updated_at=now,
-            )
-        case "delete_note":
-            await _require_visible(
-                tx, operation.note_id, series_id, current_progress, require_user_origin=True
-            )
-            return await _run_apply(
-                tx,
-                NOTE_DELETE_QUERY,
-                "delete_note: target not found.",
-                id=operation.note_id,
-                series_id=series_id,
-            )
-        case _:  # pragma: no cover — the discriminated union is closed.
-            raise ChangeSetOperationInvalid(
-                f"Unsupported operation type: {operation.operation_type}"
-            )
+    spec = _APPLY_SPECS.get(operation.operation_type)
+    if spec is None:  # pragma: no cover — the discriminated union is closed.
+        raise ChangeSetOperationInvalid(
+            f"Unsupported operation type: {operation.operation_type}"
+        )
+
+    # Apply-time fresh re-validation of every required target (RAG-14).
+    for target_name in spec.targets:
+        await _require_visible(
+            tx,
+            getattr(operation, target_name),
+            series_id,
+            current_progress,
+            require_user_origin=spec.require_user_origin,
+        )
+    episode = None
+    if spec.requires_episode:
+        episode = await _require_visible(tx, operation.episode_id, series_id, current_progress)
+
+    query = spec.query(operation) if callable(spec.query) else spec.query
+    if query is None:
+        raise ChangeSetOperationInvalid(
+            spec.query_error.format(**operation.model_dump())
+        )
+
+    ctx = {
+        "series_id": series_id,
+        "user_id": user_id,
+        "now": now,
+        "current_progress": current_progress,
+        "id_value": f"user-{spec.id_kind}:{uuid4()}" if spec.id_kind else None,
+    }
+    params = spec.params(operation, ctx, episode) if spec.params else {}
+    return await _run_apply(tx, query, spec.error_msg, **params)
