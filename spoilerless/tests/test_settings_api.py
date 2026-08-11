@@ -24,6 +24,9 @@ from spoilerless.app.graph.database import Neo4jDatabase
 from spoilerless.app.repository.session import InMemorySessionRepository
 from spoilerless.app.services.auth import AuthService
 
+from spoilerless.tests.conftest import NoopGoogleVerifier
+
+
 
 class FakeUserRepo:
     def __init__(self) -> None:
@@ -125,7 +128,7 @@ def _build_app(
     app.state.session_repo = session_repo
 
     def _override_auth_service() -> AuthService:
-        return AuthService(user_repo=fake_user_repo, session_repo=session_repo)
+        return AuthService(user_repo=fake_user_repo, session_repo=session_repo, verifier=NoopGoogleVerifier())
 
     app.dependency_overrides[deps.get_auth_service] = _override_auth_service
     app.include_router(settings_router)

@@ -52,6 +52,9 @@ CLAIM_HARRY_FAMILY = "dexter:claim:s01e03:dexter_harry_family"
 EVIDENCE_S01E03_02 = "dexter:evidence:s01e03:02"
 SOURCE_S01E03 = "dexter:source:s01e03"
 
+from spoilerless.tests.conftest import NoopGoogleVerifier
+
+
 
 class FakeUserRepo:
     def __init__(self) -> None:
@@ -144,7 +147,7 @@ def _build_app(
     app.state.session_repo = session_repo
 
     def _override_auth_service() -> AuthService:
-        return AuthService(user_repo=fake_user_repo, session_repo=session_repo)
+        return AuthService(user_repo=fake_user_repo, session_repo=session_repo, verifier=NoopGoogleVerifier())
 
     app.dependency_overrides[deps.get_auth_service] = _override_auth_service
     if provider is not None:

@@ -23,6 +23,14 @@ if str(PROJECT_ROOT) not in sys.path:
 from spoilerless.app.graph.database import Neo4jDatabase  # noqa: E402
 from spoilerless.app.graph.seed import setup_database  # noqa: E402
 
+
+class NoopGoogleVerifier:
+    """AuthService requires a verifier (PROB-09/#77); tests that never
+    exercise Google verification share this one no-op."""
+
+    async def verify(self, credential: str, client_id: str) -> dict[str, object]:
+        return {}
+
 # ── Scratch-series isolation helpers (PROB-06/22, D-07) ──────────────────────
 # Candidate/seed tests must never write to the live series_dexter graph (the
 # #14/#15/#46 pollution class). A scratch series gets its own Series +

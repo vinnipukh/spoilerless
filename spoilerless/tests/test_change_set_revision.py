@@ -45,18 +45,14 @@ SERIES_ID = "series_dexter"
 EPISODE_1 = "dexter_s01e01"
 DEXTER = "dexter:character:dexter_morgan"  # canonical, visible_from_order=1
 
+from spoilerless.tests.conftest import NoopGoogleVerifier
+
 
 def _fresh_query(query: str, **params: Any) -> list[dict[str, Any]]:
     """Run *query* on the suite-shared helper driver (see conftest.run_query)."""
     return run_query(query, **params)
 
 
-class _NoopVerifier:
-    """AuthService requires a verifier (PROB-09/#77); these tests never
-    exercise Google verification, so a no-op satisfies the dependency."""
-
-    async def verify(self, credential: str, client_id: str) -> dict[str, object]:
-        return {}
 
 class FakeUserRepo:
     def __init__(self) -> None:
@@ -142,7 +138,7 @@ def _build_app(
     app.state.session_repo = session_repo
 
     def _override_auth_service() -> AuthService:
-        return AuthService(user_repo=fake_user_repo, session_repo=session_repo, verifier=_NoopVerifier())
+        return AuthService(user_repo=fake_user_repo, session_repo=session_repo, verifier=NoopGoogleVerifier())
 
     app.dependency_overrides[deps.get_auth_service] = _override_auth_service
     if provider is not None:

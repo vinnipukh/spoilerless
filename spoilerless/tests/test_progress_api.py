@@ -36,6 +36,9 @@ from spoilerless.app.services.progress import ProgressNotFoundError, ProgressSer
 
 from conftest import helper_db, module_cleanup_fixture, run_async, run_query  # noqa: E402
 
+from spoilerless.tests.conftest import NoopGoogleVerifier
+
+
 
 class FakeUserRepo:
     """In-memory user repository keyed by google_sub (mirrors test_auth.py)."""
@@ -115,7 +118,7 @@ def progress_app(
     app.state.session_repo = session_repo
 
     def _override_auth_service() -> AuthService:
-        return AuthService(user_repo=fake_user_repo, session_repo=session_repo)
+        return AuthService(user_repo=fake_user_repo, session_repo=session_repo, verifier=NoopGoogleVerifier())
 
     app.dependency_overrides[deps.get_auth_service] = _override_auth_service
     app.include_router(progress_router)
