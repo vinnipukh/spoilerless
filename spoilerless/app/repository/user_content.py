@@ -252,48 +252,97 @@ CUSTOM_RELATIONSHIP_CREATE_QUERY = """
       claim.origin AS origin, claim.created_at AS created_at, claim.updated_at AS updated_at
 """
 
-CUSTOM_NODE_READ_QUERIES: Mapping[CustomNodeType, str] = {
-    node_type: f"""
-        MATCH (node:{node_type.value} {{id: $id, series_id: $series_id}})
-        WHERE node.origin = 'user' AND node.id STARTS WITH 'user-node:'
-          AND node.visible_from_order IS NOT NULL AND node.visible_from_order >= 1
-          AND node.visible_from_order <= $visible_until_order
-        RETURN node.id AS id, node.series_id AS series_id, node.user_id AS user_id,
-          '{node_type.value}' AS type,
-          node.label AS label, node.visible_from_order AS visible_from_order,
-          node.origin AS origin, node.episode_id AS episode_id,
-          node.created_at AS created_at, node.updated_at AS updated_at
-    """ for node_type in CustomNodeType
-}
+# Custom-node queries are label-agnostic: custom nodes live under the closed
+# ``CustomNodeType`` label set and always carry ``origin: 'user'`` +
+# ``user-node:`` id prefix, so a single ``MATCH (node {id, series_id})``
+# (with the user-node guards) selects exactly the same rows the old
+# per-label probe map did — one query instead of five, and the type is
+# projected from the node's own label (PROB-09/#66). The label literal is
+# generated from the closed server-owned enum at module load, the same
+# pattern NOTE_GET_QUERIES uses; no request text ever reaches it.
+_ALLOWED_NODE_LABELS_LITERAL = ", ".join(f"'{node_type.value}'" for node_type in CustomNodeType)
 
-CUSTOM_NODE_UPDATE_QUERIES: Mapping[CustomNodeType, str] = {
-    node_type: f"""
-        MATCH (node:{node_type.value} {{id: $id, series_id: $series_id}})
-        WHERE node.origin = 'user' AND node.id STARTS WITH 'user-node:'
-          AND ($is_admin = true OR node.user_id = $user_id)
-        SET node.label = $label, node.updated_at = $updated_at
-        RETURN node.id AS id, node.series_id AS series_id, node.user_id AS user_id,
-          '{node_type.value}' AS type,
-          node.label AS label, node.visible_from_order AS visible_from_order,
-          node.origin AS origin, node.episode_id AS episode_id,
-          node.created_at AS created_at, node.updated_at AS updated_at
-    """ for node_type in CustomNodeType
-}
+CUSTOM_NODE_READ_QUERY = f"""\
+    MATCH (node {{id: $id, series_id: $series_id}})
+    WHERE node.origin = 'user' AND node.id STARTS WITH 'user-node:'
+      AND node.visible_from_order IS NOT NULL AND node.visible_from_order >= 1
+      AND node.visible_from_order <= $visible_until_order
+    RETURN node.id AS id, node.series_id AS series_id, node.user_id AS user_id,
+      [label IN labels(node) WHERE label IN [{_ALLOWED_NODE_LABELS_LITERAL}]][0] AS type,
+      node.label AS label, node.visible_from_order AS visible_from_order,
+      node.origin AS origin, node.episode_id AS episode_id,
+      node.created_at AS created_at, node.updated_at AS updated_at
+"""
 
-CUSTOM_NODE_DELETE_QUERIES: Mapping[CustomNodeType, str] = {
-    node_type: f"""
-        MATCH (node:{node_type.value} {{id: $id, series_id: $series_id}})
-        WHERE node.origin = 'user' AND node.id STARTS WITH 'user-node:'
-          AND ($is_admin = true OR node.user_id = $user_id)
-        OPTIONAL MATCH (note:UserNote {{origin: 'user', target_id: node.id}})
-        OPTIONAL MATCH (claim:Claim {{origin: 'user', claim_type: 'user_authored'}})
-        WHERE claim.subject_id = node.id OR claim.object_id = node.id
-        WITH node, count(note) + count(claim) AS dependencies
-        WITH node.id AS deleted_id, dependencies, node
-        FOREACH (_ IN CASE WHEN dependencies = 0 THEN [1] ELSE [] END | DETACH DELETE node)
-        RETURN deleted_id AS id, dependencies
-    """ for node_type in CustomNodeType
-}
+CUSTOM_NODE_UPDATE_QUERY = f"""\
+    MATCH (node {{id: $id, series_id: $series_id}})
+    WHERE node.origin = 'user' AND node.id STARTS WITH 'user-node:'
+      AND ($is_admin = true OR node.user_id = $user_id)
+    SET node.label = $label, node.updated_at = $updated_at
+    RETURN node.id AS id, node.series_id AS series_id, node.user_id AS user_id,
+      [label IN labels(node) WHERE label IN [{_ALLOWED_NODE_LABELS_LITERAL}]][0] AS type,
+      node.label AS label, node.visible_from_order AS visible_from_order,
+      node.origin AS origin, node.episode_id AS episode_id,
+      node.created_at AS created_at, node.updated_at AS updated_at
+"""
+
+CUSTOM_NODE_DELETE_QUERY = """\
+    MATCH (node {id: $id, series_id: $series_id})
+    WHERE node.origin = 'user' AND node.id STARTS WITH 'user-node:'
+      AND ($is_admin = true OR node.user_id = $user_id)
+    OPTIONAL MATCH (note:UserNote {origin: 'user', target_id: node.id})
+    OPTIONAL MATCH (claim:Claim {origin: 'user', claim_type: 'user_authored'})
+    WHERE claim.subject_id = node.id OR claim.object_id = node.id
+    WITH node, count(note) + count(claim) AS dependencies
+    WITH node.id AS deleted_id, dependencies, node
+    FOREACH (_ IN CASE WHEN dependencies = 0 THEN [1] ELSE [] END | DETACH DELETE node)
+    RETURN deleted_id AS id, dependencies
+"""
+
+
+async def _capture_old_node(tx: Any, resource_id: str, series_id: str) -> dict[str, Any] | None:
+    """Capture the pre-mutation state of a custom node (PROB-09/#66).
+
+    One copy of the capture query instead of the six inline duplicates that
+    used to precede each mutation; ``None`` means the resource does not
+    exist.
+    """
+    row = await (await tx.run(
+        "MATCH (node {id: $id, series_id: $series_id}) "
+        "RETURN node.id AS id, node.series_id AS series_id, "
+        "labels(node)[0] AS type, node.label AS label, "
+        "node.visible_from_order AS visible_from_order, "
+        "node.origin AS origin, node.episode_id AS episode_id, "
+        "node.user_id AS user_id",
+        id=resource_id, series_id=series_id)).single()
+    return _native(row.data()) if row else None
+
+
+async def _capture_old_claim(tx: Any, resource_id: str, series_id: str) -> dict[str, Any] | None:
+    """Capture the pre-mutation state of a custom relationship (a Claim)."""
+    row = await (await tx.run(
+        "MATCH (claim:Claim {id: $id, series_id: $series_id}) "
+        "RETURN claim.id AS id, claim.series_id AS series_id, "
+        "claim.subject_id AS source, claim.object_id AS target, "
+        "claim.predicate AS type, claim.episode_id AS episode_id, "
+        "claim.visible_from_order AS visible_from_order, "
+        "claim.origin AS origin, claim.user_id AS user_id",
+        id=resource_id, series_id=series_id)).single()
+    return _native(row.data()) if row else None
+
+
+async def _capture_old_note(tx: Any, resource_id: str, series_id: str) -> dict[str, Any] | None:
+    """Capture the pre-mutation state of a UserNote."""
+    row = await (await tx.run(
+        "MATCH (note:UserNote {id: $id, series_id: $series_id}) "
+        "RETURN note.id AS id, note.series_id AS series_id, "
+        "note.target_type AS target_type, note.target_id AS target_id, "
+        "note.content AS content, note.origin AS origin, "
+        "note.visible_from_order AS visible_from_order, "
+        "note.created_at AS created_at, note.updated_at AS updated_at, "
+        "note.user_id AS user_id",
+        id=resource_id, series_id=series_id)).single()
+    return _native(row.data()) if row else None
 
 CUSTOM_RELATIONSHIP_READ_QUERY = """
     MATCH (claim:Claim {id: $id, series_id: $series_id, origin: 'user', claim_type: 'user_authored'})
@@ -504,7 +553,7 @@ class UserContentRepository:
 
     async def get_custom_node(self, series_id: str, node_id: str, boundary: int) -> Any:
         _resource_id(node_id)
-        return await self._custom_read(series_id, node_id, boundary, list(CUSTOM_NODE_READ_QUERIES.values()))
+        return await self._custom_read(series_id, node_id, boundary, [CUSTOM_NODE_READ_QUERY])
 
     async def update_custom_node(
         self, series_id: str, node_id: str, user_id: str,
@@ -519,34 +568,25 @@ class UserContentRepository:
     @staticmethod
     async def _update_custom_node(tx: Any, command: CustomUpdateCommand) -> Any:
         # Capture state before mutation
-        old_row = await (await tx.run(
-            "MATCH (node {id: $id, series_id: $series_id}) "
-            "RETURN node.id AS id, node.series_id AS series_id, "
-            "labels(node)[0] AS type, node.label AS label, "
-            "node.visible_from_order AS visible_from_order, "
-            "node.origin AS origin, node.episode_id AS episode_id, "
-            "node.user_id AS user_id",
-            id=command.id, series_id=command.series_id)).single()
-        old_state = _native(old_row.data()) if old_row else None
+        old_state = await _capture_old_node(tx, command.id, command.series_id)
         resource_type = old_state.get("type", "?") if old_state else "?"
 
-        for query in CUSTOM_NODE_UPDATE_QUERIES.values():
-            record = await (await tx.run(query, id=command.id, series_id=command.series_id,
-                                         label=command.value, updated_at=command.updated_at,
-                                         user_id=command.user_id,
-                                         is_admin=command.is_admin)).single()
-            if record is not None:
-                result_data = _native(record.data())
-                before = RevisionRepository.take_snapshot(old_state) if old_state else None
-                after = RevisionRepository.take_snapshot(result_data)
-                await RevisionRepository.log_revision(
-                    tx, series_id=command.series_id,
-                    resource_type=resource_type,
-                    resource_id=command.id, action=RevisionAction.UPDATED,
-                    before=before, after=after,
-                    visible_from_order=result_data["visible_from_order"],
-                    created_at=command.updated_at, user_id=command.user_id)
-                return result_data
+        record = await (await tx.run(CUSTOM_NODE_UPDATE_QUERY, id=command.id, series_id=command.series_id,
+                                     label=command.value, updated_at=command.updated_at,
+                                     user_id=command.user_id,
+                                     is_admin=command.is_admin)).single()
+        if record is not None:
+            result_data = _native(record.data())
+            before = RevisionRepository.take_snapshot(old_state) if old_state else None
+            after = RevisionRepository.take_snapshot(result_data)
+            await RevisionRepository.log_revision(
+                tx, series_id=command.series_id,
+                resource_type=resource_type,
+                resource_id=command.id, action=RevisionAction.UPDATED,
+                before=before, after=after,
+                visible_from_order=result_data["visible_from_order"],
+                created_at=command.updated_at, user_id=command.user_id)
+            return result_data
         ownership = await (await tx.run(OWNERSHIP_QUERY, id=command.id, series_id=command.series_id)).single()
         _raise_on_ownership_conflict(ownership, command.user_id, command.is_admin, "node not found")
 
@@ -566,37 +606,28 @@ class UserContentRepository:
     async def _delete_custom_node(tx: Any, payload: tuple[str, str, str, bool]) -> Any:
         series_id, node_id, user_id, is_admin = payload
         # Capture state before deletion
-        old_row = await (await tx.run(
-            "MATCH (node {id: $id, series_id: $series_id}) "
-            "RETURN node.id AS id, node.series_id AS series_id, "
-            "labels(node)[0] AS type, node.label AS label, "
-            "node.visible_from_order AS visible_from_order, "
-            "node.origin AS origin, node.episode_id AS episode_id, "
-            "node.user_id AS user_id",
-            id=node_id, series_id=series_id)).single()
-        old_state = _native(old_row.data()) if old_row else None
+        old_state = await _capture_old_node(tx, node_id, series_id)
         resource_type = old_state.get("type", "?") if old_state else "?"
 
-        for query in CUSTOM_NODE_DELETE_QUERIES.values():
-            record = await (await tx.run(
-                query, id=node_id, series_id=series_id,
-                user_id=user_id, is_admin=is_admin,
-            )).single()
-            if record is not None:
-                data = record.data()
-                if data.get("dependencies", 0):
-                    return "conflict"
-                deleted_id = data.get("id")
-                if old_state and deleted_id:
-                    before = RevisionRepository.take_snapshot(old_state)
-                    await RevisionRepository.log_revision(
-                        tx, series_id=series_id,
-                        resource_type=resource_type,
-                        resource_id=node_id, action=RevisionAction.DELETED,
-                        before=before, after=None,
-                        visible_from_order=old_state["visible_from_order"],
-                        created_at=_utc_now(), user_id=user_id)
-                return deleted_id
+        record = await (await tx.run(
+            CUSTOM_NODE_DELETE_QUERY, id=node_id, series_id=series_id,
+            user_id=user_id, is_admin=is_admin,
+        )).single()
+        if record is not None:
+            data = record.data()
+            if data.get("dependencies", 0):
+                return "conflict"
+            deleted_id = data.get("id")
+            if old_state and deleted_id:
+                before = RevisionRepository.take_snapshot(old_state)
+                await RevisionRepository.log_revision(
+                    tx, series_id=series_id,
+                    resource_type=resource_type,
+                    resource_id=node_id, action=RevisionAction.DELETED,
+                    before=before, after=None,
+                    visible_from_order=old_state["visible_from_order"],
+                    created_at=_utc_now(), user_id=user_id)
+            return deleted_id
         ownership = await (await tx.run(OWNERSHIP_QUERY, id=node_id, series_id=series_id)).single()
         _raise_on_ownership_conflict(ownership, user_id, is_admin, "node not found")
 
@@ -617,15 +648,7 @@ class UserContentRepository:
     @staticmethod
     async def _update_custom_relationship(tx: Any, command: CustomUpdateCommand) -> Any:
         # Capture state before mutation
-        old_row = await (await tx.run(
-            "MATCH (claim:Claim {id: $id, series_id: $series_id}) "
-            "RETURN claim.id AS id, claim.series_id AS series_id, "
-            "claim.subject_id AS source, claim.object_id AS target, "
-            "claim.predicate AS type, claim.episode_id AS episode_id, "
-            "claim.visible_from_order AS visible_from_order, "
-            "claim.origin AS origin, claim.user_id AS user_id",
-            id=command.id, series_id=command.series_id)).single()
-        old_state = _native(old_row.data()) if old_row else None
+        old_state = await _capture_old_claim(tx, command.id, command.series_id)
         before = RevisionRepository.take_snapshot(old_state) if old_state else None
 
         record = await (await tx.run(CUSTOM_RELATIONSHIP_UPDATE_QUERY, id=command.id,
@@ -663,15 +686,7 @@ class UserContentRepository:
     async def _delete_custom_relationship(tx: Any, payload: tuple[str, str, str, bool]) -> Any:
         series_id, relationship_id, user_id, is_admin = payload
         # Capture state before deletion
-        old_row = await (await tx.run(
-            "MATCH (claim:Claim {id: $id, series_id: $series_id}) "
-            "RETURN claim.id AS id, claim.series_id AS series_id, "
-            "claim.subject_id AS source, claim.object_id AS target, "
-            "claim.predicate AS type, claim.episode_id AS episode_id, "
-            "claim.visible_from_order AS visible_from_order, "
-            "claim.origin AS origin, claim.user_id AS user_id",
-            id=relationship_id, series_id=series_id)).single()
-        old_state = _native(old_row.data()) if old_row else None
+        old_state = await _capture_old_claim(tx, relationship_id, series_id)
 
         record = await (await tx.run(CUSTOM_RELATIONSHIP_DELETE_QUERY, id=relationship_id,
                                      series_id=series_id, user_id=user_id,
@@ -722,17 +737,8 @@ class UserContentRepository:
     @staticmethod
     async def _update_note(tx: Any, command: NoteUpdateCommand) -> Any:
         # Capture state before mutation
-        old_row = await (await tx.run(
-            "MATCH (note:UserNote {id: $id, series_id: $series_id}) "
-            "RETURN note.id AS id, note.series_id AS series_id, "
-            "note.target_type AS target_type, note.target_id AS target_id, "
-            "note.content AS content, note.origin AS origin, "
-            "note.visible_from_order AS visible_from_order, "
-            "note.created_at AS created_at, note.updated_at AS updated_at, "
-            "note.user_id AS user_id",
-            id=command.id, series_id=command.series_id)).single()
-        before = RevisionRepository.take_snapshot(
-            _native(old_row.data())) if old_row else None
+        old_state = await _capture_old_note(tx, command.id, command.series_id)
+        before = RevisionRepository.take_snapshot(old_state) if old_state else None
 
         result = await tx.run(NOTE_UPDATE_QUERY, id=command.id, series_id=command.series_id,
             content=command.content, updated_at=command.updated_at,
@@ -769,19 +775,9 @@ class UserContentRepository:
     async def _delete_note(tx: Any, payload: tuple[str, str, str, bool]) -> Any:
         series_id, note_id, user_id, is_admin = payload
         # Capture state before deletion
-        old_row = await (await tx.run(
-            "MATCH (note:UserNote {id: $id, series_id: $series_id}) "
-            "RETURN note.id AS id, note.series_id AS series_id, "
-            "note.target_type AS target_type, note.target_id AS target_id, "
-            "note.content AS content, note.origin AS origin, "
-            "note.visible_from_order AS visible_from_order, "
-            "note.created_at AS created_at, note.updated_at AS updated_at, "
-            "note.user_id AS user_id",
-            id=note_id, series_id=series_id)).single()
-        if old_row is None:
+        old_state = await _capture_old_note(tx, note_id, series_id)
+        if old_state is None:
             return None
-
-        old_state = _native(old_row.data())
         # Owner-scoped delete — a cross-owner or legacy-non-admin attempt
         # yields zero rows and is classified via OWNERSHIP_QUERY below.
         result = await tx.run(
