@@ -445,7 +445,9 @@ describe('useWatchProgress', () => {
 })
 
 describe('useWatchProgress persist:false (visitor / misafir read-only mode)', () => {
-  it('applies order changes purely locally — never POSTs, never opens the modal', async () => {
+  it('first interaction (no established boundary yet) applies locally — never POSTs, never opens the modal', async () => {
+    // Fresh visitor: currentView null (entry seed / series switch) — there
+    // is no boundary yet to spoil, so the first selection is silent.
     const { result } = renderHook(() => useWatchProgress({ persist: false }))
 
     await act(async () => {
@@ -467,14 +469,77 @@ describe('useWatchProgress persist:false (visitor / misafir read-only mode)', ()
     expect(mockedGetProgress).not.toHaveBeenCalled()
   })
 
-  it('confirmChange is a no-op (visitor mode never sets a pendingChange)', async () => {
+  it('forward move ABOVE the current view opens the spoiler modal without POSTing (08-12 regression)', async () => {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 2 }))
     const { result } = renderHook(() => useWatchProgress({ persist: false }))
+    expect(result.current.viewAsOfOrder).toBe(2)
+
+    await act(async () => {
+      const ok = await result.current.requestChange('series_dexter', 4)
+      expect(ok).toBe(true)
+    })
+
+    // The warning surfaces; the view is NOT moved until confirm.
+    expect(result.current.pendingChange).toEqual({
+      seriesId: 'series_dexter',
+      nextOrder: 4,
+      direction: 'forward',
+    })
+    expect(result.current.viewAsOfOrder).toBe(2)
+    expect(mockedUpdateProgress).not.toHaveBeenCalled()
+  })
+
+  it('backward / same-order moves stay silent (view-only, nothing spoiled)', async () => {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 2 }))
+    const { result } = renderHook(() => useWatchProgress({ persist: false }))
+
+    await act(async () => {
+      await result.current.requestChange('series_dexter', 1)
+    })
+    expect(result.current.viewAsOfOrder).toBe(1)
+    expect(result.current.pendingChange).toBeNull()
+
+    await act(async () => {
+      await result.current.requestChange('series_dexter', 1)
+    })
+    expect(result.current.pendingChange).toBeNull()
+    expect(mockedUpdateProgress).not.toHaveBeenCalled()
+  })
+
+  it('visitor confirmChange applies the view locally and never POSTs', async () => {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 2 }))
+    const { result } = renderHook(() => useWatchProgress({ persist: false }))
+
+    act(() => {
+      void result.current.requestChange('series_dexter', 4)
+    })
+    expect(result.current.pendingChange).not.toBeNull()
 
     await act(async () => {
       await result.current.confirmChange()
     })
 
+    expect(result.current.viewAsOfOrder).toBe(4)
+    expect(result.current.watchedThroughOrder).toBe(4)
     expect(result.current.pendingChange).toBeNull()
+    expect(mockedUpdateProgress).not.toHaveBeenCalled()
+  })
+
+  it('visitor cancelChange clears the spoiler modal without moving the view', async () => {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 2 }))
+    const { result } = renderHook(() => useWatchProgress({ persist: false }))
+
+    act(() => {
+      void result.current.requestChange('series_dexter', 4)
+    })
+    expect(result.current.pendingChange).not.toBeNull()
+
+    act(() => {
+      result.current.cancelChange()
+    })
+
+    expect(result.current.pendingChange).toBeNull()
+    expect(result.current.viewAsOfOrder).toBe(2)
     expect(mockedUpdateProgress).not.toHaveBeenCalled()
   })
 })

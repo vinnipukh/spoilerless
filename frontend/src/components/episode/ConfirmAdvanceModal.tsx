@@ -16,6 +16,11 @@ type Props = {
   // The numeric episode order being unlocked — the forward copy states
   // "Episodes 1 through N will be considered watched" (D-06).
   episodeOrder?: number
+  // Visitor (read-only) mode: the modal is a pure spoiler warning — the
+  // "considered watched / can't be undone" copy is wrong for a visitor
+  // (nothing persists), so forward moves get spoiler copy instead
+  // (08-12: restore notification for visitor forward navigation).
+  visitor?: boolean
   onConfirm: () => void
   onCancel: () => void
 }
@@ -26,10 +31,15 @@ type Props = {
 // backward-copy variant) — note the 07-03 view-only model means backward
 // selections no longer open this modal (PROG-01); the branch is retained
 // for direct-render compatibility.
-export function ConfirmAdvanceModal({ open, direction, episodeCode, episodeOrder, onConfirm, onCancel }: Props) {
-  const title = direction === 'forward' ? `Unlock ${episodeCode}?` : `Rewatch ${episodeCode}?`
-  const body =
-    direction === 'forward'
+export function ConfirmAdvanceModal({ open, direction, episodeCode, episodeOrder, visitor, onConfirm, onCancel }: Props) {
+  const title = visitor
+    ? `View ${episodeCode}?`
+    : direction === 'forward'
+      ? `Unlock ${episodeCode}?`
+      : `Rewatch ${episodeCode}?`
+  const body = visitor
+    ? `You're about to view ${episodeCode}. Content beyond your current progress may contain spoilers. Your progress isn't saved in visitor mode. Continue?`
+    : direction === 'forward'
       ? `Unlocking ${episodeCode} means Episodes 1 through ${episodeOrder ?? episodeCode} will be considered watched. This can't be undone. Continue?`
       : `You're about to move your watch progress back to ${episodeCode}. Continue?`
 
@@ -53,7 +63,7 @@ export function ConfirmAdvanceModal({ open, direction, episodeCode, episodeOrder
             onClick={onConfirm}
             className="bg-warning text-warning-foreground hover:bg-warning/80"
           >
-            Yes, unlock episode
+            {visitor ? 'View episode' : 'Yes, unlock episode'}
           </Button>
         </DialogFooter>
       </DialogContent>

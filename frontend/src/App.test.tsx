@@ -230,6 +230,38 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: 'Open chat' })).not.toBeInTheDocument()
   })
 
+  it('visitor navigating ABOVE the current boundary gets the spoiler warning modal (08-12 regression)', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await screen.findByText('Spoilerless')
+    await user.click(screen.getByRole('button', { name: 'Continue as visitor' }))
+    await waitFor(() => {
+      expect(screen.getByText('Visitor')).toBeInTheDocument()
+    })
+
+    // Visitor entry seeds the first series at order 1 silently (no boundary
+    // existed yet to spoil) — the graph for order 1 loads without a modal.
+    await waitFor(() => {
+      expect(graphFetchCalls().some(([url]) => String(url).includes('visible_until_order=1'))).toBe(true)
+    })
+
+    // Forward navigation ABOVE the seeded boundary must warn BEFORE showing
+    // anything — never a silent spoiler push (260805-te3 removed the modal
+    // for visitors; restored 08-12 with visitor copy).
+    await user.click(await screen.findByRole('combobox', { name: 'Watch progress' }))
+    await user.click(await screen.findByRole('option', { name: /S01E03/ }))
+
+    expect(await screen.findByText('View S01E03?')).toBeInTheDocument()
+    expect(screen.getByText(/may contain spoilers/i)).toBeInTheDocument()
+    expect(graphFetchCalls().some(([url]) => String(url).includes('visible_until_order=3'))).toBe(false)
+
+    await user.click(screen.getByRole('button', { name: 'View episode' }))
+    await waitFor(() => {
+      expect(graphFetchCalls().some(([url]) => String(url).includes('visible_until_order=3'))).toBe(true)
+    })
+  })
+
   it('shows loading then transitions from login to graph when authenticated', async () => {
     // Start unauthenticated, then after a brief delay become authenticated
     currentAuthState = 'authenticated'

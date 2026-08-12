@@ -544,6 +544,7 @@ function AuthenticatedApp() {
           direction={watchProgress.pendingChange.direction}
           episodeCode={pendingEpisode?.code ?? `order ${watchProgress.pendingChange.nextOrder}`}
           episodeOrder={watchProgress.pendingChange.nextOrder}
+          visitor={isVisitor}
           onConfirm={handleConfirm}
           onCancel={handleCancel}
         />

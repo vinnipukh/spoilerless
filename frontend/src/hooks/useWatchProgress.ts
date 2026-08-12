@@ -167,8 +167,24 @@ export function useWatchProgress(options?: { persist?: boolean }) {
   function requestChange(seriesId: string, nextOrder: number): Promise<boolean> {
     userInteractedRef.current = true
 
-    // Visitor mode: purely local view switch — no POST, no unlock modal.
+    // Visitor mode: purely local view switch — never POSTs. Forward moves
+    // ABOVE the current view still open ConfirmAdvanceModal (spoiler
+    // warning, visitor copy) so a visitor is never silently pushed into
+    // future-episode content (260805-te3 originally skipped the modal
+    // entirely — reverted 08-12: "no notification telling me I can see
+    // spoilers"). First interaction (currentView null: entry seed,
+    // series switch) never modals — there is no established boundary yet
+    // to spoil, and the entry seed must not pop a dialog.
     if (!persist) {
+      const currentView = state.seriesId === seriesId ? state.viewAsOfOrder : null
+      if (currentView != null && nextOrder > currentView) {
+        setState((prev) => ({
+          ...prev,
+          seriesId,
+          pendingChange: { seriesId, nextOrder, direction: 'forward' },
+        }))
+        return Promise.resolve(true)
+      }
       setState((prev) => ({ ...prev, seriesId, viewAsOfOrder: nextOrder }))
       return Promise.resolve(true)
     }
@@ -214,11 +230,26 @@ export function useWatchProgress(options?: { persist?: boolean }) {
   }
 
   async function confirmChange() {
-    if (!persist) return // visitor mode: pendingChange is never set
     userInteractedRef.current = true
     const pending = state.pendingChange
     if (!pending) return
     const { seriesId, nextOrder } = pending
+
+    // Visitor mode: the modal is a pure spoiler warning — confirm applies
+    // the view locally (mirrors the auth catch branch) and never POSTs.
+    if (!persist) {
+      setState((prev) =>
+        prev.pendingChange
+          ? {
+              seriesId,
+              watchedThroughOrder: nextOrder,
+              viewAsOfOrder: nextOrder,
+              pendingChange: null,
+            }
+          : prev,
+      )
+      return
+    }
 
     // Forward confirm marks Episodes 1..N watched AND views them (D-06):
     // watched_through_order = view_as_of_order = N. Await the backend write
