@@ -119,6 +119,25 @@ function AuthenticatedApp() {
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(watchProgress.seriesId)
   const episodesState = useEpisodes(selectedSeriesId, watchProgress.viewAsOfOrder)
   const graphState = useGraph(watchProgress.seriesId, watchProgress.confirmedOrder)
+
+  // After a user logs in (Google auth) or continues as a visitor, once the
+  // graph for the new auth scope has loaded, auto-refresh it exactly like
+  // the Refresh graph button (force re-layout + re-fit). Keyed on the auth
+  // status transition so a later series change never re-triggers it; the
+  // GraphCanvas refreshSignal effect is a no-op when the counter is equal.
+  const [authRefreshSignal, setAuthRefreshSignal] = useState(0)
+  const lastAuthStatusRef = useRef(state.status)
+  const authEntrySeenRef = useRef(false)
+  useEffect(() => {
+    const prev = lastAuthStatusRef.current
+    lastAuthStatusRef.current = state.status
+    if (
+      (state.status === 'authenticated' || state.status === 'visitor') &&
+      prev !== state.status
+    ) {
+      authEntrySeenRef.current = true
+    }
+  }, [state.status])
   // PROB-09/#74: the last successfully loaded graph survives refetch and
   // boundary loads so GraphCanvas never unmounts (loading/error render as
   // an OVERLAY above it — no destructive unmount + full relayout on every
@@ -132,6 +151,12 @@ function AuthenticatedApp() {
   if (graphData && activeGraph !== graphData) {
     setActiveGraph(graphData)
   }
+  useEffect(() => {
+    if (!authEntrySeenRef.current) return
+    if (graphData == null) return
+    authEntrySeenRef.current = false
+    setAuthRefreshSignal((n) => n + 1)
+  }, [graphData])
   // FEAT-07 (09-09): raw notes for the current series, fed to NodeSearch's
   // Notes & Claims mode (search is payload-local over already-filtered
   // data — the hook already exposes the raw list via `data`).
@@ -558,6 +583,7 @@ function AuthenticatedApp() {
             onNewlyRevealedDone={() => setNewlyRevealedIds(null)}
             readOnly={isVisitor}
             onShareLink={isVisitor ? undefined : () => setShareDialogOpen(true)}
+            refreshSignal={authRefreshSignal}
           />
 
           {/* FEAT-01/07 (09-09): floating search bar over the canvas — the

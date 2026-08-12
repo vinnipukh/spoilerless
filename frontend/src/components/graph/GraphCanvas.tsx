@@ -249,6 +249,11 @@ type Props = {
   // (default) shows the curated tier-1 + connector projection; Full shows
   // every spoiler-safe element.
   initialMode?: GraphMode
+  // External "do exactly what Refresh graph does" signal — App.tsx bumps it
+  // once after login/visitor entry once the graph is loaded, so the canvas
+  // force re-lays-out + re-fits (same runLayout(force=true) the button
+  // fires) instead of reusing cached positions.
+  refreshSignal?: number
 }
 
 
@@ -391,8 +396,12 @@ export function GraphCanvas({
   readOnly = false,
   onShareLink,
   initialMode = 'overview',
+  // External "do exactly what Refresh graph does" signal — App.tsx bumps it
+  // once after login/visitor entry once the graph is loaded, so the canvas
+  // force re-lays-out + re-fits (same runLayout(force=true) the button
+  // fires) instead of reusing cached positions.
+  refreshSignal = 0,
 }: Props) {
-
 
   const [mode, setMode] = useState<GraphMode>(initialMode)
   // PROB-09/#75: the cy event callbacks are registered once per cy instance
@@ -503,6 +512,20 @@ export function GraphCanvas({
       performance.now() - autoZoomHold.lastTouchAt < AUTO_ZOOM_HOLD_MS
     runLayout(cy, seriesId, graph.visible_until_order, modeChanged || cyChanged, mode, suppressAutoZoom)
   }, [graph, focusedElementIds, revealTarget, seriesId, mode])
+
+  // External refresh signal — App.tsx bumps it once after login/visitor
+  // entry once the graph is loaded. Runs the exact same force re-layout +
+  // re-fit as the Refresh graph button (deliberately NOT the
+  // data-preserving refetch: the graph prop already carries the new
+  // auth-scoped payload; this only re-flows the canvas).
+  const lastRefreshSignalRef = useRef(refreshSignal)
+  useEffect(() => {
+    if (refreshSignal === lastRefreshSignalRef.current) return
+    lastRefreshSignalRef.current = refreshSignal
+    const cy = cyInstanceRef.current
+    if (!cy) return
+    runLayout(cy, seriesId, graph.visible_until_order, true, mode)
+  }, [refreshSignal, graph, seriesId, mode])
 
   // Apply/clear an externally-driven `graph_focus` highlight (RAG-17), keyed
   // on the `focusedElementIds` prop — the same "prop-driven effect" pattern
