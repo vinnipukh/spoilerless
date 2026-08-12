@@ -249,11 +249,6 @@ type Props = {
   // (default) shows the curated tier-1 + connector projection; Full shows
   // every spoiler-safe element.
   initialMode?: GraphMode
-  // External "do exactly what Refresh graph does" signal — App.tsx bumps it
-  // once after login/visitor entry once the graph is loaded, so the canvas
-  // force re-lays-out + re-fits (same runLayout(force=true) the button
-  // fires) instead of reusing cached positions.
-  refreshSignal?: number
 }
 
 
@@ -396,11 +391,6 @@ export function GraphCanvas({
   readOnly = false,
   onShareLink,
   initialMode = 'overview',
-  // External "do exactly what Refresh graph does" signal — App.tsx bumps it
-  // once after login/visitor entry once the graph is loaded, so the canvas
-  // force re-lays-out + re-fits (same runLayout(force=true) the button
-  // fires) instead of reusing cached positions.
-  refreshSignal = 0,
 }: Props) {
 
   const [mode, setMode] = useState<GraphMode>(initialMode)
@@ -513,19 +503,21 @@ export function GraphCanvas({
     runLayout(cy, seriesId, graph.visible_until_order, modeChanged || cyChanged, mode, suppressAutoZoom)
   }, [graph, focusedElementIds, revealTarget, seriesId, mode])
 
-  // External refresh signal — App.tsx bumps it once after login/visitor
-  // entry once the graph is loaded. Runs the exact same force re-layout +
-  // re-fit as the Refresh graph button (deliberately NOT the
-  // data-preserving refetch: the graph prop already carries the new
-  // auth-scoped payload; this only re-flows the canvas).
-  const lastRefreshSignalRef = useRef(refreshSignal)
+  // 08-12 (product owner): on launch, do exactly what the Refresh graph
+  // button does — one forced re-layout + re-fit (runLayout force=true:
+  // ignores cached positions, re-fits the view). The canvas only mounts
+  // when the app enters the graph (cold load, login, visitor entry), so a
+  // mount-time action covers every launch path. Guarded by a ref so a
+  // StrictMode dev double-mount / remount of an already-launched canvas
+  // never re-fires.
+  const launchRefreshedRef = useRef(false)
   useEffect(() => {
-    if (refreshSignal === lastRefreshSignalRef.current) return
-    lastRefreshSignalRef.current = refreshSignal
     const cy = cyInstanceRef.current
-    if (!cy) return
+    if (!cy || launchRefreshedRef.current) return
+    launchRefreshedRef.current = true
     runLayout(cy, seriesId, graph.visible_until_order, true, mode)
-  }, [refreshSignal, graph, seriesId, mode])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Apply/clear an externally-driven `graph_focus` highlight (RAG-17), keyed
   // on the `focusedElementIds` prop — the same "prop-driven effect" pattern
