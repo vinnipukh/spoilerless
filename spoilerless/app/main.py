@@ -4,11 +4,13 @@ import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncIterator
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
 from typing import Literal
 
@@ -176,6 +178,14 @@ app.include_router(chat_router)
 app.include_router(change_set_router)
 app.include_router(settings_router)
 app.include_router(share_router)
+
+# Self-hosted character portraits (PROBLEMS #28 contract: images must be
+# self-hosted, never external CDNs). Served under /api/static so the SPA's
+# existing /api proxy (Vite dev, Vercel rewrite) reaches them on any origin
+# without extra configuration; image_url values in the seed are relative
+# ("/api/static/characters/<id>.webp") and pass the CSP img-src 'self' rule.
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+app.mount("/api/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 
 settings = get_settings()

@@ -97,15 +97,17 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
       selector: 'node[nodeType = "Character"]',
       style: { shape: 'ellipse', width: 44, height: 44, 'background-color': '#38BDF8' },
     },
-    // Portrait background for Character nodes that carry a Fandom image_url
-    // (graphElements.ts only sets the `imageUrl` data key for Character nodes,
-    // and only when a value exists, so this selector can never match other
-    // node types). No `background-image-crossorigin` here: Fandom's CDN
-    // (static.wikia.nocookie.net) doesn't send CORS headers, and requesting
-    // 'anonymous' mode makes Cytoscape treat the resulting opaque-response
-    // failure as a load error and draw its own broken-image glyph — worse than
-    // doing nothing. Loading without crossorigin taints the canvas (blocks
-    // cy.png()-style exports, which this app doesn't use) but renders
+    // Portrait background for Character nodes that carry a self-hosted
+    // image_url (graphElements.ts only sets the `imageUrl` data key for
+    // Character nodes, and only when a value exists, so this selector can
+    // never match other node types). Images are served same-origin by the
+    // backend at /api/static/characters/*.webp (PROBLEMS #28: self-hosted
+    // only, never an external CDN). No `background-image-crossorigin`:
+    // requesting 'anonymous' mode on a cross-origin image makes Cytoscape
+    // treat the resulting opaque-response failure as a load error and draw
+    // its own broken-image glyph — worse than doing nothing. Loading without
+    // crossorigin taints the canvas (blocks cy.png()-style exports, which
+    // this app doesn't use) but renders
     // correctly; if the image 404s or is blocked outright, Cytoscape falls
     // back to the node's flat background-color fill — there is no HTML <img>
     // element here to leave a broken-image box.

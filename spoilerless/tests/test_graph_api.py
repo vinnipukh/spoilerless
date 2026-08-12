@@ -431,16 +431,17 @@ def test_graph_nodes_include_image_fields(live_client: TestClient) -> None:
     # seed carries NO images at all (see below).
     characters = [node for node in payload["nodes"] if node["type"] == "Character"]
     # The curated portraits were dropped wholesale in the #28 hotlink sweep
-    # (commit 1ddc650): seed data must not load third-party CDN assets on a
-    # public site (legal + privacy + breakage), so NO character carries an
-    # image_url any more. The contract that survives is: the projection keeps
-    # both keys (nullable), and any future image must be self-hosted — never
-    # an external CDN (static.wikia.nocookie.net / fandom).
+    # (commit 1ddc650) and restored self-hosted on 08-12: seed data must not
+    # load third-party CDN assets on a public site (legal + privacy +
+    # breakage), so image_url may only be a SELF-HOSTED relative path under
+    # /api/static (served by this backend; passes CSP img-src 'self') — never
+    # an external CDN (static.wikia.nocookie.net / fandom) or any absolute
+    # http(s) URL.
     for character in characters:
-        assert character["image_url"] is None, (
+        assert character["image_url"] is None or character["image_url"].startswith("/api/static/"), (
             f"{character['id']} carries image_url {character['image_url']!r} — "
-            "external hotlinks were removed (PROBLEMS #28); re-add only "
-            "self-hosted images"
+            "external hotlinks were removed (PROBLEMS #28); only self-hosted "
+            "images under /api/static are allowed"
         )
 
     non_characters = [node for node in payload["nodes"] if node["type"] != "Character"]
