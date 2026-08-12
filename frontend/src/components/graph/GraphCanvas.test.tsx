@@ -177,6 +177,7 @@ vi.mock('react-cytoscapejs', () => {
   // included) — GraphCanvas's per-cy layout guard keys on that identity.
   // Memoize per mount so the fake mirrors the real instance lifecycle.
   function makeFakeCy() {
+    const oneHandlers: Record<string, Handler[]> = {}
     const fakeCy = {
       on: (event: string, selectorOrHandler: unknown, maybeHandler?: Handler) => {
         const selector = typeof selectorOrHandler === 'string' ? selectorOrHandler : undefined
@@ -184,6 +185,15 @@ vi.mock('react-cytoscapejs', () => {
         const key = selector ? `${event}:${selector}` : event
         handlers[key] = handlers[key] ?? []
         handlers[key].push(handler)
+      },
+      one: (event: string, handler: Handler) => {
+        oneHandlers[event] = oneHandlers[event] ?? []
+        oneHandlers[event].push(handler)
+      },
+      emitOne: (event: string) => {
+        const pending = oneHandlers[event] ?? []
+        oneHandlers[event] = []
+        pending.forEach((handler) => handler({ target: fakeCy }))
       },
       container: () => null,
       elements: () => makeCollection(allIds()),
@@ -225,6 +235,7 @@ vi.mock('react-cytoscapejs', () => {
 
     const fakeCy = useMemo(() => makeFakeCy(), [])
     props.cy?.(fakeCy)
+    ;(fakeCy as { emitOne: (event: string) => void }).emitOne('layoutstop')
     capturedCy = fakeCy
 
     return (
@@ -699,7 +710,8 @@ describe('GraphCanvas', () => {
     it('keeps the CytoscapeComponent layout prop reference stable across graph-change re-renders (no per-render re-fit)', () => {
       const { rerender } = render(<GraphCanvas graph={graphResponseS01E01} onSelect={() => {}} seriesId="series:dexter" episodes={[]} initialMode="full" />)
       const first = capturedProps.layout
-      // The declarative prop never fits — runLayout is the single fit authority.
+      // The declarative prop never fits — the post-layout launch refresh and
+      // runLayout are the single fit authority.
       expect((first as { fit?: unknown }).fit).toBe(false)
 
       // A graph change re-renders — the memoized layout object must be the

@@ -404,16 +404,12 @@ export function GraphCanvas({
     graphRef.current = graph
   }, [graph])
   const elements = useMemo(() => graphToElements(graph, mode), [graph, mode])
-  // Memoized layout options for the declarative CytoscapeComponent prop: the
-  // object reference must stay stable across re-renders or react-cytoscapejs
-  // re-runs the layout on every render. The prop NEVER fits — runLayout is
-  // the single fit authority (it decides per the 20s interaction hold); a
-  // fit:true here would zoom out on every remount before the hold logic
-  // runs. Rebuilt only when the mode changes.
+  // Memoized declarative startup layout. react-cytoscapejs starts this before
+  // invoking its `cy` callback; that callback waits for this layoutstop and
+  // then performs the same forced layout + fit as Refresh graph. Keeping the
+  // object stable prevents incidental parent renders from starting layouts.
   const layout = useMemo(
     () => layoutOptionsFor(layoutName, prefersReducedMotion, mode, false),
-    // layoutName is module-level (mutated only by the rare fallback in
-    // runLayout's catch) — not a reactive dependency.
     [mode],
   )
   // 08-06+ (product owner): timestamp of the last touch anywhere in the app
@@ -503,12 +499,10 @@ export function GraphCanvas({
     runLayout(cy, seriesId, graph.visible_until_order, modeChanged || cyChanged, mode, suppressAutoZoom)
   }, [graph, focusedElementIds, revealTarget, seriesId, mode])
 
-  // Launch refresh is scheduled from the cy callback below, not a mount
-  // effect. react-cytoscapejs can deliver its cy instance after parent
-  // effects have already run; an effect-only refresh then silently misses
-  // cold loads and leaves the declarative fit:false layout (the diagonal
-  // view). Key by cy identity so StrictMode/remount refreshes the LIVE
-  // instance, exactly like the Refresh graph button.
+  // Launch refresh is registered from the cy callback below. It deliberately
+  // waits for react-cytoscapejs's startup layout to STOP before invoking the
+  // button-equivalent runLayout(force=true). Starting both layouts together
+  // races them; refreshing before the first settles reproduces the diagonal.
   const launchRefreshCyRef = useRef<cytoscape.Core | null>(null)
 
   // Apply/clear an externally-driven `graph_focus` highlight (RAG-17), keyed
@@ -731,11 +725,17 @@ export function GraphCanvas({
 
             if (launchRefreshCyRef.current !== cy) {
               launchRefreshCyRef.current = cy
-              queueMicrotask(() => {
-                if (cyInstanceRef.current === cy && lastLayoutCyRef.current !== cy) {
+              // Mark this instance/graph as handled so the parent effect does
+              // not launch a competing layout while startup is still running.
+              lastLayoutCyRef.current = cy
+              lastLayoutGraphRef.current = graph
+              const refreshAfterStartup = () => {
+                if (cyInstanceRef.current === cy) {
                   runLayout(cy, seriesId, graph.visible_until_order, true, mode)
                 }
-              })
+              }
+              if (typeof cy.one === 'function') cy.one('layoutstop', refreshAfterStartup)
+              else queueMicrotask(refreshAfterStartup)
             }
 
             cy.on('mouseover', 'node', (evt) => {

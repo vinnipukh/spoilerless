@@ -5,7 +5,7 @@ status: complete
 
 # Summary
 
-Graph launch refresh now runs from the Cytoscape `cy` callback, after the live instance exists. A microtask invokes `runLayout(..., true, ...)`, matching Refresh graph's forced re-layout and fit. The callback guards by cy identity and confirms the instance remains live, avoiding missed cold loads and stale-instance refreshes.
+Graph launch refresh now waits for Cytoscape's declarative startup layout to emit `layoutstop`, then invokes `runLayout(..., true, ...)`, matching Refresh graph's forced re-layout and fit. This removes the startup race: the prior microtask launched two asynchronous layouts concurrently, allowing the first layout to finish last and restore the diagonal cold-open state.
 
 ## Verification
 
@@ -14,7 +14,8 @@ Graph launch refresh now runs from the Cytoscape `cy` callback, after the live i
 - `npm run lint`: passed.
 - `npm run build`: passed; Vite emitted existing chunk-size warning.
 - `git diff --check`: passed.
+- Live Chrome cold-open test: user confirmed the graph opens in the refreshed layout without pressing Refresh graph.
 
 ## Commit
 
-Code commit pending final staging.
+Committed with the final quick-task fix.
