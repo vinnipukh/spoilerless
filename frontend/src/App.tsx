@@ -122,13 +122,15 @@ function AuthenticatedApp() {
   // boundary loads so GraphCanvas never unmounts (loading/error render as
   // an OVERLAY above it — no destructive unmount + full relayout on every
   // refresh, and the autoZoomHold/positionCache module-level singletons
-  // lose their reason to exist).
-  const lastGoodGraphRef = useRef<GraphResponse | null>(null)
+  // lose their reason to exist). PROB-10/#16: kept as a guarded render-phase
+  // state update — the React 19 `react-hooks/refs` rule forbids ref reads in
+  // render, and `setState` during render (when the value changed) is the
+  // sanctioned alternative with identical single-paint semantics.
+  const [activeGraph, setActiveGraph] = useState<GraphResponse | null>(null)
   const graphData = graphState.status === 'success' ? graphState.data : null
-  useEffect(() => {
-    if (graphData) lastGoodGraphRef.current = graphData
-  }, [graphData])
-  const activeGraph = graphData ?? lastGoodGraphRef.current
+  if (graphData && activeGraph !== graphData) {
+    setActiveGraph(graphData)
+  }
   // FEAT-07 (09-09): raw notes for the current series, fed to NodeSearch's
   // Notes & Claims mode (search is payload-local over already-filtered
   // data — the hook already exposes the raw list via `data`).
