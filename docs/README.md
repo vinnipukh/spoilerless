@@ -40,7 +40,7 @@
 - [runbook.md](ops/runbook.md) — incident detection/diagnosis/rollback + deploy-crash post-mortem
 
 ### docs/ — root (ledger + backlog)
-- [PROBLEMS.md](PROBLEMS.md) — the numbered problem ledger (81 findings, pass history)
+- [PROBLEMS.md](PROBLEMS.md) — the numbered problem ledger (81 findings, pass history); **"Still open" section = the live open-work list**
 - [ROADMAP.md](ROADMAP.md) — authoritative roadmap / backlog
 
 ### docs/ideas/ — brainstorm

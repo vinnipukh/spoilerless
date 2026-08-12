@@ -850,7 +850,7 @@ Browser ──https──> Vercel static SPA (frontend/, app.spoilerless.net)
 - **Close retrieval-hop gaps:** every retrieval query should visibility-gate the matched Claim and every subject/object/source/evidence hop before returning rows or aggregate counts.
 - **Expand CSRF coverage:** login and logout validate `Origin`/`Referer`, but other cookie-authenticated state-changing routes do not attach that dependency; CORS and SameSite are the remaining controls on those paths.
 - **Unify read boundaries:** candidate reads now require a persisted-episode boundary, while user-content/revision reads accept any positive integer and graph/export clamp authenticated users to progress. A single server-authoritative resolver would remove these route-family differences.
-- **Decouple pathfinding from hop count:** `/graph/path` currently uses `MAX_PATH_HOPS` as its requested episode order because `PathRequest` has no boundary field. Resolve the view independently from `max_hops` before treating it as equivalent to graph/export.
+- ~~Decouple pathfinding from hop count~~ — **done (PROB-09/#59).** `/graph/path` previously passed `MAX_PATH_HOPS` as its requested episode order; the handler now resolves the boundary from persisted progress alone (`requested_order=None`), failing closed to order 1 with no record.
 - **Scope shared settings:** `GET`/`PUT /api/settings/llm` are admin-gated, closing the unauthenticated exposure, but the underlying `AppSetting` record is still a single shared global configuration rather than per-user, and the existing http(s)-scheme check on `base_url` does not prevent an admin from redirecting the shared provider to an external host.
 
 ---

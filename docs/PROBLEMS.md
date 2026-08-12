@@ -997,23 +997,35 @@ all verified against live source 2026-08-12)
   #57 fcose/filters/zoom culling (plan 09-14); #58-#77 ELEVENTH PASS;
   #80/#81 partial (ELEVENTH).
 
-### Still open (documented, no runtime bug)
+### Still open (verified 2026-08-12, post-FOURTEENTH-pass)
+
+**Runtime/security gaps (ARCHITECTURE.md §"Normative follow-ups"):**
+- Retrieval-hop visibility gating — some retrieval-tool queries do not
+  visibility-gate every matched Claim/hop before returning rows/counts.
+- CSRF coverage — login/logout validate Origin/Referer; other
+  cookie-authenticated state-changing routes rely on CORS + SameSite.
+- Read-boundary unification — candidate reads require a persisted-episode
+  boundary; user-content/revision reads accept any positive integer;
+  graph/export clamp to progress. One server-authoritative resolver would
+  remove the family differences.
+- Shared LLM settings scoping (#5 tail) — `AppSetting {key:'llm'}` is one
+  global record; admin-gated but not per-user; no host allowlist beyond the
+  http(s) scheme check; key stored plaintext at rest.
+
+**Structural (no runtime bug):**
+- #79: god-file decomposition (pipeline 983, DetailPanel 1001, GraphCanvas
+  909, App 710, user_content 856, change_set 850, tools 861).
+- #81 tail: useNotes provider (two mounts per series), settings typed
+  fields (services/settings.py dict-merge), DEXTER tier table
+  (display_tier → backend), `verify_origin` `"*"` bypass (deliberate,
+  documented — engages only with explicit `FRONTEND_ORIGINS=*` config).
 - #19: no migration framework — seed remains schema-as-code (additive
-  constraints are superset-checked).
-- #36: least-privilege DB user — operator task (deployment uses the
-  provider-issued credentials).
-- #79: god-file decomposition (pipeline 969, DetailPanel 1001, App 708,
-  user_content 856, change_set 850, tools 861) — structural only.
-- #81 tail: FE export-fallback dedup, CitationChip contract abuse, useNotes
-  provider, nodeTypes registries, operationTargetRefs, DEXTER tier table,
-  settings typed fields, share request/response models, `verify_origin`
-  `"*"` bypass (deliberate, documented).
-- #29: still 33 commits ahead of origin/main; remote reachable —
-  push + CI green (CI workflow exists; suite green locally) remains an
-  operator action.
-- #22/#23 doc drift partially re-opened by this pass's changes — the
-  canonical docs (TWELFTH) predate #70's registry; ARCHITECTURE/API.md
-  route-layer descriptions still name per-router helpers.
+  constraints superset-checked; startup schema check exists, PROB-20/#44).
+
+**Operator actions:**
+- #29: ~40 commits ahead of origin/main; remote reachable — push + CI
+  green remains operator-touch (no push yet, per owner).
+- #36: least-privilege DB user — needs provider-issued credentials.
 
 ---
 
@@ -1080,3 +1092,24 @@ shared-AuraDB runs; `:AppSetting`/`:Session`/real user rows untouched.
   suite).
 - BE: `test_share_api.py` 5/5; full local-docker suite **591 passed /
   1 skipped / 0 failed** (~2m) — the documented green baseline, unchanged.
+
+---
+
+## FIFTEENTH PASS — docs restructure + open-list refresh (2026-08-12)
+
+No code changes. The `docs/` tree was reorganized into lifecycle groups
+(commit `5cb6451`): `architecture/` (project-spec, spoiler-x3),
+`reference/` (frontend-api-contract, backend-modules, frontend-components),
+`ops/` (runbook — `BACKEND_DEPLOY_FIX.md` folded in and deleted), `ideas/`
+(feature-ideas, feature-research); canonical GSD docs kept their exact
+paths; new `docs/README.md` index defines stability classes (generated /
+test-locked vs decision-record vs snapshot vs living-process).
+
+Ledger impact: the open-items list above now also tracks the four
+ARCHITECTURE.md §"Normative follow-ups" gaps (retrieval-hop gating, CSRF
+coverage, read-boundary unification, shared-LLM-settings scoping) and
+removes the items closed by FOURTEENTH PASS + this session's docs work.
+Also fixed this pass: ARCHITECTURE.md §7.12-area path-route prose still
+described the pre-#59 `MAX_PATH_HOPS` coupling (4th stale spot); rewritten
+to the post-#59 resolver behavior. `docs/README.md` is the navigation hub;
+open work lives in PROBLEMS.md "Still open" above.
