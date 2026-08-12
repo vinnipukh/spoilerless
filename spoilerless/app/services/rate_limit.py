@@ -19,11 +19,15 @@ route modules, so API tests can also neutralize them via
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import Request, Response
 from pyrate_limiter import Duration, Limiter, Rate, RedisBucket, SingleBucketFactory
 
 from spoilerless.app.cache.redis_client import get_redis
 from spoilerless.app.core.errors import http_error
+
+logger = logging.getLogger(__name__)
 
 # How many requests per window each route group allows.
 LOGIN_LIMIT = 10
@@ -85,7 +89,18 @@ class RateLimiter:
             return  # Redis not configured — rate limiting disabled.
         rate_key = await rate_limit_identifier(request)
         key = f"{rate_key}:{self.bucket_key}"
-        success = await limiter.try_acquire_async(key, blocking=False)
+        try:
+            success = await limiter.try_acquire_async(key, blocking=False)
+        except Exception:
+            # A Redis outage must degrade rate limiting to a no-op, never
+            # 500 the login/chat/content-write routes (PROB-23, SEVENTEENTH
+            # PASS). Mirrors the graph cache's degrade-to-Neo4j behavior
+            # (cache/graph_cache.py).
+            logger.warning(
+                "rate_limit: Redis unavailable — rate limiting disabled for this request",
+                exc_info=True,
+            )
+            return
         if not success:
             await rate_limit_callback(request, response, pexpire=0)
 
@@ -106,16 +121,28 @@ async def init_rate_limiter() -> None:
     ``RedisBucket`` (one ZSET per window) so the login, chat-send and
     content-write counters stay independent; the leak is scheduled by
     pyrate-limiter's daemon Leaker so ZSETs never grow unboundedly.
+
+    A Redis connectivity failure here is degraded, not fatal: the limiter
+    stays unbound (a no-op) and the app still serves — matching the
+    documented "empty redis_url disables rate limiting" contract. Without
+    this guard, an Upstash hiccup at startup would raise inside lifespan
+    and Render would treat the whole deploy as failed.
     """
-    redis_client = get_redis()
-    for instance in (
-        login_rate_limiter,
-        chat_send_rate_limiter,
-        content_write_rate_limiter,
-    ):
-        bucket = await RedisBucket.init(
-            rates=[Rate(instance.times, Duration.SECOND * instance.seconds)],
-            redis=redis_client,
-            bucket_key=instance.bucket_key,
+    try:
+        redis_client = get_redis()
+        for instance in (
+            login_rate_limiter,
+            chat_send_rate_limiter,
+            content_write_rate_limiter,
+        ):
+            bucket = await RedisBucket.init(
+                rates=[Rate(instance.times, Duration.SECOND * instance.seconds)],
+                redis=redis_client,
+                bucket_key=instance.bucket_key,
+            )
+            instance._limiter = Limiter(SingleBucketFactory(bucket))
+    except Exception:
+        logger.warning(
+            "init_rate_limiter: Redis unavailable at startup — rate limiting disabled",
+            exc_info=True,
         )
-        instance._limiter = Limiter(SingleBucketFactory(bucket))

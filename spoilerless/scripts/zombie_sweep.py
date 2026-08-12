@@ -59,7 +59,7 @@ def _driver():
     config: dict = {"auth": (user, password)}
     if encrypted:
         config["encrypted"] = True
-        config["trust"] = TrustCustomCAs(certifi.where())
+        config["trusted_certificates"] = TrustCustomCAs(certifi.where())
     driver = GraphDatabase.driver(normalized, **config)
     return driver, database
 

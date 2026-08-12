@@ -48,6 +48,13 @@ def load_seed_data() -> dict[str, Any]:
                 "origin": "canonical",
             }
         )
+        # PROB-20/#44: a null reveal-point in episodes.json must be stored as
+        # the episode's own visible_from_order, never dropped — the driver
+        # omits None properties, and a missing key is exactly the 01N52
+        # "property key does not exist" class filter.py tripped on live.
+        for reveal_key in ("synopsis_visible_from_order", "image_visible_from_order"):
+            if episode.get(reveal_key) is None:
+                episode[reveal_key] = episode["visible_from_order"]
     return {
         "series": series,
         "episodes": episodes,

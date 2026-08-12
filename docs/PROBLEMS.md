@@ -1147,3 +1147,28 @@ Origin headers; CSRF tests pin a concrete origin.
   at-rest key encryption).
 - Structural: #79 god-files, #81 tail, #19 migrations. Operator: #29 push,
   #36 least-privilege DB user.
+
+## SEVENTEENTH PASS — live-stack verification: Redis-outage 500s + 01N52 seed drift + sweep driver key (2026-08-12)
+
+### PROB-23 — Redis outage 500s login/chat/content-write — FIXED
+`RateLimiter.__call__` → `try_acquire_async` raised unhandled on any Upstash
+failure → `/api/auth/google` plain 500 (even empty body; should 422/401).
+Graph cache degrades to Neo4j on Redis errors; the limiter did not. Symptom
+matched free-tier daily quota/connectivity resets ("breaks every ~24h").
+Fix: fail-open no-op on Redis error in `__call__`; `init_rate_limiter` no
+longer crashes lifespan on unreachable Redis. Tests in test_rate_limit.py
+(outage→noop, denied→429, allowed→pass, init-degrade). Live: 401 envelope,
+bounded burst → 429.
+
+### PROB-20 tail — 01N52 persisted after reseed — FIXED (seed)
+Reseed alone couldn't fix #44: episodes.json carries null reveal-points
+(synopsis/image_visible_from_order); the Neo4j driver drops None properties,
+so the keys never existed on S01E02/E03 → 01N52 storm class live. Fix:
+`load_seed_data()` materializes null reveal-point as the episode's own
+visible_from_order. Post-check: keys present 1/2/3, zero 01N52.
+
+### PROB-22 tail — sweep couldn't connect (neo4j 6.2) — FIXED
+zombie_sweep.py used legacy `trust=` driver key; 6.2.0 removed it →
+`ConfigurationError`. Switched to `trusted_certificates=` (matches
+database.py). Sweep ran: 65 zombies + 8 stale sessions removed, 0 remaining;
+protected admin user survives.
