@@ -153,7 +153,7 @@ Database Layer    ← Neo4j driver, connection management
 Spoiler Filter    ← parameterized Cypher with built-in visibility gating
 ```
 
-**Intended dependency flow:** API → service → repository → database, while domain models (`spoilerless/app/domain/`) are imported across layers. The current code has explicit route-level deviations: `candidates.py` and `revisions.py` contain direct transaction/data-access logic, `user_content.py` constructs and calls `UserContentRepository` in handlers, `share.py` interacts directly with `ShareRepository`, and chat session handlers reach `ChatRepository` through `ChatService` while `chat.py` imports repository exceptions directly.
+**Intended dependency flow:** API → service → repository → database, while domain models (`spoilerless/app/domain/`) are imported across layers. The current code has a few route-level deviations: `user_content.py` constructs and calls `UserContentRepository` in handlers, and `share.py` interacts directly with `ShareRepository` (no service layer). The former `candidates.py`/`revisions.py` route closures were moved into repository methods (`CandidateRepository.approve_claim`/`reject_claim`/`edit_claim`, `revisions.revert_revision_work`) in the PROB-09 #60 refactor — those routes now build a command and delegate.
 
 ---
 
@@ -294,7 +294,7 @@ Eleven route modules registering **51 HTTP operations** (including `GET /health`
 
 #### Architecture Pattern
 
-Route modules consistently use FastAPI `APIRouter`s and Pydantic request/response models, but dependency and data-access patterns vary: most inject services or repositories, `user_content.py` constructs its repository inside handlers, `share.py` interacts directly with `ShareRepository`, and `candidates.py`/`revisions.py` include direct transaction or data-access logic.
+Route modules consistently use FastAPI `APIRouter`s and Pydantic request/response models, but dependency and data-access patterns vary: most inject services or repositories, `user_content.py` constructs its repository inside handlers, and `share.py` interacts directly with `ShareRepository`. Candidate-review and revert transaction logic lives in the repository layer (`CandidateRepository.approve_claim`/`reject_claim`/`edit_claim`, `revisions.revert_revision_work`).
 
 #### Rate Limiting and Admin Gating
 
@@ -725,7 +725,7 @@ Provider protocols are `gemini` and OpenAI-compatible. The `vllm` and `ollama` s
 
 Candidate claims, their sources, and their evidence fragments derive deterministic IDs from a SHA-256 hash of their own content (subject:predicate:object:evidence_text:evidence_locator:episode_id for the claim; source locator for the source; evidence_text:evidence_locator:episode_id for the evidence). This makes re-ingesting the same extraction batch a no-op `MERGE` rather than creating duplicates.
 
-**Layering deviation:** `candidates.py` calls `CandidateRepository` directly — there is no `CandidateService` — and approve/reject/edit handlers inline managed-transaction logic, calling `RevisionRepository.log_revision` in the mutation transaction. Other API-layer bypasses include `user_content.py`, `share.py`, and `revisions.py`.
+**Layering deviation:** `candidates.py` calls `CandidateRepository` directly — there is no `CandidateService`. The approve/reject/edit transaction logic lives in `CandidateRepository.approve_claim`/`reject_claim`/`edit_claim`, which call `RevisionRepository.log_revision` in the same mutation transaction (PROB-09 #60). Other API-layer bypasses include `user_content.py`, `share.py`, and `revisions.py` (revert runs `revisions.revert_revision_work` via `database.execute_write` — a repository-module work function, not a route closure).
 
 ```
 POST .../candidates/ingest       → authenticated (not admin-only); origin/status candidate; idempotent MERGE

@@ -1014,3 +1014,69 @@ all verified against live source 2026-08-12)
 - #22/#23 doc drift partially re-opened by this pass's changes — the
   canonical docs (TWELFTH) predate #70's registry; ARCHITECTURE/API.md
   route-layer descriptions still name per-router helpers.
+
+---
+
+## FOURTEENTH PASS — #81 tail + #22/#23 re-open closure (2026-08-12)
+
+Verification-first sweep of every item THIRTEENTH PASS left open, followed by
+fixes for the safe subset. Local docker Neo4j (`hdgraf-neo4j`) throughout; no
+shared-AuraDB runs; `:AppSetting`/`:Session`/real user rows untouched.
+
+### Fixed and committed this pass
+- **#81 `operationTargetRefs` — FIXED (ff65c50).** The operation→target-ids
+  switch existed twice: `App.tsx::focusTargetsForAppliedChangeSet` and
+  `ChangeSetCard.tsx::affectedRefsFor` (different names, same family). One
+  `operationTargetRefs(op)` + `OperationRef` in `types/changeSet.ts`; both
+  consumers derive from it. App's post-apply focus keeps its exact semantics
+  (create_relationship contributes nothing — one-line exclusion comment).
+- **#81 CitationChip contract abuse — FIXED (ff65c50).** ChangeSetCard built
+  fake `Citation` objects (`episode_code: ref.id`) to reuse CitationChip.
+  CitationChip now takes a discriminated union: `{label}` (lean chip) or
+  `{citation, handlers}`. Same rendered text (`Kind · id`).
+- **#81 nodeTypes registries — FIXED (ff65c50).** Four lists
+  (NODE_TYPES / ALLOWED_NODE_TYPES / GraphCanvas filter list / CustomNodeType)
+  collapsed: `CUSTOM_NODE_TYPE_NAMES` + `CustomNodeType` + derived
+  `ALLOWED_NODE_TYPES` live in `lib/nodeTypes.ts`; `types/userContent.ts`
+  re-exports the type (existing importers unchanged); GraphCanvas's dialog
+  options and filter list derive from `NODE_TYPES`. Filter-state semantics
+  unchanged (UserNote enters the initial map default-true — same visibility,
+  one more toggle chip, consistent with GraphFilterPanel's existing NODE_TYPES
+  rendering).
+- **#81 share request/response models — FIXED (76aa215).** `ShareCreateRequest`
+  /`ShareCreateResponse`/`ShareItemResponse` moved from `api/share.py` into
+  `domain/share.py`; the router imports them. Dead `ShareTokenCreate` (defined
+  but referenced nowhere — single unused test import) deleted. Revoke lookup
+  left as-is (raw-token→hash is 2-mode at HEAD; the finding's "token id" third
+  mode does not exist in the repo).
+- **#22/#23 re-open — FIXED (docs).** ARCHITECTURE.md three route-layer claims
+  still described `candidates.py`/`revisions.py` as "inline managed-transaction
+  logic" / "direct transaction or data-access logic" — stale since #60/#70
+  (3e80021/50484f2/b0a6278). Rewritten to the verified post-refactor shape
+  (`CandidateRepository.approve_claim`/`reject_claim`/`edit_claim`,
+  `revisions.revert_revision_work` via `database.execute_write`); API.md
+  checked — no stale route-layer text. `run_doc_verification.py`: 276/276
+  claims pass.
+
+### Verified still-open (evaluated, no fix this pass)
+- **#81 FE export-fallback dedup — ALREADY DONE** (sibling commit, unrecorded):
+  both GraphCanvas and DetailPanel import `renderGraphMarkdown`/`exportFilename`
+  from `@/lib/exportMarkdown`; no inline fallback remains.
+- **#81 settings typed fields** (services/settings.py dict-merge) — working
+  code with test coverage; refactor risk > value this pass.
+- **#81 useNotes provider** (two mounts per series) — state-management change;
+  deferred.
+- **#81 DEXTER tier table** — display_tier→backend is a cross-stack change;
+  deferred (user tunes visuals live).
+- **#79 god-files** — structural only, no runtime bug; deferred.
+- **#19 migrations, #36 least-privilege user, #29 push** — unchanged
+  (operator/documented).
+- **`verify_origin` `"*"` bypass** — deliberate, documented, requires explicit
+  config to engage.
+
+### Verification
+- FE: `tsc -b` clean; eslint clean on all touched files; full vitest
+  **333/333** (incl. App "Highlighting 1" post-apply focus + CitationChip
+  suite).
+- BE: `test_share_api.py` 5/5; full local-docker suite **591 passed /
+  1 skipped / 0 failed** (~2m) — the documented green baseline, unchanged.
