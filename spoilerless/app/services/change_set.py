@@ -153,7 +153,12 @@ class ChangeSetService:
         self._progress = progress_service or ProgressService(database)
 
     async def propose(
-        self, user_id: str, series_id: str, request: ChangeSetCreateRequest
+        self,
+        user_id: str,
+        series_id: str,
+        request: ChangeSetCreateRequest,
+        *,
+        visible_until_order: int | None = None,
     ) -> ChangeSetResponse:
         """Validate every operation in list order, then persist the draft.
 
@@ -162,8 +167,18 @@ class ChangeSetService:
         any operation's target fails validation, and
         ``ChangeSetSessionNotFound`` for a foreign/missing chat session.
         Nothing is ever persisted unless every operation validates.
+
+        ``visible_until_order`` short-circuits the progress re-resolve when
+        the caller already holds the turn boundary (PROBLEMS #78): the
+        retrieval pipeline resolves progress once per turn and threads it
+        down, so a ``propose_changeset`` tool call no longer pays a second
+        DB read and cannot drift from the context the model saw. Callers
+        without a fresh boundary (the API route) omit it and re-resolve.
         """
-        boundary = await self._progress.resolve(user_id, series_id)
+        if visible_until_order is None:
+            boundary = await self._progress.resolve(user_id, series_id)
+        else:
+            boundary = visible_until_order
 
         resolved_operations: list[ChangeSetOperation] = []
         for operation in request.operations:

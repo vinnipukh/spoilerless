@@ -379,10 +379,14 @@ async def _propose_changeset_executor(
     effective view — never accepted from the model. Validation/session
     errors surface as a model-visible error string so the turn can
     continue, exactly like the read-only tools. ``visible_until_order``
-    rides in ``**args`` and is popped — the proposal never stamps a
-    model-supplied boundary (the service re-resolves it).
+    rides in ``**args`` injected by the dispatcher (the turn boundary
+    resolved in ``answer()``) and is threaded into the service — the
+    proposal never stamps a model-supplied boundary.
     """
-    args.pop("visible_until_order", None)
+    # The dispatcher injects the turn boundary (server-resolved) — pop it
+    # and reuse it: never stamps a model-supplied boundary, and the value
+    # comes from answer()'s resolve (PROB-10/#78).
+    boundary = args.pop("visible_until_order", None)
     try:
         parsed = ProposeChangesetInput.model_validate(args)
     except ValidationError:
@@ -397,9 +401,19 @@ async def _propose_changeset_executor(
                 summary=parsed.summary,
                 operations=parsed.operations,
             ),
+            # PROB-10/#78: the turn boundary was resolved once in answer()
+            # and threaded through the dispatcher (visible_until_order is
+            # popped above, never trusted from the model) — reuse it so the
+            # draft snapshot cannot drift from the context the model saw,
+            # and the propose call pays no second progress DB read.
+            visible_until_order=boundary,
         )
     except Exception as exc:  # noqa: BLE001 — tool errors stay turn-continuable
-        return {"error": f"propose_changeset failed: {exc}"}
+        # Never leak internal details (paths, hostnames, parameter values)
+        # into a model-visible tool result — the exception TYPE alone keeps
+        # the turn continuable without disclosing the failure internals
+        # (PROBLEMS #78).
+        return {"error": f"propose_changeset failed: {type(exc).__name__}"}
     return {"proposed_change_set": proposed.model_dump(mode="json")}
 
 
