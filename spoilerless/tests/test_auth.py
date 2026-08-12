@@ -1108,3 +1108,59 @@ def test_auth_module_imports() -> None:
     # (PROBLEMS #47): it is exercised behaviorally in test_google_verifier.py.
     from spoilerless.app.services.auth import AuthService  # noqa: F811
     assert router.prefix == "/api/auth"
+
+
+# ===================================================================
+# CSRF coverage inventory — every cookie-authenticated state-changing
+# route must carry the origin guard (retrieval-gap pass, 2026-08-12)
+# ===================================================================
+
+
+def test_every_cookie_authenticated_state_changing_route_has_csrf_guard() -> None:
+    """Static scan (mirrors the D-20 query scan style): any POST/PUT/PATCH/
+    DELETE route whose handler declares a session-cookie auth dependency
+    (CurrentUserDependency / RequireAdminDependency) must also declare the
+    CsrfGuardDependency — a future route added without the guard fails here.
+
+    Read-only POSTs (OptionalUserDependency, e.g. graph /path) are exempt:
+    no state change, so CSRF does not apply.
+    """
+    import inspect
+
+    from spoilerless.app.api import (  # noqa: PLC0415
+        auth,
+        candidates,
+        change_set,
+        chat,
+        graph,
+        progress,
+        revisions,
+        series,
+        settings,
+        share,
+        user_content,
+    )
+
+    state_changing = {"POST", "PUT", "PATCH", "DELETE"}
+    cookie_auth_marks = ("CurrentUserDependency", "RequireAdminDependency")
+    checked = 0
+    violations: list[str] = []
+    for module in (
+        auth, candidates, change_set, chat, graph, progress,
+        revisions, series, settings, share, user_content,
+    ):
+        for route in module.router.routes:
+            methods = {m for m in getattr(route, "methods", set()) or set()}
+            if not methods & state_changing:
+                continue
+            signature = str(inspect.signature(route.endpoint))
+            if not any(mark in signature for mark in cookie_auth_marks):
+                continue
+            checked += 1
+            if "CsrfGuardDependency" not in signature:
+                violations.append(f"{route.path} ({methods & state_changing})")
+    assert violations == [], (
+        "cookie-authenticated state-changing routes missing the CSRF guard: "
+        + ", ".join(violations)
+    )
+    assert checked >= 20

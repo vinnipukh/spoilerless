@@ -11,7 +11,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from spoilerless.app.api.deps import DatabaseDependency, RequireAdminDependency
+from spoilerless.app.api.deps import (
+    CsrfGuardDependency,
+    DatabaseDependency,
+    RequireAdminDependency,
+)
 from spoilerless.app.core.errors import error_responses
 from spoilerless.app.domain.settings import LLMSettingsResponse, LLMSettingsUpdate
 from spoilerless.app.services.settings import SettingsService
@@ -49,5 +53,6 @@ async def update_llm_settings(
     update: LLMSettingsUpdate,
     _admin: RequireAdminDependency,
     service: SettingsServiceDependency,
+    _csrf: CsrfGuardDependency,
 ) -> LLMSettingsResponse:
     return await service.update_llm(update)

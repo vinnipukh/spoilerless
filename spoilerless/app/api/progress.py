@@ -12,7 +12,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from spoilerless.app.api.deps import CurrentUserDependency, DatabaseDependency
+from spoilerless.app.api.deps import (
+    CsrfGuardDependency,
+    CurrentUserDependency,
+    DatabaseDependency,
+)
 from spoilerless.app.core.errors import error_responses, http_error
 from spoilerless.app.domain.progress import (
     ProgressUpdateRequest,
@@ -81,6 +85,7 @@ async def update_progress(
     payload: ProgressUpdateRequest,
     user: CurrentUserDependency,
     service: ProgressServiceDependency,
+    _csrf: CsrfGuardDependency,
 ) -> UserSeriesProgressResponse:
     """Upsert the progress record (idempotent for equal values) and return it.
 

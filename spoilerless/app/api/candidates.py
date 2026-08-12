@@ -6,7 +6,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Query
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from spoilerless.app.api.deps import CurrentUserDependency, RequireAdminDependency
+from spoilerless.app.api.deps import (
+    CsrfGuardDependency,
+    CurrentUserDependency,
+    RequireAdminDependency,
+)
 from spoilerless.app.cache.graph_cache import invalidate_series
 from spoilerless.app.core.errors import error_responses, http_error
 from spoilerless.app.domain.extraction import ExtractionBatchEnvelope
@@ -119,6 +123,7 @@ async def ingest_candidates(
     envelope: ExtractionBatchEnvelope,
     repo: CandidateRepoDependency,
     user: CurrentUserDependency,
+    _csrf: CsrfGuardDependency,
 ) -> dict:
     """Ingest a batch of candidate claims from a future extractor.
 
@@ -220,6 +225,7 @@ async def approve_candidate(
     claim_id: ClaimId,
     repo: CandidateRepoDependency,
     _admin: RequireAdminDependency,
+    _csrf: CsrfGuardDependency,
 ) -> dict:
     """Approve a candidate claim, promoting it from 'candidate' to 'canonical'
     status. Admin-only since 08-03 (AUTH-03, T-08-03-01) — a non-admin gets 403.
@@ -257,6 +263,7 @@ async def reject_candidate(
     claim_id: ClaimId,
     repo: CandidateRepoDependency,
     _admin: RequireAdminDependency,
+    _csrf: CsrfGuardDependency,
 ) -> dict:
     """Reject a candidate claim, setting its status to 'rejected'.
     Admin-only since 08-03 (AUTH-03, T-08-03-01) — a non-admin gets 403.
@@ -289,6 +296,7 @@ async def edit_candidate(
     body: EditCandidateRequest,
     repo: CandidateRepoDependency,
     _admin: RequireAdminDependency,
+    _csrf: CsrfGuardDependency,
 ) -> dict:
     """Edit a candidate claim's mutable fields. Creates a revision with
     before/after snapshots. Admin-only since 08-03 (AUTH-03, T-08-03-01).

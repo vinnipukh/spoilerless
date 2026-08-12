@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from spoilerless.app.api.deps import CurrentUserDependency
+from spoilerless.app.api.deps import CsrfGuardDependency, CurrentUserDependency
 from spoilerless.app.core.errors import error_responses, http_error
 from spoilerless.app.domain.revision import RevisionResponse
 from spoilerless.app.graph.database import Neo4jDatabase, get_database
@@ -114,6 +114,7 @@ async def revert_revision(
     visible_until_order: Boundary,
     database: DatabaseDependency,
     user: CurrentUserDependency,
+    _csrf: CsrfGuardDependency,
 ) -> RevisionResponse:
     now = datetime.now(timezone.utc)
     actor_id = user["id"]

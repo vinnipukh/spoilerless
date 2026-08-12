@@ -16,7 +16,11 @@ from typing import Annotated, Any, AsyncIterator
 from fastapi import APIRouter, Depends, Response
 from fastapi.responses import StreamingResponse
 
-from spoilerless.app.api.deps import CurrentUserDependency, DatabaseDependency
+from spoilerless.app.api.deps import (
+    CsrfGuardDependency,
+    CurrentUserDependency,
+    DatabaseDependency,
+)
 from spoilerless.app.core.errors import error_responses
 from spoilerless.app.domain.chat import (
     ChatMessageCreateRequest,
@@ -60,6 +64,7 @@ async def create_session(
     payload: ChatSessionCreateRequest,
     user: CurrentUserDependency,
     service: ChatServiceDependency,
+    _csrf: CsrfGuardDependency,
 ) -> ChatSessionResponse:
     return await service.create_session(user["id"], series_id, payload.title)
 
@@ -114,6 +119,7 @@ async def delete_session(
     session_id: str,
     user: CurrentUserDependency,
     service: ChatServiceDependency,
+    _csrf: CsrfGuardDependency,
 ) -> Response:
     """Hard-delete the session and its messages.
 
@@ -146,6 +152,7 @@ async def post_message(
     service: ChatServiceDependency,
     provider: LLMProviderDependency,
     _rate_limit: Annotated[None, Depends(chat_send_rate_limiter)],
+    _csrf: CsrfGuardDependency,
 ) -> MessageResponseEnvelope:
     # PROB-10/#70: ChatSessionNotFound/ProgressNotFoundError (404) and
     # ConcurrentGenerationLimitExceeded (429) translate via the registry.
@@ -176,6 +183,7 @@ async def stream_message(
     service: ChatServiceDependency,
     provider: LLMProviderDependency,
     _rate_limit: Annotated[None, Depends(chat_send_rate_limiter)],
+    _csrf: CsrfGuardDependency,
 ) -> StreamingResponse:
     """Stream text deltas, then a final ``event: done`` with the envelope."""
     # Resolve session ownership and progress existence up-front so a

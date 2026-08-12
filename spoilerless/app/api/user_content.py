@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, Response
 
-from spoilerless.app.api.deps import CurrentUserDependency
+from spoilerless.app.api.deps import CsrfGuardDependency, CurrentUserDependency
 from spoilerless.app.core.errors import error_responses
 from spoilerless.app.cache.graph_cache import invalidate_series
 from spoilerless.app.domain.user_content import (
@@ -42,6 +42,7 @@ async def create_note(
     series_id: str, payload: NoteCreate, database: DatabaseDependency,
     user: CurrentUserDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
+    _csrf: CsrfGuardDependency,
 ) -> NoteResponse:
     row = await _repository(database).create_note(series_id, user["id"], payload)
     return NoteResponse.model_validate(row)
@@ -83,6 +84,7 @@ async def update_note(
     series_id: str, note_id: str, payload: NoteUpdate, database: DatabaseDependency,
     user: CurrentUserDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
+    _csrf: CsrfGuardDependency,
 ) -> NoteResponse:
     actor_id, is_admin = _actor(user)
     row = await _repository(database).update_note(
@@ -99,6 +101,7 @@ async def delete_note(
     series_id: str, note_id: str, database: DatabaseDependency,
     user: CurrentUserDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
+    _csrf: CsrfGuardDependency,
 ) -> Response:
     actor_id, is_admin = _actor(user)
     await _repository(database).delete_note(
@@ -113,6 +116,7 @@ async def create_custom_node(
     series_id: str, payload: CustomNodeCreate, database: DatabaseDependency,
     user: CurrentUserDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
+    _csrf: CsrfGuardDependency,
 ) -> CustomNodeResponse:
     row = await _repository(database).create_custom_node(series_id, user["id"], payload)
     await invalidate_series(series_id)
@@ -131,6 +135,7 @@ async def update_custom_node(
     series_id: str, node_id: str, payload: CustomNodeUpdate, database: DatabaseDependency,
     user: CurrentUserDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
+    _csrf: CsrfGuardDependency,
 ) -> CustomNodeResponse:
     actor_id, is_admin = _actor(user)
     row = await _repository(database).update_custom_node(
@@ -146,6 +151,7 @@ async def delete_custom_node(
     series_id: str, node_id: str, database: DatabaseDependency,
     user: CurrentUserDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
+    _csrf: CsrfGuardDependency,
 ) -> Response:
     actor_id, is_admin = _actor(user)
     await _repository(database).delete_custom_node(
@@ -161,6 +167,7 @@ async def create_custom_relationship(
     series_id: str, payload: CustomRelationshipCreate, database: DatabaseDependency,
     user: CurrentUserDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
+    _csrf: CsrfGuardDependency,
 ) -> CustomRelationshipResponse:
     row = await _repository(database).create_custom_relationship(series_id, user["id"], payload)
     await invalidate_series(series_id)
@@ -179,6 +186,7 @@ async def update_custom_relationship(
     series_id: str, relationship_id: str, payload: CustomRelationshipUpdate, database: DatabaseDependency,
     user: CurrentUserDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
+    _csrf: CsrfGuardDependency,
 ) -> CustomRelationshipResponse:
     actor_id, is_admin = _actor(user)
     row = await _repository(database).update_custom_relationship(
@@ -194,6 +202,7 @@ async def delete_custom_relationship(
     series_id: str, relationship_id: str, database: DatabaseDependency,
     user: CurrentUserDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
+    _csrf: CsrfGuardDependency,
 ) -> Response:
     actor_id, is_admin = _actor(user)
     await _repository(database).delete_custom_relationship(

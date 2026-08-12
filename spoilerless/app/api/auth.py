@@ -8,11 +8,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, Response
 
 from spoilerless.app.api.deps import (
+    AUTH_ORIGIN_NOT_ALLOWED,  # noqa: F401 — re-exported for backward compatibility
     AuthServiceDependency,
+    CsrfGuardDependency,
     CurrentUserDependency,
     get_auth_service,  # noqa: F401 — re-exported for backward compatibility
     get_session_repo,  # noqa: F401 — re-exported for backward compatibility
     require_current_user,
+    verify_origin,  # noqa: F401 — re-exported for backward compatibility
 )
 from spoilerless.app.core.config import get_settings
 from spoilerless.app.core.errors import error_responses, http_error
@@ -39,19 +42,8 @@ AUTH_INVALID_GOOGLE_CREDENTIAL = "AUTH_INVALID_GOOGLE_CREDENTIAL"
 AUTH_UNAUTHENTICATED = "AUTH_UNAUTHENTICATED"
 AUTH_SESSION_EXPIRED = "AUTH_SESSION_EXPIRED"
 AUTH_SESSION_INVALID = "AUTH_SESSION_INVALID"
-AUTH_ORIGIN_NOT_ALLOWED = "AUTH_ORIGIN_NOT_ALLOWED"
 AUTH_EMAIL_NOT_ALLOWED = "AUTH_EMAIL_NOT_ALLOWED"
 AUTH_DISABLED = "AUTH_DISABLED"
-
-
-def _allowed_origins() -> list[str]:
-    """Parse and return the configured frontend origins, stripping empties."""
-    settings = get_settings()
-    return [
-        o.strip()
-        for o in settings.frontend_origins.split(",")
-        if o.strip()
-    ]
 
 
 def _allowed_emails() -> frozenset[str]:
@@ -71,63 +63,6 @@ def _admin_emails() -> frozenset[str]:
         e.strip().lower()
         for e in settings.admin_emails.split(",")
         if e.strip()
-    )
-
-
-async def verify_origin(request: Request) -> None:
-    """Verify ``Origin`` (preferred) or ``Referer`` matches a configured
-    frontend origin to protect state-changing requests against CSRF.
-
-    The check is deliberately performed as a FastAPI dependency on each
-    state-changing auth route so it composes naturally with the existing
-    dependency graph.  Reads ``FRONTEND_ORIGINS`` from config, so the same
-    setting controls both CORS and CSRF validation.
-
-    ``SameSite=Lax`` on the session cookie prevents most cross-site form
-    POSTs but does **not** protect against subdomain-based attacks or
-    top-level navigations.  Origin/referer validation is the complementary
-    defence.
-    """
-    origins = _allowed_origins()
-
-    # Wildcard — no protection (not recommended, explicit setting required).
-    if "*" in origins:
-        return
-
-    origin = request.headers.get("origin")
-    referer = request.headers.get("referer")
-
-    candidate = None
-    if origin:
-        candidate = origin
-    elif referer:
-        # Take scheme + host from the Referer URL.
-        try:
-            from urllib.parse import urlparse
-            parsed = urlparse(referer)
-            candidate = f"{parsed.scheme}://{parsed.hostname}"
-            if parsed.port is not None:
-                candidate += f":{parsed.port}"
-        except Exception:
-            candidate = None
-
-    # Fail closed: a request with neither Origin nor Referer is rejected —
-    # header absence is no longer trusted (SEC-02, docs/PROBLEMS.md #10).
-    # Browsers send Origin on cross-origin and same-origin POSTs alike, so
-    # a missing header signals a non-browser client; SameSite remains the
-    # complementary cookie-level defense.
-    if candidate is None:
-        raise http_error(
-            403, AUTH_ORIGIN_NOT_ALLOWED,
-            "Request origin is not allowed.",
-        )
-
-    if candidate in origins:
-        return
-
-    raise http_error(
-        403, AUTH_ORIGIN_NOT_ALLOWED,
-        "Request origin is not allowed.",
     )
 
 
@@ -168,7 +103,7 @@ async def google_auth(
     payload: GoogleAuthRequest,
     response: Response,
     service: AuthServiceDependency,
-    _csrf: Annotated[None, Depends(verify_origin)],
+    _csrf: CsrfGuardDependency,
     _rate_limit: Annotated[None, Depends(login_rate_limiter)],
 ) -> UserResponse:
     """Authenticate via a Google ID token.
@@ -273,7 +208,7 @@ async def logout(
     request: Request,
     response: Response,
     service: AuthServiceDependency,
-    _csrf: Annotated[None, Depends(verify_origin)],
+    _csrf: CsrfGuardDependency,
 ) -> Response:
     """Invalidate the server-side session and delete the browser cookie."""
     settings = get_settings()

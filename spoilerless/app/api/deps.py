@@ -10,6 +10,7 @@ change_set) uses — it reads the session cookie and resolves the authenticated
 from __future__ import annotations
 
 from typing import Annotated, Any
+from urllib.parse import urlparse
 
 from fastapi import Depends, Request
 
@@ -126,4 +127,85 @@ def get_share_repo(request: Request, database: DatabaseDependency) -> ShareRepos
 
 
 ShareRepoDependency = Annotated[ShareRepository, Depends(get_share_repo)]
+
+
+# ---------------------------------------------------------------------------
+# CSRF origin guard — shared by every cookie-authenticated state-changing
+# route (moved here from api/auth.py so non-auth routers do not reach into
+# the auth module; auth.py re-exports it for backward compatibility).
+# ---------------------------------------------------------------------------
+AUTH_ORIGIN_NOT_ALLOWED = "AUTH_ORIGIN_NOT_ALLOWED"
+
+
+def _allowed_origins() -> list[str]:
+    """Parse and return the configured frontend origins, stripping empties."""
+    settings = get_settings()
+    return [
+        o.strip()
+        for o in settings.frontend_origins.split(",")
+        if o.strip()
+    ]
+
+
+async def verify_origin(request: Request) -> None:
+    """Verify ``Origin`` (preferred) or ``Referer`` matches a configured
+    frontend origin to protect state-changing requests against CSRF.
+
+    The check is deliberately performed as a FastAPI dependency on each
+    state-changing route (auth + every cookie-authenticated write) so it
+    composes naturally with the existing dependency graph.  Reads
+    ``FRONTEND_ORIGINS`` from config, so the same setting controls both
+    CORS and CSRF validation.
+
+    ``SameSite=Lax`` on the session cookie prevents most cross-site form
+    POSTs but does **not** protect against subdomain-based attacks or
+    top-level navigations.  Origin/referer validation is the complementary
+    defence.
+    """
+    origins = _allowed_origins()
+
+    # Wildcard — no protection (not recommended, explicit setting required).
+    if "*" in origins:
+        return
+
+    origin = request.headers.get("origin")
+    referer = request.headers.get("referer")
+
+    candidate = None
+    if origin:
+        candidate = origin
+    elif referer:
+        # Take scheme + host from the Referer URL.
+        try:
+            parsed = urlparse(referer)
+            candidate = f"{parsed.scheme}://{parsed.hostname}"
+            if parsed.port is not None:
+                candidate += f":{parsed.port}"
+        except Exception:
+            candidate = None
+
+    # Fail closed: a request with neither Origin nor Referer is rejected —
+    # header absence is no longer trusted (SEC-02, docs/PROBLEMS.md #10).
+    # Browsers send Origin on cross-origin and same-origin POSTs alike, so
+    # a missing header signals a non-browser client; SameSite remains the
+    # complementary cookie-level defense.
+    if candidate is None:
+        raise http_error(
+            403, AUTH_ORIGIN_NOT_ALLOWED,
+            "Request origin is not allowed.",
+        )
+
+    if candidate in origins:
+        return
+
+    raise http_error(
+        403, AUTH_ORIGIN_NOT_ALLOWED,
+        "Request origin is not allowed.",
+    )
+
+
+# The named dependency every state-changing cookie-authenticated route
+# declares as ``_csrf`` (an underscore-ignored parameter) — one line per
+# route, same semantics as the auth routes' original ``Depends(verify_origin)``.
+CsrfGuardDependency = Annotated[None, Depends(verify_origin)]
 

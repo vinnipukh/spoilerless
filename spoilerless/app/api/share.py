@@ -5,6 +5,7 @@ import logging
 from fastapi import APIRouter, Depends, Request
 
 from spoilerless.app.api.deps import (
+    CsrfGuardDependency,
     CurrentUserDependency,
     DatabaseDependency,
     ShareRepoDependency,
@@ -45,6 +46,7 @@ async def create_share_link(
     database: DatabaseDependency,
     share_repo: ShareRepoDependency,
     user: CurrentUserDependency,
+    _csrf: CsrfGuardDependency,
 ) -> ShareCreateResponse:
     service = GraphService(database)
     boundary_episode = await service.resolve_boundary(
@@ -149,6 +151,7 @@ async def revoke_share_link(
     token: str,
     share_repo: ShareRepoDependency,
     user: CurrentUserDependency,
+    _csrf: CsrfGuardDependency,
 ) -> dict[str, str]:
     # Support revoking by raw token, hash, or token id
     record = await share_repo.get_by_raw_token(token)

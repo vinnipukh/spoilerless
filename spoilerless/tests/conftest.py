@@ -24,6 +24,26 @@ from spoilerless.app.graph.database import Neo4jDatabase  # noqa: E402
 from spoilerless.app.graph.seed import setup_database  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _csrf_bypass_default(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> None:
+    """Default the CSRF ``verify_origin`` guard to the wildcard bypass so
+    API tests that don't care about origin validation pass without an
+    Origin header (the documented test pattern; see test_auth.py).
+
+    Runs before every test; CSRF-specific tests override
+    ``FRONTEND_ORIGINS`` themselves via monkeypatch/setenv, which restores
+    this value afterwards (monkeypatch semantics).  Skipped for
+    ``test_config`` — its production-safe-defaults assertion must see the
+    pristine unset-env default.
+    """
+    if "test_config" in request.node.module.__name__:
+        return
+    monkeypatch.setenv("FRONTEND_ORIGINS", "*")
+    from spoilerless.app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+
 class NoopGoogleVerifier:
     """AuthService requires a verifier (PROB-09/#77); tests that never
     exercise Google verification share this one no-op."""

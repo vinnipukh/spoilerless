@@ -26,6 +26,7 @@ from fastapi.testclient import TestClient
 
 from spoilerless.app.api import deps
 from spoilerless.app.api.progress import router as progress_router
+from spoilerless.app.core.config import get_settings
 from spoilerless.app.core.errors import install_database_error_handlers
 from spoilerless.app.api.exceptions import install_repository_error_handlers
 from spoilerless.app.graph.database import Neo4jDatabase
@@ -648,3 +649,64 @@ def test_migration_backfills_split_fields_and_is_idempotent() -> None:
         )
 
     run_async(_go)
+
+
+# ---------------------------------------------------------------------------
+# CSRF origin guard on non-auth state-changing routes (retrieval-gap pass)
+# ---------------------------------------------------------------------------
+
+
+def _restrict_csrf_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin FRONTEND_ORIGINS to a concrete origin (override the conftest
+    wildcard default) so verify_origin actually enforces."""
+    monkeypatch.setenv("FRONTEND_ORIGINS", "http://localhost:5173")
+    get_settings.cache_clear()
+
+
+def test_update_progress_rejects_unexpected_origin(
+    client: TestClient,
+    authed_user: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CSRF guard applies to non-auth state-changing routes too: a request
+    carrying a disallowed Origin is rejected before any mutation."""
+    _restrict_csrf_origin(monkeypatch)
+    response = client.post(
+        "/api/series/series_dexter/progress",
+        json={"visible_until_order": 2},
+        headers={"Origin": "http://evil.com"},
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "AUTH_ORIGIN_NOT_ALLOWED"
+
+
+def test_update_progress_rejects_missing_origin(
+    client: TestClient,
+    authed_user: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fail closed: a cookie-authenticated write without Origin/Referer is
+    rejected (header absence is not trusted)."""
+    _restrict_csrf_origin(monkeypatch)
+    response = client.post(
+        "/api/series/series_dexter/progress",
+        json={"visible_until_order": 2},
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "AUTH_ORIGIN_NOT_ALLOWED"
+
+
+def test_update_progress_accepts_allowed_origin(
+    client: TestClient,
+    authed_user: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A matching Origin passes the guard and the write succeeds."""
+    _restrict_csrf_origin(monkeypatch)
+    response = client.post(
+        "/api/series/series_dexter/progress",
+        json={"visible_until_order": 2},
+        headers={"Origin": "http://localhost:5173"},
+    )
+    assert response.status_code == 200
+    assert response.json()["visible_until_order"] == 2

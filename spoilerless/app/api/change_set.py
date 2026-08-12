@@ -15,7 +15,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from spoilerless.app.api.deps import CurrentUserDependency, DatabaseDependency, RequireAdminDependency
+from spoilerless.app.api.deps import (
+    CsrfGuardDependency,
+    CurrentUserDependency,
+    DatabaseDependency,
+    RequireAdminDependency,
+)
 from spoilerless.app.cache.graph_cache import invalidate_series
 from spoilerless.app.core.errors import error_responses, http_error
 from spoilerless.app.domain.change_set import ChangeSetCreateRequest, ChangeSetResponse
@@ -56,6 +61,7 @@ async def propose_change_set(
     payload: ChangeSetCreateRequest,
     user: CurrentUserDependency,
     service: ChangeSetServiceDependency,
+    _csrf: CsrfGuardDependency,
 ) -> ChangeSetResponse:
     """Validate every operation server-side and persist only the draft.
 
@@ -87,6 +93,7 @@ async def confirm_change_set(
     user: CurrentUserDependency,
     service: ChangeSetServiceDependency,
     _admin: RequireAdminDependency,
+    _csrf: CsrfGuardDependency,
 ) -> ChangeSetResponse:
     """Re-validate everything fresh and apply the whole ChangeSet transactionally.
 
@@ -126,6 +133,7 @@ async def reject_change_set(
     change_set_id: str,
     user: CurrentUserDependency,
     service: ChangeSetServiceDependency,
+    _csrf: CsrfGuardDependency,
 ) -> ChangeSetResponse:
     """Reject a ChangeSet — zero graph mutation, cannot be confirmed afterward."""
     try:
@@ -151,6 +159,7 @@ async def revert_change_set(
     change_set_id: str,
     user: CurrentUserDependency,
     service: ChangeSetServiceDependency,
+    _csrf: CsrfGuardDependency,
 ) -> ChangeSetResponse:
     """Revert a previously applied ChangeSet's create-shaped operations.
 

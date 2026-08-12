@@ -1113,3 +1113,37 @@ Also fixed this pass: ARCHITECTURE.md §7.12-area path-route prose still
 described the pre-#59 `MAX_PATH_HOPS` coupling (4th stale spot); rewritten
 to the post-#59 resolver behavior. `docs/README.md` is the navigation hub;
 open work lives in PROBLEMS.md "Still open" above.
+
+## SIXTEENTH PASS — runtime/security gaps: retrieval-hop gating + CSRF coverage (2026-08-12)
+
+Closed two of the four ARCHITECTURE.md §Normative-follow-ups items.
+
+### Retrieval-hop visibility gating — FIXED (4ffb36b)
+EVIDENCE_FOR_CLAIMS/SOURCES_FOR_CLAIMS + GET_EVIDENCE/GET_SOURCES gated the
+SUPPORTED_BY/REFERS_TO rel and the evidence/source node but never the Claim
+itself; a model-supplied hidden claim id returned its attachments (claim
+existence leak). All four now embed the shared visible_claim_where() on the
+claim hop (fail closed; neighborhood/summary paths unchanged). New
+scratch-series leak test + pipeline stub fragment reorder (SUPPORTED_BY /
+REFERS_TO before claim.claim_type). Suite: 592 passed/1 skipped.
+
+### CSRF coverage beyond login/logout — FIXED (this commit)
+verify_origin + _allowed_origins + AUTH_ORIGIN_NOT_ALLOWED moved auth.py ->
+api/deps.py (shared; auth.py re-exports); new CsrfGuardDependency. Guard
+wired into all 26 cookie-authenticated state-changing routes (candidates
+ingest/approve/reject/edit, change_set 4, chat 4, progress, revisions,
+settings llm, share 2, user_content 9). Read-only POST /graph/path
+(OptionalUserDependency) exempt. Tests: 3 behavioral CSRF tests on
+update_progress (evil/missing/ok origin) + static inventory scan
+test_every_cookie_authenticated_state_changing_route_has_csrf_guard (caught
+ingest_candidates missed by manual inventory). conftest autouse fixture
+FRONTEND_ORIGINS=* default (skips test_config) so API tests pass without
+Origin headers; CSRF tests pin a concrete origin.
+
+### Still open
+- Read-boundary unification (candidate vs user-content/revision vs
+  graph/export resolvers -> one server-authoritative resolver).
+- Shared LLM settings scoping (#5 tail: per-user scope, host allowlist,
+  at-rest key encryption).
+- Structural: #79 god-files, #81 tail, #19 migrations. Operator: #29 push,
+  #36 least-privilege DB user.
