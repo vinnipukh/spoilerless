@@ -288,6 +288,16 @@ async def _upsert_nodes(
         UNWIND $rows AS row
         MERGE (node:{label} {{id: row.id}})
         SET node += row
+        WITH node, keys(node) AS node_keys, keys(row) AS row_keys
+        // Self-healing upsert (PROBLEMS #28 tail): a key dropped from the
+        // seed JSON (e.g. image_url hotlinks removed in the sweep) must not
+        // linger on already-seeded nodes — `SET node += row` only adds/
+        // overwrites, it never removes. Nulling the key deletes it.
+        FOREACH (k IN node_keys |
+          FOREACH (_ IN CASE WHEN NOT k IN row_keys THEN [1] ELSE [] END |
+            SET node[k] = null
+          )
+        )
         """,
         rows=rows,
     )
