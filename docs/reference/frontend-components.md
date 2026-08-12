@@ -1,7 +1,7 @@
 <!-- generated-by: gsd-doc-writer -->
 # Frontend Component Reference
 
-> **Snapshot (2026-08-12).** Point-in-time component map — verify against the
+> **Snapshot (2026-08-13).** Point-in-time component map — verify against the
 > live tree before trusting; not regenerated automatically.
 
 This reference describes the live React frontend under `frontend/src`. The application uses React 19, TypeScript, Vite, Vitest, Tailwind CSS, Radix primitives, and Cytoscape. Paths and symbols below match the current source.
@@ -264,7 +264,7 @@ GraphResponse
 
 `GraphCanvas` defaults to `initialMode="overview"`; full mode renders all already spoiler-filtered elements. fcose is the primary layout, with built-in cose as runtime fallback. Position cache keys include series, visible boundary, and graph mode.
 
-A fresh Cytoscape instance forces a layout and fit. Graph-driven relayout respects a 20-second interaction hold stored in `autoZoomHold`; explicit mode changes and refreshes still re-fit. Incremental updates with active focus/reveal avoid destructive relayout and use Cytoscape framing instead.
+A fresh Cytoscape instance performs two ordered layout stages. `react-cytoscapejs` starts the stable declarative layout with `fit: false`; the `cy` callback records the live instance and graph, subscribes once to `layoutstop`, and then calls `runLayout(..., forceRelayout=true)`. This second stage is exactly the **Refresh graph** relayout/fit path. The ordering is intentional: starting the forced refresh in a microtask while the declarative layout is still running creates a race in which the startup layout can finish last and restore the diagonal cold-open state. Graph-driven relayout respects a 20-second interaction hold stored in `autoZoomHold`; explicit mode changes and refreshes still re-fit. Incremental updates with active focus/reveal avoid destructive relayout and use Cytoscape framing instead.
 
 Graph mutations currently enter through:
 

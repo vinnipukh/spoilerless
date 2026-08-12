@@ -1172,3 +1172,23 @@ zombie_sweep.py used legacy `trust=` driver key; 6.2.0 removed it →
 `ConfigurationError`. Switched to `trusted_certificates=` (matches
 database.py). Sweep ran: 65 zombies + 8 stale sessions removed, 0 remaining;
 protected admin user survives.
+
+## EIGHTEENTH PASS — graph cold-open refresh lifecycle (2026-08-13)
+
+### PROB-24 — graph reopened in a diagonal until Refresh graph was clicked — FIXED (`e20bbd4`)
+The first launch-refresh fix invoked `runLayout(..., forceRelayout=true)` from
+the `react-cytoscapejs` `cy` callback via `queueMicrotask`. That proved too
+early in the live browser: the component's declarative fCoSE startup layout
+was still asynchronous, so both layouts raced. The startup layout could stop
+last and overwrite the button-equivalent result, leaving the graph diagonal.
+
+`GraphCanvas` now keeps the declarative startup layout stable with `fit: false`,
+marks the live Cytoscape instance/graph as handled, and registers a one-shot
+`layoutstop` listener. Only after startup settles does it call the same forced
+layout + fit path as **Refresh graph**. The test Cytoscape double now models
+one-shot event delivery so this lifecycle is covered through remounts.
+
+Verification: focused GraphCanvas suite **25/25**, ESLint clean, production
+TypeScript/Vite build clean (existing chunk-size warning only), `git diff
+--check` clean, and live Chrome cold-open confirmed by the product owner
+without pressing Refresh graph.
