@@ -1,5 +1,11 @@
 // Mirrors spoilerless/app/domain/user_content.py field-for-field
 
+// CustomNodeType is defined in lib/nodeTypes.ts (single registry with
+// NODE_TYPES + ALLOWED_NODE_TYPES, PROB-09 #81) and re-exported here so
+// existing importers keep `types/userContent` as their entry point.
+import type { CustomNodeType } from '../lib/nodeTypes'
+export type { CustomNodeType } from '../lib/nodeTypes'
+
 export type NoteResponse = {
   id: string
   series_id: string
@@ -21,8 +27,6 @@ export type NoteCreate = {
 export type NoteUpdate = {
   content: string
 }
-
-export type CustomNodeType = 'Character' | 'Event' | 'Location' | 'Organization' | 'Object'
 
 export type CustomNodeCreate = {
   node_type: CustomNodeType

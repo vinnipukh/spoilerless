@@ -162,3 +162,39 @@ export type ChangeSet = {
   revision_id: string | null
   idempotency_key: string | null
 }
+
+// One operation → already-existing-target-ids mapping, shared by every
+// consumer that needs the graph elements an operation touches
+// (ChangeSetCard's affected-elements list, App's post-apply focus
+// highlight — was two hand-rolled switches in two files, PROB-09 #81).
+// `create_node`/`create_claim` carry no persisted id at propose/apply
+// time, so they contribute nothing; `create_relationship` contributes its
+// endpoint nodes (the relationship id itself is not persisted until apply).
+export type OperationRef = { id: string; kind: string }
+
+export function operationTargetRefs(op: ChangeSetOperation): OperationRef[] {
+  switch (op.operation_type) {
+    case 'update_node':
+    case 'delete_node':
+      return [{ id: op.node_id, kind: 'Node' }]
+    case 'create_relationship':
+      return [
+        { id: op.source_id, kind: 'Node' },
+        { id: op.target_id, kind: 'Node' },
+      ]
+    case 'update_relationship':
+    case 'delete_relationship':
+      return [{ id: op.relationship_id, kind: 'Relationship' }]
+    case 'update_claim':
+    case 'delete_claim':
+    case 'attach_evidence':
+      return [{ id: op.claim_id, kind: 'Claim' }]
+    case 'create_note':
+      return [{ id: op.target_id, kind: op.target_type }]
+    case 'update_note':
+    case 'delete_note':
+      return [{ id: op.note_id, kind: 'Note' }]
+    default:
+      return []
+  }
+}

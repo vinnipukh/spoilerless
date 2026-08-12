@@ -6,6 +6,7 @@ import { CitationChip } from './CitationChip'
 import { confirmChangeSet, rejectChangeSet } from '../../api/changeSet'
 import { ApiError } from '../../api/client'
 import type { ChangeSet, ChangeSetOperation, ChangeSetStatus } from '../../types/changeSet'
+import { operationTargetRefs } from '../../types/changeSet'
 
 // The propose-time preview + Confirm/Reject card (06-UI-SPEC.md "Proposed-
 // ChangeSet card") — the ONE UI surface in this phase that ever calls
@@ -149,45 +150,6 @@ function changedFieldsFor(op: ChangeSetOperation): FieldChange[] {
   }
 }
 
-type AffectedRef = { id: string; kind: string }
-
-// The affected-graph-elements list — every operation's already-existing
-// target resource (create_node/create_claim carry no persisted id yet at
-// propose time, so they contribute nothing here).
-function affectedRefsFor(operations: ChangeSetOperation[]): AffectedRef[] {
-  const refs: AffectedRef[] = []
-  for (const op of operations) {
-    switch (op.operation_type) {
-      case 'update_node':
-      case 'delete_node':
-        refs.push({ id: op.node_id, kind: 'Node' })
-        break
-      case 'create_relationship':
-        refs.push({ id: op.source_id, kind: 'Node' }, { id: op.target_id, kind: 'Node' })
-        break
-      case 'update_relationship':
-      case 'delete_relationship':
-        refs.push({ id: op.relationship_id, kind: 'Relationship' })
-        break
-      case 'update_claim':
-      case 'delete_claim':
-      case 'attach_evidence':
-        refs.push({ id: op.claim_id, kind: 'Claim' })
-        break
-      case 'create_note':
-        refs.push({ id: op.target_id, kind: op.target_type })
-        break
-      case 'update_note':
-      case 'delete_note':
-        refs.push({ id: op.note_id, kind: 'Note' })
-        break
-      default:
-        break
-    }
-  }
-  return refs
-}
-
 // Warnings are rendered defensively via an optional extension — the current
 // backend ChangeSetResponse (06-05/06-06) has no `warnings` field at all, so
 // this always resolves to an empty array today. Implemented ahead of time so
@@ -287,7 +249,9 @@ export function ChangeSetCard({ changeSet, seriesId, onApplied }: Props) {
   const deleteCount = current.operations.filter((op) => DELETE_OPERATION_TYPES.has(op.operation_type)).length
   const isDestructive = deleteCount > 0
   const warnings = warningsFor(current)
-  const affectedRefs = affectedRefsFor(current.operations)
+  // Every operation's already-existing target resource — shared mapping
+  // from types/changeSet.ts (PROB-09 #81).
+  const affectedRefs = current.operations.flatMap(operationTargetRefs)
   const protectedOp = protectedOverrideOperation(current.operations)
   const isAwaiting = localStatus === 'awaiting_confirmation' || localStatus === 'draft'
 
@@ -338,18 +302,7 @@ export function ChangeSetCard({ changeSet, seriesId, onApplied }: Props) {
             {affectedRefs.map((ref, index) => (
               <CitationChip
                 key={`${ref.kind}-${ref.id}-${index}`}
-                citation={{
-                  claim_id: null,
-                  evidence_id: null,
-                  source_id: null,
-                  source_label: ref.id,
-                  source_type: ref.kind,
-                  episode_code: ref.id,
-                  locator: '',
-                  excerpt: null,
-                  related_node_ids: [],
-                  related_edge_ids: [],
-                }}
+                label={`${ref.kind} · ${ref.id}`}
               />
             ))}
           </div>

@@ -19,3 +19,22 @@ export const NODE_TYPES: NodeTypeMeta[] = [
   { type: 'UserNote', shape: 'round-rect', color: '#131936' },
   { type: 'Object', shape: 'ellipse', color: '#131936' },
 ]
+
+// The closed set of types the custom-node dialog may create — mirrors the
+// backend's CustomNodeType enum (types/userContent re-exports this).
+// Derived registries below (ALLOWED_NODE_TYPES, GraphCanvas's filter
+// list) build from NODE_TYPES so a new node type lands in one place
+// (PROB-09 #81).
+export const CUSTOM_NODE_TYPE_NAMES = [
+  'Character',
+  'Event',
+  'Location',
+  'Organization',
+  'Object',
+] as const
+
+export type CustomNodeType = (typeof CUSTOM_NODE_TYPE_NAMES)[number]
+
+export const ALLOWED_NODE_TYPES: { value: CustomNodeType; label: string }[] = NODE_TYPES.filter(
+  (nt) => (CUSTOM_NODE_TYPE_NAMES as readonly string[]).includes(nt.type),
+).map((nt) => ({ value: nt.type as CustomNodeType, label: nt.type }))

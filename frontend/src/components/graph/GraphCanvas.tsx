@@ -38,6 +38,7 @@ import { createCustomNode } from '../../api/userContent'
 import type { CustomNodeResponse, CustomNodeType } from '../../types/userContent'
 import { fetchExportMarkdown, downloadMarkdownBlob } from '@/api/export'
 import { renderGraphMarkdown, exportFilename } from '@/lib/exportMarkdown'
+import { ALLOWED_NODE_TYPES, NODE_TYPES } from '@/lib/nodeTypes'
 import { applyHighlight } from '@/lib/graph/highlight'
 
 
@@ -252,13 +253,9 @@ type Props = {
 
 
 
-const ALLOWED_NODE_TYPES: { value: CustomNodeType; label: string }[] = [
-  { value: 'Character', label: 'Character' },
-  { value: 'Event', label: 'Event' },
-  { value: 'Location', label: 'Location' },
-  { value: 'Organization', label: 'Organization' },
-  { value: 'Object', label: 'Object' },
-]
+// The node types the custom-node dialog may create — derived from the
+// NODE_TYPES registry in lib/nodeTypes.ts (PROB-09 #81), not a second
+// inline list.
 
 function CreateCustomNodeDialog({
   open,
@@ -442,7 +439,8 @@ export function GraphCanvas({
   // Pending reveal target (external prop wins over the local custom-node one).
   const revealTarget = revealElementIds ?? localReveal
   // Filter state for node-type and edge-family toggles (PROB-32 / FEAT-11.4)
-  const allNodeTypes = useMemo(() => ['Character', 'Event', 'Location', 'Organization', 'Object', 'Episode', 'Series'], [])
+  // — node-type list derived from the NODE_TYPES registry (PROB-09 #81).
+  const allNodeTypes = useMemo(() => NODE_TYPES.map((nt) => nt.type), [])
   const allEdgeFamilies = useMemo(() => ['CHARACTER', 'STRUCTURAL', 'EPISODE', 'USER'], [])
   const [filterState, setFilterState] = useState<FilterState>(() => initialFilterState(allNodeTypes, allEdgeFamilies))
   // 08-06: previous timeline event filter — tracks entry/exit so stale

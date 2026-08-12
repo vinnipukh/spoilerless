@@ -30,6 +30,7 @@ import { useHotkey } from './hooks/useHotkey'
 import type { CustomRelationshipResponse } from './types/userContent'
 import type { Citation } from './types/chat'
 import type { ChangeSet } from './types/changeSet'
+import { operationTargetRefs } from './types/changeSet'
 import type { GraphResponse } from './types/graph'
 
 // Inline SVG gear icon for the topBar Settings toggle (matches the inline
@@ -224,29 +225,16 @@ function AuthenticatedApp() {
     const nodeIds: string[] = []
     const edgeIds: string[] = []
     for (const op of changeSet.operations) {
-      switch (op.operation_type) {
-        case 'update_node':
-        case 'delete_node':
-          nodeIds.push(op.node_id)
-          break
-        case 'update_relationship':
-        case 'delete_relationship':
-          edgeIds.push(op.relationship_id)
-          break
-        case 'update_claim':
-        case 'delete_claim':
-        case 'attach_evidence':
-          nodeIds.push(op.claim_id)
-          break
-        case 'create_note':
-          nodeIds.push(op.target_id)
-          break
-        case 'update_note':
-        case 'delete_note':
-          nodeIds.push(op.note_id)
-          break
-        default:
-          break
+      // create_relationship contributes nothing to the post-apply
+      // highlight (unchanged pre-apply behavior): the relationship id is
+      // not persisted until apply, and its endpoint nodes were already on
+      // screen. Everything else rides the shared operationTargetRefs
+      // mapping (PROB-09 #81) — claims/notes/custom nodes highlight as
+      // nodes, relationships as edges.
+      if (op.operation_type === 'create_relationship') continue
+      for (const ref of operationTargetRefs(op)) {
+        if (ref.kind === 'Relationship') edgeIds.push(ref.id)
+        else nodeIds.push(ref.id)
       }
     }
     return { nodeIds: [...new Set(nodeIds)], edgeIds: [...new Set(edgeIds)] }
