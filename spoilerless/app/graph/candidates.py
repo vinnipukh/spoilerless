@@ -4,12 +4,12 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Any
 
-from neo4j import ManagedTransaction
-
 from spoilerless.app.domain.extraction import ExtractionBatchEnvelope, ExtractionClaim
+from spoilerless.app.domain.revision import RevisionAction
 from spoilerless.app.domain.user_content import Origin
 from spoilerless.app.graph.database import Neo4jDatabase
 from spoilerless.app.core.errors import http_error
+from spoilerless.app.revisions import RevisionRepository
 
 
 def _derive_candidate_id(claim: ExtractionClaim) -> str:
@@ -180,26 +180,63 @@ class CandidateRepository:
         return result
 
     async def approve_claim(
-        self, work: Any, command: dict[str, Any]
+        self,
+        *,
+        series_id: str,
+        claim_id: str,
+        user_id: str,
+        now: datetime,
     ) -> dict[str, Any]:
-        """Run an approve-claim transaction (promote candidate to canonical).
+        """Promote a candidate claim to ``canonical`` inside one transaction.
 
-        Public repository method so route layers never reach into the
-        private ``_db`` attribute (PROB-19/#41 / NO-REPO-PRIVATE-ACCESS).
+        PROB-10/#60: the approve business flow (read -> origin guard ->
+        status write -> revision log) lives here, not in a route closure.
+        Returns the claim id + the revision id actually persisted. Admin
+        gating (AUTH-03) stays at the route.
         """
-        return await self._db.execute_write(work, command)
+        command = {
+            "series_id": series_id,
+            "claim_id": claim_id,
+            "user_id": user_id,
+            "now": now,
+        }
+        return await self._db.execute_write(_approve_claim_work, command)
 
     async def reject_claim(
-        self, work: Any, command: dict[str, Any]
+        self,
+        *,
+        series_id: str,
+        claim_id: str,
+        user_id: str,
+        now: datetime,
     ) -> dict[str, Any]:
-        """Run a reject-claim transaction (candidate status -> rejected)."""
-        return await self._db.execute_write(work, command)
+        """Set a candidate claim's status to ``rejected`` inside one transaction."""
+        command = {
+            "series_id": series_id,
+            "claim_id": claim_id,
+            "user_id": user_id,
+            "now": now,
+        }
+        return await self._db.execute_write(_reject_claim_work, command)
 
     async def edit_claim(
-        self, work: Any, command: dict[str, Any]
+        self,
+        *,
+        series_id: str,
+        claim_id: str,
+        updates: dict[str, Any],
+        user_id: str,
+        now: datetime,
     ) -> dict[str, Any]:
-        """Run an edit-claim transaction (mutable field updates + revision)."""
-        return await self._db.execute_write(work, command)
+        """Apply mutable-field edits to a candidate claim + log a revision."""
+        command = {
+            "series_id": series_id,
+            "claim_id": claim_id,
+            "updates": updates,
+            "user_id": user_id,
+            "now": now,
+        }
+        return await self._db.execute_write(_edit_claim_work, command)
 
     async def get_candidate_claim(
         self,
@@ -298,3 +335,155 @@ class CandidateRepository:
         """
         result = await self._db.execute_query(query, **params)
         return list(result)
+
+
+# ── Review-flow transactions (PROB-10/#60) ────────────────────────────────────
+# The approve/reject/edit business flows live here as module-level work
+# functions (same shape as _ingest_candidate_claims), NOT as route closures —
+# the API layer shrinks to try/except + invalidate_series.
+
+_READ_CANDIDATE_CLAIM_QUERY = """
+    MATCH (claim:Claim {id: $claim_id, series_id: $series_id})
+    RETURN claim.id AS id,
+           claim.label AS label,
+           claim.subject_id AS subject_id,
+           claim.predicate AS predicate,
+           claim.object_id AS object_id,
+           claim.claim_type AS claim_type,
+           claim.status AS status,
+           claim.confidence_level AS confidence_level,
+           claim.relationship_effect AS relationship_effect,
+           claim.visible_from_order AS visible_from_order,
+           claim.valid_from_order AS valid_from_order,
+           claim.valid_until_order AS valid_until_order,
+           claim.origin AS origin,
+           claim.schema_version AS schema_version,
+           claim.created_at AS created_at
+"""
+
+
+async def _read_candidate_claim(tx: Any, command: dict[str, Any]) -> dict[str, Any]:
+    """Fetch a candidate claim row or raise 404 if it does not exist."""
+    result = await tx.run(
+        _READ_CANDIDATE_CLAIM_QUERY,
+        claim_id=command["claim_id"],
+        series_id=command["series_id"],
+    )
+    record = await result.single()
+    if record is None:
+        raise http_error(
+            404,
+            "CANDIDATE_NOT_FOUND",
+            f"Candidate claim not found: {command['claim_id']}",
+        )
+    return dict(record.data())
+
+
+async def _log_claim_revision(
+    tx: Any,
+    command: dict[str, Any],
+    before: dict[str, Any],
+    after: dict[str, Any],
+) -> dict[str, Any]:
+    """Append one Claim revision and return it (persisted uuid id — #34)."""
+    return await RevisionRepository.log_revision(
+        tx,
+        series_id=command["series_id"],
+        resource_type="Claim",
+        resource_id=command["claim_id"],
+        action=RevisionAction.UPDATED,
+        before=before,
+        after=after,
+        visible_from_order=before.get("visible_from_order", 1),
+        created_at=command["now"],
+        user_id=command["user_id"],
+    )
+
+
+async def _approve_claim_work(tx: Any, command: dict[str, Any]) -> dict[str, Any]:
+    """Read -> origin guard -> canonical write -> revision (one transaction)."""
+    row = await _read_candidate_claim(tx, command)
+    if row["origin"] != "candidate":
+        raise http_error(
+            409,
+            "CANNOT_APPROVE_NON_CANDIDATE",
+            f"Claim '{command['claim_id']}' origin is '{row['origin']}', not 'candidate'.",
+        )
+
+    before = dict(row)
+    after = dict(before)
+    after["status"] = "canonical"
+
+    await tx.run(
+        """
+        MATCH (claim:Claim {id: $claim_id, series_id: $series_id, origin: 'candidate'})
+        SET claim.status = 'canonical'
+        """,
+        claim_id=command["claim_id"],
+        series_id=command["series_id"],
+    )
+
+    revision = await _log_claim_revision(tx, command, before, after)
+    # Return the id RevisionRepository.log_revision actually persisted
+    # (PROB-12, #34) — never a fabricated hash. GET /revisions/{id} resolves it.
+    return {
+        "id": command["claim_id"],
+        "status": "canonical",
+        "origin": "candidate",
+        "revision_id": revision["id"],
+    }
+
+
+async def _reject_claim_work(tx: Any, command: dict[str, Any]) -> dict[str, Any]:
+    """Read -> status write -> revision (one transaction)."""
+    row = await _read_candidate_claim(tx, command)
+
+    before = dict(row)
+    after = dict(before)
+    after["status"] = "rejected"
+
+    await tx.run(
+        """
+        MATCH (claim:Claim {id: $claim_id, series_id: $series_id, origin: 'candidate'})
+        SET claim.status = 'rejected'
+        """,
+        claim_id=command["claim_id"],
+        series_id=command["series_id"],
+    )
+
+    revision = await _log_claim_revision(tx, command, before, after)
+    return {
+        "id": command["claim_id"],
+        "status": "rejected",
+        "origin": "candidate",
+        "revision_id": revision["id"],
+    }
+
+
+async def _edit_claim_work(tx: Any, command: dict[str, Any]) -> dict[str, Any]:
+    """Read -> mutable-field SET -> revision (one transaction)."""
+    row = await _read_candidate_claim(tx, command)
+    before = dict(row)
+
+    set_items = [f"claim.{key} = ${key}" for key in command["updates"]]
+    set_expr = ", ".join(set_items)
+    await tx.run(
+        f"""
+        MATCH (claim:Claim {{id: $claim_id, series_id: $series_id, origin: 'candidate'}})
+        SET {set_expr}
+        RETURN claim.id AS id
+        """,
+        claim_id=command["claim_id"],
+        series_id=command["series_id"],
+        **command["updates"],
+    )
+
+    after = {**before, **command["updates"]}
+    revision = await _log_claim_revision(tx, command, before, after)
+    return {
+        "id": command["claim_id"],
+        "status": "edited",
+        "origin": "candidate",
+        "revision_id": revision["id"],
+        "updates_applied": list(command["updates"].keys()),
+    }

@@ -1,20 +1,18 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Annotated, Any
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, Path, Query
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from spoilerless.app.api.deps import CurrentUserDependency, RequireAdminDependency
 from spoilerless.app.cache.graph_cache import invalidate_series
 from spoilerless.app.core.errors import error_responses, http_error
 from spoilerless.app.domain.extraction import ExtractionBatchEnvelope
-from spoilerless.app.domain.revision import RevisionAction
 from spoilerless.app.domain.user_content import Identifier
 from spoilerless.app.graph.candidates import CandidateRepository
 from spoilerless.app.graph.database import Neo4jDatabase, get_database
-from spoilerless.app.revisions import RevisionRepository
 from spoilerless.app.services.graph import GraphService
 
 router = APIRouter(prefix="/api/series/{series_id}/candidates", tags=["candidates"])
@@ -63,27 +61,6 @@ async def _require_resolved_boundary(
             "INVALID_VISIBLE_UNTIL_ORDER",
             "visible_until_order must identify a persisted episode order.",
         )
-
-
-def _read_claim_query() -> str:
-    return """
-    MATCH (claim:Claim {id: $claim_id, series_id: $series_id})
-    RETURN claim.id AS id,
-           claim.label AS label,
-           claim.subject_id AS subject_id,
-           claim.predicate AS predicate,
-           claim.object_id AS object_id,
-           claim.claim_type AS claim_type,
-           claim.status AS status,
-           claim.confidence_level AS confidence_level,
-           claim.relationship_effect AS relationship_effect,
-           claim.visible_from_order AS visible_from_order,
-           claim.valid_from_order AS valid_from_order,
-           claim.valid_until_order AS valid_until_order,
-           claim.origin AS origin,
-           claim.schema_version AS schema_version,
-           claim.created_at AS created_at
-    """
 
 
 class EditCandidateRequest(BaseModel):
@@ -245,42 +222,23 @@ async def approve_candidate(
     _admin: RequireAdminDependency,
 ) -> dict:
     """Approve a candidate claim, promoting it from 'candidate' to 'canonical'
-    status. Admin-only since 08-03 (AUTH-03, T-08-03-01) — a non-admin gets 403."""
+    status. Admin-only since 08-03 (AUTH-03, T-08-03-01) — a non-admin gets 403.
 
-    async def _approve(tx: Any, cmd: dict[str, Any]) -> dict[str, Any]:
-        read_query = _read_claim_query()
-        result = await tx.run(read_query, claim_id=cmd["claim_id"], series_id=cmd["series_id"])
-        record = await result.single()
-        if record is None:
-            raise http_error(404, "CANDIDATE_NOT_FOUND", f"Candidate claim not found: {cmd['claim_id']}")
-        row = dict(record.data())
-        if row["origin"] != "candidate":
-            raise http_error(409, "CANNOT_APPROVE_NON_CANDIDATE", f"Claim '{cmd['claim_id']}' origin is '{row['origin']}', not 'candidate'.")
-
-        before = dict(row)
-        after = dict(before)
-        after["status"] = "canonical"
-
-        await tx.run("""
-            MATCH (claim:Claim {id: $claim_id, series_id: $series_id, origin: 'candidate'})
-            SET claim.status = 'canonical'
-        """, claim_id=cmd["claim_id"], series_id=cmd["series_id"])
-
-        now = cmd["now"]
-        revision = await RevisionRepository.log_revision(tx, series_id=cmd["series_id"], resource_type="Claim",
-            resource_id=cmd["claim_id"], action=RevisionAction.UPDATED,
-            before=before, after=after, visible_from_order=before.get("visible_from_order", 1),
-            created_at=now, user_id=cmd["user_id"])
-        # Return the id RevisionRepository.log_revision actually persisted
-        # (PROB-12, #34) — never a fabricated hash. GET /revisions/{id} resolves it.
-        return {"id": cmd["claim_id"], "status": "canonical", "origin": "candidate", "revision_id": revision["id"]}
-
-    # PROB-09/#71: no catch-all 422 — the closure raises HTTPException
+    PROB-10/#60: the transaction (read -> origin guard -> status write ->
+    revision log) lives in ``CandidateRepository.approve_claim``; the route
+    only builds the command and invalidates the graph cache.
+    """
+    # PROB-09/#71: no catch-all 422 — the repository raises HTTPException
     # (404/409) which propagates, and any Neo4j/driver error reaches the
     # global error handlers. A DB failure must never be mislabeled as an
     # extraction-payload problem, and raw str(exc) is never interpolated
     # into the client response.
-    result = await repo.approve_claim(_approve, {"series_id": series_id, "claim_id": claim_id, "now": datetime.now(timezone.utc), "user_id": _admin["id"]})
+    result = await repo.approve_claim(
+        series_id=series_id,
+        claim_id=claim_id,
+        user_id=_admin["id"],
+        now=datetime.now(timezone.utc),
+    )
     await invalidate_series(series_id)
     return result
 
@@ -301,34 +259,17 @@ async def reject_candidate(
     _admin: RequireAdminDependency,
 ) -> dict:
     """Reject a candidate claim, setting its status to 'rejected'.
-    Admin-only since 08-03 (AUTH-03, T-08-03-01) — a non-admin gets 403."""
+    Admin-only since 08-03 (AUTH-03, T-08-03-01) — a non-admin gets 403.
 
-    async def _reject(tx: Any, cmd: dict[str, Any]) -> dict[str, Any]:
-        read_query = _read_claim_query()
-        result = await tx.run(read_query, claim_id=cmd["claim_id"], series_id=cmd["series_id"])
-        record = await result.single()
-        if record is None:
-            raise http_error(404, "CANDIDATE_NOT_FOUND", f"Candidate claim not found: {cmd['claim_id']}")
-
-        row = dict(record.data())
-        before = dict(row)
-        after = dict(before)
-        after["status"] = "rejected"
-
-        await tx.run("""
-            MATCH (claim:Claim {id: $claim_id, series_id: $series_id, origin: 'candidate'})
-            SET claim.status = 'rejected'
-        """, claim_id=cmd["claim_id"], series_id=cmd["series_id"])
-
-        now = cmd["now"]
-        revision = await RevisionRepository.log_revision(tx, series_id=cmd["series_id"], resource_type="Claim",
-            resource_id=cmd["claim_id"], action=RevisionAction.UPDATED,
-            before=before, after=after, visible_from_order=before.get("visible_from_order", 1),
-            created_at=now, user_id=cmd["user_id"])
-        return {"id": cmd["claim_id"], "status": "rejected", "origin": "candidate", "revision_id": revision["id"]}
-
+    PROB-10/#60: the transaction lives in ``CandidateRepository.reject_claim``.
+    """
     # PROB-09/#71: no catch-all 422 (see approve_candidate).
-    result = await repo.reject_claim(_reject, {"series_id": series_id, "claim_id": claim_id, "now": datetime.now(timezone.utc), "user_id": _admin["id"]})
+    result = await repo.reject_claim(
+        series_id=series_id,
+        claim_id=claim_id,
+        user_id=_admin["id"],
+        now=datetime.now(timezone.utc),
+    )
     await invalidate_series(series_id)
     return result
 
@@ -350,41 +291,22 @@ async def edit_candidate(
     _admin: RequireAdminDependency,
 ) -> dict:
     """Edit a candidate claim's mutable fields. Creates a revision with
-    before/after snapshots. Admin-only since 08-03 (AUTH-03, T-08-03-01)."""
+    before/after snapshots. Admin-only since 08-03 (AUTH-03, T-08-03-01).
+
+    PROB-10/#60: the transaction lives in ``CandidateRepository.edit_claim``.
+    """
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
-
-    async def _edit(tx: Any, cmd: dict[str, Any]) -> dict[str, Any]:
-        read_query = _read_claim_query()
-        result = await tx.run(read_query, claim_id=cmd["claim_id"], series_id=cmd["series_id"])
-        record = await result.single()
-        if record is None:
-            raise http_error(404, "CANDIDATE_NOT_FOUND", f"Candidate claim not found: {cmd['claim_id']}")
-
-        row = dict(record.data())
-        before = dict(row)
-
-        set_items = [f"claim.{k} = ${k}" for k in cmd["updates"]]
-        set_expr = ", ".join(set_items)
-        update_query = f"""
-            MATCH (claim:Claim {{id: $claim_id, series_id: $series_id, origin: 'candidate'}})
-            SET {set_expr}
-            RETURN claim.id AS id
-        """
-        params = {"claim_id": cmd["claim_id"], "series_id": cmd["series_id"], **cmd["updates"]}
-        await tx.run(update_query, **params)
-
-        now = cmd["now"]
-        after = {**before, **cmd["updates"]}
-        revision = await RevisionRepository.log_revision(tx, series_id=cmd["series_id"], resource_type="Claim",
-            resource_id=cmd["claim_id"], action=RevisionAction.UPDATED,
-            before=before, after=after, visible_from_order=before.get("visible_from_order", 1),
-            created_at=now, user_id=cmd["user_id"])
-        return {"id": cmd["claim_id"], "status": "edited", "origin": "candidate", "revision_id": revision["id"], "updates_applied": list(cmd["updates"].keys())}
 
     # PROB-09/#71: only ValueError (mutable-field validation) maps to 422;
     # HTTPException (404) and driver/Neo4j errors propagate — no catch-all.
     try:
-        result = await repo.edit_claim(_edit, {"series_id": series_id, "claim_id": claim_id, "updates": updates, "now": datetime.now(timezone.utc), "user_id": _admin["id"]})
+        result = await repo.edit_claim(
+            series_id=series_id,
+            claim_id=claim_id,
+            updates=updates,
+            user_id=_admin["id"],
+            now=datetime.now(timezone.utc),
+        )
     except ValueError as exc:
         raise http_error(422, "INVALID_EXTRACTION_PAYLOAD", str(exc))
     await invalidate_series(series_id)
