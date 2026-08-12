@@ -174,7 +174,11 @@ async def test_community_schema_creates_only_unique_and_index(
         """
     )
     for ct in constraint_types:
-        assert ct["type"] in ("NODE_PROPERTY_UNIQUENESS", "NODE_KEY"), (
+        # Engine-version-tolerant: AuraDB reports NODE_PROPERTY_UNIQUENESS /
+        # NODE_KEY; Neo4j 5.x Community reports UNIQUENESS / KEY for the same
+        # objects (EIGHTH-PASS class). Normalize the prefix away and assert
+        # the invariant (uniqueness or key) instead of a fixed spelling.
+        assert ct["type"].replace("NODE_PROPERTY_", "") in ("UNIQUENESS", "KEY"), (
             f"Unexpected constraint type {ct['type']} on {ct['label']}"
         )
         # Every unique/node-key constraint must cover `id` (our schema invariant),
@@ -368,7 +372,7 @@ async def test_constraints_visibility_and_provenance(live_database: Neo4jDatabas
     constraints = await live_database.execute_query(
         """
         SHOW CONSTRAINTS YIELD type, labelsOrTypes, properties
-        WHERE type = 'NODE_PROPERTY_UNIQUENESS' AND properties = ['id']
+        WHERE type IN ['NODE_PROPERTY_UNIQUENESS', 'UNIQUENESS'] AND properties = ['id']
         RETURN labelsOrTypes[0] AS label
         ORDER BY label
         """

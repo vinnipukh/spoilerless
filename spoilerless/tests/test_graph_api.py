@@ -423,31 +423,23 @@ def test_graph_nodes_include_image_fields(live_client: TestClient) -> None:
         assert "image_url" in node
         assert "image_source_url" in node
 
-    # The original curated S01E01 cast carries a manually-verified Fandom
-    # portrait. Source-enrichment characters (minor cast, victims, the
-    # unidentified killer) intentionally carry no image — the unknown killer must
-    # never receive an identity-revealing portrait. So: any character that has an
-    # image uses the Fandom CDN, and the core portrait-bearing cast still has one.
+    # Source-enrichment characters (minor cast, victims, the unidentified
+    # killer) intentionally carry no image — the unknown killer must never
+    # receive an identity-revealing portrait. Since the #28 hotlink sweep the
+    # seed carries NO images at all (see below).
     characters = [node for node in payload["nodes"] if node["type"] == "Character"]
-    by_id = {c["id"]: c for c in characters}
-    core_portrait_ids = [
-        "dexter:character:dexter_morgan",
-        "dexter:character:debra_morgan",
-        "dexter:character:angel_batista",
-        "dexter:character:maria_laguerta",
-        "dexter:character:james_doakes",
-        "dexter:character:rita_bennett",
-    ]
-    for cid in core_portrait_ids:
-        assert by_id[cid]["image_url"], cid
+    # The curated portraits were dropped wholesale in the #28 hotlink sweep
+    # (commit 1ddc650): seed data must not load third-party CDN assets on a
+    # public site (legal + privacy + breakage), so NO character carries an
+    # image_url any more. The contract that survives is: the projection keeps
+    # both keys (nullable), and any future image must be self-hosted — never
+    # an external CDN (static.wikia.nocookie.net / fandom).
     for character in characters:
-        if character["image_url"]:
-            assert character["image_url"].startswith(
-                "https://static.wikia.nocookie.net/dexter/"
-            )
-            assert character["image_source_url"].startswith(
-                "https://dexter.fandom.com/wiki/"
-            )
+        assert character["image_url"] is None, (
+            f"{character['id']} carries image_url {character['image_url']!r} — "
+            "external hotlinks were removed (PROBLEMS #28); re-add only "
+            "self-hosted images"
+        )
 
     non_characters = [node for node in payload["nodes"] if node["type"] != "Character"]
     assert non_characters
@@ -1016,10 +1008,18 @@ class TestSeedImageCuration:
             )
 
         # Sanity: order-1 characters may carry curated portraits (D-14 keeps
-        # the existing safe images for already-revealed characters).
+        # the existing safe images for already-revealed characters). Since the
+        # #28 hotlink sweep (commit 1ddc650) the seed carries none — external
+        # CDN hotlinks were removed; any future portrait must be self-hosted.
         order_one = [character for character in characters if character["visible_from_order"] == 1]
         assert order_one
-        assert any(character.get("image_url") for character in order_one)
+        for character in order_one:
+            image_url = character.get("image_url")
+            if image_url is not None:
+                assert not image_url.startswith(("http://", "https://")), (
+                    f"{character['id']} order-1 portrait {image_url!r} hotlinks "
+                    "an external host — self-host images only (PROBLEMS #28)"
+                )
 
 
 # ===================================================================

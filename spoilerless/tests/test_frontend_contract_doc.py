@@ -166,8 +166,6 @@ def test_document_has_examples_projection_rules_non_goals_and_pending_status() -
 
     for non_goal in (
         "passwords",
-        "roles",
-        "permissions",
         "account linking",
         "refresh-token",
         "soft delete",
@@ -183,6 +181,12 @@ def test_document_has_examples_projection_rules_non_goals_and_pending_status() -
         "frontend implementation",
     ):
         assert non_goal in lower
+    # roles/permissions are no longer non-goals: UserPublic.role (admin|user),
+    # ADMIN_EMAILS assignment, and admin gates (candidate approve/reject/edit,
+    # ChangeSet confirm, LLM settings) are implemented (PROBLEMS #5/#14 —
+    # refreshed TWELFTH-PASS contract; the doc asserts this positively).
+    assert "Roles **are** implemented" in document
+    assert "admin gates protect candidate approve/reject/edit" in document
     assert "react/cytoscape/frontend integration" in lower
     assert "distinct visual treatment" in lower
     assert "overall phase 03 completion" in lower

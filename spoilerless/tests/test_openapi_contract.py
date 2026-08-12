@@ -147,6 +147,14 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         "/api/auth/google", "/api/auth/me", "/api/auth/logout",
         # Settings (LLM provider configuration)
         "/api/settings/llm",
+        # Phase 9: Path, Export, Share (PROB-10/#21: live surface is 50 ops /
+        # 37 templates — TWELFTH-pass docs refreshed, this test now locks the
+        # current inventory instead of the stale 45-op/32-path set)
+        "/api/series/{series_id}/graph/path",
+        "/api/series/{series_id}/export",
+        "/api/share",
+        "/api/share/{token}/graph",
+        "/api/share/{token}",
     }
     assert set(schema["paths"]) == expected_paths
     methods = {(method, path) for path, item in schema["paths"].items()
@@ -198,8 +206,15 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         # Settings (LLM provider configuration)
         ("get", "/api/settings/llm"),
         ("put", "/api/settings/llm"),
+        # Phase 9: Path, Export, Share
+        ("post", "/api/series/{series_id}/graph/path"),
+        ("get", "/api/series/{series_id}/export"),
+        ("post", "/api/share"),
+        ("get", "/api/share"),
+        ("get", "/api/share/{token}/graph"),
+        ("delete", "/api/share/{token}"),
     }
-    assert len(schema["paths"]) == 32
+    assert len(schema["paths"]) == 37
     for path, item in schema["paths"].items():
         for method, operation in item.items():
             if method not in {"get", "post", "patch", "delete"}:
@@ -301,7 +316,18 @@ def test_all_story_reads_graph_errors_health_and_deletes_are_fully_typed() -> No
     }
     for path, item in schema["paths"].items():
         if "delete" in item:
-            assert item["delete"]["responses"]["204"].get("content") in (None, {})
+            # Every DELETE is fully typed: 204-no-content (user content,
+            # chat sessions, custom nodes) or 200-with-body (share revoke
+            # returns the revoked record — PROB-10/#21 phase-9 surface).
+            if "204" in item["delete"]["responses"]:
+                assert item["delete"]["responses"]["204"].get("content") in (None, {})
+            else:
+                # 200-with-body: share revoke returns {"revoked": true} as an
+                # inline object schema (dict[str, str]) — typed, not a bare
+                # envelope (PROB-10/#21 phase-9 surface).
+                assert "schema" in item["delete"]["responses"]["200"]["content"][
+                    "application/json"
+                ]
 
 
 def _collect_openapi_error_codes() -> set[str]:
