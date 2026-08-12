@@ -10,7 +10,7 @@ from spoilerless.app.api import deps
 from spoilerless.app.api.share import router as share_router
 from spoilerless.app.core.errors import install_database_error_handlers
 from spoilerless.app.api.exceptions import install_repository_error_handlers
-from spoilerless.app.domain.share import ShareTokenCreate, ShareTokenRecord
+from spoilerless.app.domain.share import ShareTokenRecord
 from spoilerless.app.graph.database import Neo4jDatabase
 from spoilerless.app.graph.seed import setup_database
 from spoilerless.app.repository.share import (

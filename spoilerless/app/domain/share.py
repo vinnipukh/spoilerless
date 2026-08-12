@@ -6,13 +6,40 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class ShareTokenCreate(BaseModel):
-    """Internal model for share token creation request."""
+class ShareCreateRequest(BaseModel):
+    """Create-a-snapshot-link request body (was defined in api/share.py —
+    PROB-09 #81 moves router request/response models into the domain)."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid")
 
     series_id: Annotated[str, Field(min_length=1, max_length=255)]
     visible_until_order: Annotated[int, Field(gt=0)]
+
+
+class ShareCreateResponse(BaseModel):
+    """Create-a-snapshot-link response (the raw token is shown exactly once)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    token: str
+    expires_at: float
+    url: str
+    series_id: str
+    visible_until_order: int
+    created_at: float
+
+
+class ShareItemResponse(BaseModel):
+    """List-active-tokens row."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    token_hash: str
+    series_id: str
+    visible_until_order: int
+    created_at: float
+    expires_at: float
 
 
 class ShareTokenRecord(BaseModel):

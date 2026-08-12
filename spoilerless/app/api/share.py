@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, ConfigDict, Field
 
 from spoilerless.app.api.deps import (
     CurrentUserDependency,
@@ -21,42 +19,18 @@ from spoilerless.app.cache.graph_cache import (
 )
 from spoilerless.app.core.errors import error_responses, http_error
 from spoilerless.app.domain.graph import GraphResponse
-from spoilerless.app.domain.share import ShareTokenRecord
+from spoilerless.app.domain.share import (
+    ShareCreateRequest,
+    ShareCreateResponse,
+    ShareItemResponse,
+    ShareTokenRecord,
+)
 from spoilerless.app.services.graph import GraphService
 
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/share", tags=["share"])
-
-
-class ShareCreateRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    series_id: Annotated[str, Field(min_length=1, max_length=255)]
-    visible_until_order: Annotated[int, Field(gt=0)]
-
-
-class ShareCreateResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    token: str
-    expires_at: float
-    url: str
-    series_id: str
-    visible_until_order: int
-    created_at: float
-
-
-class ShareItemResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    token_hash: str
-    series_id: str
-    visible_until_order: int
-    created_at: float
-    expires_at: float
 
 
 @router.post(
