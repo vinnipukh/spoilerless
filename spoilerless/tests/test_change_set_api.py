@@ -26,6 +26,7 @@ from spoilerless.app.api.change_set import router as change_set_router
 from spoilerless.app.api.chat import router as chat_router
 from spoilerless.app.api.progress import router as progress_router
 from spoilerless.app.core.errors import install_database_error_handlers
+from spoilerless.app.api.exceptions import install_repository_error_handlers
 from spoilerless.app.domain.change_set import (
     ChangeSetCreateRequest,
     CreateRelationshipOperation,
@@ -223,6 +224,7 @@ def _build_app(
 ) -> FastAPI:
     app = FastAPI()
     install_database_error_handlers(app)
+    install_repository_error_handlers(app)
     app.state.neo4j = database
     app.state.session_repo = session_repo
 

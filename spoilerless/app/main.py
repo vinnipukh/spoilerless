@@ -24,6 +24,7 @@ from spoilerless.app.api.chat import router as chat_router
 from spoilerless.app.api.change_set import router as change_set_router
 from spoilerless.app.api.settings import router as settings_router
 from spoilerless.app.api.share import router as share_router
+from spoilerless.app.api.exceptions import install_repository_error_handlers
 from spoilerless.app.core.config import get_settings, verify_google_client_id_equality
 from spoilerless.app.core.errors import install_database_error_handlers
 from spoilerless.app.graph.database import Neo4jDatabase
@@ -205,6 +206,7 @@ app.middleware("http")(_security_headers_middleware)
 app.middleware("http")(_request_logging_middleware)
 install_database_error_handlers(app)
 install_llm_error_handlers(app)
+install_repository_error_handlers(app)
 
 
 @app.get("/health", response_model=HealthResponse, summary="Check service and database health",

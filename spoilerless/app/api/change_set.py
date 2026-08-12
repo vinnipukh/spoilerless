@@ -21,17 +21,10 @@ from spoilerless.app.core.errors import error_responses, http_error
 from spoilerless.app.domain.change_set import ChangeSetCreateRequest, ChangeSetResponse
 from spoilerless.app.services.change_set import (
     ChangeSetConflict,
-    ChangeSetNotFound,
     ChangeSetNotRevertible,
-    ChangeSetOperationInvalid,
     ChangeSetRevertConflict,
-    ChangeSetRevertUnsupported,
     ChangeSetService,
-    ChangeSetSessionNotFound,
-    ChangeSetStale,
-    ChangeSetValidationError,
 )
-from spoilerless.app.services.progress import ProgressNotFoundError
 
 router = APIRouter(prefix="/api/series/{series_id}/change-sets", tags=["change-sets"])
 
@@ -43,25 +36,8 @@ def get_change_set_service(database: DatabaseDependency) -> ChangeSetService:
 ChangeSetServiceDependency = Annotated[ChangeSetService, Depends(get_change_set_service)]
 
 
-def _not_found() -> None:
-    raise http_error(404, "RESOURCE_NOT_FOUND", "Resource not found.")
-
-
-def _invalid() -> None:
-    raise http_error(422, "INVALID_REQUEST", "Request validation failed.")
-
-
 def _conflict(message: str = "The request conflicts with the current resource state.") -> None:
     raise http_error(409, "RESOURCE_CONFLICT", message)
-
-
-def _stale() -> None:
-    raise http_error(
-        409,
-        "CHANGESET_STALE",
-        "This ChangeSet was proposed at a higher progress boundary than the "
-        "current progress and must be regenerated before it can be confirmed.",
-    )
 
 
 @router.post(
@@ -87,13 +63,10 @@ async def propose_change_set(
     only the ``ChangeSet`` draft resource itself (Stage 2/06-06 applies it).
     """
     if payload.series_id != series_id:
-        _invalid()
-    try:
-        return await service.propose(user["id"], series_id, payload)
-    except (ProgressNotFoundError, ChangeSetSessionNotFound):
-        _not_found()
-    except ChangeSetValidationError:
-        _invalid()
+        raise http_error(422, "INVALID_REQUEST", "Request validation failed.")
+    # PROB-10/#70: ProgressNotFoundError/ChangeSetSessionNotFound/ChangeSet
+    # ValidationError translate via the api/exceptions.py registry.
+    return await service.propose(user["id"], series_id, payload)
 
 
 @router.post(
@@ -126,16 +99,13 @@ async def confirm_change_set(
     a higher progress boundary than the current, since-lowered, progress) is
     rejected with a distinct ``409 changeset_stale`` — never silently applied.
     """
+    # PROB-10/#70: ChangeSetNotFound/ChangeSetStale/ChangeSetOperationInvalid
+    # translate via the registry; ChangeSetConflict keeps its context-specific
+    # message here.
     try:
         result = await service.confirm(user["id"], series_id, change_set_id)
-    except ChangeSetNotFound:
-        _not_found()
-    except ChangeSetStale:
-        _stale()
     except ChangeSetConflict:
         _conflict("This ChangeSet has already been resolved and cannot be confirmed again.")
-    except ChangeSetOperationInvalid:
-        _invalid()
     await invalidate_series(series_id)
     return result
 
@@ -160,8 +130,6 @@ async def reject_change_set(
     """Reject a ChangeSet — zero graph mutation, cannot be confirmed afterward."""
     try:
         return await service.reject(user["id"], series_id, change_set_id)
-    except ChangeSetNotFound:
-        _not_found()
     except ChangeSetConflict:
         _conflict("This ChangeSet has already been resolved and cannot be rejected again.")
 
@@ -197,10 +165,10 @@ async def revert_change_set(
     was applied causes revert to fail with **409** rather than silently
     overwrite that change.
     """
+    # PROB-10/#70: ChangeSetNotFound / ChangeSetRevertUnsupported translate
+    # via the registry; NotRevertible/RevertConflict keep context messages.
     try:
         result = await service.revert(user["id"], series_id, change_set_id)
-    except ChangeSetNotFound:
-        _not_found()
     except ChangeSetNotRevertible:
         _conflict("This ChangeSet has no applied Revision to revert.")
     except ChangeSetRevertConflict:
@@ -208,7 +176,5 @@ async def revert_change_set(
             "A resource this ChangeSet created was modified or removed by a later, "
             "unrelated change; revert was aborted to avoid overwriting it."
         )
-    except ChangeSetRevertUnsupported:
-        _invalid()
     await invalidate_series(series_id)
     return result

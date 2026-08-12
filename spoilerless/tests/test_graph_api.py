@@ -17,6 +17,7 @@ from neo4j.exceptions import ServiceUnavailable
 from pydantic import ValidationError
 
 from spoilerless.app.core.errors import install_database_error_handlers
+from spoilerless.app.api.exceptions import install_repository_error_handlers
 from spoilerless.app.cache import graph_cache
 from spoilerless.app.cache.graph_cache import (
     _cache_key,
@@ -70,6 +71,7 @@ def cached_live_client(
 def test_error_responses() -> None:
     app = FastAPI()
     install_database_error_handlers(app)
+    install_repository_error_handlers(app)
 
     @app.get("/boom")
     async def boom() -> None:

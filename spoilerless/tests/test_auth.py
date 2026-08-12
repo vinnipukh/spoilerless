@@ -21,6 +21,7 @@ from spoilerless.app.api.auth import (
 )
 from spoilerless.app.core.config import get_settings
 from spoilerless.app.core.errors import install_database_error_handlers
+from spoilerless.app.api.exceptions import install_repository_error_handlers
 from spoilerless.app.domain.auth import GoogleAuthRequest, UserPublic, UserResponse
 from spoilerless.app.repository.session import InMemorySessionRepository, SessionRecord
 from spoilerless.app.services.auth import GoogleVerificationError
@@ -146,6 +147,7 @@ def auth_app(
 
     app = FastAPI()
     install_database_error_handlers(app)
+    install_repository_error_handlers(app)
     app.state.session_repo = session_repo
 
     def _override_service() -> Any:

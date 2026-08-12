@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from spoilerless.app.api import deps
 from spoilerless.app.api.share import router as share_router
 from spoilerless.app.core.errors import install_database_error_handlers
+from spoilerless.app.api.exceptions import install_repository_error_handlers
 from spoilerless.app.domain.share import ShareTokenCreate, ShareTokenRecord
 from spoilerless.app.graph.database import Neo4jDatabase
 from spoilerless.app.graph.seed import setup_database
@@ -137,6 +138,7 @@ def test_share_api_create_read_revoke_flow(database: Neo4jDatabase) -> None:
     app = FastAPI()
     repo = InMemoryShareRepository()
     install_database_error_handlers(app)
+    install_repository_error_handlers(app)
     app.include_router(share_router)
 
     mock_user = {
@@ -196,6 +198,7 @@ def test_share_api_invalid_boundary_and_forbidden_revoke(database: Neo4jDatabase
     app = FastAPI()
     repo = InMemoryShareRepository()
     install_database_error_handlers(app)
+    install_repository_error_handlers(app)
     app.include_router(share_router)
 
     user1 = {"id": "user:owner", "role": "user"}

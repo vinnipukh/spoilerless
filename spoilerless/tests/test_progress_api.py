@@ -27,6 +27,7 @@ from fastapi.testclient import TestClient
 from spoilerless.app.api import deps
 from spoilerless.app.api.progress import router as progress_router
 from spoilerless.app.core.errors import install_database_error_handlers
+from spoilerless.app.api.exceptions import install_repository_error_handlers
 from spoilerless.app.graph.database import Neo4jDatabase
 from spoilerless.app.graph.progress import PROGRESS_GET_QUERY, PROGRESS_UPSERT_QUERY
 from spoilerless.app.repository.session import InMemorySessionRepository
@@ -114,6 +115,7 @@ def progress_app(
 ) -> FastAPI:
     app = FastAPI()
     install_database_error_handlers(app)
+    install_repository_error_handlers(app)
     app.state.neo4j = database
     app.state.session_repo = session_repo
 

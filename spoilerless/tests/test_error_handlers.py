@@ -12,6 +12,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from neo4j.exceptions import ConstraintError, ServiceUnavailable
 
+from spoilerless.app.api.exceptions import install_repository_error_handlers
+
 
 # ---------------------------------------------------------------------------
 # Helpers — error-handler test app
@@ -49,6 +51,7 @@ def _build_error_test_app() -> FastAPI:
         raise Neo4jError("GENERAL", "general error")
 
     install_database_error_handlers(app)
+    install_repository_error_handlers(app)
     return app
 
 

@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from spoilerless.app.core.errors import install_database_error_handlers
+from spoilerless.app.api.exceptions import install_repository_error_handlers
 from spoilerless.app.llm.provider import (
     FakeLLMProvider,
     GeminiProvider,
@@ -257,6 +258,7 @@ async def test_openai_provider_never_exposes_api_key_in_events() -> None:
 def test_llm_error_handlers_map_to_503_with_distinct_codes() -> None:
     app = FastAPI()
     install_database_error_handlers(app)
+    install_repository_error_handlers(app)
     install_llm_error_handlers(app)
 
     @app.get("/disabled")

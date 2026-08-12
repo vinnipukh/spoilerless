@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, Response
 from fastapi.responses import StreamingResponse
 
 from spoilerless.app.api.deps import CurrentUserDependency, DatabaseDependency
-from spoilerless.app.core.errors import error_responses, http_error
+from spoilerless.app.core.errors import error_responses
 from spoilerless.app.domain.chat import (
     ChatMessageCreateRequest,
     ChatSessionCreateRequest,
@@ -26,13 +26,11 @@ from spoilerless.app.domain.chat import (
     MessageResponseEnvelope,
 )
 from spoilerless.app.llm.provider import LLMProvider, LLMProviderUnavailable
-from spoilerless.app.repository.chat import ChatSessionNotFound
 from spoilerless.app.services.chat import (
     ConcurrentGenerationLimitExceeded,
     LLMProviderDependency,
     ChatService,
 )
-from spoilerless.app.services.progress import ProgressNotFoundError
 from spoilerless.app.services.rate_limit import chat_send_rate_limiter
 
 router = APIRouter(prefix="/api/series/{series_id}/chat", tags=["chat"])
@@ -45,14 +43,6 @@ def get_chat_service(database: DatabaseDependency) -> ChatService:
 
 
 ChatServiceDependency = Annotated[ChatService, Depends(get_chat_service)]
-
-
-def _not_found() -> None:
-    raise http_error(404, "RESOURCE_NOT_FOUND", "Resource not found.")
-
-
-def _too_many_requests() -> None:
-    raise http_error(429, "TOO_MANY_REQUESTS", "Too many concurrent requests.")
 
 
 @router.post(
@@ -105,10 +95,8 @@ async def get_session(
     user: CurrentUserDependency,
     service: ChatServiceDependency,
 ) -> ChatSessionDetailResponse:
-    try:
-        return await service.get_session_detail(user["id"], series_id, session_id)
-    except ChatSessionNotFound:
-        _not_found()
+    # PROB-10/#70: ChatSessionNotFound translates via the registry.
+    return await service.get_session_detail(user["id"], series_id, session_id)
 
 
 @router.delete(
@@ -134,10 +122,8 @@ async def delete_session(
     needed — a single user-scoped MATCH already makes those three cases
     indistinguishable; see 06-PATTERNS.md note in ``graph/chat.py``).
     """
-    try:
-        await service.delete_session(user["id"], series_id, session_id)
-    except ChatSessionNotFound:
-        _not_found()
+    # PROB-10/#70: ChatSessionNotFound translates via the registry.
+    await service.delete_session(user["id"], series_id, session_id)
     return Response(status_code=204)
 
 
@@ -161,18 +147,15 @@ async def post_message(
     provider: LLMProviderDependency,
     _rate_limit: Annotated[None, Depends(chat_send_rate_limiter)],
 ) -> MessageResponseEnvelope:
-    try:
-        return await service.answer(
-            user_id=user["id"],
-            series_id=series_id,
-            chat_session_id=session_id,
-            question=payload.question,
-            provider=provider,
-        )
-    except (ChatSessionNotFound, ProgressNotFoundError):
-        _not_found()
-    except ConcurrentGenerationLimitExceeded:
-        _too_many_requests()
+    # PROB-10/#70: ChatSessionNotFound/ProgressNotFoundError (404) and
+    # ConcurrentGenerationLimitExceeded (429) translate via the registry.
+    return await service.answer(
+        user_id=user["id"],
+        series_id=series_id,
+        chat_session_id=session_id,
+        question=payload.question,
+        provider=provider,
+    )
 
 
 @router.post(
@@ -207,11 +190,10 @@ async def stream_message(
     # rejection that happens after headers are already sent is instead
     # surfaced as a structured ``event: error`` below — the clearest signal
     # this transport can give once the 200 status line has already gone out.
-    try:
-        await service.get_session_detail(user["id"], series_id, session_id)
-        await service.ensure_progress_for_chat(user["id"], series_id)
-    except (ChatSessionNotFound, ProgressNotFoundError):
-        _not_found()
+    # PROB-10/#70: ChatSessionNotFound/ProgressNotFoundError (404) translate
+    # via the registry in the pre-check.
+    await service.get_session_detail(user["id"], series_id, session_id)
+    await service.ensure_progress_for_chat(user["id"], series_id)
 
     async def event_stream() -> AsyncIterator[str]:
         try:

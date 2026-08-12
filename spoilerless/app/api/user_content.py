@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Query, Response
 
 from spoilerless.app.api.deps import CurrentUserDependency
-from spoilerless.app.core.errors import error_responses, http_error
+from spoilerless.app.core.errors import error_responses
 from spoilerless.app.cache.graph_cache import invalidate_series
 from spoilerless.app.domain.user_content import (
     NoteCreate,
@@ -17,13 +17,7 @@ from spoilerless.app.domain.user_content import (
     CustomRelationshipCreate, CustomRelationshipResponse, CustomRelationshipUpdate,
 )
 from spoilerless.app.graph.database import Neo4jDatabase, get_database
-from spoilerless.app.repository.user_content import (
-    UserContentForbidden,
-    UserContentNotFound,
-    UserContentConflict,
-    UserContentRepository,
-    UserContentValidationError,
-)
+from spoilerless.app.repository.user_content import UserContentRepository
 from spoilerless.app.services.rate_limit import content_write_rate_limiter
 
 router = APIRouter(prefix="/api/series", tags=["user-content"])
@@ -33,22 +27,6 @@ Boundary = Annotated[int, Query(gt=0, description="Persisted positive spoiler bo
 
 def _repository(database: Neo4jDatabase) -> UserContentRepository:
     return UserContentRepository(database)
-
-
-def _not_found() -> Exception:
-    return http_error(404, "RESOURCE_NOT_FOUND", "Resource not found.")
-
-
-def _invalid(exc: UserContentValidationError) -> Exception:
-    return http_error(422, "INVALID_REQUEST", "Request validation failed.")
-
-
-def _conflict(exc: UserContentConflict) -> Exception:
-    return http_error(409, "RESOURCE_CONFLICT", "The request conflicts with the current resource state.")
-
-
-def _forbidden() -> Exception:
-    return http_error(403, "FORBIDDEN", "This resource belongs to another user.")
 
 
 def _actor(user: dict) -> tuple[str, bool]:
@@ -65,14 +43,7 @@ async def create_note(
     user: CurrentUserDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
 ) -> NoteResponse:
-    try:
-        row = await _repository(database).create_note(series_id, user["id"], payload)
-    except UserContentValidationError as exc:
-        raise _invalid(exc) from exc
-    except UserContentNotFound as exc:
-        raise _not_found() from exc
-    except UserContentForbidden as exc:
-        raise _forbidden() from exc
+    row = await _repository(database).create_note(series_id, user["id"], payload)
     return NoteResponse.model_validate(row)
 
 
@@ -87,12 +58,9 @@ async def list_notes(
     target_type: NoteTargetType | None = Query(default=None),
     target_id: str | None = Query(default=None),
 ) -> list[NoteResponse]:
-    try:
-        rows = await _repository(database).list_notes(
-            series_id, visible_until_order, target_type, target_id
-        )
-    except UserContentValidationError as exc:
-        raise _invalid(exc) from exc
+    rows = await _repository(database).list_notes(
+        series_id, visible_until_order, target_type, target_id
+    )
     return [NoteResponse.model_validate(row) for row in rows]
 
 
@@ -103,10 +71,7 @@ async def list_notes(
 async def get_note(
     series_id: str, note_id: str, visible_until_order: Boundary, database: DatabaseDependency
 ) -> NoteResponse:
-    try:
-        row = await _repository(database).get_note(series_id, note_id, visible_until_order)
-    except (UserContentNotFound, UserContentValidationError) as exc:
-        raise (_not_found() if isinstance(exc, UserContentNotFound) else _invalid(exc)) from exc
+    row = await _repository(database).get_note(series_id, note_id, visible_until_order)
     return NoteResponse.model_validate(row)
 
 
@@ -120,16 +85,9 @@ async def update_note(
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
 ) -> NoteResponse:
     actor_id, is_admin = _actor(user)
-    try:
-        row = await _repository(database).update_note(
-            series_id, note_id, actor_id, payload, is_admin=is_admin
-        )
-    except UserContentValidationError as exc:
-        raise _invalid(exc) from exc
-    except UserContentNotFound as exc:
-        raise _not_found() from exc
-    except UserContentForbidden as exc:
-        raise _forbidden() from exc
+    row = await _repository(database).update_note(
+        series_id, note_id, actor_id, payload, is_admin=is_admin
+    )
     return NoteResponse.model_validate(row)
 
 
@@ -143,16 +101,9 @@ async def delete_note(
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
 ) -> Response:
     actor_id, is_admin = _actor(user)
-    try:
-        await _repository(database).delete_note(
-            series_id, note_id, actor_id, is_admin=is_admin
-        )
-    except UserContentValidationError as exc:
-        raise _invalid(exc) from exc
-    except UserContentNotFound as exc:
-        raise _not_found() from exc
-    except UserContentForbidden as exc:
-        raise _forbidden() from exc
+    await _repository(database).delete_note(
+        series_id, note_id, actor_id, is_admin=is_admin
+    )
     return Response(status_code=204)
 
 
@@ -163,16 +114,7 @@ async def create_custom_node(
     user: CurrentUserDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
 ) -> CustomNodeResponse:
-    try:
-        row = await _repository(database).create_custom_node(series_id, user["id"], payload)
-    except UserContentValidationError as exc:
-        raise _invalid(exc) from exc
-    except UserContentConflict as exc:
-        raise _conflict(exc) from exc
-    except UserContentNotFound as exc:
-        raise _not_found() from exc
-    except UserContentForbidden as exc:
-        raise _forbidden() from exc
+    row = await _repository(database).create_custom_node(series_id, user["id"], payload)
     await invalidate_series(series_id)
     return CustomNodeResponse.model_validate(row)
 
@@ -180,10 +122,7 @@ async def create_custom_node(
 @router.get("/{series_id}/custom-nodes/{node_id}", response_model=CustomNodeResponse,
             summary="Read one visible custom node", responses=error_responses(404, 422, 503))
 async def get_custom_node(series_id: str, node_id: str, visible_until_order: Boundary, database: DatabaseDependency) -> CustomNodeResponse:
-    try:
-        return CustomNodeResponse.model_validate(await _repository(database).get_custom_node(series_id, node_id, visible_until_order))
-    except UserContentValidationError as exc: raise _invalid(exc) from exc
-    except UserContentNotFound as exc: raise _not_found() from exc
+    return CustomNodeResponse.model_validate(await _repository(database).get_custom_node(series_id, node_id, visible_until_order))
 
 
 @router.patch("/{series_id}/custom-nodes/{node_id}", response_model=CustomNodeResponse,
@@ -194,18 +133,9 @@ async def update_custom_node(
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
 ) -> CustomNodeResponse:
     actor_id, is_admin = _actor(user)
-    try:
-        row = await _repository(database).update_custom_node(
-            series_id, node_id, actor_id, payload, is_admin=is_admin
-        )
-    except UserContentValidationError as exc:
-        raise _invalid(exc) from exc
-    except UserContentConflict as exc:
-        raise _conflict(exc) from exc
-    except UserContentNotFound as exc:
-        raise _not_found() from exc
-    except UserContentForbidden as exc:
-        raise _forbidden() from exc
+    row = await _repository(database).update_custom_node(
+        series_id, node_id, actor_id, payload, is_admin=is_admin
+    )
     await invalidate_series(series_id)
     return CustomNodeResponse.model_validate(row)
 
@@ -218,14 +148,9 @@ async def delete_custom_node(
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
 ) -> Response:
     actor_id, is_admin = _actor(user)
-    try:
-        await _repository(database).delete_custom_node(
-            series_id, node_id, actor_id, is_admin=is_admin
-        )
-    except UserContentValidationError as exc: raise _invalid(exc) from exc
-    except UserContentConflict as exc: raise _conflict(exc) from exc
-    except UserContentNotFound as exc: raise _not_found() from exc
-    except UserContentForbidden as exc: raise _forbidden() from exc
+    await _repository(database).delete_custom_node(
+        series_id, node_id, actor_id, is_admin=is_admin
+    )
     await invalidate_series(series_id)
     return Response(status_code=204)
 
@@ -237,16 +162,7 @@ async def create_custom_relationship(
     user: CurrentUserDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
 ) -> CustomRelationshipResponse:
-    try:
-        row = await _repository(database).create_custom_relationship(series_id, user["id"], payload)
-    except UserContentValidationError as exc:
-        raise _invalid(exc) from exc
-    except UserContentConflict as exc:
-        raise _conflict(exc) from exc
-    except UserContentNotFound as exc:
-        raise _not_found() from exc
-    except UserContentForbidden as exc:
-        raise _forbidden() from exc
+    row = await _repository(database).create_custom_relationship(series_id, user["id"], payload)
     await invalidate_series(series_id)
     return CustomRelationshipResponse.model_validate(row)
 
@@ -254,10 +170,7 @@ async def create_custom_relationship(
 @router.get("/{series_id}/custom-relationships/{relationship_id}", response_model=CustomRelationshipResponse,
             summary="Read one visible custom relationship", responses=error_responses(404, 422, 503))
 async def get_custom_relationship(series_id: str, relationship_id: str, visible_until_order: Boundary, database: DatabaseDependency) -> CustomRelationshipResponse:
-    try:
-        return CustomRelationshipResponse.model_validate(await _repository(database).get_custom_relationship(series_id, relationship_id, visible_until_order))
-    except UserContentValidationError as exc: raise _invalid(exc) from exc
-    except UserContentNotFound as exc: raise _not_found() from exc
+    return CustomRelationshipResponse.model_validate(await _repository(database).get_custom_relationship(series_id, relationship_id, visible_until_order))
 
 
 @router.patch("/{series_id}/custom-relationships/{relationship_id}", response_model=CustomRelationshipResponse,
@@ -268,18 +181,9 @@ async def update_custom_relationship(
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
 ) -> CustomRelationshipResponse:
     actor_id, is_admin = _actor(user)
-    try:
-        row = await _repository(database).update_custom_relationship(
-            series_id, relationship_id, actor_id, payload, is_admin=is_admin
-        )
-    except UserContentValidationError as exc:
-        raise _invalid(exc) from exc
-    except UserContentConflict as exc:
-        raise _conflict(exc) from exc
-    except UserContentNotFound as exc:
-        raise _not_found() from exc
-    except UserContentForbidden as exc:
-        raise _forbidden() from exc
+    row = await _repository(database).update_custom_relationship(
+        series_id, relationship_id, actor_id, payload, is_admin=is_admin
+    )
     await invalidate_series(series_id)
     return CustomRelationshipResponse.model_validate(row)
 
@@ -292,13 +196,8 @@ async def delete_custom_relationship(
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
 ) -> Response:
     actor_id, is_admin = _actor(user)
-    try:
-        await _repository(database).delete_custom_relationship(
-            series_id, relationship_id, actor_id, is_admin=is_admin
-        )
-    except UserContentValidationError as exc: raise _invalid(exc) from exc
-    except UserContentConflict as exc: raise _conflict(exc) from exc
-    except UserContentNotFound as exc: raise _not_found() from exc
-    except UserContentForbidden as exc: raise _forbidden() from exc
+    await _repository(database).delete_custom_relationship(
+        series_id, relationship_id, actor_id, is_admin=is_admin
+    )
     await invalidate_series(series_id)
     return Response(status_code=204)

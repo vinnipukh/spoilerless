@@ -927,3 +927,90 @@ failures (`test_openapi_contract` ×2) remain open — they assert the
 older 45-op contract while the live surface is 50/37; they stay red by
 policy (pre-existing), but the docs they guard are now current.
 
+
+---
+
+## THIRTEENTH PASS — ledger reconciliation + PROB-10 fixes (2026-08-12)
+
+Ledger was badly stale: sibling-session commits (plans 09-08..09-16) fixed
+many findings without appending passes. This pass re-verified every finding
+against live source, recorded the unrecorded fixes, fixed the remaining
+runtime/test items, and closed the baseline.
+
+### Fixed and committed this pass
+- **#16 — FIXED (17e166a).** App.tsx read `lastGoodGraphRef.current` in the
+  render body (react-hooks/refs violation). Replaced with a guarded
+  render-phase `setState` mirror — sanctioned pattern, identical
+  single-paint semantics. `eslint src` now **0 problems, 0 warnings**
+  (was 28 errors at the audit); tsc -b clean; App.test 17/17; full FE
+  suite 333/333 (also closes #17's flake — the e2e test is deterministic
+  under `waitFor`).
+- **#78 — FIXED (b52b1c9).** `ChangeSetService.propose` gained optional
+  `visible_until_order`: the `propose_changeset` tool threads the boundary
+  resolved once per turn in `answer()` — no second progress DB read per
+  propose call, no snapshot drift from the context the model saw. Tool
+  error results carry the exception TYPE only (raw `str(exc)` never
+  reaches the model-visible result).
+- **#14/#20/#21/#28 baseline — FIXED (545126f).** The 7-failure baseline is
+  closed: full local-docker suite is now **591 passed / 1 skipped / 0
+  failed** (~2m). openapi_contract updated to the live 50-op/37-template
+  surface (+phase-9 path/export/share ops, DELETE typing rule accepts
+  200-with-body beside 204); frontend_contract_doc non-goals updated
+  (roles/permissions are implemented — #5); seed_idempotency constraint
+  assertions engine-tolerant (AuraDB `NODE_PROPERTY_UNIQUENESS` vs local
+  5.x `UNIQUENESS`); graph image tests lock the post-#28 contract (no
+  external-CDN hotlinks — self-host only).
+- **#60 — FIXED (3e80021, 50484f2).** The three candidate route closures
+  (approve/reject/edit, ~85% duplicated) moved into `graph/candidates.py`
+  as real keyword-param repository methods + module-level work functions;
+  the 175-line revert closure moved into `revisions/__init__.py` as
+  `revert_revision_work`. Routes shrink to command build +
+  invalidate_series; router-level query constants deleted. Candidate +
+  revision suites 34/34.
+- **#70 — FIXED (this pass, uncommitted at write time).** One sentinel→
+  envelope registry in `api/exceptions.py` (`install_repository_error_handlers`)
+  — layer-correct (api, not core); uniform mappings for UserContent*,
+  ChangeSetNotFound/SessionNotFound/OperationInvalid/RevertUnsupported/
+  ValidationError/Stale, ChatSessionNotFound, ProgressNotFoundError,
+  ConcurrentGenerationLimitExceeded. user_content (9 handlers), chat (4),
+  change_set (4) routes collapse to bare awaits; context-specific messages
+  (ChangeSetConflict confirm/reject wording, NotRevertible, RevertConflict)
+  stay as one-line route catches. ~120 lines of 4-clause boilerplate
+  deleted. 12 standalone test apps install the registry.
+
+### Fixed in-tree before this pass (recorded here for ledger accuracy —
+all verified against live source 2026-08-12)
+- #1-#4: write surface auth + ownership (owner-bound user content,
+  owner/admin revert checks, admin-gated candidate review — AUTH-03).
+- #5: admin-gated LLM settings (`RequireAdminDependency`); host allowlist
+  + at-rest key encryption still open (ops).
+- #9: session sweep loop wired in main.py. #10: verify_origin fails closed
+  + logout covered. #12/#13: server-resolved boundaries, anonymous = 1.
+- #32 uuid4 session ids; #33 revision user_id; #34 real persisted
+  revision_id; #35 FAILED status + logged stream failures; #37 None-guard;
+  #42 `google` bound in verifier scope; #43 wire-shape fixed (PROB-31);
+  #44 startup schema check; #45 error boundaries; #46 scratch-series
+  candidate tests + zombie sweep script; #47 behavioral verifier tests;
+  #48 notes bucket; #49 one visibility derivation; #50 created_by on
+  direct API; #51 revert_revision_id; #52 JSONDecodeError + dead code
+  gone; #53 series_id on SOURCES/EVIDENCE; #56 no silent no-ops (PROB-31);
+  #57 fcose/filters/zoom culling (plan 09-14); #58-#77 ELEVENTH PASS;
+  #80/#81 partial (ELEVENTH).
+
+### Still open (documented, no runtime bug)
+- #19: no migration framework — seed remains schema-as-code (additive
+  constraints are superset-checked).
+- #36: least-privilege DB user — operator task (deployment uses the
+  provider-issued credentials).
+- #79: god-file decomposition (pipeline 969, DetailPanel 1001, App 708,
+  user_content 856, change_set 850, tools 861) — structural only.
+- #81 tail: FE export-fallback dedup, CitationChip contract abuse, useNotes
+  provider, nodeTypes registries, operationTargetRefs, DEXTER tier table,
+  settings typed fields, share request/response models, `verify_origin`
+  `"*"` bypass (deliberate, documented).
+- #29: still 33 commits ahead of origin/main; remote reachable —
+  push + CI green (CI workflow exists; suite green locally) remains an
+  operator action.
+- #22/#23 doc drift partially re-opened by this pass's changes — the
+  canonical docs (TWELFTH) predate #70's registry; ARCHITECTURE/API.md
+  route-layer descriptions still name per-router helpers.
