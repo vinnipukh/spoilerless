@@ -80,9 +80,13 @@ RETURN node.id AS id,
 ORDER BY node.visible_from_order, node.id
 """
 
-EVIDENCE_FOR_CLAIMS_QUERY = """\
+EVIDENCE_FOR_CLAIMS_QUERY = (
+    """\
 MATCH (claim:Claim {series_id: $series_id})-[supported:SUPPORTED_BY]->(evidence:EvidenceFragment)
 WHERE claim.id IN $claim_ids
+  AND """
+    + visible_claim_where()
+    + """
   AND supported.visible_from_order IS NOT NULL
   AND supported.visible_from_order <= $visible_until_order
   AND evidence.visible_from_order IS NOT NULL
@@ -98,10 +102,15 @@ RETURN evidence.id AS id,
        claim.id AS claim_id
 ORDER BY evidence.visible_from_order, evidence.id
 """
+)
 
-SOURCES_FOR_CLAIMS_QUERY = """\
+SOURCES_FOR_CLAIMS_QUERY = (
+    """\
 MATCH (claim:Claim {series_id: $series_id})-[ref:REFERS_TO]->(source:Source)
 WHERE claim.id IN $claim_ids
+  AND """
+    + visible_claim_where()
+    + """
   AND ref.visible_from_order IS NOT NULL
   AND ref.visible_from_order <= $visible_until_order
   AND source.visible_from_order IS NOT NULL
@@ -116,6 +125,7 @@ RETURN source.id AS id,
        claim.id AS claim_id
 ORDER BY source.visible_from_order, source.id
 """
+)
 
 EPISODE_CODES_QUERY = """\
 MATCH (episode:Episode)
@@ -178,9 +188,13 @@ LIMIT $limit
 """
 )
 
-GET_EVIDENCE_QUERY = """\
+GET_EVIDENCE_QUERY = (
+    """\
 MATCH (claim:Claim {series_id: $series_id})-[supported:SUPPORTED_BY]->(evidence:EvidenceFragment)
 WHERE claim.id IN $claim_ids
+  AND """
+    + visible_claim_where()
+    + """
   AND supported.visible_from_order IS NOT NULL
   AND supported.visible_from_order <= $visible_until_order
   AND evidence.visible_from_order IS NOT NULL
@@ -197,10 +211,15 @@ RETURN evidence.id AS id,
 ORDER BY evidence.visible_from_order, evidence.id
 LIMIT $limit
 """
+)
 
-GET_SOURCES_QUERY = """\
+GET_SOURCES_QUERY = (
+    """\
 MATCH (claim:Claim {series_id: $series_id})-[ref:REFERS_TO]->(source:Source)
 WHERE claim.id IN $claim_ids
+  AND """
+    + visible_claim_where()
+    + """
   AND ref.visible_from_order IS NOT NULL
   AND ref.visible_from_order <= $visible_until_order
   AND source.visible_from_order IS NOT NULL
@@ -216,6 +235,7 @@ RETURN source.id AS id,
 ORDER BY source.visible_from_order, source.id
 LIMIT $limit
 """
+)
 
 GRAPH_SUMMARY_COUNTS_QUERY = (
     """\

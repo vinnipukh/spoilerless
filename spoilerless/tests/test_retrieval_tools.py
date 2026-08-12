@@ -629,6 +629,76 @@ async def test_get_sources_visible_only(database: Neo4jDatabase) -> None:
     assert hidden == missing
 
 
+@pytest.mark.asyncio
+async def test_get_evidence_hidden_claim_with_visible_attachments_fails_closed(
+    database: Neo4jDatabase, scratch_series: str
+) -> None:
+    """The claim hop itself must be visibility-gated, not just its
+    attachments: a hidden Claim never yields evidence rows, even when the
+    evidence fragment and SUPPORTED_BY relationship are individually
+    visible at the boundary (retrieval-hop visibility gating)."""
+    hidden_claim = "scratch:claim:hidden-with-visible-evidence"
+    await database.execute_query(
+        """
+        CREATE (subject:Character {id: $subject_id, series_id: $series_id,
+                label: $subject_id, visible_from_order: 1,
+                origin: 'canonical'})
+        CREATE (object:Character {id: $object_id, series_id: $series_id,
+                label: $object_id, visible_from_order: 1,
+                origin: 'canonical'})
+        CREATE (claim:Claim {id: $claim_id, series_id: $series_id,
+                label: $claim_id, subject_id: $subject_id,
+                predicate: 'KNOWS', object_id: $object_id,
+                claim_type: 'observed_event', status: 'corroborated',
+                confidence_level: 'high', visible_from_order: 99,
+                origin: 'canonical'})
+        CREATE (claim)-[:SUPPORTED_BY {id: $evidence_id + ':supported_by',
+                series_id: $series_id, visible_from_order: 1,
+                origin: 'canonical'}]->(evidence:EvidenceFragment
+                {id: $evidence_id, series_id: $series_id,
+                label: $evidence_id, episode_id: 'scratch:ep:s01e01',
+                source_id: $source_id, text: 'visible text',
+                locator: 'S01E01', visible_from_order: 1,
+                origin: 'canonical'})
+        CREATE (claim)-[:REFERS_TO {id: $source_id + ':refers_to',
+                series_id: $series_id, visible_from_order: 1,
+                origin: 'canonical'}]->(source:Source
+                {id: $source_id, series_id: $series_id,
+                label: $source_id, episode_id: 'scratch:ep:s01e01',
+                source_type: 'episode', locator: 'S01E01',
+                visible_from_order: 1, origin: 'canonical'})
+        """,
+        subject_id="scratch:character:hidden-claim-a",
+        object_id="scratch:character:hidden-claim-b",
+        claim_id=hidden_claim,
+        evidence_id="scratch:evidence:visible-attachment",
+        source_id="scratch:source:visible-attachment",
+        series_id=scratch_series,
+    )
+
+    evidence = await get_evidence(
+        database,
+        claim_ids=[hidden_claim],
+        series_id=scratch_series,
+        visible_until_order=1,
+    )
+    sources = await get_sources(
+        database,
+        claim_ids=[hidden_claim],
+        series_id=scratch_series,
+        visible_until_order=1,
+    )
+    missing = await get_evidence(
+        database,
+        claim_ids=["scratch:claim:no-such"],
+        series_id=scratch_series,
+        visible_until_order=1,
+    )
+    assert evidence == []
+    assert sources == []
+    assert evidence == missing
+
+
 # ---------------------------------------------------------------------------
 # get_current_visible_graph_summary
 # ---------------------------------------------------------------------------

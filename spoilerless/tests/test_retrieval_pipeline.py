@@ -112,14 +112,18 @@ class _StubDatabase:
             # falls back to node_rows when no entity_rows are supplied —
             # the neighborhood tests provide entities via node_rows.
             "node.id = $entity_id": entity_rows or node_rows or [],
-            "claim.claim_type": claim_rows or [],
             "node.id IN $node_ids": node_rows or [],
             # USER_NOTES_QUERY's owner predicate is distinctive enough to
             # route before the shared REFERS_TO fragment (which the
             # SOURCES_FOR_CLAIMS_QUERY also contains).
             "note.user_id = $user_id": note_rows or [],
+            # SUPPORTED_BY / REFERS_TO must route BEFORE "claim.claim_type":
+            # the evidence/sources queries embed the shared claim predicate
+            # (visible_claim_where) and would otherwise be mistaken for
+            # claim-selecting queries.
             "SUPPORTED_BY": evidence_rows or [],
             "REFERS_TO": source_rows or [],
+            "claim.claim_type": claim_rows or [],
             "episode.id IN $episode_ids": [],
             "series:Series": series_rows or [],
             "toLower(coalesce(node.label": search_rows or [],
