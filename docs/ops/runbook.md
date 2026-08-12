@@ -223,8 +223,14 @@ was killed after 25+ minutes without completing — still slower than serial, so
 the durable guidance stands: against shared AuraDB run single chunks
 (`--chunk <name>`) sequentially; parallel is only useful with isolated Neo4j
 instances. The graph chunk alone is ~15 min (per-test re-seed is required for
-isolation — module-scoped clients broke cookie/get_database state), and the
-sub-8-minute target requires local docker Neo4j (`scripts/env-local.sh`).
+isolation — module-scoped clients broke cookie/get_database state). Local
+docker Neo4j (`scripts/env-local.sh` + the `aura_*` exports; correct container
+is `hdgrafcehennemi-neo4j` on 2026.06.0, NOT the stale `hdgraf-neo4j`
+5-community) makes seeding ~4.6s — but the green full suite is still ~42 min
+because the function-scoped `live_client` re-seeds per test (~10s/test). The
+EIGHTH PASS "<8m (2:01)" figure was measured on the stale 5-community
+container with 35 fast-failing tests — never a green-suite benchmark. Suite
+speedup task is tracked in docs/ROADMAP.md §8.7.
 
 **Environment pitfall (why agents historically "could not run" the suite):**
 the Hermes terminal exports `PYTHONPATH` pointing at the hermes-agent
