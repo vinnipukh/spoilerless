@@ -503,21 +503,13 @@ export function GraphCanvas({
     runLayout(cy, seriesId, graph.visible_until_order, modeChanged || cyChanged, mode, suppressAutoZoom)
   }, [graph, focusedElementIds, revealTarget, seriesId, mode])
 
-  // 08-12 (product owner): on launch, do exactly what the Refresh graph
-  // button does — one forced re-layout + re-fit (runLayout force=true:
-  // ignores cached positions, re-fits the view). The canvas only mounts
-  // when the app enters the graph (cold load, login, visitor entry), so a
-  // mount-time action covers every launch path. Guarded by a ref so a
-  // StrictMode dev double-mount / remount of an already-launched canvas
-  // never re-fires.
-  const launchRefreshedRef = useRef(false)
-  useEffect(() => {
-    const cy = cyInstanceRef.current
-    if (!cy || launchRefreshedRef.current) return
-    launchRefreshedRef.current = true
-    runLayout(cy, seriesId, graph.visible_until_order, true, mode)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // Launch refresh is scheduled from the cy callback below, not a mount
+  // effect. react-cytoscapejs can deliver its cy instance after parent
+  // effects have already run; an effect-only refresh then silently misses
+  // cold loads and leaves the declarative fit:false layout (the diagonal
+  // view). Key by cy identity so StrictMode/remount refreshes the LIVE
+  // instance, exactly like the Refresh graph button.
+  const launchRefreshCyRef = useRef<cytoscape.Core | null>(null)
 
   // Apply/clear an externally-driven `graph_focus` highlight (RAG-17), keyed
   // on the `focusedElementIds` prop — the same "prop-driven effect" pattern
@@ -736,6 +728,15 @@ export function GraphCanvas({
 
             if (wiredCyRef.current === cy) return
             wiredCyRef.current = cy
+
+            if (launchRefreshCyRef.current !== cy) {
+              launchRefreshCyRef.current = cy
+              queueMicrotask(() => {
+                if (cyInstanceRef.current === cy && lastLayoutCyRef.current !== cy) {
+                  runLayout(cy, seriesId, graph.visible_until_order, true, mode)
+                }
+              })
+            }
 
             cy.on('mouseover', 'node', (evt) => {
               cy.container()?.setAttribute('title', evt.target.data('label'))
