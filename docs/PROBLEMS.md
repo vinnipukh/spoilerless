@@ -107,7 +107,7 @@ Constraints/indexes live in `seed.py` as idempotent `CREATE CONSTRAINT IF NOT EX
 ## MEDIUM — "well documented crap": the docs drift, overclaim, and underclaim
 
 ### 21. `docs/API.md` route counts are stale — off by exactly the dev-login route
-`API.md:10` claims "**44** method/path operations over **32** path templates". Live `/openapi.json`: **45 operations / 33 paths**. The missing entry is `POST /api/auth/dev` — the backdoor route (#7) — which the flagship API doc doesn't even list. This file is not test-locked (only `frontend-api-contract.md` is), so it rots. **Fix:** generate API.md from `app.openapi()` in CI or delete the hand-maintained counts.
+`API.md:10` claims "**44** method/path operations over **32** path templates". Live `/openapi.json`: **45 operations / 33 paths**. The missing entry is `POST /api/auth/dev` — the backdoor route (#7) — which the flagship API doc doesn't even list. This file is not test-locked (only `reference/frontend-api-contract.md` is), so it rots. **Fix:** generate API.md from `app.openapi()` in CI or delete the hand-maintained counts.
 
 ### 22. `docs/ARCHITECTURE.md` claims the LLM "always emits proposed_change_set: null" — false since 07-07
 `ARCHITECTURE.md:562`: "the current chat/retrieval pipeline does not create or return them and **always emits `proposed_change_set: null`**". Since commit `67f4a58` (07-07) the pipeline ships a 12th allowlisted tool, `propose_changeset`, wired into the done-envelope `proposed_change_set`. The doc describing the system's own headline capability (agent-proposed graph edits) is outdated by its most recent feature.
@@ -355,7 +355,7 @@ Race: the mount-time `getProgress` hydration (`useEffect` deps `[]`, lines 104-1
 
 ## SEVENTH PASS — backend test-suite time (2026-08-10)
 
-Suite was 75+ min (coding agents timed out mid-run; see BACKEND_DEPLOY_FIX.md).
+Suite was 75+ min (coding agents timed out mid-run; see ops/runbook.md).
 Optimized in one pass (commit a56b52f):
 
 - **Per-test full re-seed (was ~12s x N)** — graph/episode/api_series tests each

@@ -2,7 +2,7 @@
 
 > **Status vocabulary:** **implemented** describes the current repository; **prototype target** describes the original one-week vertical slice; **future direction** is architectural guidance, not a claim of implementation.
 >
-> This document is the canonical project and coding-agent specification after consolidation. Detailed implementation references remain in [ARCHITECTURE.md](ARCHITECTURE.md), [API.md](API.md), [DEVELOPMENT.md](DEVELOPMENT.md), [TESTING.md](TESTING.md), and [frontend-api-contract.md](frontend-api-contract.md).
+> This document is the canonical project and coding-agent specification after consolidation. Detailed implementation references remain in [ARCHITECTURE.md](../ARCHITECTURE.md), [API.md](../API.md), [DEVELOPMENT.md](../DEVELOPMENT.md), [TESTING.md](../TESTING.md), and [frontend-api-contract.md](../reference/frontend-api-contract.md).
 
 ## 1. Aim, prototype boundary, and current state
 
@@ -25,7 +25,7 @@ Curated episode data → source-grounded claims → Neo4j
 → LLM answers grounded in the visible subgraph
 ```
 
-**Current implementation:** the repository now contains the original graph slice plus Google sign-in and server-side sessions, persisted watch progress, user content, revisions, candidate ingestion/review APIs, GraphRAG chat and retrieval tools, settings, and confirmable ChangeSets. The REST surface currently has 44 method/path operations over 32 path templates. Chat is optional and disabled unless configured. Candidate-review reads are a known spoiler-boundary exception, and several production concerns remain unresolved; see [Current gaps](#13-current-gaps-and-scope-boundaries) and [ROADMAP.md](ROADMAP.md).
+**Current implementation:** the repository now contains the original graph slice plus Google sign-in and server-side sessions, persisted watch progress, user content, revisions, candidate ingestion/review APIs, GraphRAG chat and retrieval tools, settings, confirmable ChangeSets, and share links. The generated OpenAPI document contains 50 method/path operations over 37 path templates, including the export and share routes now registered in `spoilerless/app/main.py`. Chat is optional and disabled unless configured. Candidate-review reads are no longer a spoiler-boundary exception: both candidate list and candidate detail call `_require_resolved_boundary` in `spoilerless/app/api/candidates.py`, so an omitted or nonpersisted episode order returns 422 and the repository read is boundary-filtered. Several production concerns remain unresolved; see [Current gaps](#13-current-gaps-and-scope-boundaries) and [ROADMAP.md](../ROADMAP.md).
 
 ### 1.1 Delivery boundary and extension discipline
 
@@ -80,7 +80,7 @@ The system prompt and runtime must require the model to:
 - cite retrieved claim/evidence/source identifiers;
 - say when the available graph does not support an answer.
 
-**Implemented:** chat resolves the boundary from persisted user progress; server-owned tool arguments inject `series_id` and `visible_until_order`; retrieval is bounded and allowlisted; citations are validated against the current turn's retrieved IDs. No retrieval tool accepts raw Cypher. See [ARCHITECTURE.md §7.8](ARCHITECTURE.md#78-graphrag-lite-chat-pipeline) and [API.md, Chat](API.md#chat).
+**Implemented:** chat resolves the boundary from persisted user progress; server-owned tool arguments inject `series_id` and `visible_until_order`; retrieval is bounded and allowlisted; citations are validated against the current turn's retrieved IDs. No retrieval tool accepts raw Cypher. See [ARCHITECTURE.md §7.8](../ARCHITECTURE.md#78-graphrag-lite-chat-pipeline) and [API.md, Chat](../API.md#chat).
 
 ## 3. Non-negotiable architecture invariants
 
@@ -92,7 +92,7 @@ Future story data must be filtered before it reaches the frontend or LLM; sendin
 
 The same rule covers nodes, edges, claims, evidence, sources, search, autocomplete, degree/count metadata, hidden labels, episode metadata, graph layout metadata, character appearance counts, retrieval context, and error behavior. Hidden and missing resources should be indistinguishable where a boundary applies. Do not reproduce IMDb-style leaks such as total appearance counts.
 
-**Known current exception:** `GET /api/series/{series_id}/candidates` accepts an optional `visible_until_order`, and `GET /api/series/{series_id}/candidates/{claim_id}` has no watch boundary. Treat this as a documented gap, not precedent for new endpoints. Boundary behavior by route is specified in [frontend-api-contract.md](frontend-api-contract.md#spoiler-boundary-and-fail-closed-reads).
+**Candidate reads require a resolved boundary:** `GET /api/series/{series_id}/candidates` and `GET /api/series/{series_id}/candidates/{claim_id}` both declare `visible_until_order` and invoke `_require_resolved_boundary` in `spoilerless/app/api/candidates.py` — an omitted or nonpersisted episode order returns 422, and the repository read is boundary-filtered so above-boundary detail reads as missing. Treat any weakening of this as a documented gap, not precedent for new endpoints. Boundary behavior by route is specified in [frontend-api-contract.md](../reference/frontend-api-contract.md#spoiler-boundary-and-fail-closed-reads).
 
 ### 3.2 Episode-order visibility and narrative time
 
@@ -108,7 +108,7 @@ record.visible_from_order <= viewer_boundary
 - `valid_until_order`: when it ceases to be true;
 - `visible_from_order`: when the viewer is allowed to discover it.
 
-Discovery and narrative validity are different. A state may begin in episode 2 but become knowable only in episode 3. Current graph and retrieval queries honor visibility and claim validity windows. Null visibility must fail closed; setup includes a visibility-integrity audit because Neo4j Community lacks the required property-existence constraint.
+Discovery and narrative validity are different. A state may begin in episode 2 but become knowable only in episode 3. The main graph queries in `spoilerless/app/spoiler/filter.py` gate the matched Claim and its validity window, but the retrieval evidence/source lookups (`GET_EVIDENCE_QUERY`, `GET_SOURCES_QUERY`, `EVIDENCE_FOR_CLAIMS_QUERY`, `SOURCES_FOR_CLAIMS_QUERY` in `spoilerless/app/retrieval/tools.py`) gate the `SUPPORTED_BY`/`REFERS_TO` relationship and the evidence/source node visibility without gating the matched Claim's own `visible_from_order` or `valid_from_order`/`valid_until_order`. Null visibility must fail closed; setup includes a visibility-integrity audit because Neo4j Community lacks the required property-existence constraint.
 
 ### 3.3 Provenance and evidence
 
@@ -134,9 +134,9 @@ Full event sourcing was not required for the prototype, but meaningful mutations
 
 Node, relationship, claim type, claim status, and confidence values come from:
 
-- [`ontology/node_types.yaml`](../ontology/node_types.yaml)
-- [`ontology/relation_types.yaml`](../ontology/relation_types.yaml)
-- [`ontology/claim_types.yaml`](../ontology/claim_types.yaml)
+- [`ontology/node_types.yaml`](../../ontology/node_types.yaml)
+- [`ontology/relation_types.yaml`](../../ontology/relation_types.yaml)
+- [`ontology/claim_types.yaml`](../../ontology/claim_types.yaml)
 
 Agents must not invent predicates dynamically. If no relationship fits, record an unresolved candidate and propose an intentional ontology change. Preserve the correct spelling `OCCURRED_IN`, never `OCCURED_IN`.
 
@@ -154,7 +154,7 @@ The current setup command is:
 uv run --project spoilerless python -m spoilerless.app.graph.setup
 ```
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for contributor commands and [ARCHITECTURE.md](ARCHITECTURE.md) for current storage/query details.
+See [DEVELOPMENT.md](../DEVELOPMENT.md) for contributor commands and [ARCHITECTURE.md](../ARCHITECTURE.md) for current storage/query details.
 
 ## 4. Ontology and atomic-claim semantics
 
@@ -173,7 +173,7 @@ Ontology v0.1 defines:
 - statuses: `candidate`, `corroborated`, `canonical`, `disputed`, `rejected`;
 - confidence levels: `low`, `medium`, `high`, `verified`.
 
-A Claim represents one atomic assertion with stable subject, predicate, object, temporal visibility/validity, status, confidence, origin, ontology version, and provenance. Treat only `canonical` or `corroborated` status as accepted truth. `relationship_effect` (what the relationship does/how strong it is) is separate from `confidence_level` (how certain the system is). Do not pretend arbitrary decimal confidence is scientifically calibrated; prefer an ontology level plus explanation. The committed YAML files and [ARCHITECTURE.md §7.2–7.4](ARCHITECTURE.md#72-the-claim-model) are the detailed reference.
+A Claim represents one atomic assertion with stable subject, predicate, object, temporal visibility/validity, status, confidence, origin, ontology version, and provenance. Treat only `canonical` or `corroborated` status as accepted truth. `relationship_effect` (what the relationship does/how strong it is) is separate from `confidence_level` (how certain the system is). Do not pretend arbitrary decimal confidence is scientifically calibrated; prefer an ontology level plus explanation. The committed YAML files and [ARCHITECTURE.md §7.2–7.4](../ARCHITECTURE.md#72-the-claim-model) are the detailed reference.
 
 Not every ontology type must be exposed in the prototype UI, but the model must remain compatible with the versioned ontology.
 
@@ -187,7 +187,7 @@ GET /api/series/{series_id}/graph?visible_until_order={positive persisted episod
 
 not the stale `/api/graph?series_id=...` example. The graph response includes `series`, `visible_until_order`, `nodes`, `edges`, `claims`, `sources`, and `evidence`; each returned edge is closed over returned nodes. Health must verify Neo4j connectivity, not return a hard-coded connected value.
 
-The generated OpenAPI document is the machine-readable contract. See [API.md](API.md) for all current auth, series, graph, user-content, revision, candidate, progress, chat, ChangeSet, and settings routes. Every endpoint must use parameterized Cypher and preserve applicable visibility, ownership, and fail-closed rules.
+The generated OpenAPI document is the machine-readable contract. See [API.md](../API.md) for all current auth, series, graph, user-content, revision, candidate, progress, chat, ChangeSet, and settings routes. Every endpoint must use parameterized Cypher and preserve applicable visibility, ownership, and fail-closed rules.
 
 ## 6. Frontend and UX requirements
 
@@ -201,14 +201,14 @@ Graph appearance is a primary requirement, not an incidental default Cytoscape v
 - Use an appropriate layout such as `cose-bilkent` when stable and keep narrative graphs intentionally legible. The historical target was roughly 8–15 visible nodes per episode rather than 50 noisy nodes.
 - Every graph element must derive from the backend response; the frontend must not manufacture a second graph representation or become the spoiler boundary.
 
-Current frontend behavior and exact types are documented in [ARCHITECTURE.md §4.1](ARCHITECTURE.md#41-frontend-react--cytoscape) and [frontend-api-contract.md](frontend-api-contract.md).
+Current frontend behavior and exact types are documented in [ARCHITECTURE.md §4.1](../ARCHITECTURE.md#41-frontend-react--cytoscape) and [frontend-api-contract.md](../reference/frontend-api-contract.md).
 
 ## 7. GraphRAG constraints
 
 A real graph-backed answer path is required, but a large GraphRAG framework is not. The current allowlisted tool layer is the intended pattern:
 
 - server, never model, supplies `series_id`, user identity, and visibility boundary;
-- every tool applies its own boundary and validity filters;
+- every tool applies its own boundary and validity filters to the nodes and relationships it returns; the evidence/source lookups accept claim IDs and gate the associated `SUPPORTED_BY`/`REFERS_TO` relationship and the evidence/source node, but do not re-apply Claim visibility or validity predicates to the matched Claim itself (see [§3.2](#32-episode-order-visibility-and-narrative-time));
 - traversal depth, path hops, search/result counts, and context size are bounded server-side;
 - relationship labels and node labels come from allowlists;
 - no unrestricted text-to-Cypher or raw query parameter;
@@ -233,7 +233,7 @@ Spoiler tests are mandatory. At minimum, tests must prove:
 - edits append revisions, old values remain inspectable, and revert appends rather than erases;
 - users can understand evidence, distinguish origins, and advance progress safely.
 
-Every new spoiler-sensitive endpoint needs tests. See [TESTING.md](TESTING.md) for current pytest/Vitest commands, patterns, and the warning that integration tests use live local Neo4j.
+Every new spoiler-sensitive endpoint needs tests. See [TESTING.md](../TESTING.md) for current pytest/Vitest commands, patterns, and the warning that integration tests use live local Neo4j.
 
 ## 9. Future automated knowledge-graph ingestion architecture
 
@@ -315,7 +315,7 @@ The original one-week order is retained as historical rationale, not as current 
 6. notes, basic revisions, empty/loading/error UX;
 7. spoiler tests, fixes, README/architecture/screenshots/demo preparation.
 
-Current completion and remaining work are tracked in [ROADMAP.md](ROADMAP.md).
+Current completion and remaining work are tracked in [ROADMAP.md](../ROADMAP.md).
 
 ## 11. Coding-agent operating instructions
 
@@ -347,7 +347,7 @@ The prototype target is satisfied when a reviewer can:
 7. ask about a visible relationship and receive a Neo4j/evidence-grounded answer;
 8. verify the same question at S01E01 leaks no S01E02/S01E03 information.
 
-This is a technically honest proof of the architecture, not a claim that the system is a complete production product. Operational acceptance evidence and unresolved gaps belong in [ROADMAP.md](ROADMAP.md).
+This is a technically honest proof of the architecture, not a claim that the system is a complete production product. Operational acceptance evidence and unresolved gaps belong in [ROADMAP.md](../ROADMAP.md).
 
 ## 13. Current gaps and scope boundaries
 
@@ -361,8 +361,8 @@ Implemented preparation must not be confused with the following incomplete or fu
 - authentication expansion beyond Google sign-in and session cookies;
 - a general CSRF strategy for all state-changing cookie-authenticated routes;
 - vector search, advanced hybrid retrieval, community detection;
-- production deployment architecture, Kubernetes, and configured CI;
+- production deployment architecture, Kubernetes, and a release/deployment pipeline; CI itself is configured — `.github/workflows/ci.yml` runs a pull_request workflow with backend Neo4j setup/pytest and DB-pollution checks plus frontend build/lint/audit jobs, while the release workflow is only a promotion skeleton;
 - full event sourcing, automatic ontology evolution, calibrated confidence scoring;
 - multi-series breadth, actor appearance counts, mobile, and social features.
 
-The authoritative maintenance backlog and research direction are in [ROADMAP.md](ROADMAP.md). Preserve these boundaries unless scope is explicitly changed.
+The authoritative maintenance backlog and research direction are in [ROADMAP.md](../ROADMAP.md). Preserve these boundaries unless scope is explicitly changed.

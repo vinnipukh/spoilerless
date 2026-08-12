@@ -64,30 +64,31 @@ The following table is the complete locked inventory: **50 method/path operation
 
 ## Status and envelope contract
 
-- Reads and updates generally return **200**; note, custom-content, chat-session, and ChangeSet-draft creates return **201**, while Google auth, candidate ingest, and progress upsert return **200**; hard deletes return **204 with no response body**; logout returns **204**.
+- Reads and updates generally return **200**; note, custom-content, chat-session, and ChangeSet-draft creates return **201**, while Google auth, candidate ingest, and progress upsert return **200**. Note, custom-content, and chat-session hard deletes return **204 with no response body**; logout returns **204** after its origin check; share revocation (`DELETE /api/share/{token}`) instead returns **200** with `{"status":"revoked"}`.
 - Stable HTTP errors use **401**, **403**, **404**, **409**, **422**, **429**, or **503** and JSON error responses have this envelope. Streaming chat can instead commit an SSE response and emit `event: error` data shaped as `{"code":"...","message":"..."}`:
 
 ```json
 {"detail":{"code":"RESOURCE_NOT_FOUND","message":"Resource not found."}}
 ```
 
-Machine codes currently emitted by HTTP errors, SSE errors, and candidate-ingest item errors include `SERIES_NOT_FOUND`, `RESOURCE_NOT_FOUND`, `RESOURCE_CONFLICT`, `RESOURCE_ALREADY_EXISTS`, `INVALID_REQUEST`, `INVALID_VISIBLE_UNTIL_ORDER`, `TOO_MANY_REQUESTS`, `DATABASE_UNAVAILABLE`, `DATABASE_ERROR`, `CONSTRAINT_VIOLATION`, `CHANGESET_STALE`, `CANDIDATE_NOT_FOUND`, `CANNOT_APPROVE_NON_CANDIDATE`, `CANNOT_REVERT_CREATE`, `CANNOT_REVERT_CANONICAL`, `INVALID_ACTION`, `INVALID_EXTRACTION_PAYLOAD`, `INGEST_ERROR`, `AUTH_INVALID_GOOGLE_CREDENTIAL`, `AUTH_UNAUTHENTICATED`, `AUTH_ORIGIN_NOT_ALLOWED`, `AUTH_EMAIL_NOT_ALLOWED`, `AUTH_DISABLED`, `AUTH_SERVICE_UNAVAILABLE`, `LLM_DISABLED`, `LLM_PROVIDER_UNAVAILABLE`, and `LLM_STREAM_FAILED`. Hidden direct reads on boundary-enforced routes deliberately use the same `404 RESOURCE_NOT_FOUND` envelope as absent resources. Shared database, validation, and authentication handlers sanitize internal details, but candidate ingest/approve/reject/edit paths currently interpolate caught exception text into public **422** messages, and candidate reads do not consistently enforce a required spoiler boundary: list filtering is optional and direct GET has no boundary.
+Machine codes currently emitted by HTTP errors, SSE errors, and candidate-ingest item errors include `SERIES_NOT_FOUND`, `RESOURCE_NOT_FOUND`, `RESOURCE_CONFLICT`, `RESOURCE_ALREADY_EXISTS`, `INVALID_REQUEST`, `INVALID_VISIBLE_UNTIL_ORDER`, `TOO_MANY_REQUESTS`, `DATABASE_UNAVAILABLE`, `DATABASE_ERROR`, `CONSTRAINT_VIOLATION`, `CHANGESET_STALE`, `CANDIDATE_NOT_FOUND`, `CANNOT_APPROVE_NON_CANDIDATE`, `CANNOT_REVERT_CREATE`, `CANNOT_REVERT_CANONICAL`, `INVALID_ACTION`, `INVALID_EXTRACTION_PAYLOAD`, `INGEST_ERROR`, `AUTH_INVALID_GOOGLE_CREDENTIAL`, `AUTH_UNAUTHENTICATED`, `AUTH_ORIGIN_NOT_ALLOWED`, `AUTH_EMAIL_NOT_ALLOWED`, `AUTH_DISABLED`, `AUTH_SERVICE_UNAVAILABLE`, `LLM_DISABLED`, `LLM_PROVIDER_UNAVAILABLE`, and `LLM_STREAM_FAILED`. Hidden direct reads on boundary-enforced routes deliberately use the same not-found envelope as absent resources; hidden direct candidate reads specifically return **404** `CANDIDATE_NOT_FOUND`. Shared database, validation, and authentication handlers sanitize internal details, but candidate ingest/approve/reject/edit paths currently interpolate caught exception text into public **422** messages. Candidate list and direct candidate GET both require `visible_until_order`, resolve it to a persisted Episode order, and return **422** when the boundary is omitted or does not identify a persisted order.
 
 ## Origin and server ownership
 
 `origin` has exactly these public values: **`canonical|candidate|user`**. User-created notes, nodes, and relationships return `origin: "user"`; curated records remain canonical and future reviewed candidates remain candidate. Do not introduce `is_custom` or `source_type` as a parallel public discriminator.
 
-The server owns IDs (`user-note:*`, `user-node:*`, `user-rel:*`), `series_id`, `origin`, `visible_from_order`, `created_at`, and `updated_at`. Clients cannot submit or patch those values. Note attachment, custom-node type, relationship endpoints, episode ownership, and resource identity are immutable. PATCH accepts only note `content`, node `label`, or relationship `predicate`, respectively.
+For direct user-content payloads, the server owns IDs (`user-note:*`, `user-node:*`, `user-rel:*`), `series_id`, `origin`, `visible_from_order`, `created_at`, and `updated_at`; clients cannot submit or patch those values. The deliberate exception is `ChangeSetCreateRequest`, which requires client-supplied `series_id`, and the propose route rejects it unless it equals the path `series_id`. Note attachment, custom-node type, relationship endpoints, episode ownership, and resource identity are immutable. PATCH accepts only note `content`, node `label`, or relationship `predicate`, respectively.
 
 ## Spoiler boundary and fail-closed reads
 
-Graph, note, and direct custom-content GET routes require `visible_until_order` as a **required positive integer identifying a persisted episode order**. Revision list/get/revert routes require only a positive integer and do not resolve it against an Episode. Candidate list filtering is optional, direct candidate GET has no boundary, and chat session/detail GETs resolve visibility from persisted watch progress instead of this query parameter:
+Graph, note, direct custom-content GET, candidate-list, and direct-candidate GET routes require `visible_until_order` as a **required positive integer identifying a persisted episode order**. Revision list/get/revert routes require only a positive integer and do not resolve it against an Episode. Chat session/detail GETs resolve visibility from persisted watch progress instead of this query parameter:
 
 - `GET /api/series/{series_id}/graph?visible_until_order={order}`
 - `GET /api/series/{series_id}/notes?visible_until_order={order}&target_type={type?}&target_id={id?}`
 - direct GETs for a note, custom node, or custom relationship.
+- `GET /api/series/{series_id}/candidates?visible_until_order={order}` and `GET /api/series/{series_id}/candidates/{claim_id}?visible_until_order={order}`.
 
-Missing, malformed, zero, and negative boundaries return sanitized **422** responses. A positive-but-nonpersisted order additionally returns **422** on graph, note, and direct custom-content reads; revision routes accept it and then follow normal 200/404 query behavior. Filtering is fail-closed: the record and all attachment/relationship endpoints must have positive visibility at or below the boundary before serialization. Hidden and missing direct reads are indistinguishable. Collection responses contain no totals/counts and are deterministic; note filters require `target_type` and `target_id` together or neither.
+Missing, malformed, zero, and negative boundaries return sanitized **422** responses. Candidate, note, and direct custom-content reads return **422** for a positive boundary that does not identify a persisted Episode; revision routes accept it and then follow normal 200/404 query behavior. Graph has an authentication-dependent exception: anonymous graph reads ignore the requested value and clamp to order 1 before persisted-boundary resolution, while authenticated graph reads resolve the requested view through persisted progress. Filtering is fail-closed: the record and all attachment/relationship endpoints must have positive visibility at or below the effective boundary before serialization. Hidden and missing direct reads are indistinguishable (with `CANDIDATE_NOT_FOUND` used for direct candidate reads). Collection responses contain no totals/counts and are deterministic; note filters require `target_type` and `target_id` together or neither.
 
 ## Existing read schemas
 
@@ -95,7 +96,7 @@ Missing, malformed, zero, and negative boundaries return sanitized **422** respo
 - `GET /api/series` → `SeriesResponse[]`.
 - `GET /api/series/{series_id}` → `SeriesResponse`; missing series is 404.
 - `GET /api/series/{series_id}/episodes` → ordered `EpisodeResponse[]`; missing series is 404.
-- `GET /api/series/{series_id}/graph` → `GraphResponse` containing `series`, `visible_until_order`, `nodes`, `edges`, `claims`, `sources`, and `evidence`.
+- `GET /api/series/{series_id}/graph` → `GraphResponse` containing `series`, `visible_until_order`, `effective_view_order`, `nodes`, `edges`, `claims`, `sources`, and `evidence`. `effective_view_order` is required on the wire and must also be added to the frontend `GraphResponse` type.
 
 ## Authentication routes and schemas
 
@@ -112,10 +113,10 @@ Verifies the Google ID token signature, issuer, audience (`GOOGLE_CLIENT_ID`), a
 **200** response:
 
 ```json
-{"user":{"id":"user:abc","email":"user@example.com","display_name":"Test User","avatar_url":"https://...","created_at":"2025-01-01T00:00:00Z","updated_at":"2025-01-01T00:00:00Z"}}
+{"user":{"id":"user:abc","email":"user@example.com","display_name":"Test User","avatar_url":"https://...","role":"user","created_at":"2025-01-01T00:00:00Z","updated_at":"2025-01-01T00:00:00Z"}}
 ```
 
-A missing or invalid request body returns sanitized **422** `INVALID_REQUEST`. Expired or invalid Google credentials return generic **401** `AUTH_INVALID_GOOGLE_CREDENTIAL`; unconfigured auth returns **401** `AUTH_DISABLED`. When `ALLOWED_EMAILS` is set, a verified-but-unlisted email returns **403** `AUTH_EMAIL_NOT_ALLOWED`.
+A missing or invalid request body returns sanitized **422** `INVALID_REQUEST`. Expired or invalid Google credentials return generic **401** `AUTH_INVALID_GOOGLE_CREDENTIAL`; unconfigured auth returns **401** `AUTH_DISABLED`. When `ALLOWED_EMAILS` is set, a verified-but-unlisted email returns **403** `AUTH_EMAIL_NOT_ALLOWED`. `UserPublic.role` is always `"admin"` or `"user"`; `ADMIN_EMAILS` controls assignment, and the frontend `User` type must include this required field.
 
 ### GET /api/auth/me
 
@@ -127,12 +128,12 @@ Reads the session cookie and returns the authenticated user.
 
 ### POST /api/auth/logout
 
-Invalidates the server-side session and clears the cookie. Always returns **204** even without a session.
+After a successful `Origin`/`Referer` verification, invalidates the server-side session and clears the cookie, returning **204** even when no session exists. A missing, disallowed, or unparseable origin/referer fails first with **403** `AUTH_ORIGIN_NOT_ALLOWED`.
 
 ## Cookie contract
 
-- `HttpOnly=true`, `Path=/`, `SameSite=Lax`
-- `Secure` defaults to `false` with no automatic environment-mode switch; it is `true` only when `SESSION_COOKIE_SECURE=true` is explicitly configured
+- `HttpOnly=true`, `Path=/`; `SameSite` defaults to `lax` and `SESSION_COOKIE_SAMESITE` can configure `lax`, `strict`, or `none`
+- `Secure` defaults to `true`; local plain-HTTP development must explicitly set `SESSION_COOKIE_SECURE=false`
 - Configurable cookie name (`SESSION_COOKIE_NAME`) — default `session`
 - Opaque random session ID; no user information stored in the cookie value
 - Session token is hashed (SHA-256) server-side; raw token never stored or logged
@@ -141,7 +142,7 @@ Invalidates the server-side session and clears the cookie. Always returns **204*
 
 ## CSRF strategy
 
-`SameSite=Lax` provides baseline CSRF protection for cookie-authenticated requests. CORS limits which origins can read credentialed responses, but does not itself prevent cross-origin state mutation. Server-side `Origin`/`Referer` verification is currently attached only to `POST /api/auth/google`; logout, progress, chat, ChangeSet, settings, and other state-changing routes do not apply it or require a custom CSRF header. This is a current CSRF limitation. For deployment scenarios requiring `SameSite=None`, `Secure=true` must also be enabled.
+The default `SameSite=Lax` provides baseline CSRF protection for cookie-authenticated requests. CORS limits which origins can read credentialed responses, but does not itself prevent cross-origin state mutation. Server-side `Origin`/`Referer` verification is attached to both `POST /api/auth/google` and `POST /api/auth/logout`; progress, chat, ChangeSet, settings, and other state-changing route families do not apply it or require a custom CSRF header. This is a current CSRF limitation. For deployment scenarios using `SameSite=None`, `Secure=true` must also remain enabled.
 
 Visible custom nodes use the existing `GraphNode` shape. Visible API-owned relationships use the existing `GraphEdge` shape exactly once. Their Claim-node storage is not exposed as `GraphClaim`, `GraphSource`, or `GraphEvidence`; canonical/candidate claims still require source and evidence provenance. No second graph representation exists, and every returned edge has both endpoints in `nodes`.
 
@@ -158,10 +159,10 @@ Visible custom nodes use the existing `GraphNode` shape. Visible API-owned relat
 A **201** response is:
 
 ```json
-{"id":"user-note:example","series_id":"series_dexter","target_type":"Character","target_id":"dexter:character:dexter_morgan","content":"My plain-text note","origin":"user","visible_from_order":1,"created_at":"2026-07-29T12:00:00Z","updated_at":"2026-07-29T12:00:00Z"}
+{"id":"user-note:example","series_id":"series_dexter","user_id":"user:abc","target_type":"Character","target_id":"dexter:character:dexter_morgan","content":"My plain-text note","origin":"user","visible_from_order":1,"created_at":"2026-07-29T12:00:00Z","updated_at":"2026-07-29T12:00:00Z"}
 ```
 
-`GET /notes` returns a deterministic array with no count metadata. `GET /notes/{note_id}` returns one response at an allowed boundary. `PATCH /notes/{note_id}` accepts `{"content":"Updated plain text"}`. `DELETE` hard-deletes only the API-owned note and its attachment and returns 204.
+`GET /notes` returns a deterministic array with no count metadata. `GET /notes/{note_id}` returns one response at an allowed boundary. `PATCH /notes/{note_id}` accepts `{"content":"Updated plain text"}`. `DELETE` hard-deletes only the API-owned note and its attachment and returns 204. The backend-required, server-owned `user_id` must be added to the frontend `NoteResponse` type.
 
 Example hidden direct read:
 
@@ -183,10 +184,10 @@ Allowed `node_type` values are `Character`, `Event`, `Location`, `Organization`,
 {"node_type":"Object","label":"Blood slide","episode_id":"dexter_s01e01"}
 ```
 
-A **201** backend response uses GraphNode-compatible identity fields plus server metadata. The current frontend type does not mirror this field: `frontend/src/types/userContent.ts` declares `CustomNodeResponse.node_type` and omits the backend's `type` field.
+A **201** backend response uses GraphNode-compatible identity fields plus server metadata. The frontend contract must use the backend response field `type` (not request-only `node_type`) and include the required server-owned `user_id`; `frontend/src/types/userContent.ts` is currently stale on both points.
 
 ```json
-{"id":"user-node:example","series_id":"series_dexter","type":"Object","label":"Blood slide","visible_from_order":1,"origin":"user","episode_id":"dexter_s01e01","created_at":"2026-07-29T12:00:00Z","updated_at":"2026-07-29T12:00:00Z"}
+{"id":"user-node:example","series_id":"series_dexter","user_id":"user:abc","type":"Object","label":"Blood slide","visible_from_order":1,"origin":"user","episode_id":"dexter_s01e01","created_at":"2026-07-29T12:00:00Z","updated_at":"2026-07-29T12:00:00Z"}
 ```
 
 PATCH accepts only `{"label":"Updated label"}`. DELETE is hard delete and returns 204; dependency-conflict behavior is explicit: an attached note or user relationship produces **409 `RESOURCE_CONFLICT`**. Canonical/candidate nodes cannot be changed through these routes.
@@ -202,10 +203,10 @@ Allowed predicates are the ontology participation and character sets: `PARTICIPA
 A **201** response is GraphEdge-compatible:
 
 ```json
-{"id":"user-rel:example","series_id":"series_dexter","source":"dexter:character:dexter_morgan","target":"dexter:character:debra_morgan","type":"FAMILY_OF","visible_from_order":1,"origin":"user","episode_id":"dexter_s01e01","created_at":"2026-07-29T12:00:00Z","updated_at":"2026-07-29T12:00:00Z"}
+{"id":"user-rel:example","series_id":"series_dexter","user_id":"user:abc","source":"dexter:character:dexter_morgan","target":"dexter:character:debra_morgan","type":"FAMILY_OF","visible_from_order":1,"origin":"user","episode_id":"dexter_s01e01","created_at":"2026-07-29T12:00:00Z","updated_at":"2026-07-29T12:00:00Z"}
 ```
 
-PATCH accepts only `{"predicate":"TRUSTS"}`; endpoints are immutable. DELETE hard-deletes only the API-owned relationship representation and returns 204. Cross-series, absent, dangling, or unsupported endpoints/predicates are rejected. In the graph response these user-authored Claim records are edge-only and have `claim_id: null`; they are emitted only when both endpoints survive same-series node visibility filtering. Thus `claim_id: null` means “not a canonical/candidate claim projection,” not necessarily “structural edge.”
+PATCH accepts only `{"predicate":"TRUSTS"}`; endpoints are immutable. DELETE hard-deletes only the API-owned relationship representation and returns 204. Cross-series, absent, dangling, or unsupported endpoints/predicates are rejected. The backend-required, server-owned `user_id` must be added to the frontend `CustomRelationshipResponse` type. In the graph response these user-authored Claim records are edge-only and have `claim_id: null`; they are emitted only when both endpoints survive same-series node visibility filtering. Thus `claim_id: null` means “not a canonical/candidate claim projection,” not necessarily “structural edge.”
 
 ## Watch-progress routes and schemas
 
@@ -214,10 +215,10 @@ PATCH accepts only `{"predicate":"TRUSTS"}`; endpoints are immutable. DELETE har
 **200** response:
 
 ```json
-{"id":"progress:user:example","user_id":"user:abc","series_id":"series_dexter","visible_until_order":3,"updated_at":"2026-07-29T12:00:00Z"}
+{"id":"progress:user:example","user_id":"user:abc","series_id":"series_dexter","visible_until_order":3,"watched_through_order":3,"view_as_of_order":3,"effective_view_order":3,"updated_at":"2026-07-29T12:00:00Z"}
 ```
 
-`POST /api/series/{series_id}/progress` upserts the boundary (idempotent for equal values) and returns the same `UserSeriesProgressResponse` shape. Request body:
+`POST /api/series/{series_id}/progress` upserts the boundary (idempotent for equal values) and returns the same `UserSeriesProgressResponse` shape. `visible_until_order` is the compatibility field; `watched_through_order`, `view_as_of_order`, and `effective_view_order` are all required response fields. Request body using the legacy compatibility alias:
 
 ```json
 {"visible_until_order":3}
@@ -244,10 +245,10 @@ The boundary is resolved server-side from this persisted record on GraphRAG chat
 `GET /api/series/{series_id}/chat/sessions/{session_id}` returns the session with its boundary-visible messages:
 
 ```json
-{"session":{"id":"chat-session:example","series_id":"series_dexter","title":"S01E03 discussion","created_at":"2026-07-29T12:00:00Z","updated_at":"2026-07-29T12:00:00Z"},"messages":[{"id":"chat-message:example","role":"user","content":"Who is Debra?","created_at":"2026-07-29T12:00:00Z","visible_until_order_snapshot":3}]}
+{"session":{"id":"chat-session:example","series_id":"series_dexter","title":"S01E03 discussion","created_at":"2026-07-29T12:00:00Z","updated_at":"2026-07-29T12:00:00Z"},"messages":[{"id":"chat-message:example","role":"user","content":"Who is Debra?","status":"completed","created_at":"2026-07-29T12:00:00Z","visible_until_order_snapshot":3}]}
 ```
 
-Cross-user, missing, or wrong-series sessions use the same generic **404**.
+Cross-user, missing, or wrong-series sessions use the same generic **404**. Every `ChatMessageResponse` includes required `status: "pending"|"completed"|"failed"`; the frontend `ChatMessage` type must mirror it.
 
 `DELETE /api/series/{series_id}/chat/sessions/{session_id}` hard-deletes the session and every message it owns, returning **204** with no response body. Retrying the same `DELETE` returns the same terminal result both times — **204** then **404** — never a duplicate side effect. Cross-user, cross-series, and missing sessions all return the identical generic **404** as `GET`.
 
@@ -262,7 +263,7 @@ Cross-user, missing, or wrong-series sessions use the same generic **404**.
 **200** response:
 
 ```json
-{"message":{"id":"chat-message:example","role":"assistant","content":"Debra is Dexter's sister.","created_at":"2026-07-29T12:00:00Z","visible_until_order_snapshot":3},"citations":[{"claim_id":"dexter:claim:s01e01:dexter_debra_family","evidence_id":"dexter:evidence:s01e01:01","source_id":"dexter:source:s01e01","source_label":"S01E01","source_type":"episode","episode_code":"S01E01","locator":"S01E01 00:12:00","excerpt":"Debra is Dexter's sister.","related_node_ids":["dexter:character:dexter_morgan","dexter:character:debra_morgan"],"related_edge_ids":["dexter:claim:s01e01:dexter_debra_family:edge"]}],"graph_focus":{"node_ids":["dexter:character:debra_morgan","dexter:character:dexter_morgan"],"edge_ids":["dexter:claim:s01e01:dexter_debra_family:edge"]},"proposed_change_set":null}
+{"message":{"id":"chat-message:example","role":"assistant","content":"Debra is Dexter's sister.","status":"completed","created_at":"2026-07-29T12:00:00Z","visible_until_order_snapshot":3},"citations":[{"claim_id":"dexter:claim:s01e01:dexter_debra_family","evidence_id":"dexter:evidence:s01e01:01","source_id":"dexter:source:s01e01","source_label":"S01E01","source_type":"episode","episode_code":"S01E01","locator":"S01E01 00:12:00","excerpt":"Debra is Dexter's sister.","related_node_ids":["dexter:character:dexter_morgan","dexter:character:debra_morgan"],"related_edge_ids":["dexter:claim:s01e01:dexter_debra_family:edge"]}],"graph_focus":{"node_ids":["dexter:character:debra_morgan","dexter:character:dexter_morgan"],"edge_ids":["dexter:claim:s01e01:dexter_debra_family:edge"]},"proposed_change_set":null}
 ```
 
 `POST /api/series/{series_id}/chat/sessions/{session_id}/messages/stream` streams the same answer as server-sent events: incremental `text_delta` events followed by one final `done` event carrying the full `MessageResponseEnvelope` JSON. The non-streaming message endpoint returns **503** when the LLM provider is disabled or unavailable (`LLM_DISABLED` / `LLM_PROVIDER_UNAVAILABLE`). The streaming endpoint can return **503** when provider resolution fails before the response starts; after SSE headers are committed, provider unavailability instead yields HTTP **200** `text/event-stream` with a structured `event: error` carrying code `LLM_PROVIDER_UNAVAILABLE` — never 401/403.
@@ -280,7 +281,7 @@ Concurrent generations are bounded per user: a second `POST .../messages` while 
 **201** response:
 
 ```json
-{"id":"change-set:example","user_id":"user:abc","series_id":"series_dexter","chat_session_id":"chat-session:example","status":"awaiting_confirmation","visible_until_order_snapshot":1,"summary":"Add Rita's second home","operations":[{"operation_type":"create_node","node_type":"Location","label":"Rita's second home","episode_id":"dexter_s01e01","properties":null}],"created_at":"2026-07-31T12:00:00Z","confirmed_at":null,"applied_at":null,"revision_id":null,"idempotency_key":null}
+{"id":"change-set:example","user_id":"user:abc","series_id":"series_dexter","chat_session_id":"chat-session:example","status":"awaiting_confirmation","visible_until_order_snapshot":1,"summary":"Add Rita's second home","operations":[{"operation_type":"create_node","node_type":"Location","label":"Rita's second home","episode_id":"dexter_s01e01","properties":null}],"created_at":"2026-07-31T12:00:00Z","confirmed_at":null,"applied_at":null,"revision_id":null,"revert_revision_id":null,"idempotency_key":null}
 ```
 
 The closed discriminated union accepts exactly thirteen `operation_type` values (`create_node`, `update_node`, `delete_node`, `create_relationship`, `update_relationship`, `delete_relationship`, `create_claim`, `update_claim`, `delete_claim`, `attach_evidence`, `create_note`, `update_note`, `delete_note`); an unlisted type or any extra field (`origin`, `visible_from_order`, `id`, or anything else) is rejected by Pydantic before any repository code runs. `operations` requires at least one item. A hidden target, a cross-series target, and a genuinely nonexistent target all return the identical **422** `INVALID_REQUEST`; operations are validated in list order and nothing is persisted unless every operation validates (no partial draft). Proposing identical content twice creates two independent draft `ChangeSet`s — propose has no idempotency-key requirement (that applies only to a later confirm/apply stage).
@@ -289,10 +290,10 @@ A direct-mutation operation (`update_node`, `delete_node`, `update_relationship`
 
 ## ChangeSet routes and schemas (Stage 2 — confirm and apply)
 
-`POST /api/series/{series_id}/change-sets/{change_set_id}/confirm` re-validates the ChangeSet fresh (current user, current progress, current resource origin/visibility of every operation's target) and, if everything still validates, applies every operation plus logs exactly one Revision inside a single Neo4j write transaction — full rollback (zero partial writes) if any operation fails re-validation. **200** response is the same `ChangeSetResponse` shape as propose, with `status:"applied"`, `confirmed_at`, `applied_at`, and `revision_id` populated:
+`POST /api/series/{series_id}/change-sets/{change_set_id}/confirm` requires an authenticated **admin** (`RequireAdminDependency`; an authenticated non-admin receives **403**) and re-validates the ChangeSet fresh (current user, current progress, current resource origin/visibility of every operation's target). If everything still validates, it applies every operation plus logs exactly one Revision inside a single Neo4j write transaction — full rollback (zero partial writes) if any operation fails re-validation. **200** response is the same `ChangeSetResponse` shape as propose, with `status:"applied"`, `confirmed_at`, `applied_at`, and apply-time `revision_id` populated while `revert_revision_id` remains null:
 
 ```json
-{"id":"change-set:example","user_id":"user:abc","series_id":"series_dexter","chat_session_id":"chat-session:example","status":"applied","visible_until_order_snapshot":1,"summary":"Add Rita's second home","operations":[{"operation_type":"create_node","node_type":"Location","label":"Rita's second home","episode_id":"dexter_s01e01","properties":null}],"created_at":"2026-07-31T12:00:00Z","confirmed_at":"2026-08-01T12:00:00Z","applied_at":"2026-08-01T12:00:00Z","revision_id":"revision:example","idempotency_key":"change-set-apply:example"}
+{"id":"change-set:example","user_id":"user:abc","series_id":"series_dexter","chat_session_id":"chat-session:example","status":"applied","visible_until_order_snapshot":1,"summary":"Add Rita's second home","operations":[{"operation_type":"create_node","node_type":"Location","label":"Rita's second home","episode_id":"dexter_s01e01","properties":null}],"created_at":"2026-07-31T12:00:00Z","confirmed_at":"2026-08-01T12:00:00Z","applied_at":"2026-08-01T12:00:00Z","revision_id":"revision:example","revert_revision_id":null,"idempotency_key":"change-set-apply:example"}
 ```
 
 Confirming an already-`applied` ChangeSet a second time is a safe idempotent no-op — the original stored result is returned verbatim, with zero additional graph mutation and zero additional Revision (replay protection). A ChangeSet whose `visible_until_order_snapshot` now exceeds the caller's current (since-lowered) progress is never silently applied: it is marked `failed` and the response is a distinct **409** `CHANGESET_STALE` error — the ChangeSet must be regenerated (re-proposed), not retried. Confirming a ChangeSet that is not currently `awaiting_confirmation` (already `applied`/`rejected`/`failed`) other than the applied-replay case above returns **409** `RESOURCE_CONFLICT`. Newly created/mutated resources always get server-derived `origin:"user"`, a server-derived creator, and `visible_from_order` equal to the fresh current progress — never a value read from the operation payload.
@@ -301,10 +302,10 @@ Confirming an already-`applied` ChangeSet a second time is a safe idempotent no-
 
 ## ChangeSet routes and schemas (Stage 3 — revert)
 
-`POST /api/series/{series_id}/change-sets/{change_set_id}/revert` reverts a previously **applied** ChangeSet, following `spoilerless/app/api/revisions.py`'s revert pattern adapted to Stage 2's one-Revision-per-apply model: it deletes every resource the ChangeSet created, restoring pre-apply state, and logs a new `Reverted`-action Revision — the original apply-time Revision is never edited or deleted. **200** response is the same `ChangeSetResponse` shape, with `status:"reverted"` and `revision_id` now pointing at the new revert Revision:
+`POST /api/series/{series_id}/change-sets/{change_set_id}/revert` reverts a previously **applied** ChangeSet, following `spoilerless/app/api/revisions.py`'s revert pattern adapted to Stage 2's one-Revision-per-apply model: it deletes every resource the ChangeSet created, restoring pre-apply state, and logs a new `Reverted`-action Revision — the original apply-time Revision is never edited or deleted. **200** response is the same `ChangeSetResponse` shape, with `status:"reverted"`; `revision_id` continues to identify the original apply Revision and `revert_revision_id` identifies the later revert Revision:
 
 ```json
-{"id":"change-set:example","user_id":"user:abc","series_id":"series_dexter","chat_session_id":"chat-session:example","status":"reverted","visible_until_order_snapshot":1,"summary":"Add Rita's second home","operations":[{"operation_type":"create_node","node_type":"Location","label":"Rita's second home","episode_id":"dexter_s01e01","properties":null}],"created_at":"2026-07-31T12:00:00Z","confirmed_at":"2026-08-01T12:00:00Z","applied_at":"2026-08-01T12:00:00Z","revision_id":"revision:revert-example","idempotency_key":"change-set-apply:example"}
+{"id":"change-set:example","user_id":"user:abc","series_id":"series_dexter","chat_session_id":"chat-session:example","status":"reverted","visible_until_order_snapshot":1,"summary":"Add Rita's second home","operations":[{"operation_type":"create_node","node_type":"Location","label":"Rita's second home","episode_id":"dexter_s01e01","properties":null}],"created_at":"2026-07-31T12:00:00Z","confirmed_at":"2026-08-01T12:00:00Z","applied_at":"2026-08-01T12:00:00Z","revision_id":"revision:example","revert_revision_id":"revision:revert-example","idempotency_key":"change-set-apply:example"}
 ```
 
 Only a ChangeSet whose applied operations are **entirely create-shaped** (`create_node`, `create_relationship`, `create_claim`, `attach_evidence`, `create_note`) supports revert — for those, the pre-apply state is simply "the resource did not exist", so revert is a well-defined delete. A ChangeSet containing any `update_*`/`delete_*` operation has no stored per-operation prior-state snapshot to restore and returns **422** `INVALID_REQUEST` — the same "no prior state to restore" discipline `spoilerless/app/api/revisions.py::revert_revision` already applies to a plain Creation revision. A ChangeSet with no applied Revision to revert (never confirmed, or already `rejected`/`failed`/`reverted`) returns **409** `RESOURCE_CONFLICT` ("nothing to revert"). If a resource the ChangeSet created was modified or removed by a later, unrelated change since this ChangeSet was applied, revert fails with **409** `RESOURCE_CONFLICT` rather than silently overwriting that later change — a fresh `updated_at`-vs-`applied_at` comparison, evaluated entirely inside Cypher, guards this. Revert requires its own explicit call, distinct from the original apply confirmation — posting a chat message never triggers it. Missing/cross-user `change_set_id` is the identical generic **404** `RESOURCE_NOT_FOUND` used by confirm/reject.
@@ -322,9 +323,12 @@ Frontend callers must account for these deliberate corrections:
 3. Database 503 responses are declared.
 4. Health has typed 200 and 503 response bodies.
 5. Query parameters remain query parameters; `/graph?visible_until_order=1` does not create another path template.
+6. Frontend response types must include backend-required `GraphResponse.effective_view_order`, `User.role`, user-content `user_id`, `ChatMessage.status`, `ChangeSet.revert_revision_id`, and Revision `user_id` fields.
+7. Frontend `CustomNodeResponse` must expose backend field `type`, not request-only `node_type`; `GraphEvidence.content_hash` must be nullable to match the backend.
+8. ChangeSet callers must preserve the apply-time `revision_id` after revert and read the later revert link from `revert_revision_id`.
 
 ## Non-goals and pending acceptance
 
-No passwords, roles/permissions, account linking, refresh-token Google API access, soft delete, rich text, uploads, collaboration, automated live extraction, moderation, queues, vector stores, ontology expansion, ORM, or unrelated refactor is implemented. The historical umbrella non-goals `LLM/extraction` and `frontend implementation` no longer describe the whole current system: GraphRAG chat, the fixture-driven candidate ingest/review contract, and the frontend are implemented, while an automated extractor remains future work. Canonical fixtures are unchanged.
+No passwords, account linking, refresh-token Google API access, soft delete, rich text, uploads, collaboration, automated live extraction, moderation, queues, vector stores, ontology expansion, ORM, or unrelated refactor is implemented. Roles **are** implemented: `UserPublic.role` is `admin|user`, `ADMIN_EMAILS` assigns admins, and admin gates protect candidate approve/reject/edit, ChangeSet confirm, and LLM settings. Direct user-content ownership and share revocation additionally enforce owner/admin authorization. The historical umbrella non-goals `LLM/extraction` and `frontend implementation` no longer describe the whole current system: GraphRAG chat, the fixture-driven candidate ingest/review contract, and the frontend are implemented, while an automated extractor remains future work. Canonical fixtures are unchanged.
 
 NOTE-01/NOTE-02/NOTE-03 backend API/storage/projection acceptance is automated. React/Cytoscape graph integration, distinct user-origin visual treatment and routing, chat, ChangeSets, revision history, watch progress, and settings are implemented with frontend tests; Phase 2 is complete and verified.

@@ -202,7 +202,7 @@ hdgrafcehennemi/
 **Documentation and Planning:**
 - `README.md`: Active product/setup overview.
 - `docs/ARCHITECTURE.md`: High-level architecture context; verify against source.
-- `docs/frontend-api-contract.md`: Frontend-facing API contract.
+- `docs/reference/frontend-api-contract.md`: Frontend-facing API contract.
 - `ROADMAP.md`: Canonical long-term scope; checkbox state is not current implementation evidence.
 - `.planning/STATE.md`: GSD milestone state and accumulated decisions.
 

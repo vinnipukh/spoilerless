@@ -72,7 +72,7 @@ Full platform-specific procedures, rollback, and monitoring: [`docs/DEPLOYMENT.m
 
 The repository is a polished vertical prototype for a **spoiler-aware, provenance-backed narrative knowledge graph**: an Obsidian-like graph, human-authored knowledge, revision history, and GraphRAG over only the viewer-visible subgraph. Candidate review and chat are implemented; automated subtitle/script ingestion, production deployment scaling, and broader product scope remain future work.
 
-Coding agents should use [`docs/PROJECT-SPEC.md`](./docs/PROJECT-SPEC.md) for product intent and non-negotiable invariants. The document distinguishes implemented capability, historical prototype scope, and future requirements; implementation status must still be verified against live source and tests before acting on it.
+Coding agents should use [`docs/PROJECT-SPEC.md`](./docs/architecture/project-spec.md) for product intent and non-negotiable invariants. The document distinguishes implemented capability, historical prototype scope, and future requirements; implementation status must still be verified against live source and tests before acting on it.
 
 ---
 
@@ -329,16 +329,16 @@ Watch progress is persisted per user via `GET/POST /api/series/{series_id}/progr
 | Document | What it covers |
 |---|---|
 | [`docs/GETTING-STARTED.md`](./docs/GETTING-STARTED.md) | Step-by-step local setup and demo walkthrough |
-| [`docs/PROJECT-SPEC.md`](./docs/PROJECT-SPEC.md) | Canonical product aim, invariants, coding-agent rules, and future architecture |
+| [`docs/PROJECT-SPEC.md`](./docs/architecture/project-spec.md) | Canonical product aim, invariants, coding-agent rules, and future architecture |
 | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | System architecture, layer breakdown, spoiler model, ontology |
 | [`docs/CONFIGURATION.md`](./docs/CONFIGURATION.md) | Environment variables, Docker Compose, backend settings |
 | [`docs/API.md`](./docs/API.md) | Full HTTP API reference |
 | [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md) | Local development workflow, build/lint/format commands |
 | [`docs/TESTING.md`](./docs/TESTING.md) | Test framework, running tests, coverage |
 | [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) | Deployment targets and pipeline |
-| [`docs/RUNBOOK.md`](./docs/RUNBOOK.md) | Operations runbook — zombie sweep, DB-pollution gate, CI checks |
+| [`docs/RUNBOOK.md`](./docs/ops/runbook.md) | Operations runbook — zombie sweep, DB-pollution gate, CI checks |
 | [`docs/PROBLEMS.md`](./docs/PROBLEMS.md) | Audit ledger — findings and fixes across passes (ELEVENTH PASS: repository-layer consolidation, ToolSpec registry, shared BFS, change-set refactor, AuthService wiring, frontend fetch-state/highlight/graph-overlay refactors) |
-| [`docs/frontend-api-contract.md`](./docs/frontend-api-contract.md) | Frontend-facing API contract |
+| [`docs/frontend-api-contract.md`](./docs/reference/frontend-api-contract.md) | Frontend-facing API contract |
 
 ### Enabling the GraphRAG chat locally (optional)
 

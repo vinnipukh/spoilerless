@@ -40,7 +40,7 @@ NODE_ENV=test CI=1 npm run test -- src/App.test.tsx     # one frontend file
 ```
 - Run backend tests from the repository root because some tests open root-relative artifacts under `data/` and `docs/`.
 - Set `NODE_ENV=test` explicitly. An inherited `NODE_ENV=production` loads React production behavior and causes misleading `act`/empty-render failures despite Vitest mode being test.
-- `scripts/run_backend_tests.py` splits the suite into 10 named chunks (see the chunk table in `docs/BACKEND_DEPLOY_FIX.md`). Parallel mode is SLOWER than serial against the shared AuraDB (connection contention) and is only useful against isolated Neo4j instances; the runner strips `PYTHONPATH` from child environments because the ambient shell can shadow the venv and break `import spoilerless`.
+- `scripts/run_backend_tests.py` splits the suite into 10 named chunks (see the chunk table in `docs/ops/runbook.md`). Parallel mode is SLOWER than serial against the shared AuraDB (connection contention) and is only useful against isolated Neo4j instances; the runner strips `PYTHONPATH` from child environments because the ambient shell can shadow the venv and break `import spoilerless`.
 
 ## Test File Organization
 
@@ -184,7 +184,7 @@ describe('SettingsPage', () => {
 
 **Contract tests:**
 - `spoilerless/tests/test_openapi_contract.py` locks exact OpenAPI paths, operations, response models, boundaries, and sanitized errors.
-- `spoilerless/tests/test_frontend_contract_doc.py` locks `docs/frontend-api-contract.md` against the route inventory. API changes must update runtime routes, OpenAPI expectations, documentation expectations, and the contract document together.
+- `spoilerless/tests/test_frontend_contract_doc.py` locks `docs/reference/frontend-api-contract.md` against the route inventory. API changes must update runtime routes, OpenAPI expectations, documentation expectations, and the contract document together.
 
 **E2E tests:**
 - No browser E2E framework such as Playwright or Cypress is configured. Frontend integration runs under jsdom; backend live-DB tests are not full browser-to-database E2E tests.

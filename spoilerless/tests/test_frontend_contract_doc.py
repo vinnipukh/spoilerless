@@ -5,7 +5,7 @@ from pathlib import Path
 
 from spoilerless.app.main import app
 
-DOC_PATH = Path(__file__).resolve().parents[2] / "docs" / "frontend-api-contract.md"
+DOC_PATH = Path(__file__).resolve().parents[2] / "docs" / "reference" / "frontend-api-contract.md"
 HTTP_METHODS = {"get", "post", "patch", "delete", "put", "options", "head", "trace"}
 EXPECTED_OPERATIONS: set[tuple[str, str]] = {
     ("get", "/health"),

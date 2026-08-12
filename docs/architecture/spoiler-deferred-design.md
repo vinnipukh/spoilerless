@@ -32,10 +32,12 @@ Future invariants (when cast support is actually required):
 - Every review carries `spoiler_up_to_order`: the publication order up to which the review's
   content is safe. (Note: this is a *review-content* gate, not a story-resource reveal point —
   story resources keep `visible_from_order` per D-02.)
-- A review is hidden **above the reader's effective boundary**: a review whose
-  `spoiler_up_to_order` is below the reader's `effective_view_order` is not returned.
+- A review-content snapshot is safe when its `spoiler_up_to_order` is at or below the
+  reader's `effective_view_order`; a review whose `spoiler_up_to_order` exceeds the
+  reader's `effective_view_order` is hidden (not returned).
 - A reader viewing an earlier episode never sees reviews that reference content beyond that
-  boundary — same rule as chat messages and ChangeSets (D-12/D-13).
+  boundary — same rule as chat messages and ChangeSets (D-12/D-13): snapshots at or below
+  the current effective boundary are eligible, snapshots above it are hidden or stale.
 - No review UI, no review endpoints, no review tables this phase.
 
 ## 3. Ratings (D-18)
@@ -100,7 +102,7 @@ Future invariants (when cast support is actually required):
 1. No placeholder tables, no placeholder UI, no stubbed endpoints (D-18).
 2. Every story-sensitive resource uses `visible_from_order` (D-02) and the fail-closed rule (D-03).
 3. All boundary math goes through the central visibility policy service
-   (`spoilerless/app/spoiler/policy.py`, specified in `docs/SPOILER-TERMINOLOGY.md`, implemented in
+   (`spoilerless/app/spoiler/policy.py`, specified in `docs/architecture/spoiler-terminology.md`, implemented in
    07-02).
 4. Any future implementation must be a new plan in the GSD flow; nothing in this document grants
    permission to build these features inline.

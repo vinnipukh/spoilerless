@@ -5,7 +5,7 @@ effective-boundary formula. Every repository, service, retrieval tool, and API
 route that decides visibility delegates to this module — the rule is never
 reimplemented per query. Pure functions only, no database access (D-01), so the
 module is trivially unit-testable. Contract:
-``docs/SPOILER-TERMINOLOGY.md`` §6 (written in 07-01).
+``docs/architecture/spoiler-terminology.md`` §6 (written in 07-01).
 """
 
 from __future__ import annotations

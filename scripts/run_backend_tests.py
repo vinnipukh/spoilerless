@@ -5,7 +5,7 @@ Why this exists
 The full ``uv run pytest spoilerless/tests/`` run takes ~40 minutes against the
 shared live AuraDB (was 75+ before the 2026-08-10 suite-time pass — see
 docs/PROBLEMS.md SEVENTH PASS), so coding agents time out mid-run and broken
-backend code ships without being caught (see docs/BACKEND_DEPLOY_FIX.md). This
+backend code ships without being caught (see docs/ops/runbook.md). This
 runner splits the suite into 10 named chunks and can launch them **in parallel**
 — but measured on the shared AuraDB, parallel is SLOWER than serial (connection
 contention; the 2026-08-05 observation still holds), so parallel mode is only
@@ -53,7 +53,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TESTS = PROJECT_ROOT / "spoilerless" / "tests"
 
 # 10 chunks — every test file appears exactly once. Names match the
-# "Backend Tests — Break Up Strategy" table in docs/BACKEND_DEPLOY_FIX.md.
+# "Backend Tests — Break Up Strategy" table in docs/ops/runbook.md.
 CHUNKS: dict[str, list[str]] = {
     "core": [
         "test_config.py",

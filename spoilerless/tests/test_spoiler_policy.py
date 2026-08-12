@@ -2,7 +2,7 @@
 
 ``spoilerless/app/spoiler/policy.py`` is the single owner of ``visible_from_order``
 semantics and of the D-05 effective-boundary formula (contract:
-``docs/SPOILER-TERMINOLOGY.md`` §6). These tests are pure — no database access —
+``docs/architecture/spoiler-terminology.md`` §6). These tests are pure — no database access —
 exercising the fail-closed rule, the min-rule, the masking display shape, and
 the invariant assertions.
 """

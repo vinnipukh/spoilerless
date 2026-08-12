@@ -1,7 +1,7 @@
 <!-- generated-by: gsd-doc-writer -->
 # Contributing to HD Graf Cehennemi
 
-Thank you for contributing to HD Graf Cehennemi (the "Spoilerless" application). This guide describes the repository's current setup, issue-ledger workflow, quality gates, and pull-request expectations. For deeper implementation guidance, see [Development](docs/DEVELOPMENT.md), [Testing](docs/TESTING.md), [Architecture](docs/ARCHITECTURE.md), and the [authoritative project specification](docs/PROJECT-SPEC.md). The canonical issue ledger is [docs/PROBLEMS.md](docs/PROBLEMS.md) — read it before starting work, and record your work in it (see "Issue Ledger and Contribution Workflow" below).
+Thank you for contributing to HD Graf Cehennemi (the "Spoilerless" application). This guide describes the repository's current setup, issue-ledger workflow, quality gates, and pull-request expectations. For deeper implementation guidance, see [Development](docs/DEVELOPMENT.md), [Testing](docs/TESTING.md), [Architecture](docs/ARCHITECTURE.md), and the [authoritative project specification](docs/architecture/project-spec.md). The canonical issue ledger is [docs/PROBLEMS.md](docs/PROBLEMS.md) — read it before starting work, and record your work in it (see "Issue Ledger and Contribution Workflow" below).
 
 ## Code of Conduct
 
@@ -111,7 +111,7 @@ The API and Swagger UI run at `http://localhost:8000` and `http://localhost:8000
 The HTTP surface is treated as a closed inventory (currently 50 operations over 37 path templates). Adding, removing, or changing a route requires synchronized updates to:
 
 - `spoilerless/tests/test_frontend_contract_doc.py`
-- `docs/frontend-api-contract.md`
+- `docs/reference/frontend-api-contract.md`
 - affected frontend types/clients and focused backend/frontend tests
 
 `spoilerless/tests/test_openapi_contract.py` is also intended to lock this inventory, but it is currently stale: it still expects 32 path templates rather than the live 37-template, 50-operation surface and assumes every `DELETE` returns 204, unlike share-token revocation. Update it as part of the next route-contract change, but do not cite it as a passing gate until those expectations are synchronized.

@@ -177,7 +177,7 @@ The package defines only the `test` script (`vitest`); there are no separate `te
 - Prefer existing fakes for isolated service tests, such as `FakeUserRepo`, `FakeGoogleVerifier`, `InMemorySessionRepository`, and `FakeLLMProvider`.
 - Use a context-managed `TestClient` when the app owns an async Neo4j driver so requests share one portal event loop.
 - Keep spoiler-boundary assertions fail-closed: assert that hidden content is absent, not only that visible content is present.
-- Add API inventory changes to both contract tests and `docs/frontend-api-contract.md`. `test_frontend_contract_doc.py` locks the live 50-operation, 37-template inventory; its `test_document_and_openapi_have_exact_locked_inventory` is green, while its doc-content test (`test_document_has_examples_projection_rules_non_goals_and_pending_status`) is part of the documented baseline failures. `test_openapi_contract.py` is an intended companion gate but is currently stale and red: it still expects 32 templates, omits the graph-path, export, and share templates, and assumes every DELETE response is 204 even though share-token revocation returns 200. Do not treat those two files as passing bounded gates until their assertions are updated.
+- Add API inventory changes to both contract tests and `docs/reference/frontend-api-contract.md`. `test_frontend_contract_doc.py` locks the live 50-operation, 37-template inventory; its `test_document_and_openapi_have_exact_locked_inventory` is green, while its doc-content test (`test_document_has_examples_projection_rules_non_goals_and_pending_status`) is part of the documented baseline failures. `test_openapi_contract.py` is an intended companion gate but is currently stale and red: it still expects 32 templates, omits the graph-path, export, and share templates, and assumes every DELETE response is 204 even though share-token revocation returns 200. Do not treat those two files as passing bounded gates until their assertions are updated.
 
 `spoilerless/tests/conftest.py` contains shared import-path setup, scratch-series helpers, and an autouse `_disable_rate_limiter` fixture that patches `RateLimiter.__call__` to a no-op so rate-limited routes are testable without a live Redis. It does not configure Neo4j credentials. Since the 2026-08-10 suite-time pass it also hosts the shared test infrastructure (see `docs/PROBLEMS.md` SEVENTH PASS), extended in the 2026-08-11 ELEVENTH PASS with the shared `NoopGoogleVerifier` (PROB-09/#77 follow-up — `AuthService` requires a verifier, and tests that never exercise Google verification share this one no-op):
 
@@ -216,7 +216,7 @@ The HTTP surface is a closed inventory. Adding, removing, or changing a route re
 
 - `spoilerless/tests/test_openapi_contract.py`;
 - `spoilerless/tests/test_frontend_contract_doc.py` (`EXPECTED_OPERATIONS`, template and count assertions);
-- `docs/frontend-api-contract.md` (one exact `(method, path)` row per operation).
+- `docs/reference/frontend-api-contract.md` (one exact `(method, path)` row per operation).
 
 ## Troubleshooting
 

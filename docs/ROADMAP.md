@@ -1,6 +1,6 @@
 # Spoilerless — Authoritative Roadmap
 
-> **Maintenance note:** This is the canonical roadmap after consolidation. Update status here when implementation changes; do not revive the root roadmap as a competing status source. Normative invariants and future ingestion rules live in [PROJECT-SPEC.md](PROJECT-SPEC.md).
+> **Maintenance note:** This is the canonical roadmap after consolidation. Update status here when implementation changes; do not revive the root roadmap as a competing status source. Normative invariants and future ingestion rules live in [PROJECT-SPEC.md](architecture/project-spec.md).
 
 ## 0. Project summary and status legend
 
@@ -17,14 +17,14 @@ Status terms in this roadmap:
 
 ## 1. Core principles
 
-1. **Spoiler safety at data access.** Backend/retrieval filtering happens before data reaches the frontend or LLM. Story records use `visible_from_order`; claims also honor validity windows. Candidate reads are the current documented exception because list filtering is optional and detail has no boundary.
+1. **Spoiler safety at data access.** Backend/retrieval filtering happens before data reaches the frontend or LLM. Story records use `visible_from_order`; claims also honor validity windows. Candidate list and detail reads require a resolved spoiler boundary and fail closed (422) when it is omitted or unresolved.
 2. **Automatic knowledge is source-backed.** Every automatic candidate needs evidence with source type/locator, episode, precise locator, retrieval metadata, and preferably a content hash.
 3. **Origins remain separate.** Canonical show metadata, candidate extraction, user notes/nodes/relationships, and corrections stay distinguishable through `canonical|candidate|user`.
 4. **Confidence is not relationship effect.** `confidence_level` describes certainty; `relationship_effect` describes the asserted relationship dimension. Do not collapse them.
 5. **History is append-only in meaning.** Edits, extraction review decisions, corrections, and reversions create revisions. Revert appends a new revision instead of destroying prior records.
 6. **Ontology and Cypher are constrained.** Types come from versioned YAML; user/model values are parameterized and never become unrestricted query text.
 
-See [PROJECT-SPEC.md §3](PROJECT-SPEC.md#3-non-negotiable-architecture-invariants) for the complete normative rules.
+See [PROJECT-SPEC.md §3](architecture/project-spec.md#3-non-negotiable-architecture-invariants) for the complete normative rules.
 
 ## 2. Prototype scope: original target versus current product
 
@@ -66,7 +66,7 @@ The historical planned tree has become a layered implementation under `spoilerle
 
 Ontology v0.1 remains committed in `ontology/node_types.yaml`, `ontology/relation_types.yaml`, and `ontology/claim_types.yaml`. It defines structural/narrative/knowledge/user/system nodes; structural, participation, character, provenance, and revision relationships; five claim types; five statuses; and four confidence levels.
 
-A Claim is one atomic assertion with stable subject/predicate/object, visibility and optional validity window, origin, status, confidence, relationship effect, creator/provenance, and ontology version. Only `canonical` or `corroborated` status should be treated as accepted truth. See [PROJECT-SPEC.md §4](PROJECT-SPEC.md#4-ontology-and-atomic-claim-semantics) and [ARCHITECTURE.md §7.2–7.4](ARCHITECTURE.md#72-the-claim-model).
+A Claim is one atomic assertion with stable subject/predicate/object, visibility and optional validity window, origin, status, confidence, relationship effect, creator/provenance, and ontology version. Only `canonical` or `corroborated` status should be treated as accepted truth. See [PROJECT-SPEC.md §4](architecture/project-spec.md#4-ontology-and-atomic-claim-semantics) and [ARCHITECTURE.md §7.2–7.4](ARCHITECTURE.md#72-the-claim-model).
 
 ## 5. Prototype milestones and acceptance status
 
@@ -105,7 +105,7 @@ Acceptance: the seeded graph contains one Dexter series with three ordered episo
 
 ### Milestone 3 — Spoiler-aware graph endpoint
 
-**Status: Complete for the graph route; candidate-review boundaries remain a separate known gap.**
+**Status: Complete for the graph route; candidate list/detail reads enforce the same resolved spoiler boundary.**
 
 - [x] Define `GraphResponse`.
 - [x] Require positive integer visibility on seeded story nodes/claims and audit null visibility.
@@ -146,7 +146,7 @@ Acceptance: a user can choose watched progress and see only the graph returned f
 
 ### Milestone 6 — User notes and manual editing
 
-**Status: Complete for current API/UI scope; authorization is incomplete.**
+**Status: Complete for current API/UI scope; user-content mutations are authenticated and owner-bound (admin bypass).**
 
 - [x] Implement `UserNote` contracts and CRUD.
 - [x] Implement custom node CRUD.
@@ -154,7 +154,7 @@ Acceptance: a user can choose watched progress and see only the graph returned f
 - [x] Derive visibility server-side and visually separate user origin.
 - [x] Surface notes and relationship creation in the detail experience.
 
-Acceptance: users can add a note to a Character or Claim and inspect it in the detail panel; custom content can appear in the graph. Gap: these user-content routes currently do not require the authenticated session/ownership dependency.
+Acceptance: users can add a note to a Character or Claim and inspect it in the detail panel; custom content can appear in the graph. All user-content mutation routes require an authenticated session and enforce stored `user_id` ownership with an admin bypass (anonymous 401; cross-owner 403).
 
 ### Milestone 7 — Revision history
 
@@ -181,7 +181,7 @@ Acceptance: a user can inspect prior snapshots for supported edits and perform s
 - [ ] Implement LLM extraction and canonical entity resolution.
 - [ ] Implement a complete human review UI.
 
-Acceptance achieved: a future extractor can submit structured candidate claims without changing the core Claim model. Acceptance not claimed: automatic source-to-graph ingestion. See [PROJECT-SPEC.md §9](PROJECT-SPEC.md#9-future-automated-knowledge-graph-ingestion-architecture).
+Acceptance achieved: a future extractor can submit structured candidate claims without changing the core Claim model. Acceptance not claimed: automatic source-to-graph ingestion. See [PROJECT-SPEC.md §9](architecture/project-spec.md#9-future-automated-knowledge-graph-ingestion-architecture).
 
 ### Milestone 9 — Spoiler-aware LLM chat
 
@@ -204,7 +204,7 @@ Acceptance: when enabled/configured, chat answers from graph data visible at per
 - [x] Opaque HttpOnly server-side sessions and authenticated `/me`/logout.
 - [x] Per-user watch progress, chat ownership, settings, and ChangeSet ownership.
 - [x] Two-stage ChangeSet proposal/confirmation with transactional application, rejection, replay protection, and bounded revert support.
-- [ ] Apply consistent authentication/ownership to user-content, revision, and candidate mutations.
+- [x] Apply consistent authentication/ownership to user-content, revision, and candidate mutations. (Corrected 2026-08-10: shipped — user-content mutations and candidate ingest require `CurrentUserDependency` with owner-scoped enforcement and admin bypass; candidate review routes require `RequireAdminDependency`; settings routes are admin-gated.)
 - [ ] Add comprehensive CSRF protection for cookie-authenticated state changes.
 - [ ] Define production authorization roles/policy if multi-user deployment is approved.
 
@@ -231,7 +231,7 @@ This is a polished, technically honest architecture proof, not production comple
 - S01E01 graph/search/retrieval cannot expose S01E02/S01E03 nodes, labels, names, counts, claims, or evidence.
 - Hidden and missing resources share fail-closed responses on boundary-aware routes.
 - LLM tools cannot override persisted progress.
-- Candidate-route boundary exceptions remain visible in this roadmap until fixed.
+- Candidate list and detail reads require a resolved spoiler boundary and fail closed (422) when it is omitted or invalid; above-boundary detail reads are indistinguishable from missing (404).
 
 ### Source and provenance
 
@@ -256,27 +256,27 @@ Testing commands and live-Neo4j safety are in [TESTING.md](TESTING.md).
 
 ## 8. Known gaps and unresolved risks
 
-1. **Candidate spoiler boundary:** list boundary optional; candidate detail has none.
-2. **Authorization:** Google Sign-In, HttpOnly session cookies, and `admin` role-based access control for settings, candidates, and ChangeSets shipped in Phase 8/9 (PROB-18/PROB-19/AUTH-01); per-user owner isolation for ordinary notes/custom nodes remains future work.
-3. **CSRF:** Origin verification via `verify_origin` dependency guards authentication POST routes; additional CSRF token checks for non-auth cookie routes remain a future hardening goal.
-4. **Source navigation:** detail UI shows plain-text source metadata/locators, not navigable source links.
-5. **Automatic ingestion:** no subtitle/script downloader, parser, extractor, entity linker, or production review pipeline exists.
-6. **Review UI:** candidate workflow is API-level; comprehensive human review UX remains future work.
-7. **Production operations:** no production deployment architecture or CI workflow is configured.
-8. **Testing isolation:** backend integration tests use live local Neo4j and require careful cleanup.
-9. **ChangeSet/revision breadth:** revert is intentionally bounded; this is not full event sourcing.
-10. **Confidence semantics:** extraction `relationship_effect` remains loosely typed; thresholds/calibration are not academically validated.
+1. **Authorization:** Google Sign-In, HttpOnly session cookies, and `admin` role-based access control for settings, candidates, and ChangeSets shipped in Phase 8/9 (PROB-18/PROB-19/AUTH-01); per-user owner isolation for ordinary notes/custom nodes/relationships also shipped — user-created content carries `user_id`, and cross-owner mutations are rejected with 403 (admin bypass). Residual: a read/privacy policy for owner-scoped content is not yet defined.
+2. **CSRF:** Origin verification via `verify_origin` dependency guards authentication POST routes; additional CSRF token checks for non-auth cookie routes remain a future hardening goal.
+3. **Source navigation:** detail UI shows plain-text source metadata/locators, not navigable source links.
+4. **Automatic ingestion:** no subtitle/script downloader, parser, extractor, entity linker, or production review pipeline exists.
+5. **Review UI:** candidate workflow is API-level; comprehensive human review UX remains future work.
+6. **Production operations:** deployment architecture is repository-declared (`render.yaml` backend service, `frontend/vercel.json` SPA rewrites, [DEPLOYMENT.md](DEPLOYMENT.md)) and PR CI is configured (`.github/workflows/ci.yml`: dedicated Neo4j service, seed, full pytest, DB-residue gate, frontend build/lint/audit — pull-request trigger only). Live operator/platform production state, push-triggered CI, and release enforcement (`.github/workflows/release.yml` remains a non-enforcing skeleton) are still incomplete.
+7. **Testing isolation:** backend integration tests use live local Neo4j and require careful cleanup.
+8. **ChangeSet/revision breadth:** revert is intentionally bounded; this is not full event sourcing.
+9. **Confidence semantics:** extraction `relationship_effect` remains loosely typed; thresholds/calibration are not academically validated.
 
 ## 9. Future milestone/backlog direction
 
 ### Near-term hardening
 
-- make candidate reads boundary-required and fail closed;
-- apply consistent authenticated ownership/authorization to user content, revisions, candidates, and settings-sensitive mutations;
+- make candidate reads boundary-required and fail closed — **shipped** (candidate list/detail require a resolved persisted-episode boundary and fail closed with 422 when it is omitted or invalid);
+- apply consistent authenticated ownership/authorization to user content, revisions, candidates, and settings-sensitive mutations — **shipped** (user-content mutations and candidate ingest require an authenticated session; user-content owner checks with admin bypass; candidate review and settings routes admin-gated);
 - add CSRF defenses appropriate to cookie-authenticated deployment;
 - reconcile frontend/backend type mismatches and keep OpenAPI/contract tests locked;
 - add rights-safe navigable source links only when locators are valid URLs and copyright constraints are respected;
-- establish isolated test database/CI and a production-readiness deployment plan.
+- CI test isolation is shipped (per-job Neo4j service + DB-residue gate in `.github/workflows/ci.yml`); local integration tests still share the live local Neo4j instance;
+- production-readiness deployment: manifests are declared (`render.yaml`, `frontend/vercel.json`, `docs/DEPLOYMENT.md`), but release enforcement and live operator/platform state remain incomplete.
 
 ### Ingestion research and implementation
 
@@ -289,7 +289,7 @@ Testing commands and live-Neo4j safety are in [TESTING.md](TESTING.md).
 
 ### Product feature ideas (brainstorm, unscoped)
 
-Ungrouped, unscoped user-facing feature ideas — graph UX, chat, provenance, collaboration, multi-series, provider UX — live in [FEATURE-IDEAS.md](FEATURE-IDEAS.md). None of it carries roadmap status until explicitly scoped against [PROJECT-SPEC.md §3](PROJECT-SPEC.md#3-non-negotiable-architecture-invariants).
+Ungrouped, unscoped user-facing feature ideas — graph UX, chat, provenance, collaboration, multi-series, provider UX — live in [FEATURE-IDEAS.md](ideas/feature-ideas.md). None of it carries roadmap status until explicitly scoped against [PROJECT-SPEC.md §3](architecture/project-spec.md#3-non-negotiable-architecture-invariants).
 
 ### Deliberately later product breadth
 
@@ -323,6 +323,6 @@ Future academic claims require empirical evaluation; placeholder linking thresho
 - Update task status only with source/test evidence.
 - Preserve the distinction between implemented prototype capability and production readiness.
 - Never mark extraction, review UI, deployment, or authorization complete because an interface/schema exists.
-- Keep real route shapes synchronized with [API.md](API.md) and [frontend-api-contract.md](frontend-api-contract.md).
-- Put normative invariant changes in [PROJECT-SPEC.md](PROJECT-SPEC.md) and link them here.
+- Keep real route shapes synchronized with [API.md](API.md) and [frontend-api-contract.md](reference/frontend-api-contract.md).
+- Put normative invariant changes in [PROJECT-SPEC.md](architecture/project-spec.md) and link them here.
 - Preserve known exceptions until the implementation and tests close them.

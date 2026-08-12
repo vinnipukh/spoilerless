@@ -263,7 +263,7 @@ uv run uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
 (the package is `spoilerless/`; there is no `backend/` directory). The
 service keeps serving the **previous successful build**, so `/health`
 continues to return HTTP 200 while the new code is never deployed. See
-`docs/BACKEND_DEPLOY_FIX.md` for the root-cause write-up and the manual
+`docs/ops/runbook.md` for the root-cause write-up and the manual
 dashboard fix. No `RENDER_API_KEY` (or equivalent deployment-automation
 credential) exists anywhere in the repository or the root `.env`, so this
 fix is **operator-touch**: it can only be applied from the Render dashboard
@@ -435,7 +435,7 @@ fetch queries Neo4j directly.
 
 - **External uptime monitor**: no UptimeRobot (or equivalent)
   monitor polls `GET /health` yet — requires human account sign-up. See
-  `docs/RUNBOOK.md` §1 for the planned detection flow.
+  `docs/ops/runbook.md` §1 for the planned detection flow.
 
 ## Rollback
 
@@ -505,7 +505,7 @@ Neo4j connectivity with a lightweight `verify_connection()` call. A
 An UptimeRobot (or equivalent free-tier service) monitor on
 `https://api.spoilerless.net/health` with a 5-minute check interval and
 email alert on non-200 response or timeout is planned (human-provisioned
-— see `docs/RUNBOOK.md` §1 for the detection flow). No monitor configuration
+— see `docs/ops/runbook.md` §1 for the detection flow). No monitor configuration
 is tracked; whether one exists in an external account is unknown.
 <!-- VERIFY: Operator step — inspect the monitoring provider for this health URL, interval, timeout/non-200 policy, and alert target; if absent, provision it and record the result without exposing recipient details. -->
 
@@ -530,7 +530,7 @@ The backend includes partial structured logging infrastructure:
 
 ### Incident response
 
-See `docs/RUNBOOK.md` for the full incident detection, diagnosis ladder,
+See `docs/ops/runbook.md` for the full incident detection, diagnosis ladder,
 rollback procedure, and zombie-sweep runbook. Key diagnostic commands
 are executable by a future operator without platform dashboard access.
 
