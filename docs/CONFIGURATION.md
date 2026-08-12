@@ -195,10 +195,11 @@ plus a server-controlled env var — never by unverified client input.
 
 Two independent features share the single `REDIS_URL` setting and the one shared `redis.asyncio` client in
 `spoilerless/app/cache/redis_client.py` (`get_redis()`, `lru_cache`-decorated). Both are guarded on a non-empty
-`REDIS_URL`; when it is unset, local development runs unthrottled and always queries Neo4j directly. Graph-cache
-operations catch Redis errors and fall through to Neo4j. Rate-limiter initialization is awaited during startup
-when `REDIS_URL` is non-empty, so an invalid or unreachable configured Redis service can fail startup rather than
-silently disabling throttling:
+`REDIS_URL`; when it is unset, local development runs unthrottled and always queries Neo4j directly. Both
+features **degrade, never fail, on Redis errors** (PROB-23, SEVENTEENTH PASS): graph-cache operations catch
+Redis errors and fall through to Neo4j; `init_rate_limiter()` startup failures leave the limiter unbound (a
+no-op — the app still serves); and a request-time `try_acquire_async()` failure logs a warning and lets the
+request through unthrottled instead of surfacing a 500:
 
 - **Rate limiting** (`spoilerless/app/services/rate_limit.py`) — `RateLimiter` dependencies backed by
   `pyrate-limiter`'s Redis `RedisBucket` (one bucket key per window). Bound

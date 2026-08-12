@@ -110,6 +110,12 @@ HARD rules baked into the script: never deletes the protected dev user
 (`ae8a41b7-db96-40e8-b6c2-2e3c69aedb11`); deletes only `:AppUser` rows with
 no ownership ties and expired/revoked/orphaned `:Session` nodes.
 
+Requires the modern driver TLS key: the script connects to Aura via
+`trusted_certificates=TrustCustomCAs(certifi.where())` — the legacy `trust=`
+driver key was removed in neo4j 6.2 and raises `ConfigurationError`
+(fixed 2026-08-12, SEVENTEENTH PASS). If the dry-run fails with
+`Unexpected config keys: trust`, update the venv driver first.
+
 KNOWN LIMITATION (verify counts before `--execute`): the script's tie check
 guards only `HAS_PROGRESS`, `HAS_SESSION`, `CREATED` (both directions), and
 `REFERS_TO`. Live ownership edges also include `HAS_CHAT_SESSION`,
