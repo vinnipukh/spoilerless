@@ -130,9 +130,9 @@ Ten new user-facing capabilities on top of the existing graph/chat product.
 
 ## Polish (POLISH)
 
-- [ ] **POLISH-01**: A full regression pass (backend `pytest`, frontend `vitest`, `npm run lint`, `npm run build`) is green with zero known failures at milestone close.
+- [x] **POLISH-01**: A full regression pass (backend `pytest`, frontend `vitest`, `npm run lint`, `npm run build`) is green with zero known failures at milestone close.
 - [ ] **POLISH-02**: A conversational UAT pass covers the full golden path (login → series/episode select → graph explore → chat with BYOK key → notes → export → new features) with no unresolved regressions.
-- [ ] **POLISH-03**: `README.md` and root-level docs reflect the shipped v1.3 state (features, deployment, screenshots/links) — no stale "prototype only, no deployment" language remains.
+- [x] **POLISH-03**: `README.md` and root-level docs reflect the shipped v1.3 state (features, deployment, screenshots/links) — no stale "prototype only, no deployment" language remains.
 
 ## Future Requirements (deferred)
 
