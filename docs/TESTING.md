@@ -62,11 +62,13 @@ The setup file registers jest-dom matchers and browser API shims needed by React
 
 ### Backend commands
 
-The complete configured backend suite is broad and includes live-Neo4j mutations. Run it only when the configured database is disposable or explicitly dedicated to tests. Against a fresh local docker Neo4j (`scripts/env-local.sh`), the full suite takes roughly 2 minutes and lands on the documented baseline of 584 passed / 7 failed:
+The complete configured backend suite is broad and includes live-Neo4j mutations. Run it only when the configured database is disposable or explicitly dedicated to tests. The **only supported full-suite entrypoint** is the Phase 10 guarded runner, which provisions its own ephemeral container (see "Phase 10 guarded runner" below):
 
 ```bash
-unset PYTHONPATH && source scripts/env-local.sh && uv run pytest spoilerless/tests -q
+unset PYTHONPATH && uv run python scripts/run_phase10_backend_tests.py --all
 ```
+
+For fast focused iteration against a fresh local docker Neo4j (`scripts/env-local.sh`), the suite is green on the documented baseline of **0 failed** (see below):
 
 Run one test file:
 
@@ -94,10 +96,10 @@ uv run pytest -x -v
 
 There are no configured pytest marker groups such as `unit` or `integration`; select subsets by file path or `-k` expression.
 
-**Chunked runner.** `scripts/run_backend_tests.py` splits the suite into 10 named chunks (core, domain-models, series-api, graph, change-set, candidates, auth, user-content, chat-llm, contract-ops), each test file appearing in exactly one chunk:
+**Chunked runner.** `scripts/run_backend_tests.py` splits the suite into 11 named chunks (core, domain-models, series-api, graph, change-set, candidates, auth, user-content, chat-llm, contract-ops, phase10-viz), each test file appearing in exactly one chunk. Before every run it asserts the chunk inventory matches `spoilerless/tests/` exactly once per file — a new test file that lands on disk without a chunk fails the runner instead of silently dropping out of `--all`:
 
 ```bash
-uv run python scripts/run_backend_tests.py            # all 10 chunks, sequential
+uv run python scripts/run_backend_tests.py            # all 11 chunks, sequential
 uv run python scripts/run_backend_tests.py --list     # show chunk names and files
 uv run python scripts/run_backend_tests.py --chunk 7  # one chunk by index
 uv run python scripts/run_backend_tests.py --chunk auth,graph   # a few by name
@@ -106,22 +108,28 @@ uv run python scripts/run_backend_tests.py --chunk 7 -x -k foo  # extra pytest a
 
 The runner strips `PYTHONPATH` from every child environment, so it works regardless of the ambient shell. It also supports `--parallel` (all selected chunks at once), but measured on the shared AuraDB, parallel is **slower** than serial due to connection contention — use parallel mode only against isolated Neo4j instances. Chunks that re-seed the graph or assert exact global node counts (`seed_idempotency`, `setup_schema_check`) should run alone before any parallel batch. Exit code is non-zero if any chunk fails.
 
-### Documented baseline: never chase the 7
+### Phase 10 guarded runner (scripts/run_phase10_backend_tests.py)
 
-The full-suite baseline is **584 passed / 7 failed** on a fresh local docker Neo4j. The 7 failures are documented pre-existing and are not regressions — do not chase them:
+Phase 10 closeout (POLISH-01) requires the full backend suite to be green with **zero known failures** against disposable data. `scripts/run_phase10_backend_tests.py` is the only Phase 10 backend entrypoint and enforces that:
 
-- 3 doc-contract:
-  - `spoilerless/tests/test_frontend_contract_doc.py::test_document_has_examples_projection_rules_non_goals_and_pending_status`
-  - `spoilerless/tests/test_openapi_contract.py::test_user_route_openapi_has_exact_operations_and_templates`
-  - `spoilerless/tests/test_openapi_contract.py::test_all_story_reads_graph_errors_health_and_deletes_are_fully_typed`
-- 2 seed-image:
-  - `spoilerless/tests/test_graph_api.py::test_graph_nodes_include_image_fields`
-  - `spoilerless/tests/test_graph_api.py::TestSeedImageCuration::test_no_seed_image_for_resources_visible_above_order_one`
-- 2 seed_idempotency constraint-name:
-  - `spoilerless/tests/test_seed_idempotency.py::test_community_schema_creates_only_unique_and_index`
-  - `spoilerless/tests/test_seed_idempotency.py::test_constraints_visibility_and_provenance`
+- It **provisions its own uniquely named** `neo4j:2026.06.0-community` container (same pinned image as docker-compose and CI) with a random password, random loopback-only ports, and **no volume mounts** (anonymous volumes only).
+- It **refuses, fail-closed, before creating anything** (exit 2): ambient `NEO4J_*`/`aura_*` connection overrides, remote/Aura URIs, port `:7687` (the docker-compose developer container), the running developer containers `spoilerless-neo4j`/`hdgraf-neo4j`, pre-existing containers/volumes with its generated name, and inconsistent alias-family values.
+- It **proves the target is its own container**: a settings+driver probe asserts the effective `Settings` (after both alias families resolve — `aura_*` wins) equals the ephemeral credentials and the database holds 0 nodes.
+- It **exports both alias families** (`NEO4J_*` and lowercase `aura_*`, identical values) and strips `PYTHONPATH` for children.
+- It **always tears down** in `finally` — `docker rm -f -v <name>` runs even when provisioning, seeding, or tests fail — and verifies the container is gone afterwards.
 
-A green run means 584 passed with exactly these 7 failing. If a run differs from this baseline (fewer failures, different failures, or failures outside this list), that is a real regression and should be investigated.
+```bash
+unset PYTHONPATH && uv run python scripts/run_phase10_backend_tests.py            # every chunk
+unset PYTHONPATH && uv run python scripts/run_phase10_backend_tests.py --all      # explicit
+unset PYTHONPATH && uv run python scripts/run_phase10_backend_tests.py --files \
+    spoilerless/tests/test_graph_api.py spoilerless/tests/test_seed_idempotency.py
+```
+
+The runner's fail-closed/cleanup behavior is locked by mock-driven tests in `spoilerless/tests/test_phase10_test_runner.py` (no docker daemon required). The chunk inventory itself is guarded: `run_backend_tests.py` asserts before every run that every `test_*.py` on disk appears in exactly one chunk.
+
+### Baseline: zero known failures
+
+The full-suite baseline is **0 failed** on the ephemeral container (and on a fresh local docker Neo4j). The historical "584 passed / 7 failed" baseline is retired: the 3 doc-contract failures were fixed by the Phase 10 10-03/10-06 inventory updates (52 operations / 39 templates, locked by `test_frontend_contract_doc.py` and `test_openapi_contract.py`), the 2 seed-image failures by the self-hosted portrait restore (order-1 characters may carry `/api/static/` images; above-order-1 resources must not — locked by `TestSeedImageCuration`), and the 2 constraint-name failures by engine-tolerant assertions in `test_seed_idempotency.py` (verified against `neo4j:2026.06.0-community`). **Any failure now is a real regression** — there is no accepted red list.
 
 ### Frontend commands
 
@@ -225,9 +233,8 @@ The HTTP surface is a closed inventory. Adding, removing, or changing a route re
 | Root-relative fixture `FileNotFoundError` | pytest was run from `spoilerless/` | Re-run from the repository root. |
 | `ModuleNotFoundError: spoilerless` under the Hermes terminal | Ambient `PYTHONPATH` shadows the venv | `unset PYTHONPATH` before the pytest/uv command, or use `scripts/run_backend_tests.py`. |
 | Many unrelated live-DB failures after an aborted run | Shared Neo4j contains partial fixture state | Stop; inspect/backup the database, then clean or reseed only with explicit data-loss awareness. Re-run a focused file before blaming source. |
-| `test_seed_idempotency.py` fails with a relationship/node mismatch | The disposable test DB was not clean, or an interrupted/concurrent run left user/candidate records behind. | Stop concurrent runs and inspect the configured database. On a disposable local DB, run the setup module and retry the focused file; never use reseeding as a substitute for backing up valuable data. |
-| Exactly 7 failures matching the documented baseline | Not a regression — the documented pre-existing baseline | Do not chase them; they are expected (see "Documented baseline"). |
-| Any failure count or set different from the 7-failure baseline | Likely a real regression from source changes | Investigate the new failure; the 7-name list above is the only accepted baseline. |
+| Any backend failure on the ephemeral runner | A real regression — there is no accepted red list | Investigate the failure; `scripts/run_phase10_backend_tests.py` teardown is automatic and verified. |
+| `REFUSED: ...` from the guarded runner | A forbidden target/override was detected (remote/Aura URI, developer port `:7687`, running developer container, pre-existing container/volume, ambient connection override) | Stop the shared target or unset the ambient `NEO4J_*`/`aura_*` variables and rerun; the runner owns its connection. |
 | React renders an empty container or many Testing Library lookups fail | `NODE_ENV=production` leaked into Vitest | Re-run with `NODE_ENV=test CI=1 npx vitest run`. |
 | `toBeInTheDocument` is missing | Wrong jest-dom entry/setup | Keep `@testing-library/jest-dom/vitest` in `frontend/src/test/setup.ts`. |
 | Pointer capture, `ResizeObserver`, `matchMedia`, or `React.act` fails | Required jsdom shim is absent | Add a suite-wide shim to `frontend/src/test/setup.ts`, not per test. |

@@ -1,4 +1,4 @@
-"""Run the spoilerless backend test suite in 10 named chunks.
+"""Run the spoilerless backend test suite in 11 named chunks.
 
 Why this exists
 ---------------
@@ -6,7 +6,7 @@ The full ``uv run pytest spoilerless/tests/`` run takes ~40 minutes against the
 shared live AuraDB (was 75+ before the 2026-08-10 suite-time pass — see
 docs/PROBLEMS.md SEVENTH PASS), so coding agents time out mid-run and broken
 backend code ships without being caught (see docs/ops/runbook.md). This
-runner splits the suite into 10 named chunks and can launch them **in parallel**
+runner splits the suite into 11 named chunks and can launch them **in parallel**
 — but measured on the shared AuraDB, parallel is SLOWER than serial (connection
 contention; the 2026-08-05 observation still holds), so parallel mode is only
 useful against isolated Neo4j instances. Total wall time serial tracks the sum;
@@ -30,8 +30,8 @@ small race risk.
 
 Usage
 -----
-    uv run python scripts/run_backend_tests.py            # all 10 chunks, sequential
-    uv run python scripts/run_backend_tests.py --parallel # all 10 chunks at once
+    uv run python scripts/run_backend_tests.py            # all 11 chunks, sequential
+    uv run python scripts/run_backend_tests.py --parallel # all 11 chunks at once
     uv run python scripts/run_backend_tests.py --list     # show chunks
     uv run python scripts/run_backend_tests.py --chunk 7  # one chunk by index
     uv run python scripts/run_backend_tests.py --chunk auth,graph  # a few
@@ -52,7 +52,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TESTS = PROJECT_ROOT / "spoilerless" / "tests"
 
-# 10 chunks — every test file appears exactly once. Names match the
+# 11 chunks — every test file appears exactly once. Names match the
 # "Backend Tests — Break Up Strategy" table in docs/ops/runbook.md.
 CHUNKS: dict[str, list[str]] = {
     "core": [
@@ -120,7 +120,42 @@ CHUNKS: dict[str, list[str]] = {
         "test_error_handlers.py",
         "test_rate_limit.py",
     ],
+    "phase10-viz": [
+        "test_visualization_baseline.py",
+        "test_visualization_projection.py",
+        "test_visualization_cache.py",
+        "test_visualization_graphrag.py",
+        "test_phase10_test_runner.py",
+    ],
 }
+
+
+def assert_chunk_inventory_matches_disk() -> None:
+    """Inventory assertion: every test_*.py appears in CHUNKS exactly once.
+
+    Guards against a new test file landing on disk without a chunk (it would
+    silently drop out of ``--all`` runs) or a chunk entry drifting out of
+    sync with the directory. Called at the top of every run.
+    """
+    disk = sorted(path.name for path in TESTS.glob("test_*.py"))
+    listed = [name for files in CHUNKS.values() for name in files]
+    problems: list[str] = []
+
+    missing = sorted(set(disk) - set(listed))
+    if missing:
+        problems.append(f"on disk but in no chunk: {', '.join(missing)}")
+    unknown = sorted(set(listed) - set(disk))
+    if unknown:
+        problems.append(f"in CHUNKS but not on disk: {', '.join(unknown)}")
+    duplicates = sorted({name for name in listed if listed.count(name) > 1})
+    if duplicates:
+        problems.append(f"listed more than once: {', '.join(duplicates)}")
+
+    if problems:
+        raise AssertionError(
+            "CHUNKS inventory out of sync with spoilerless/tests — "
+            + "; ".join(problems)
+        )
 
 
 def _chunk_files(names: list[str]) -> list[str]:
@@ -194,6 +229,9 @@ def main() -> int:
     parser.add_argument("--parallel", action="store_true", help="launch all selected chunks at once")
     parser.add_argument("extra", nargs="*", help="extra args passed through to pytest")
     args = parser.parse_args()
+
+    # Inventory gate — fail before any chunk runs if CHUNKS drifted from disk.
+    assert_chunk_inventory_matches_disk()
 
     order = list(CHUNKS)
     if args.list:
