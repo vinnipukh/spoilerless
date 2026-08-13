@@ -64,12 +64,31 @@ No unrelated authentication, settings, chat, Notes, ChangeSet, ingestion, render
 - **D-28:** Investigation view answers “Why do we know this?” using layered Claim/Evidence/Source path; never placed on default Episode Overview.
 
 ### Backend, cache, tests, closeout
-- **D-29:** Task-specific graph endpoint supports `episode_overview`, `character_network`, `plot_threads`, `investigation`, `full`, `graphrag_focus`; expansion endpoint enforces boundary, allowlist, limit server-side.
-- **D-30:** Projection cache key includes series, effective order, view type, projection version, graph revision, user scope where needed. Never cross-return view or boundary.
-- **D-31:** Baseline fixed safe snapshots for S01E01 and cumulative S01E02. Measure current node kinds, edge types, layout duration, payload before production behavior changes.
-- **D-32:** Benchmarks cover 30/50, 75/150, 150/400, 300/1000 node/edge datasets; measure payload, adapter, init/layout, interaction, expansion, switch, memory, React commits, displacement, labels/crossings where practical.
-- **D-33:** Automated tests cover spoiler-before-projection, bounds, Episode 1 safety, expansion, hidden leaks, GraphRAG independence/focus, cache separation, default view, timeline sync, label hiding, focus, collapse/reset, stable positions, Episode switch, Answer Graph, Evidence Chain, Inspector, responsive UI.
-- **D-34:** Finish original Phase 10 obligations: backend pytest, frontend vitest/lint/build; real golden-path UAT; shipped-state README/root docs. Manual tasks include Dexter family, Doakes distrust, Episode events/clues/cases, return to Overview, GraphRAG visualization, Episode 2 to 1 spoiler disappearance.
+- **D-29:** Task-specific graph endpoint supports `episode_overview`, `character_network`, `plot_threads`, `investigation`, `full`, `graphrag_focus`; expansion endpoint enforces boundary, allowlist, limit server-side. Reuse repository architecture; do not create every conceivable endpoint merely because it appears in design notes.
+- **D-30:** Projection cache key includes series, effective order, view type, projection version, graph revision, user scope where needed. Never cross-return view or boundary. Prefer existing revision invalidation over cache redesign.
+- **D-31:** Baseline fixed safe snapshots for S01E01 and cumulative S01E02. Measure current Character/Event/Location/Object/Organization counts, total nodes/edges, `PARTICIPATED_IN`, `OCCURRED_IN`, direct Character relations, initial layout duration, response latency, payload size before production behavior changes.
+- **D-32:** Benchmarks cover 30/50, 75/150, 150/400, 300/1000 node/edge datasets; optional 1000-node stress case only if cheap. Measure enough to find product regressions: payload/latency, adapter, init/layout, interaction, expansion, switch, memory, React commits, displacement, labels/crossings. Avoid academic harness work.
+- **D-33:** Automated tests cover spoiler-before-projection, fail-closed missing visibility, publication/reveal-order security, bounds, Episode 1 safety, expansion, hidden leaks, GraphRAG independence/focus, cache separation, deterministic IDs, default view, timeline sync, label hiding, focus, collapse/reset, stable positions, Episode switch, Answer Graph, Evidence Chain, Inspector, search/filter preservation, Chat focus, responsive UI.
+- **D-34:** Finish original Phase 10 obligations: backend pytest, spoiler/projection/GraphRAG/ChangeSet tests; frontend vitest/lint/typecheck/build; `git diff --check`; real golden-path UAT; shipped-state README/root docs. Tests make no production LLM calls. Manual tasks include login, Dexter family, Doakes distrust, Episode events/clues/cases, Notes/export, return to Overview, GraphRAG visualization, expansion/collapse, refresh, Episode 2 to 1 spoiler disappearance.
+
+### Narrative semantics and timeline security
+- **D-35:** Reveal/publication order is authoritative for spoiler security. Fictional chronology may be optional display metadata only; flashbacks remain gated by first reveal Episode.
+- **D-36:** Plot threads are editorial story concepts, never automatic graph communities. Group labels, membership, collapsed metadata, and counts must all be spoiler-safe. No future member totals.
+- **D-37:** Visual aggregation may summarize safe micro Events through an existing major/parent Event; it must not invent canonical Character relationships or mutate ontology semantics.
+- **D-38:** Event timeline is first-class React/CSS UI grouped by spoiler-safe plot thread. Event cards expose participants and Location as metadata. Graph/timeline selection is bidirectional; graph focus remains optional and camera-preserving.
+- **D-39:** `episode_difference` (“What changed in this Episode?”) is valuable but secondary. Plan only after Episode Overview is stable; defer if it threatens highest-priority deliverable.
+
+### Product polish, resilience, and accessibility
+- **D-40:** Phase is primarily product/frontend polish plus projection architecture, not major backend rewrite. Backend work stays limited to neutral DTOs, spoiler-safe projections/expansion/focus, cache separation, and required tests.
+- **D-41:** Claims, EvidenceFragments, and Sources stay off main story graph. Inspector tabs remain Overview, Claims, Evidence, Sources, Notes where current permissions allow. Opening citation prefers evidence detail; main graph changes only on explicit “Show in graph.”
+- **D-42:** Origin styling stays restrained: canonical normal; candidate small draft/warning marker; user small pencil badge or subtle dashed border. Do not create a color-heavy provenance taxonomy.
+- **D-43:** Character images must be Episode-safe. Unknown identities use neutral visuals; invalid/missing images fall back to initials, silhouette, or icon. Images cannot reveal future costume, injury, age, relationship, or identity.
+- **D-44:** Loading transitions keep prior scene visible where practical, avoid graph flashing, incrementally update shared elements, and do not recreate Cytoscape on Episode change. Projection/layout/image/Inspector/expansion failures show graceful retry states without internal Neo4j errors. Sparse Episodes show explanatory empty state.
+- **D-45:** Accessibility must not regress: keyboard-focusable controls, visible focus, accessible Inspector/search or readable node access, non-color distinctions, reduced-motion support. No full certification scope.
+- **D-46:** General polish audits shared header/actions, graph controls, Episode selector, Filters, Chat/Settings transitions, spacing, typography, radii, icon sizes, panels, hover/active/disabled/focus states. Reuse existing Tailwind design language; no brand redesign and no DaisyUI.
+- **D-47:** Views and Filters stay separate. View answers user task; Filters restrict entity types. View changes preserve filters unless an incompatibility requires a documented reset.
+- **D-48:** Search remains spoiler-safe. Hidden-safe resources open a local safe projection when absent from current view; search never defaults to Full Graph. GraphRAG focus must narrow broad retrieval context to intentional explanation elements.
+- **D-49:** Exploration recovery provides Back, Undo Expansion, Collapse, Clear Focus, Reset to Episode Overview. Browser-history integration and persisted Saved Views remain optional/deferred unless already cleanly supported.
 
 ### Claude's Discretion
 - Exact nesting controls inside four top-level tabs.
@@ -111,6 +130,7 @@ No unrelated authentication, settings, chat, Notes, ChangeSet, ingestion, render
 - `spoilerless/app/services/graph.py` — current graph assembly/projection candidate.
 - `spoilerless/app/cache/graph_cache.py` — existing spoiler-safe graph cache.
 - `spoilerless/app/spoiler/policy.py` — effective boundary rule.
+- User-provided “Phase 10 Context: Polishing and Graph Visualization Improvements” (2026-08-13) — complete product, spoiler, visualization, polish, performance, acceptance, non-goal, and Definition-of-Done brief; decisions D-35..D-49 capture additions not already explicit in repository files.
 
 </canonical_refs>
 
