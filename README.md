@@ -7,14 +7,13 @@
 
 Explore characters, events, locations, claims, and relationships through an interactive graph interface — with spoiler protection enforced at the backend data-access layer, plus an optional spoiler-safe LLM chat over the same filtered graph.
 
-> **Prototype scope:** Dexter, Season 1, Episodes 1–3.
+> **Shipped content scope:** Dexter, Season 1, Episodes 1–3 (the v1.3 seed series).
 
 ---
 
 ## Deployment & Environment Quick Reference
 
-<!-- VERIFY: Production stack endpoints (app.spoilerless.net, api.spoilerless.net), Neo4j AuraDB instance ID (03a8623b), Upstash Redis instance (darling-rat-221809), and Cloudflare DNS setup are external infrastructure details. -->
-**Documented production target:** Vercel `app.spoilerless.net` (frontend) · Render `api.spoilerless.net` (backend) · Neo4j AuraDB Free `03a8623b` · Upstash Redis `darling-rat-221809` · Cloudflare DNS + apex redirect.
+**Live production (operator-verified, v1.3 shipped 2026-08-13):** Vercel `app.spoilerless.net` (frontend) · Render `api.spoilerless.net` (backend) · Neo4j AuraDB Free `03a8623b` · Upstash Redis `darling-rat-221809` · Cloudflare DNS + apex redirect.
 
 ### Where configuration lives
 
@@ -27,7 +26,7 @@ Explore characters, events, locations, claims, and relationships through an inte
 ### Platform environment variables
 
 <!-- VERIFY: Render platform deployment environment variables and target database URL. -->
-**Render — `api.spoilerless.net`** (required unless noted):
+**Render — `api.spoilerless.net`** — service `spoilerless` (Blueprint `render.yaml`): build **`uv sync --frozen`**, start **`uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT`**. Required environment unless noted:
 
 ```
 NEO4J_URI=neo4j+s://03a8623b.databases.neo4j.io
@@ -70,7 +69,7 @@ Full platform-specific procedures, rollback, and monitoring: [`docs/DEPLOYMENT.m
 
 ## Product direction
 
-The repository is a polished vertical prototype for a **spoiler-aware, provenance-backed narrative knowledge graph**: an Obsidian-like graph, human-authored knowledge, revision history, and GraphRAG over only the viewer-visible subgraph. Candidate review and chat are implemented; automated subtitle/script ingestion, production deployment scaling, and broader product scope remain future work.
+Spoilerless v1.3 is **shipped and deployed** (Vercel + Render + AuraDB + Upstash) as a spoiler-aware, provenance-backed narrative knowledge graph: an Obsidian-like graph, human-authored knowledge, revision history, and GraphRAG over only the viewer-visible subgraph, presented through the Story / Characters / Evidence / Advanced projection views. Candidate review and chat are implemented; automated subtitle/script ingestion, broader product scope, and further deployment hardening remain future work (see [`docs/ROADMAP.md`](./docs/ROADMAP.md)).
 
 Coding agents should use [`docs/PROJECT-SPEC.md`](./docs/architecture/project-spec.md) for product intent and non-negotiable invariants. The document distinguishes implemented capability, historical prototype scope, and future requirements; implementation status must still be verified against live source and tests before acting on it.
 
@@ -96,6 +95,10 @@ Coding agents should use [`docs/PROJECT-SPEC.md`](./docs/architecture/project-sp
 - **Markdown export** — Export the visible graph (or a single resource) as Markdown from the same filtered read path.
 - **Path finder** — Pick two nodes to highlight the shortest visible path between them (server-resolved boundary, capped hops).
 - **Read-only share links** — Authenticated users can create, list, and revoke expiring snapshot links; recipients can open the token-gated spoiler boundary without signing in.
+- **Four projection views (v1.3)** — Story (bounded Episode Overview + coordinated Event Timeline), Characters (Character Network + Local Neighborhood), Evidence (layered Investigation / Evidence Chain + temporary GraphRAG Answer Graph), and Advanced (Full Graph / debug explorer). The backend serves library-neutral, task-specific projections from `GET /api/series/{series_id}/graph/visualization` (view types: `episode_overview`, `character_network`, `plot_threads`, `investigation`, `full`, `graphrag_focus`) after the effective spoiler boundary is enforced; raw Neo4j relation names stay hidden outside debug mode.
+- **Semantic expansion** — Server-allowlisted expansion (`family`, `work`, `conflict`, `episode_events`, `clues`, `locations`, `evidence`) adds 8–12 elements by default (hard max 25) with no hidden totals or future hints, and supports Collapse / Undo / Reset without global relayout.
+- **Stable scene state** — React owns the scene; Cytoscape updates arrive as batched diffs, so camera, selection, expansions, and timeline state survive episode switches and restore exactly when temporary Answer Graph / Evidence Chain views close. Projection responses are cached per series / order / view / projection version / graph revision / user (focus views add a deterministic focus digest; expansion is deliberately uncached).
+- **Responsive four-tab navigation** — Desktop uses top tabs; mobile mirrors the hierarchy with horizontally scrollable top tabs and a half/full-height Inspector bottom sheet, with keyboard focus, Escape/return-focus, and reduced-motion support (see the [Phase 10 UAT record](./docs/uat/phase-10-golden-path.md)).
 
 ---
 
@@ -112,6 +115,10 @@ Curated seed data (JSON/YAML)
   (visible_from_order)
          │
          ▼
+  Visualization projections
+  (neutral DTOs, view/cache separation)
+         │
+         ▼
     FastAPI REST API
          │
          ▼
@@ -119,7 +126,7 @@ React + TypeScript frontend
 (Cytoscape.js interactive graph)
 ```
 
-The **spoiler boundary** is the system's core architectural invariant. Every story-sensitive entity carries a `visible_from_order` field. When a user sets their watch progress to episode N, graph and GraphRAG queries return only data with `visible_from_order <= N`; candidate list and detail reads likewise require a positive boundary that the server validates against a persisted episode.
+The **spoiler boundary** is the system's core architectural invariant. Every story-sensitive entity carries a `visible_from_order` field. When a user sets their watch progress to episode N, graph and GraphRAG queries return only data with `visible_from_order <= N`; candidate list and detail reads likewise require a positive boundary that the server validates against a persisted episode. Projection and expansion reads enforce `effective_view_order = min(requested_view_order, watched_progress)` **before** projection or serialization (D-05), so future elements never leak through counts, layout, group names, expansion hints, or cache entries.
 
 See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the full system breakdown.
 
@@ -282,6 +289,8 @@ The backend exposes REST endpoints grouped by area, documented via OpenAPI at `/
 | Health | `GET /health` | Service and database health check |
 | Series | `/api/series` | List/get series and episodes |
 | Graph | `/api/series/{series_id}/graph` | Spoiler-filtered graph, keyed by `visible_until_order` |
+| Graph projections | `GET /api/series/{series_id}/graph/visualization` | Library-neutral task projections (6 view types) after the effective boundary |
+| Graph expansion | `GET /api/series/{series_id}/graph/expand` | Allowlisted, bounded semantic expansion (uncached) |
 | Graph path | `POST /api/series/{series_id}/graph/path` | Shortest visible path between two entities (server-resolved boundary, `max_hops` capped at 4) |
 | Export | `GET /api/series/{series_id}/export` | Visible graph (or `target_id` resource) as Markdown |
 | Auth | `/api/auth` | Google sign-in, current user, logout |
@@ -336,6 +345,8 @@ Watch progress is persisted per user via `GET/POST /api/series/{series_id}/progr
 | [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md) | Local development workflow, build/lint/format commands |
 | [`docs/TESTING.md`](./docs/TESTING.md) | Test framework, running tests, coverage |
 | [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) | Deployment targets and pipeline |
+| [`docs/uat/phase-10-golden-path.md`](./docs/uat/phase-10-golden-path.md) | Phase 10 (v1.3) operator-approved golden-path UAT record — 12 scenarios + 7 responsive/accessibility backstop rows |
+| [`docs/decision-logs/phase-10-visualization.md`](./docs/decision-logs/phase-10-visualization.md) | Phase 10 evidence-based decision log (Episode Overview variant selection, bounds, cache, benchmark evidence) + final multi-source coverage audit |
 | [`docs/RUNBOOK.md`](./docs/ops/runbook.md) | Operations runbook — zombie sweep, DB-pollution gate, CI checks |
 | [`docs/PROBLEMS.md`](./docs/PROBLEMS.md) | Audit ledger — findings and fixes across passes (ELEVENTH PASS: repository-layer consolidation, ToolSpec registry, shared BFS, change-set refactor, AuthService wiring, frontend fetch-state/highlight/graph-overlay refactors) |
 | [`docs/frontend-api-contract.md`](./docs/reference/frontend-api-contract.md) | Frontend-facing API contract |

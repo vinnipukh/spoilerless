@@ -3,11 +3,15 @@
 
 Spoilerless includes repository configuration for a Vercel frontend, a
 Render FastAPI service, pull-request CI, and local Neo4j through Docker
-Compose. The named production domains, tiers, and managed-service resources
-below are intended operator configuration, not asserted current state. Their
-current deployment state is unknown from the repository.
-
-<!-- VERIFY: Operator step — open the Vercel, Render, Neo4j Aura, Upstash, and Cloudflare dashboards and record whether the production deployments, custom domains, service tiers, and managed-resource identifiers match the intended values below. Until checked, their current state is unknown. -->
+Compose. **The production deployment is live and operator-verified (v1.3,
+2026-08-13):** Vercel `app.spoilerless.net`, Render `api.spoilerless.net`
+(service `spoilerless`, build `uv sync --frozen`, start
+`uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT`),
+Neo4j AuraDB Free (`03a8623b`), Upstash Redis (`darling-rat-221809`), and
+Cloudflare DNS + apex redirect. The named tiers and managed-service
+resources below record the verified configuration; operator evidence is the
+Phase 10 UAT record (`docs/uat/phase-10-golden-path.md`) and the live
+`GET /health` build-marker check in [Monitoring](#monitoring).
 
 ## Production Hosting Stack
 
@@ -423,9 +427,7 @@ fetch queries Neo4j directly.
   services; production secrets and resource bindings are dashboard-only.
 - `release.yml` does not enforce its stated CI gate and cannot push tags with
   its current `contents: read` permission.
-- No deployment smoke-test workflow, infrastructure-as-code for DNS, external
-  uptime monitor configuration, or automated database backup/restore job is
-  committed.
+- A deployment smoke-test workflow is not committed; there is no infrastructure-as-code for DNS, no committed external uptime monitor configuration (the live UptimeRobot monitor is operator-configured, OPS-02), and no automated database backup/restore job.
 - No `RENDER_API_KEY` (or equivalent deployment-automation credential)
   exists in the repository or the root `.env`, so dashboard-level fixes —
   most importantly a stale Start Command override — are operator-touch
@@ -433,9 +435,11 @@ fetch queries Neo4j directly.
 
 ### Outstanding (not yet configured)
 
-- **External uptime monitor**: no UptimeRobot (or equivalent)
-  monitor polls `GET /health` yet — requires human account sign-up. See
-  `docs/ops/runbook.md` §1 for the planned detection flow.
+- **External uptime monitor:** an UptimeRobot HTTPS monitor polls
+  `GET https://api.spoilerless.net/health` every 5 minutes with an email
+  alert contact (OPS-02, live since Phase 8 UAT #11). Free-tier Render
+  sleep cycles can produce false-downs — a known free-tier cost, not a
+  defect. See `docs/ops/runbook.md` §1 for the detection flow.
 
 ## Rollback
 

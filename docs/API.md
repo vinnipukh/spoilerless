@@ -7,9 +7,9 @@ The backend is a FastAPI application defined by `spoilerless.app.main:app`. Its 
 - Swagger UI: `/docs`
 - ReDoc: `/redoc`
 - API version: `0.1.0`
-- Registered surface: **50 method/path operations over 37 path templates**
+- Registered surface: **52 method/path operations over 39 path templates** (locked by `spoilerless/tests/test_frontend_contract_doc.py`)
 
-All paths below are relative to the backend origin. JSON field names use `snake_case`. No production base URL is defined in the repository. <!-- VERIFY: deployed backend base URL -->
+All paths below are relative to the backend origin. JSON field names use `snake_case`. The deployed production backend origin is `https://api.spoilerless.net` (Render service `spoilerless` — build `uv sync --frozen`, start `uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT`; see [DEPLOYMENT.md](./DEPLOYMENT.md)); local development serves the same app at `http://localhost:8000`.
 
 ## Authentication
 
@@ -108,6 +108,8 @@ Share-link creation and listing require a session but not the admin role. Revoca
 | GET | `/api/series/{series_id}` | Read one series | No |
 | GET | `/api/series/{series_id}/episodes` | List episodes for a series | No |
 | GET | `/api/series/{series_id}/graph` | Read the spoiler-filtered graph | No |
+| GET | `/api/series/{series_id}/graph/visualization` | Read a task-specific visualization projection (6 view types) | No |
+| GET | `/api/series/{series_id}/graph/expand` | Read an allowlisted semantic expansion delta (uncached) | No |
 | POST | `/api/series/{series_id}/graph/path` | Find the shortest visible path between two entities | No |
 | GET | `/api/series/{series_id}/export` | Export the visible graph as Markdown | No |
 | POST | `/api/series/{series_id}/notes` | Create a user note | Yes |
@@ -215,6 +217,16 @@ Every graph node and narrative item is filtered by `visible_from_order`. Claims 
 #### Markdown export
 
 `GET /api/series/{series_id}/export` renders the visible graph as Markdown (feature D-11). It accepts the same optional `visible_until_order` query parameter (defaults to 1, with the same anonymous-fixed-at-1 and progress-clamped boundary resolution as the graph read) and an optional `target_id` query parameter that narrows the export to a single visible resource and its claims. The response is `text/markdown` with a `Content-Disposition: attachment` header naming the file `spoilerless-{slug}-order-{N}.md` for a whole-series export or `spoilerless-{nodeLabel}.md` for a single-target export (labels are slugified; a target that is not visible at the boundary renders a stub note instead of failing). The Markdown is assembled from the same filtered read path as the graph GET — there is no second filter implementation. Errors: `404 SERIES_NOT_FOUND`, `422 INVALID_VISIBLE_UNTIL_ORDER`, `503 DATABASE_UNAVAILABLE`.
+
+#### Visualization projections (Phase 10, D-29/D-30)
+
+`GET /api/series/{series_id}/graph/visualization` returns a library-neutral `VisualizationDTO` (`metadata` with `projection_version`, `view_type`, `series_id`, `series_title`, `episode_order`, `visible_until_order`, `effective_view_order`; plus `nodes`, `edges`, `groups`, `timeline`, and `focus`). Required query `view` is the exact enum `episode_overview|character_network|plot_threads|investigation|full|graphrag_focus`; `episode_order` is a required positive integer with the same persisted-episode resolution and anonymous-clamp semantics as `visible_until_order` (anonymous readers are fixed at order 1; authenticated readers are clamped by persisted progress; an order that does not identify a persisted Episode returns `422 INVALID_VISIBLE_UNTIL_ORDER`). `focus` is `null` for every view except `graphrag_focus`, where it references the primary focus node — always resolvable inside the DTO. Repeated optional `focus_id` values are accepted only for `graphrag_focus` and capped at 20 distinct ids; any other view sending `focus_id` (or `graphrag_focus` without one) returns `422 INVALID_REQUEST`. Missing series: `404 SERIES_NOT_FOUND`; database failures: `503 DATABASE_UNAVAILABLE`.
+
+Projection responses are cached keyed by **series, effective order, view type, projection version, graph revision (Redis-local per-series cache epoch), and user scope**; `graphrag_focus` keys additionally include a deterministic digest of the validated, deduplicated, sorted focus ids. Cache entries can never cross-return a view, boundary, or focus set; an epoch-read failure bypasses the cache.
+
+#### Semantic expansion (Phase 10, D-21/D-29)
+
+`GET /api/series/{series_id}/graph/expand` returns a strict `VisualizationDTO` **delta** — the anchor node, the bounded additions, and the edges between them; `metadata.view_type` carries `expansion:{key}` so a delta is always distinguishable from a view projection. Required `expansion_key` is the exact allowlisted enum `family|work|conflict|episode_events|clues|locations|evidence`; required `node_id` is a non-empty visible graph resource to expand around (hidden and unknown anchors are indistinguishable — both return sanitized `422 INVALID_REQUEST`); required `episode_order` uses the shared boundary resolver. Optional `limit` defaults to 12 and is constrained to **1..25** — no request or server result exceeds the hard max of 25 additions. Additions are ordered deterministically by (reveal order, id) before the limit applies — never randomly. Expansion responses are **never cached** in Phase 10 (`T10-CACHE-06`): every request resolves the boundary and computes the delta from the current safe graph. Errors: `404 SERIES_NOT_FOUND`, `422 INVALID_REQUEST`, `422 INVALID_VISIBLE_UNTIL_ORDER`, `503 DATABASE_UNAVAILABLE`.
 
 ### Notes
 

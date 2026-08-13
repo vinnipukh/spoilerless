@@ -6,7 +6,7 @@
 
 ## 1. Aim, prototype boundary, and current state
 
-Spoilerless is a spoiler-aware, source-grounded television-series knowledge-graph application. It combines an Obsidian-like interactive graph for characters, events, locations, organizations, objects, claims, relationships, sources, evidence, notes, and revisions with an LLM chat that may use only graph data visible at the viewer's persisted watch progress.
+Spoilerless is a spoiler-aware, source-grounded television-series knowledge-graph application — **shipped and deployed as v1.3** (Vercel frontend + Render backend + Neo4j AuraDB + Upstash Redis, operator-verified 2026-08-13). It combines an Obsidian-like interactive graph for characters, events, locations, organizations, objects, claims, relationships, sources, evidence, notes, and revisions with an LLM chat that may use only graph data visible at the viewer's persisted watch progress. Since v1.3, the four-view hierarchy (Story / Characters / Evidence / Advanced) presents task-specific, spoiler-safe projections of that graph (see [ARCHITECTURE.md §7.17](../ARCHITECTURE.md#717-visualization-projections-expansion-and-scene-state)).
 
 The historical one-week prototype target was deliberately narrow:
 
@@ -25,7 +25,7 @@ Curated episode data → source-grounded claims → Neo4j
 → LLM answers grounded in the visible subgraph
 ```
 
-**Current implementation:** the repository now contains the original graph slice plus Google sign-in and server-side sessions, persisted watch progress, user content, revisions, candidate ingestion/review APIs, GraphRAG chat and retrieval tools, settings, confirmable ChangeSets, and share links. The generated OpenAPI document contains 50 method/path operations over 37 path templates, including the export and share routes now registered in `spoilerless/app/main.py`. Chat is optional and disabled unless configured. Candidate-review reads are no longer a spoiler-boundary exception: both candidate list and candidate detail call `_require_resolved_boundary` in `spoilerless/app/api/candidates.py`, so an omitted or nonpersisted episode order returns 422 and the repository read is boundary-filtered. Several production concerns remain unresolved; see [Current gaps](#13-current-gaps-and-scope-boundaries) and [ROADMAP.md](../ROADMAP.md).
+**Current implementation:** the repository now contains the original graph slice plus Google sign-in and server-side sessions, persisted watch progress, user content, revisions, candidate ingestion/review APIs, GraphRAG chat and retrieval tools, settings, confirmable ChangeSets, share links, and the v1.3 four-view visualization hierarchy (Story / Characters / Evidence / Advanced) served by task-specific backend projections (`/graph/visualization`, 6 view types) and allowlisted semantic expansion (`/graph/expand`, 7 keys, limit 1–25, uncached). The generated OpenAPI document contains 52 method/path operations over 39 path templates (locked by `spoilerless/tests/test_frontend_contract_doc.py`), including the export, share, visualization, and expansion routes registered in `spoilerless/app/main.py`. The v1.3 product is deployed and operator-verified (Vercel `app.spoilerless.net` + Render `api.spoilerless.net` + Neo4j AuraDB + Upstash Redis, 2026-08-13; see [ROADMAP.md §8.6](../ROADMAP.md) and the [Phase 10 UAT record](../uat/phase-10-golden-path.md)). Chat is optional and disabled unless configured. Candidate-review reads are no longer a spoiler-boundary exception: both candidate list and candidate detail call `_require_resolved_boundary` in `spoilerless/app/api/candidates.py`, so an omitted or nonpersisted episode order returns 422 and the repository read is boundary-filtered. Several production concerns remain unresolved; see [Current gaps](#13-current-gaps-and-scope-boundaries) and [ROADMAP.md](../ROADMAP.md).
 
 ### 1.1 Delivery boundary and extension discipline
 
@@ -361,7 +361,7 @@ Implemented preparation must not be confused with the following incomplete or fu
 - authentication expansion beyond Google sign-in and session cookies;
 - a general CSRF strategy for all state-changing cookie-authenticated routes;
 - vector search, advanced hybrid retrieval, community detection;
-- production deployment architecture, Kubernetes, and a release/deployment pipeline; CI itself is configured — `.github/workflows/ci.yml` runs a pull_request workflow with backend Neo4j setup/pytest and DB-pollution checks plus frontend build/lint/audit jobs, while the release workflow is only a promotion skeleton;
+- production deployment is **live** (Vercel + Render + AuraDB + Upstash, operator-verified 2026-08-13; [DEPLOYMENT.md](../DEPLOYMENT.md)); still absent: a deployment smoke-test workflow, DNS infrastructure-as-code, an automated database backup/restore job, and an enforcing release pipeline — `.github/workflows/release.yml` remains a promotion skeleton, while `.github/workflows/ci.yml` runs a pull_request workflow with backend Neo4j setup/pytest and DB-pollution checks plus frontend build/lint/audit jobs;
 - full event sourcing, automatic ontology evolution, calibrated confidence scoring;
 - multi-series breadth, actor appearance counts, mobile, and social features.
 

@@ -126,7 +126,7 @@ That is the roadmap **openly deferring the #1-#5 findings in this document** to 
 ### 25. Committed junk: a PyCharm hello-world script and untouched Vite boilerplate
 `main.py` at the repo root is the **PyCharm template** (`print_hi('PyCharm')` — literally "Press Shift+F10 to execute it"). `frontend/README.md` is the **unmodified create-vite boilerplate** ("React Compiler is not enabled on this template…"). These are committed. Root `index.html` (60 KB inline landing page) is the only thing GitHub Pages can serve — the actual app has no static build artifact story (see #26). Junk in the root of a repo is the first thing a code reviewer and a prospective deployer sees.
 
-### 26. There is no deployment story at all — "deploy to public" starts from zero
+### 26. Deployment story was entirely absent — "deploy to public" started from zero
 `docs/DEPLOYMENT.md` states it plainly: no backend/frontend Dockerfiles, no CI/CD, no production target. Verified: **no `.github/` directory exists** in the repo. The GitHub Pages commit (`273221e`) deploys the static landing page only. What's missing for a public launch: app container images, reverse proxy/TLS termination, CI pipeline, env/secret management, log aggregation, monitoring/alerting, backups of Neo4j, and a documented multi-user operations model. "Polished vertical prototype" is accurate; "deployable" is not.
 
 ### 27. Docker Compose hardcodes credentials; `.env.example` ships different ones

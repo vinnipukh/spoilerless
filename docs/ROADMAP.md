@@ -47,9 +47,11 @@ The repository now also includes:
 - revisions and supported revert flows;
 - extraction schemas plus candidate ingest/list/get/edit/approve/reject APIs;
 - optional spoiler-aware GraphRAG chat, bounded allowlisted retrieval, structured citations, SSE, and chat persistence;
-- LLM settings and confirmable/rejectable/revertible ChangeSets.
+- LLM settings and confirmable/rejectable/revertible ChangeSets;
+- the v1.3 four-view visualization hierarchy (Story / Characters / Evidence / Advanced) with task-specific backend projections (`/graph/visualization`, 6 view types), allowlisted semantic expansion (`/graph/expand`, 7 keys, limit 1–25, uncached), projection cache separation, and GraphRAG Answer Graph / Evidence Chain flows;
+- a live v1.3 deployment (Vercel `app.spoilerless.net` + Render `api.spoilerless.net` + Neo4j AuraDB + Upstash Redis) verified by the operator on 2026-08-13 (see [DEPLOYMENT.md](DEPLOYMENT.md) and the [Phase 10 UAT record](uat/phase-10-golden-path.md)).
 
-This expansion does not mean automatic extraction, full multi-user authorization, production deployment, or all review UX is complete.
+This expansion does not mean automatic extraction, full multi-user authorization, or all review UX is complete.
 
 ## 3. Current stack and repository shape
 
@@ -130,7 +132,7 @@ Acceptance: the graph response can supply series/episodes, selected narrative no
 
 ### Milestone 5 — Frontend graph UI
 
-**Status: Complete for the current prototype experience.**
+**Status: Complete for the shipped v1.3 experience.**
 
 - [x] Replace the Vite starter screen and implement the main application shell.
 - [x] Fetch real series, episodes, progress, and graph data.
@@ -222,7 +224,7 @@ The canonical demo remains:
 8. with chat configured, ask a visible relationship question and inspect citations;
 9. repeat at S01E01 and verify there is no S01E02/S01E03 leak.
 
-This is a polished, technically honest architecture proof, not production completion. The original demo also listed direct claim editing; current candidate edit/review is an API workflow and ChangeSets can propose guarded changes, but a comprehensive candidate-review UI is not claimed.
+This is the shipped v1.3 product: the same spoiler-safe golden path is live on the deployed stack (Vercel + Render + AuraDB + Upstash) and was operator-UAT-approved on 2026-08-13 with the mandatory Episode 2 → Episode 1 spoiler-disappearance check passing (see [uat/phase-10-golden-path.md](uat/phase-10-golden-path.md)). The original demo also listed direct claim editing; current candidate edit/review is an API workflow and ChangeSets can propose guarded changes, but a comprehensive candidate-review UI is not claimed.
 
 ## 7. Evaluation and acceptance obligations
 
@@ -261,7 +263,7 @@ Testing commands and live-Neo4j safety are in [TESTING.md](TESTING.md).
 3. **Source navigation:** detail UI shows plain-text source metadata/locators, not navigable source links.
 4. **Automatic ingestion:** no subtitle/script downloader, parser, extractor, entity linker, or production review pipeline exists.
 5. **Review UI:** candidate workflow is API-level; comprehensive human review UX remains future work.
-6. **Production operations:** deployment architecture is repository-declared (`render.yaml` backend service, `frontend/vercel.json` SPA rewrites, [DEPLOYMENT.md](DEPLOYMENT.md)) and PR CI is configured (`.github/workflows/ci.yml`: dedicated Neo4j service, seed, full pytest, DB-residue gate, frontend build/lint/audit — pull-request trigger only). Live operator/platform production state, push-triggered CI, and release enforcement (`.github/workflows/release.yml` remains a non-enforcing skeleton) are still incomplete.
+6. **Production operations:** the v1.3 deployment is **live and operator-verified** (2026-08-13): Vercel `app.spoilerless.net`, Render `api.spoilerless.net` (service `spoilerless`, build `uv sync --frozen`, start `uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT`), Neo4j AuraDB `03a8623b`, Upstash Redis `darling-rat-221809`, Cloudflare DNS + apex redirect, and an UptimeRobot `GET /health` monitor (OPS-02). Residual: `release.yml` remains a non-enforcing skeleton (its CI gate prints a message and tag push is not authorized), a deployment smoke-test workflow and DNS infrastructure-as-code are not committed, and no automated database backup/restore job exists — see [DEPLOYMENT.md](DEPLOYMENT.md) §Repository-visible deployment gaps.
 7. **Testing isolation:** backend integration tests use live local Neo4j and require careful cleanup. **Suite-time gap (SEVENTEENTH PASS, 2026-08-12):** the `live_client` fixture is function-scoped and re-runs the full `setup_database` per test (~4.6s local seed + TestClient lifespan boot ≈ 10s/test; measured: `test_progress_api.py` 26 tests / 260s) — the full green suite is ~42 min even on local docker. The EIGHTH PASS "<8m met (2:01)" figure was measured on the stale `hdgraf-neo4j` (5-community) container with 35 failing tests that fast-failed before doing work — never a green-suite benchmark; `bacd536` (08-11) later made those tests pass (full work per test), which is why green wall-time is back to ~40 min. **Task:** module/session-scoped seed + read-only client (the DRY conftest comment at `conftest.py:163` documents the earlier attempt broke `get_database` state — needs the per-module shared client to be resurrected without that breakage), targeting sub-10-min green local runs. See `docs/ops/runbook.md` §Backend Tests.
 8. **ChangeSet/revision breadth:** revert is intentionally bounded; this is not full event sourcing.
 9. **Confidence semantics:** extraction `relationship_effect` remains loosely typed; thresholds/calibration are not academically validated.
@@ -276,7 +278,7 @@ Testing commands and live-Neo4j safety are in [TESTING.md](TESTING.md).
 - reconcile frontend/backend type mismatches and keep OpenAPI/contract tests locked;
 - add rights-safe navigable source links only when locators are valid URLs and copyright constraints are respected;
 - CI test isolation is shipped (per-job Neo4j service + DB-residue gate in `.github/workflows/ci.yml`); local integration tests still share the live local Neo4j instance;
-- production-readiness deployment: manifests are declared (`render.yaml`, `frontend/vercel.json`, `docs/DEPLOYMENT.md`), but release enforcement and live operator/platform state remain incomplete.
+- production-readiness deployment: the v1.3 deployment is **live** (Vercel + Render + AuraDB + Upstash, operator-verified 2026-08-13); release enforcement (`release.yml`), a deployment smoke-test workflow, DNS infrastructure-as-code, and automated backup/restore remain open hardening items.
 
 ### Ingestion research and implementation
 
