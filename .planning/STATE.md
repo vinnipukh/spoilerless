@@ -102,6 +102,7 @@ None yet.
 | 260812-gra | Refresh graph automatically on website open: run the same forced Cytoscape layout and fit used by Refresh graph when the live canvas instance is created | 2026-08-12 | f968788 | [260812-gra-refresh-graph-on-open](./quick/260812-gra-refresh-graph-on-open/) |
 | 260813-ftl | Hide note-adding UI (Add Note / NoteEditor / NoteItem edit-delete) and revision History tab from visitor (misafir) mode; readOnly threaded into DetailPanel from App.tsx | 2026-08-13 | ed24814 | [260813-ftl-hide-note-adding-ui-buttons-and-revision](./quick/260813-ftl-hide-note-adding-ui-buttons-and-revision/) |
 | 260813-gao | Fix broken node portrait images in production: apiUrl() helper prefixes relative image_url with VITE_API_BASE_URL at both consumption sites (Cytoscape imageUrl + DetailPanel img src); local vite-proxy behavior unchanged | 2026-08-13 | 73ed961 | [260813-gao-fix-broken-node-portrait-images-in-produ](./quick/260813-gao-fix-broken-node-portrait-images-in-produ/) |
+| 260813-wyp | Resizable Story Event Timeline rail: drag its left edge leftwards to widen (pointer events, 240..min(640,60vw) clamp) or use ArrowLeft/ArrowRight on the focused separator handle (±16px); no new dependencies | 2026-08-13 | b714e79, 316b938 | [260813-wyp-make-the-story-event-timeline-rail-horiz](./quick/260813-wyp-make-the-story-event-timeline-rail-horiz/) |
 
 ## Deferred Items
 
