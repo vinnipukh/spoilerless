@@ -146,7 +146,7 @@ Plans:
   5. Automated tests cover projection order/bounds/leaks, cache separation, GraphRAG independence/focus, adapter and scene behavior, timeline/Inspector/responsive coordination, Episode switching, Answer Graph, Evidence Chain, and benchmark datasets at 30/50, 75/150, 150/400, and 300/1000 node/edge scales.
   6. Backend `pytest`, frontend `vitest`, `npm run lint`, and `npm run build` are green; a real golden-path UAT includes the original flow plus Dexter-family, Doakes-distrust, episode events/clues/cases, Overview restoration, GraphRAG visualization, and Episode 2→1 spoiler disappearance; README and root docs match the shipped architecture and behavior.
 
-**Plans**: TBD
+**Plans**: 11 plans in 10 dependency waves (`10-01` baseline/A-B gate; `10-02` DTO/boundary; `10-03` projections/cache; `10-04` Cytoscape adapter/scene; `10-05` four-view responsive UI; `10-06` semantic expansion/recovery; `10-07` GraphRAG Answer Graph/evidence; `10-08` benchmarks/refinement; `10-09` isolated regression gate; `10-10` operator UAT; `10-11` docs/coverage closeout).
 
 **UI hint**: yes
 
@@ -165,7 +165,7 @@ Plans:
 | 7. Spoiler-Safety Hardening | v1.2 | 8/8 | Complete | 2026-08-03 |
 | 8. Production Deployment & Automated CI/CD | v1.3 | 8/8 | Complete    | 2026-08-04 |
 | 9. Feature Expansion & Full Audit Remediation | v1.3 | 18/18 | Complete    | 2026-08-13 |
-| 10. Polish & Finishing Touches | v1.3 | 0/TBD | Not started | - |
+| 10. Polish & Finishing Touches + Narrative Visualization Redesign | v1.3 | 0/11 | Planned | - |
 
 Full phase details archived at `.planning/milestones/v1.1-ROADMAP.md` / `.planning/milestones/v1.1-phases/` and `.planning/milestones/v1.2-ROADMAP.md` / `.planning/milestones/v1.2-phases/` (v1.2 archive supersedes the earlier v1.1 archive, which predates Phase 7).
 

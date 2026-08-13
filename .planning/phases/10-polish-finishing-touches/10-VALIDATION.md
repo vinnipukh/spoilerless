@@ -21,7 +21,7 @@ created: 2026-08-13
 | **Frontend config** | `frontend/vite.config.ts`; setup `frontend/src/test/setup.ts` |
 | **Quick backend run** | `uv run pytest spoilerless/tests/test_spoiler_policy.py spoilerless/tests/test_graph_api.py -q` |
 | **Quick frontend run** | `cd frontend && NODE_ENV=test CI=1 npm test -- --run src/components/graph/GraphCanvas.test.tsx src/components/graph/graphElements.test.ts` |
-| **Full backend run** | Repository disposable/local-DB runner after reading `docs/TESTING.md` and `scripts/run_backend_tests.py`; never shared live data |
+| **Full backend run** | Phase 10 plan creates `scripts/run_phase10_backend_tests.py`: uniquely named Neo4j 2026.06.0 container + ephemeral volume, both alias families overridden, guaranteed cleanup; never developer/shared/Aura data |
 | **Full frontend run** | `cd frontend && NODE_ENV=test CI=1 npm test -- --run` |
 | **Static gates** | `cd frontend && npm run lint && npm run build` |
 | **Estimated feedback** | Focused unit/contract checks < 120s; full suites sampled per wave |
@@ -31,7 +31,7 @@ created: 2026-08-13
 - **After every task commit:** run the task's focused backend or frontend command.
 - **After every plan:** run all focused tests named by that plan.
 - **After every wave:** run the full relevant backend/frontend suite; run both once cross-stack wiring begins.
-- **Before `/gsd-verify-work`:** backend pytest, frontend Vitest, lint, build, benchmark report, and UAT evidence must all be green/complete.
+- **Before `/gsd-verify-work`:** isolated backend pytest, frontend Vitest, lint, build, benchmark report, and UAT evidence must all be green/complete.
 - **Max feedback latency:** 120 seconds for focused checks; long full-suite/database checks are wave gates rather than per-task gates.
 
 ## Per-Plan Verification Map
@@ -56,7 +56,8 @@ created: 2026-08-13
 - [ ] `frontend/src/lib/visualizationAdapter.test.ts` — DTO adapters, label suppression, stable IDs.
 - [ ] Scene reducer/hook tests — selection, camera, expansions, restoration.
 - [ ] Deterministic benchmark harness/result schema for 30/50, 75/150, 150/400, 300/1000.
-- [ ] Responsive/FakeLLM UAT checklist with explicit live-data prohibition.
+- [ ] `scripts/run_phase10_backend_tests.py` + mock-driven guard tests — provision/verify/clean one ephemeral local Neo4j target; reject developer/shared/Aura targets and alias-precedence bypasses.
+- [ ] Responsive/FakeLLM UAT checklist with explicit shared-mutation prohibition; real BYOK is manual operator-only, masked, never recorded.
 
 ## Manual-Only Verifications
 
@@ -64,7 +65,7 @@ created: 2026-08-13
 |----------|-------------|------------|-------------------|
 | Narrative comprehension and A/B choice | VIZ-03, VIZ-10 | Clarity/crossings/comprehension require human judgment | Compare fixed S01E01/S01E02 variants with recorded metrics and select via Decision Log. |
 | Mobile visual composition | VIZ-05 | Real viewport/touch and half/full sheet behavior | Verify scrollable top tabs; graph/timeline/Inspector are never squeezed together; touch and focus remain usable. |
-| Golden path | POLISH-02 | Real OAuth/deployed/BYOK interactions | Login → series/episode → four views → BYOK chat → notes/export → expansion → Answer Graph/Evidence Chain → Overview restoration → Episode 2→1 disappearance; include Dexter family, Doakes distrust, events/clues/cases. |
+| Golden path | POLISH-02 | Real OAuth/deployed interaction plus zero-cost chat contract | Login → series/episode → four views → BYOK settings/masking/transport with FakeLLM or operator-approved zero-cost provider only → notes/export → expansion → Answer Graph/Evidence Chain → Overview restoration → Episode 2→1 disappearance; include Dexter family, Doakes distrust, events/clues/cases. Never incur paid LLM spend. |
 | Shipped-state documentation | POLISH-03 | Truth must be checked against deployed behavior | Verify README/root docs, API and architecture describe the actual routes, hierarchy, deployment and screenshots/links. |
 
 ## Validation Sign-Off
