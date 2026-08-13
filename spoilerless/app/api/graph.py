@@ -250,7 +250,15 @@ async def get_visualization(
         effective_view_order=effective,
     )
     try:
-        dto = _visualization_service.project_view(result, view, focus_ids=focus_id)
+        # 10-07 (D-26/D-37): events is the editorial SafeEventContext seam —
+        # currently None in production (no editorial event source is wired
+        # yet). When supplied, the graphrag_focus projection maps micro/
+        # supporting Event focus ids to the episode's safe major Events plus
+        # timeline (Inspector) detail; without it every focus node keeps the
+        # safe in-place pass-through behavior.
+        dto = _visualization_service.project_view(
+            result, view, events=None, focus_ids=focus_id
+        )
     except InvalidVisibilityOrder as exc:
         # Hidden/unknown focus ids and hidden projection rows are client
         # request problems; sanitized, never echoing the offending id.

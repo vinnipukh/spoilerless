@@ -564,6 +564,115 @@ def _citation_survives(raw: dict[str, Any], retrieved: dict[str, Any]) -> bool:
     return True
 
 
+# ---------------------------------------------------------------------------
+# 10-07 (D-26/D-27): the GraphRAG focus contract. The pipeline's raw
+# ``graph_focus`` (node/edge ids derived from this turn's citations) is mapped
+# onto the visualization surfaces WITHOUT ever reducing retrieval: the
+# complete safe retrieval set (nodes/claims/evidence/sources/edges) remains
+# intact regardless of the visual bounds the frontend later applies. Every
+# focus id is validated against THIS turn's retrieved set only (never a fresh
+# DB existence check) — an id that was never retrieved is dropped (fail
+# closed), exactly like the citation validation above.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class GraphRagFocusContract:
+    """Safe mapping of one turn's focus onto visualization surfaces (D-26).
+
+    - ``entity_ids``: focus ids that are story nodes retrieved this turn (or
+      referenced by a retrieved claim) — the frontend highlights these IN
+      PLACE on the current view.
+    - ``event_ids``: the subset of entity ids whose retrieved row is an
+      Event. The major-vs-micro decision is made at the visualization layer
+      (SafeEventContext), never here — retrieval rows carry no editorial tier
+      (D-37: micro Events map to visible major Events + Inspector detail).
+    - ``investigation_ids``: focus ids that are Claim/Evidence/Source rows
+      retrieved this turn — these open the Evidence Chain, never the main
+      story graph (D-28/D-41).
+    - ``edge_ids``: validated edge ids (retrieved edges or ``<claim_id>:edge``
+      for retrieved claims).
+    - ``dropped_ids``: cited ids that were never retrieved this turn — never
+      forwarded (fail closed, mirrors citation stripping).
+    """
+
+    entity_ids: list[str]
+    event_ids: list[str]
+    investigation_ids: list[str]
+    edge_ids: list[str]
+    dropped_ids: list[str]
+
+
+def build_graphrag_focus(
+    retrieved: dict[str, Any],
+    node_ids: list[str],
+    edge_ids: list[str],
+) -> GraphRagFocusContract:
+    """Classify a turn's raw graph focus against the retrieved context.
+
+    Pure and deterministic: every list is sorted and deduplicated. The
+    complete ``retrieved`` accumulator is never trimmed here — the contract
+    only CLASSIFIES ids for presentation routing (D-04: visual bounds never
+    reduce retrieval). Claim subjects/objects count as validated entity refs
+    even when the standalone ``get_claims`` tool fetched the claim without
+    the node rows (the citation validator accepts exactly these rows).
+    """
+    node_rows = {row["id"]: row for row in retrieved["nodes"]}
+    claim_rows = {row["id"]: row for row in retrieved["claims"]}
+    evidence_rows = {row["id"] for row in retrieved["evidence"]}
+    source_rows = {row["id"] for row in retrieved["sources"]}
+    edge_rows = {row["id"] for row in retrieved["edges"]}
+
+    # Validated entity references: retrieved node rows plus the endpoints of
+    # retrieved claims (which the citation validator already accepts).
+    referenced_entity_ids: set[str] = set(node_rows)
+    for claim in retrieved["claims"]:
+        referenced_entity_ids.add(claim["subject_id"])
+        referenced_entity_ids.add(claim["object_id"])
+
+    entity_ids: list[str] = []
+    event_ids: list[str] = []
+    investigation_ids: list[str] = []
+    dropped_ids: list[str] = []
+    for node_id in sorted(set(node_ids)):
+        if node_id in node_rows:
+            entity_ids.append(node_id)
+            if node_rows[node_id].get("type") == "Event":
+                event_ids.append(node_id)
+        elif node_id in referenced_entity_ids:
+            # Referenced by a retrieved claim but no node row was fetched:
+            # still a safe in-place highlight target (the id came from this
+            # turn's validated citation). Its type is unknown — never
+            # classified as an Event (fail closed on editorial decisions).
+            entity_ids.append(node_id)
+        elif node_id in claim_rows or node_id in evidence_rows or node_id in source_rows:
+            investigation_ids.append(node_id)
+        else:
+            dropped_ids.append(node_id)
+
+    valid_edge_ids: list[str] = []
+    for edge_id in sorted(set(edge_ids)):
+        if edge_id in edge_rows:
+            valid_edge_ids.append(edge_id)
+            continue
+        # Related edge ids are serialized as ``<claim_id>:edge`` (pipeline
+        # ``_enrich_citation``); validate against this turn's claims.
+        claim_id = edge_id.removesuffix(":edge")
+        if edge_id.endswith(":edge") and claim_id in claim_rows:
+            valid_edge_ids.append(edge_id)
+        else:
+            dropped_ids.append(edge_id)
+
+    return GraphRagFocusContract(
+        entity_ids=entity_ids,
+        event_ids=event_ids,
+        investigation_ids=investigation_ids,
+        edge_ids=valid_edge_ids,
+        dropped_ids=dropped_ids,
+    )
+
+
+
 def _enrich_citation(
     raw: dict[str, Any],
     retrieved: dict[str, Any],
@@ -972,12 +1081,22 @@ class RetrievalPipeline:
         edge_ids = sorted(
             {edge for citation in citations for edge in citation["related_edge_ids"]}
         )
+        # 10-07 (D-26): the done event's focus rides the focus contract — the
+        # same validated mapping the frontend consumes. Retrieval stays
+        # complete (the contract only classifies), and any id that somehow
+        # escaped citation validation is dropped here (fail closed).
+        focus_contract = build_graphrag_focus(retrieved, node_ids, edge_ids)
 
         # The pipeline never reveals the resolved boundary to the model; the
         # snapshot is attached by the service layer when persisting.
         yield LLMEvent.done(
             content,
             citations=citations,
-            graph_focus={"node_ids": node_ids, "edge_ids": edge_ids},
+            graph_focus={
+                # event_ids is a classified subset of entity_ids — entity_ids
+                # alone is the complete validated node focus.
+                "node_ids": focus_contract.entity_ids,
+                "edge_ids": focus_contract.edge_ids,
+            },
             proposed_change_set=proposed_change_set,
         )

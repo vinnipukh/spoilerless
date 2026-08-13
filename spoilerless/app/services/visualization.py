@@ -663,6 +663,7 @@ class VisualizationProjectionService:
         self,
         graph: GraphResponse,
         focus_ids: list[str] | None = None,
+        events: list[SafeEventContext] | None = None,
     ) -> VisualizationDTO:
         """Project the bounded GraphRAG Answer Graph (D-26/D-27/D-48).
 
@@ -674,8 +675,18 @@ class VisualizationProjectionService:
         ``GRAPHRAG_FOCUS_MAX_NODES`` (D-27: 5-20 visual elements). The DTO
         ``focus`` field references the primary focus node (first in canonical
         order) — a focus reference always resolves inside the DTO.
+
+        10-07 (D-26/D-37): with editorial ``events`` supplied, a focus Event
+        whose tier is not ``major`` is NEVER drawn in-graph — it is replaced
+        by that episode's visible major Events (deterministic order) and the
+        micro/supporting event itself becomes a timeline entry (Inspector
+        detail). Without event context for a focus event, or when the episode
+        declares no major event to map to, the safe event node is kept at
+        detail tier (never guessed into a major slot).
         """
+        events = list(events) if events is not None else []
         served, effective = self._validate_safe_graph(graph)
+        event_by_id = self._validate_events(events, effective)
         canonical: list[str] = []
         seen: set[str] = set()
         for focus_id in focus_ids or []:
@@ -707,42 +718,105 @@ class VisualizationProjectionService:
                     f"boundary {effective}."
                 )
 
+        # D-26/D-37: micro/supporting Event focus maps to the episode's
+        # major Events plus Inspector detail (a timeline entry). The mapping
+        # only ever substitutes safe, visible major Events of the same
+        # episode — never invented or cross-episode resources.
+        inspector_timeline: list[TimelineItem] = []
+        substituted: dict[str, str] = {}  # micro event id -> major event id
+        focus_ids_for_kept: list[str] = []
+        for focus_id in canonical:
+            node = node_by_id[focus_id]
+            if node.type != "Event":
+                focus_ids_for_kept.append(focus_id)
+                continue
+            event = event_by_id.get(focus_id)
+            if event is None or event.tier == "major":
+                # No editorial context (or already major): keep as-is.
+                focus_ids_for_kept.append(focus_id)
+                continue
+            # Micro/supporting: never drawn in-graph. Substitute the same
+            # episode's visible major Events (deterministic order); the
+            # micro event becomes Inspector detail via the timeline.
+            major_events = sorted(
+                (
+                    other
+                    for other_id, other in event_by_id.items()
+                    if other.tier == "major"
+                    and other.episode_id == event.episode_id
+                ),
+                key=lambda item: (item.visible_from_order, item.id),
+            )
+            inspector_timeline.append(
+                self._to_timeline_item(event, node_by_id, effective)
+            )
+            if major_events:
+                for major in major_events:
+                    if major.id not in focus_ids_for_kept:
+                        focus_ids_for_kept.append(major.id)
+                    # First major in deterministic order is the representative.
+                    substituted.setdefault(focus_id, major.id)
+            else:
+                # No major event to map to: keep the safe micro event node at
+                # detail tier rather than dropping the focus (D-44 sparse
+                # episodes keep a graceful, safe fallback).
+                focus_ids_for_kept.append(focus_id)
+
         # Visible narrative neighbors (both endpoints visible; participation
         # family excluded — the Answer Graph highlights relationships, D-26).
+        focus_set = set(focus_ids_for_kept)
         neighbor_ids: set[str] = set()
         for edge in graph.edges:
             if edge.type in OMITTED_EDGE_TYPES:
                 continue
-            if edge.source in seen and edge.target in node_by_id:
+            if edge.source in focus_set and edge.target in node_by_id:
                 neighbor_ids.add(edge.target)
-            if edge.target in seen and edge.source in node_by_id:
+            if edge.target in focus_set and edge.source in node_by_id:
                 neighbor_ids.add(edge.source)
 
-        kept_ids: list[str] = list(canonical)
-        kept_ids.extend(sorted(neighbor_ids - set(canonical)))
+        kept_ids: list[str] = list(dict.fromkeys(focus_ids_for_kept))
+        kept_ids.extend(sorted(neighbor_ids - focus_set))
         # D-27 bound: focus nodes always survive; neighbors are truncated
         # deterministically (stable id order), never randomly.
         kept_ids = kept_ids[:GRAPHRAG_FOCUS_MAX_NODES]
         kept_set = set(kept_ids)
         focus_set = set(canonical)
+        # Substituted major Events represent the micro-event focus — core tier
+        # like any other focus node.
+        core_focus = focus_set | set(substituted.values())
 
         nodes = [
             self._node(
                 node_by_id[nid],
                 node_by_id[nid].type,
-                DISPLAY_TIER_CORE if nid in focus_set else DISPLAY_TIER_SUPPORTING,
+                DISPLAY_TIER_CORE if nid in core_focus else DISPLAY_TIER_SUPPORTING,
             )
             for nid in kept_ids
         ]
         edges = self._narrative_edges(graph, kept_set)
+
+        # The primary focus reference must resolve INSIDE the DTO: prefer the
+        # first canonical id that survived the event mapping; fall back to
+        # its substituted major event; finally the first kept node.
+        primary = next(
+            (fid for fid in canonical if fid in kept_set),
+            next(
+                (
+                    substituted[fid]
+                    for fid in canonical
+                    if fid in substituted and substituted[fid] in kept_set
+                ),
+                kept_ids[0],
+            ),
+        )
 
         return VisualizationDTO(
             metadata=self._metadata(graph, GRAPHRAG_FOCUS_VIEW_TYPE),
             nodes=nodes,
             edges=edges,
             groups=[],
-            timeline=[],
-            focus=VisualizationFocus(node_id=canonical[0]),
+            timeline=inspector_timeline,
+            focus=VisualizationFocus(node_id=primary),
         )
 
     def project_view(
@@ -771,7 +845,7 @@ class VisualizationProjectionService:
         if view_type == FULL_VIEW_TYPE:
             return self.project_full(graph, events)
         if view_type == GRAPHRAG_FOCUS_VIEW_TYPE:
-            return self.project_graphrag_focus(graph, focus_ids)
+            return self.project_graphrag_focus(graph, focus_ids, events)
         raise ValueError(f"Unknown visualization view type {view_type!r}.")
 
     def project_expansion(
