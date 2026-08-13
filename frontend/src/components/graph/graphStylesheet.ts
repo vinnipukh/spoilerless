@@ -74,6 +74,11 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
         label: 'data(label)',
         'font-size': 10,
         color: '#FFFFFF',
+        // 10-04 (D-14): medium_zoom label policy — below the zoom where a
+        // 10px font would render <7px, node labels disappear entirely
+        // (semantic zoom shows icons/short labels only; presentation-only,
+        // never fetches or expands).
+        'min-zoomed-font-size': 7,
         'text-valign': 'bottom',
         'text-halign': 'center',
         'text-margin-y': 6,
@@ -274,6 +279,10 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
       selector: 'edge.hovered, edge.edge-active, edge.label-visible',
       style: {
         label: 'data(label)',
+        // 10-04 (D-14): medium_zoom policy for interaction-driven edge
+        // labels — they only render once zoomed in enough for a 9px font
+        // to stay ≥7px, so a zoomed-out overview never fills with labels.
+        'min-zoomed-font-size': 7,
       },
     },
     // Dashed candidate edges

@@ -49,13 +49,11 @@ import { applyHighlight } from '@/lib/graph/highlight'
 // would require a React state/hook, but <CytoscapeComponent> doesn't re-render on
 // stylesheet changes anyway (it captures the ref once), so a static capture is
 // appropriate.
-import { layoutOptionsFor } from './layoutConfig'
+import { layoutNameForView, layoutOptionsFor } from './layoutConfig'
 
 const prefersReducedMotion =
   typeof window !== 'undefined' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-let layoutName: 'fcose' | 'cose-bilkent' | 'cose' = 'fcose'
 
 // 08-06+ (product owner): Overview's sparse layout makes cytoscape's fit
 // zoom out so far the nodes look tiny. On layout completion, if the fit
@@ -190,7 +188,12 @@ function runLayout(
 
   try {
     const l = cy.layout(
-      layoutOptionsFor(layoutName, prefersReducedMotion, mode, !holdView),
+      layoutOptionsFor(
+        layoutNameForView(view),
+        prefersReducedMotion,
+        mode,
+        !holdView,
+      ),
     )
     if (seriesId && (visibleUntilOrder != null || sceneKey) && typeof l.one === 'function') {
       l.one('layoutstop', () => {
@@ -233,7 +236,6 @@ function runLayout(
       'cose-bilkent layout failed at runtime; falling back to the built-in cose layout',
       error,
     )
-    layoutName = 'cose'
     try {
       cy.layout(
         layoutOptionsFor('cose', prefersReducedMotion, mode, !holdView),
@@ -518,9 +520,17 @@ export function GraphCanvas({
   // invoking its `cy` callback; that callback waits for this layoutstop and
   // then performs the same forced layout + fit as Refresh graph. Keeping the
   // object stable prevents incidental parent renders from starting layouts.
+  // The task view selects the engine (D-25: investigation → dagre LR).
+  const layoutView = activeVisualization?.metadata.view_type ?? null
   const layout = useMemo(
-    () => layoutOptionsFor(layoutName, prefersReducedMotion, mode, false),
-    [mode],
+    () =>
+      layoutOptionsFor(
+        layoutNameForView(layoutView as VisualizationViewType | null),
+        prefersReducedMotion,
+        mode,
+        false,
+      ),
+    [mode, layoutView],
   )
   // 08-06+ (product owner): timestamp of the last touch anywhere in the app
   // (document-level capture) — stored at MODULE level so the 20s hold

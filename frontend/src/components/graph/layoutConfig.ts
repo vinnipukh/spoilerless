@@ -1,7 +1,9 @@
 import cytoscape from 'cytoscape'
 import fcose from 'cytoscape-fcose'
 import coseBilkent from 'cytoscape-cose-bilkent'
+import dagre from 'cytoscape-dagre'
 import type { GraphMode } from './overviewTiers'
+import type { VisualizationViewType } from '../../types/graph'
 
 // Register extensions with Cytoscape safely (no-op if already registered)
 try {
@@ -16,6 +18,15 @@ try {
   // Extension already registered or register error fallback
 }
 
+// 10-04 (D-23): locked cytoscape-dagre@4.0.0 for the left-to-right Evidence
+// Chain / Investigation layout. ELK is deliberately NOT added. Registered
+// once, beside the other layouts.
+try {
+  cytoscape.use(dagre)
+} catch {
+  // Extension already registered or register error fallback
+}
+
 export const DEXTER_NODE_ID = 'char_dexter_morgan'
 
 type RepulsionNode = {
@@ -25,6 +36,16 @@ type RepulsionNode = {
 }
 
 export const OVERVIEW_SPACING_SCALE = 1.6
+
+// 10-04 (D-22..D-25): layout engine per task view. Investigation / Evidence
+// Chain is a layered Claim → Evidence → Source path — left-to-right Dagre
+// (rankDir LR) renders that as a readable chain; every other view keeps the
+// force-directed family (fcose + stored presets).
+export function layoutNameForView(
+  view: VisualizationViewType | null,
+): 'fcose' | 'dagre' {
+  return view === 'investigation' ? 'dagre' : 'fcose'
+}
 
 /**
  * Per-node repulsion multiplier used by every layout.
@@ -48,7 +69,7 @@ export function nodeRepulsionFor(node: RepulsionNode, spacingScale: number = 1):
 }
 
 export function layoutOptionsFor(
-  name: 'fcose' | 'cose-bilkent' | 'cose',
+  name: 'fcose' | 'cose-bilkent' | 'cose' | 'dagre',
   prefersReducedMotion: boolean = false,
   mode: GraphMode = 'full',
   fit: boolean = true,
@@ -57,6 +78,19 @@ export function layoutOptionsFor(
     fit,
     padding: 48,
     animate: prefersReducedMotion ? false : ('end' as const),
+  }
+
+  // 10-04 (D-25): left-to-right Evidence Chain for Investigation. Dagre has
+  // no per-node repulsion; rank separation is handled by ranksep/nodesep.
+  if (name === 'dagre') {
+    return {
+      ...common,
+      name: 'dagre',
+      rankDir: 'LR',
+      spacingFactor: mode === 'overview' ? OVERVIEW_SPACING_SCALE : 1,
+      ranksep: 96,
+      nodesep: 32,
+    }
   }
 
   // 08-06+ (product owner): Overview mode gets extra spacing so the fewer,

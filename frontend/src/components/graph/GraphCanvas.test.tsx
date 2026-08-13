@@ -106,7 +106,7 @@ let capturedCy: unknown = null
 // becomes reachable once the fake exposes `layout`) — plus the cy instance
 // the layout ran on, so tests can assert the LIVE instance was refreshed
 // (StrictMode double-mount produces a dead cy#1 and a live cy#2).
-let layoutCalls: Array<{ fit: unknown; cy: unknown }> = []
+let layoutCalls: Array<{ fit: unknown; cy: unknown; name?: unknown }> = []
 
 function resetFakeCytoscape() {
   registry = new Map()
@@ -237,7 +237,7 @@ vi.mock('react-cytoscapejs', () => {
       // 08-06+ auto-zoom-hold: runLayout is reachable once `layout` exists —
       // record the options (esp. `fit`) so the suppression is assertable.
       layout: (opts: Record<string, unknown>) => {
-        layoutCalls.push({ fit: opts.fit, cy: fakeCy })
+        layoutCalls.push({ fit: opts.fit, cy: fakeCy, name: opts.name })
         return { one: () => {}, run: () => {} }
       },
     }
@@ -915,6 +915,54 @@ describe('GraphCanvas', () => {
         />,
       )
       expect(capturedElements.find((el) => el.data.id === 'char_dexter_morgan')?.data.debugLabel).toBe('Character')
+    })
+
+    it('routes investigation to left-to-right dagre; other views stay fcose (D-25)', () => {
+      const { rerender } = render(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          visualization={makeVisualizationDto({
+            metadata: { ...makeVisualizationDto().metadata, view_type: 'investigation' },
+          })}
+        />,
+      )
+
+      // Declarative startup layout (react-cytoscapejs prop) is dagre LR…
+      expect(capturedProps.layout).toMatchObject({ name: 'dagre', rankDir: 'LR' })
+      // …and the imperative runLayout (Refresh-graph path) also picked dagre.
+      expect(layoutCalls[layoutCalls.length - 1]?.name).toBe('dagre')
+
+      // Switching to a story view returns to the force-directed engine.
+      rerender(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          visualization={makeVisualizationDto()}
+        />,
+      )
+      expect(capturedProps.layout).toMatchObject({ name: 'fcose' })
+      expect(layoutCalls[layoutCalls.length - 1]?.name).toBe('fcose')
+    })
+
+    it('selection/focus on the visualization path never re-runs the layout (D-22)', () => {
+      render(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          visualization={makeVisualizationDto()}
+        />,
+      )
+      const layoutCallsBefore = layoutCalls.length
+
+      simulateTap('node', 'char_dexter_morgan')
+      expect(layoutCalls.length).toBe(layoutCallsBefore)
     })
   })
 })
