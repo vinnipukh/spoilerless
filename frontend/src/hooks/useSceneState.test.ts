@@ -83,6 +83,93 @@ describe('useSceneState', () => {
     expect(result.current[0].expansions).toEqual([])
   })
 
+  it('expansion history undoes the newest record exactly; unsafe records refused (D-48)', () => {
+    const { result } = renderHook(() => useSceneState())
+    act(() =>
+      result.current[1]({
+        type: 'ADD_EXPANSION',
+        nodeIds: ['char_debra_morgan'],
+        record: { anchorId: 'char_dexter_morgan', key: 'family', additionIds: ['char_debra_morgan'] },
+      }),
+    )
+    act(() =>
+      result.current[1]({
+        type: 'ADD_EXPANSION',
+        nodeIds: ['char_angel_batista'],
+        record: { anchorId: 'char_dexter_morgan', key: 'work', additionIds: ['char_angel_batista'] },
+      }),
+    )
+    expect(result.current[0].expansions).toEqual(['char_debra_morgan', 'char_angel_batista'])
+
+    // Unsafe record ids never enter state.
+    act(() =>
+      result.current[1]({
+        type: 'ADD_EXPANSION',
+        nodeIds: ['bad id'],
+        record: { anchorId: 'char_dexter_morgan', key: 'family', additionIds: ['bad id'] },
+      }),
+    )
+    expect(result.current[0].expansions).toEqual(['char_debra_morgan', 'char_angel_batista'])
+
+    // Undo pops the newest (work) record — only its additions disappear.
+    act(() => result.current[1]({ type: 'UNDO_EXPANSION' }))
+    expect(result.current[0].expansions).toEqual(['char_debra_morgan'])
+    expect(result.current[0].expansionHistory).toEqual([
+      { anchorId: 'char_dexter_morgan', key: 'family', additionIds: ['char_debra_morgan'] },
+    ])
+
+    act(() => result.current[1]({ type: 'UNDO_EXPANSION' }))
+    expect(result.current[0].expansions).toEqual([])
+    // No-op when history is empty.
+    act(() => result.current[1]({ type: 'UNDO_EXPANSION' }))
+    expect(result.current[0].expansions).toEqual([])
+  })
+
+  it('COLLAPSE_EXPANSION removes every record rooted at the anchor', () => {
+    const { result } = renderHook(() => useSceneState())
+    const record = (key: string, additionIds: string[]) => ({
+      type: 'ADD_EXPANSION' as const,
+      nodeIds: additionIds,
+      record: { anchorId: 'char_dexter_morgan', key, additionIds },
+    })
+    act(() => result.current[1](record('family', ['char_debra_morgan'])))
+    act(() => result.current[1](record('work', ['char_angel_batista'])))
+    act(() =>
+      result.current[1]({
+        type: 'ADD_EXPANSION',
+        nodeIds: ['loc_miami_metro'],
+        record: { anchorId: 'char_debra_morgan', key: 'locations', additionIds: ['loc_miami_metro'] },
+      }),
+    )
+
+    act(() => result.current[1]({ type: 'COLLAPSE_EXPANSION', anchorId: 'char_dexter_morgan' }))
+    expect(result.current[0].expansions).toEqual(['loc_miami_metro'])
+    expect(result.current[0].expansionHistory).toEqual([
+      { anchorId: 'char_debra_morgan', key: 'locations', additionIds: ['loc_miami_metro'] },
+    ])
+  })
+
+  it('BACK_TO_OVERVIEW restores the bounded Story view, keeps filters and camera (D-47/D-49)', () => {
+    const { result } = renderHook(() =>
+      useSceneState({ nodeKindFilters: { Character: false } }),
+    )
+    act(() => result.current[1]({ type: 'SET_VIEW', view: 'investigation' }))
+    act(() => result.current[1]({ type: 'SET_CAMERA', camera: { zoom: 1.5, pan: { x: 1, y: 2 } } }))
+    act(() => result.current[1]({ type: 'ADD_EXPANSION', nodeIds: ['char_debra_morgan'] }))
+    act(() => result.current[1]({ type: 'SET_FOCUS', nodeIds: ['char_dexter_morgan'], edgeIds: [] }))
+    act(() => result.current[1]({ type: 'SELECT', selection: { kind: 'node', id: 'char_dexter_morgan' } }))
+
+    act(() => result.current[1]({ type: 'BACK_TO_OVERVIEW' }))
+    const state = result.current[0]
+    expect(state.activeView).toBe('episode_overview')
+    expect(state.expansions).toEqual([])
+    expect(state.expansionHistory).toEqual([])
+    expect(state.focus).toBeNull()
+    expect(state.selection).toBeNull()
+    expect(state.nodeKindFilters).toEqual({ Character: false })
+    expect(state.camera).toEqual({ zoom: 1.5, pan: { x: 1, y: 2 } })
+  })
+
   it('timeline selection and Inspector state are tracked', () => {
     const { result } = renderHook(() => useSceneState())
     act(() => result.current[1]({ type: 'SET_TIMELINE_SELECTION', nodeIds: ['event_first_kill'] }))
