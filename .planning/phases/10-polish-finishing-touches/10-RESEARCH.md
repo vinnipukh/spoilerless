@@ -48,7 +48,7 @@
 ### Interaction and scene state
 - **D-21:** Semantic expansion keys are human concepts (`family`, `work`, `conflict`, `episode_events`, `clues`, `locations`, `evidence`), server allowlisted and spoiler-safe. Preferred 8–12 additions, hard max 25. No hidden totals or future hints. Collapse, Undo, Reset required.
 - **D-22:** Expansion preserves scene: existing important nodes fixed/constrained; new nodes arranged locally via concentric/local fCoSE. Never rerun random global layout.
-- **D-23:** Initial Overview/Character layout uses fCoSE, then stored preset positions. Shared characters remain mostly stable across Episode changes. Evidence uses ELK/Dagre; timeline uses React/CSS.
+- **D-23:** Initial Overview/Character layout uses fCoSE, then stored preset positions. Shared characters remain mostly stable across Episode changes. Evidence uses left-to-right Dagre through pinned `cytoscape-dagre@4.0.0` plus TypeScript declarations pinned to `2.3.4`; ELK is not added. Timeline uses React/CSS.
 - **D-24:** Stable Cytoscape instance. React state owns scene; Cytoscape changes apply through batched diffs. Selection dims unrelated content, syncs Inspector/timeline, preserves camera, never triggers relayout.
 - **D-25:** Semantic zoom changes labels/icons/secondary text only. Zoom never fetches or expands graph data.
 
@@ -58,8 +58,8 @@
 - **D-28:** Investigation view answers “Why do we know this?” using layered Claim/Evidence/Source path; never placed on default Episode Overview.
 
 ### Backend, cache, tests, closeout
-- **D-29:** Task-specific graph endpoint supports `episode_overview`, `character_network`, `plot_threads`, `investigation`, `full`, `graphrag_focus`; expansion endpoint enforces boundary, allowlist, limit server-side.
-- **D-30:** Projection cache key includes series, effective order, view type, projection version, graph revision, user scope where needed. Never cross-return view or boundary.
+- **D-29:** Exact read contracts: `GET /api/series/{series_id}/graph/visualization` supports `episode_overview`, `character_network`, `plot_threads`, `investigation`, `full`, `graphrag_focus`; `GET /api/series/{series_id}/graph/expand` enforces boundary, semantic allowlist, and limit server-side. Both use strict neutral DTOs, existing optional-user graph access semantics, required positive `episode_order`, typed 404/422/503 envelopes, and synchronized OpenAPI/frontend-contract inventories.
+- **D-30:** Projection cache key includes series, effective order, view type, projection version, Redis-local per-series cache epoch (`graph_revision`), and user scope where needed. Existing write invalidation atomically increments epoch; read failure bypasses cache. Never cross-return view or boundary.
 - **D-31:** Baseline fixed safe snapshots for S01E01 and cumulative S01E02. Measure current node kinds, edge types, layout duration, payload before production behavior changes.
 - **D-32:** Benchmarks cover 30/50, 75/150, 150/400, 300/1000 node/edge datasets; measure payload, adapter, init/layout, interaction, expansion, switch, memory, React commits, displacement, labels/crossings where practical.
 - **D-33:** Automated tests cover spoiler-before-projection, bounds, Episode 1 safety, expansion, hidden leaks, GraphRAG independence/focus, cache separation, default view, timeline sync, label hiding, focus, collapse/reset, stable positions, Episode switch, Answer Graph, Evidence Chain, Inspector, responsive UI.
@@ -258,7 +258,7 @@ The following decisions should become concise records during planning/execution,
 | Neutral DTO location | `spoilerless/app/domain/graph.py:79-104`, `spoilerless/app/services/graph.py:51-130` | Add `domain/visualization.py` models and a projection service adjacent to `GraphService`; keep `GraphResponse` complete. | DTO duplication until all consumers migrate. |
 | Boundary resolver ownership | `spoilerless/app/api/graph.py:66-180` | Extract one backend resolver used by graph, projection, expansion, path, search/focus, and restoration. | Route-specific authorization/scope must remain explicit. |
 | Episode Overview variant | S01E01/S01E02 fixture metrics and benchmark output | Choose A or B only after fixed-data comparison; store the chosen projection version. | Editorial metadata may be incomplete; do not add parallel priority fields without audit. |
-| Cache key versioning | `spoilerless/app/cache/graph_cache.py:21-80` | Central key includes `series_id`, effective order, view, projection version, graph revision, and required user scope; invalidate safely on writes. | Graph revision source must be defined without a schema migration. |
+| Cache key versioning | `spoilerless/app/cache/graph_cache.py:21-80` | Central key includes `series_id`, effective order, view, projection version, Redis-local per-series epoch, and required user scope; existing invalidation atomically increments epoch. | No Neo4j schema migration; Redis failure bypasses cache. |
 | Stable scene update | `GraphCanvas.tsx:88-112,430-470` and existing tests | Keep one Cytoscape instance and apply batched add/update/remove plus preset/local positions. | Cytoscape diff edge cases and mobile remount behavior. |
 | UI hierarchy | `App.tsx:109-701`, `TimelineView.tsx`, `DetailPanel.tsx` | Four top tabs, nested modes, shared scene actions; mobile horizontal tabs + bottom sheet. | Existing header actions/settings/chat must remain reachable without unrelated redesign. |
 | GraphRAG Answer Graph | Existing citation/focus path in `App.tsx` and current GraphRAG contract | Temporary bounded view with explicit restoration snapshot; do not reduce retrieval graph. | Hidden-safe focus semantics need an explicit safe explanation and tests. |
@@ -356,7 +356,7 @@ No repository `HERMES.md` exists at the working-directory path. `[VERIFIED: file
 
 ### Primary / verified repository sources
 
-- `.planning/phases/10-polish-finishing-touches/10-CONTEXT.md` — locked D-01..D-34, discretion, canonical refs, and deferred ideas.
+- `.planning/phases/10-polish-finishing-touches/10-CONTEXT.md` — locked D-01..D-49, discretion, canonical refs, and deferred ideas.
 - `.planning/REQUIREMENTS.md` — exact VIZ-01..10 and POLISH-01..03 requirements.
 - `.planning/ROADMAP.md` — Phase 10 goal/success criteria and D-01 scope reconciliation.
 - `.planning/STATE.md` and `.planning/PROJECT.md` — current milestone, spoiler invariant, test/operational context.
@@ -382,9 +382,9 @@ No external package or web research was required: this is a repository-constrain
 ## Open Questions
 
 1. Which existing metadata is a safe, canonical source for `display_tier`/major-supporting-micro classification? Audit `overviewTiers`, graph seed metadata, and backend rows before adding any field.
-2. What graph revision can safely participate in cache keys without a schema migration? Prefer an existing revision/content timestamp or explicit projection version plus conservative invalidation, and document the remaining risk.
+2. Resolved: graph revision is a Redis-local per-series cache epoch, default 0, atomically incremented by existing `invalidate_series` write paths. It is not canonical graph data; Redis read failure bypasses cache.
 3. Which exact nested controls fit the current `App.tsx` header and mobile layout without an unrelated header redesign? Validate with the four-tab UAT and preserve existing Chat, Settings, Series, and Episode access.
-4. Can ELK/Dagre be used from already-installed dependencies? If not, keep Evidence layout as a documented adapter boundary and avoid adding a package unless explicitly approved; D-23 is a target, not permission to expand the stack silently.
+4. Resolved: add only pinned `cytoscape-dagre@4.0.0` plus TypeScript declarations pinned to `2.3.4`; commit lockfile and audit provenance. Do not add ELK.
 5. What are the real S01E01/S01E02 counts and layout metrics? Do not invent them in plans; generate only from fixed safe fixtures or a disposable scratch dataset.
 
 ## Metadata

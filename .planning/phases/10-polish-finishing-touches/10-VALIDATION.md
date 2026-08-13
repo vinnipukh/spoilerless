@@ -30,7 +30,10 @@ created: 2026-08-13
 
 - **After every task commit:** run the task's focused backend or frontend command.
 - **After every plan:** run all focused tests named by that plan.
-- **After every wave:** run the full relevant backend/frontend suite; run both once cross-stack wiring begins.
+- **After waves 1–4:** run the cumulative focused backend/frontend files named by completed plans; the isolated full backend runner does not exist until Plan 10-09.
+- **After wave 5:** run full frontend Vitest after the coordinated view shell lands, plus cumulative focused backend tests.
+- **After waves 6–7:** run cumulative focused cross-stack suites named by Plans 10-07/10-08.
+- **Wave 8 / Plan 10-09:** provision the ephemeral Neo4j target and run the complete backend inventory, full frontend Vitest, lint, build, and diff gate. No earlier plan may use shared/Aura data merely to satisfy a “full wave” label.
 - **Before `/gsd-verify-work`:** isolated backend pytest, frontend Vitest, lint, build, benchmark report, and UAT evidence must all be green/complete.
 - **Max feedback latency:** 120 seconds for focused checks; long full-suite/database checks are wave gates rather than per-task gates.
 
@@ -39,14 +42,14 @@ created: 2026-08-13
 | Plan slice | Requirements | Threat Ref | Secure behavior | Automated evidence |
 |---|---|---|---|---|
 | Audit/baseline tracer | VIZ-03, VIZ-10 | T10-LEAK-01 | Fixtures contain only safe S01E01/cumulative S01E02 rows; no live DB | snapshot/schema checks and deterministic baseline command |
-| Neutral DTO + boundary | VIZ-01, VIZ-02 | T10-BOUND-01 | Clamp/filter precedes projection and serialization | projection/policy/API pytest |
-| Projection/cache | VIZ-03, VIZ-09 | T10-CACHE-01 | hard caps and cache dimensions prevent cross-view/boundary returns | projection/cache pytest |
-| Cytoscape adapter/scene | VIZ-07 | T10-SCENE-01 | no hidden metadata or network fetch on zoom; no relayout on selection | adapter/reducer/GraphCanvas Vitest |
-| Four-view UI/mobile | VIZ-04, VIZ-05 | T10-UI-01 | safe DTO-only rendering and accessible stable state | App/DetailPanel/timeline Vitest + responsive UAT |
-| Expansion | VIZ-06 | T10-EXP-01 | allowlist, hard max 25, no hidden totals | API pytest + reducer/adapter Vitest |
-| Answer Graph/evidence | VIZ-08 | T10-RAG-01 | retrieval remains complete-safe; visible DTO bounded; scene restores | FakeLLM contract tests + restoration Vitest |
-| Benchmarks/refinement | VIZ-10 | T10-PERF-01 | in-memory deterministic data only | four required size reports |
-| Closeout | POLISH-01..03 | T10-CLOSE-01 | no shared live mutations; truthful shipped docs | full suites, lint/build, UAT, docs verification |
+| Neutral DTO + boundary | VIZ-01, VIZ-02 | T10-BOUND-02 | Clamp/filter precedes projection and serialization | projection/policy/API pytest |
+| Projection/cache | VIZ-03, VIZ-09 | T10-CACHE-03 | hard caps and cache dimensions prevent cross-view/boundary returns | projection/cache pytest |
+| Cytoscape adapter/scene | VIZ-07 | T10-BOUND-04 | no hidden metadata or network fetch on zoom; no relayout on selection | adapter/reducer/GraphCanvas Vitest |
+| Four-view UI/mobile | VIZ-04, VIZ-05 | T10-BOUND-05 | safe DTO-only rendering and accessible stable state | App/DetailPanel/timeline Vitest + responsive UAT |
+| Expansion | VIZ-06 | T10-BOUND-06 | allowlist, hard max 25, no hidden totals | API pytest + reducer/adapter Vitest |
+| Answer Graph/evidence | VIZ-08 | T10-FOCUS-07 | retrieval remains complete-safe; visible DTO bounded; scene restores | FakeLLM contract tests + restoration Vitest |
+| Benchmarks/refinement | VIZ-10 | T10-BOUND-08 | in-memory deterministic data only | four required size reports |
+| Closeout | POLISH-01..03 | T10-LEAK-09 / T10-LEAK-10 / T10-LEAK-11 | no shared live mutations; truthful shipped docs | full suites, lint/build, UAT, docs verification |
 
 ## Wave 0 Requirements
 
