@@ -147,11 +147,13 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         "/api/auth/google", "/api/auth/me", "/api/auth/logout",
         # Settings (LLM provider configuration)
         "/api/settings/llm",
-        # Phase 9: Path, Export, Share (PROB-10/#21: live surface is 50 ops /
-        # 37 templates — TWELFTH-pass docs refreshed, this test now locks the
+        # Phase 9: Path, Export, Share (PROB-10/#21: live surface is 51 ops /
+        # 38 templates — TWELFTH-PASS docs refreshed, this test now locks the
         # current inventory instead of the stale 45-op/32-path set)
         "/api/series/{series_id}/graph/path",
         "/api/series/{series_id}/export",
+        # Phase 10 (10-03): typed visualization projections (D-29)
+        "/api/series/{series_id}/graph/visualization",
         "/api/share",
         "/api/share/{token}/graph",
         "/api/share/{token}",
@@ -209,12 +211,14 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         # Phase 9: Path, Export, Share
         ("post", "/api/series/{series_id}/graph/path"),
         ("get", "/api/series/{series_id}/export"),
+        # Phase 10 (10-03): typed visualization projections (D-29)
+        ("get", "/api/series/{series_id}/graph/visualization"),
         ("post", "/api/share"),
         ("get", "/api/share"),
         ("get", "/api/share/{token}/graph"),
         ("delete", "/api/share/{token}"),
     }
-    assert len(schema["paths"]) == 37
+    assert len(schema["paths"]) == 38
     for path, item in schema["paths"].items():
         for method, operation in item.items():
             if method not in {"get", "post", "patch", "delete"}:

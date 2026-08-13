@@ -1,15 +1,20 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
-from spoilerless.app.api.deps import OptionalUserDependency
+from spoilerless.app.api.deps import (
+    OptionalUserDependency,
+    get_optional_current_user,
+)
 from spoilerless.app.cache.graph_cache import (
     get_cached_graph,
+    get_cached_visualization,
     set_cached_graph,
+    set_cached_visualization,
 )
 from spoilerless.app.domain.graph import (
     GraphResponse,
@@ -17,12 +22,18 @@ from spoilerless.app.domain.graph import (
 from spoilerless.app.core.errors import error_responses
 from spoilerless.app.domain.series import SeriesResponse
 from spoilerless.app.domain.user_content import VisibleUntilOrder
+from spoilerless.app.domain.visualization import (
+    GRAPHRAG_FOCUS_VIEW_TYPE,
+    PROJECTION_VERSION,
+    VisualizationDTO,
+)
 from spoilerless.app.graph.database import Neo4jDatabase, get_database
 from spoilerless.app.graph.ontology import load_ontology
 from spoilerless.app.retrieval.tools import MAX_PATH_HOPS, find_path
 from spoilerless.app.services.graph import GraphService
 from spoilerless.app.services.progress import ProgressService
-from spoilerless.app.spoiler.policy import effective_view_order
+from spoilerless.app.services.visualization import VisualizationProjectionService
+from spoilerless.app.spoiler.policy import InvalidVisibilityOrder, effective_view_order
 
 router = APIRouter(prefix="/api/series", tags=["graph"])
 DatabaseDependency = Annotated[Neo4jDatabase, Depends(get_database)]
@@ -36,6 +47,21 @@ VISIBLE_NODE_LABELS = [
     "Object",
 ]
 USER_RELATIONSHIP_TYPES = sorted(load_ontology().user_safe_relationship_types)
+
+# D-29: the exact view vocabulary of the visualization route. ``Literal``
+# keeps the OpenAPI enum and the route's runtime validation in lockstep; the
+# projection service additionally refuses unknown view types (fail closed).
+VisualizationView = Literal[
+    "episode_overview",
+    "character_network",
+    "plot_threads",
+    "investigation",
+    "full",
+    "graphrag_focus",
+]
+
+# Stateless projection service; one shared instance per process.
+_visualization_service = VisualizationProjectionService()
 
 
 def get_graph_service(database: DatabaseDependency) -> GraphService:
@@ -119,6 +145,124 @@ async def get_graph(
 
 
 # ---------------------------------------------------------------------------
+# 10-03 (D-29): typed read contract for the task-specific visualization
+# projections. One route, six concrete views; the effective boundary resolves
+# through the SAME shared block as graph/path/export (anonymous fixed at
+# order 1, authenticated clamped by persisted progress — never a
+# client-trusted order), the projection runs over the complete safe graph
+# read, and cache-aside keys on every dimension a projection must not cross
+# (series, effective order, view, projection version, user scope; D-30 adds
+# the graph_revision epoch and focus signature in Task 2).
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/{series_id}/graph/visualization",
+    response_model=VisualizationDTO,
+    summary="Read a typed spoiler-safe visualization projection",
+    responses=error_responses(404, 422, 503),
+)
+async def get_visualization(
+    series_id: str,
+    view: VisualizationView,
+    episode_order: int = Query(
+        gt=0,
+        description="Required positive episode order used as the requested "
+        "spoiler boundary for the projection.",
+    ),
+    focus_id: list[str] = Query(
+        default_factory=list,
+        description="Optional repeated focus ids; accepted only for the "
+        "graphrag_focus view and capped at 20 distinct ids.",
+    ),
+    service: GraphService = Depends(get_graph_service),
+    progress_service: ProgressService = Depends(get_progress_service),
+    user: dict[str, Any] | None = Depends(get_optional_current_user),
+) -> VisualizationDTO:
+    """Read one typed visualization projection at the effective boundary.
+
+    ``view`` selects one of six concrete projections (episode_overview,
+    character_network, plot_threads, investigation, full, graphrag_focus).
+    ``episode_order`` is the requested spoiler boundary — anonymous readers
+    are fixed at order 1 (PROB-04/#12), authenticated readers are clamped to
+    their persisted progress (D-05), and a boundary that does not identify a
+    persisted episode is refused (422 ``INVALID_VISIBLE_UNTIL_ORDER``).
+    """
+    series = await service.get_series_meta(series_id)
+    if series is None:
+        raise _error(404, "SERIES_NOT_FOUND", "Series not found.")
+
+    # D-29 focus contract: repeated focus_id values are accepted ONLY for
+    # graphrag_focus (T10-FOCUS-02/03); the 20-id cap and hidden/unknown-id
+    # rejection are enforced by the projection service below.
+    if view != GRAPHRAG_FOCUS_VIEW_TYPE and focus_id:
+        raise _error(
+            422,
+            "INVALID_REQUEST",
+            "focus_id is only accepted for the graphrag_focus view.",
+        )
+    if view == GRAPHRAG_FOCUS_VIEW_TYPE and not focus_id:
+        raise _error(
+            422,
+            "INVALID_REQUEST",
+            "graphrag_focus requires at least one focus_id.",
+        )
+
+    effective = await _resolve_effective_boundary(
+        service,
+        progress_service,
+        series_id,
+        user,
+        episode_order,
+        boundary_label="episode_order",
+    )
+
+    # Cache-aside (D-30/T10-CACHE-02): the key carries series, effective
+    # order, view, projection version, and user scope, and every cached DTO
+    # is re-validated against its own metadata on read.
+    user_id = user["id"] if user is not None else None
+    cached = await get_cached_visualization(
+        series_id, effective, view, PROJECTION_VERSION, user_id
+    )
+    if cached is not None:
+        return VisualizationDTO.model_validate(cached)
+
+    result = await service.fetch_graph(
+        series_id,
+        effective,
+        node_labels=VISIBLE_NODE_LABELS,
+        user_relationship_types=USER_RELATIONSHIP_TYPES,
+        effective_view_order=effective,
+    )
+    try:
+        dto = _visualization_service.project_view(result, view, focus_ids=focus_id)
+    except InvalidVisibilityOrder as exc:
+        # Hidden/unknown focus ids and hidden projection rows are client
+        # request problems; sanitized, never echoing the offending id.
+        raise _error(
+            422,
+            "INVALID_REQUEST",
+            "The requested projection is not visible at the effective boundary.",
+        ) from exc
+    except ValueError as exc:
+        raise _error(
+            422,
+            "INVALID_REQUEST",
+            "The requested projection could not be produced.",
+        ) from exc
+
+    # Write-through on miss (best-effort; swallows Redis errors).
+    await set_cached_visualization(
+        series_id,
+        effective,
+        view,
+        PROJECTION_VERSION,
+        user_id,
+        dto.model_dump(mode="json"),
+    )
+    return dto
+
+
+# ---------------------------------------------------------------------------
 # FEAT-06 / FEAT-05 backend (plan 09-11): shared boundary resolution, the
 # shortest-path POST, and the Markdown-only export GET. Both routes resolve
 # the boundary through the SAME block the graph GET uses (effective_view_order
@@ -132,6 +276,8 @@ async def _resolve_effective_boundary(
     series_id: str,
     user: dict | None,
     requested_order: int | None = None,
+    *,
+    boundary_label: str = "visible_until_order",
 ) -> int:
     """Resolve the effective boundary for a client request.
 
@@ -148,7 +294,7 @@ async def _resolve_effective_boundary(
             raise _error(
                 422,
                 "INVALID_VISIBLE_UNTIL_ORDER",
-                "visible_until_order must identify a persisted episode order.",
+                f"{boundary_label} must identify a persisted episode order.",
             )
         return requested
 
@@ -162,7 +308,7 @@ async def _resolve_effective_boundary(
             raise _error(
                 422,
                 "INVALID_VISIBLE_UNTIL_ORDER",
-                "visible_until_order must identify a persisted episode order.",
+                f"{boundary_label} must identify a persisted episode order.",
             )
         return requested
 
@@ -182,7 +328,7 @@ async def _resolve_effective_boundary(
         raise _error(
             422,
             "INVALID_VISIBLE_UNTIL_ORDER",
-            "visible_until_order must identify a persisted episode order.",
+            f"{boundary_label} must identify a persisted episode order.",
         )
     return effective
 

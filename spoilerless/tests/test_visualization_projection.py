@@ -36,20 +36,30 @@ from spoilerless.app.domain.graph import (
 )
 from spoilerless.app.domain.series import SeriesResponse
 from spoilerless.app.domain.visualization import (
+    CHARACTER_NETWORK_VIEW_TYPE,
     DISPLAY_TIER_CORE,
     DISPLAY_TIER_DETAIL,
     DISPLAY_TIER_SUPPORTING,
     EPISODE_OVERVIEW_MAX_EDGES,
     EPISODE_OVERVIEW_MAX_NODES,
     EPISODE_OVERVIEW_VIEW_TYPE,
+    FULL_VIEW_TYPE,
+    GRAPHRAG_FOCUS_MAX_IDS,
+    GRAPHRAG_FOCUS_MAX_NODES,
+    GRAPHRAG_FOCUS_VIEW_TYPE,
+    INVESTIGATION_VIEW_TYPE,
+    PLOT_THREADS_VIEW_TYPE,
     PROJECTION_VERSION,
     SafeEventContext,
+    SafePlotThread,
     TimelineItem,
     VisualizationDTO,
     VisualizationFocus,
+    VisualizationGroup,
     VisualizationNode,
 )
 from spoilerless.app.services.visualization import (
+    FULL_EDGE_CLASSES,
     HUMAN_EDGE_CLASSES,
     OMITTED_EDGE_TYPES,
     VisualizationProjectionService,
@@ -808,3 +818,359 @@ def test_hidden_claim_reference_cannot_leak() -> None:
     # The projection never synthesizes claim refs for edges that have none.
     assert dto.edges[0].id == "edge_1"
     assert dto.edges[0].claim_id is None
+
+
+# ---------------------------------------------------------------------------
+# 10-03 Task 1: concrete semantics for the remaining D-29 views
+# (character_network / plot_threads / investigation / full / graphrag_focus)
+# ---------------------------------------------------------------------------
+
+
+def test_character_network_projects_characters_only() -> None:
+    """D-17: characters only; narrative edges between characters; no
+    timeline, no groups, no focus."""
+    graph, _events = _load_fixture("s01e02_cumulative_safe.json")
+    dto = service.project_character_network(graph)
+
+    assert dto.metadata.view_type == CHARACTER_NETWORK_VIEW_TYPE
+    assert dto.metadata.effective_view_order == 2
+    assert {node.kind for node in dto.nodes} == {"Character"}
+    assert len(dto.nodes) == 8
+    assert "char_dexter_morgan" in {node.id for node in dto.nodes}
+    # Locations/Episodes/Events never enter the character network.
+    assert not any(node.id.startswith("loc_") for node in dto.nodes)
+    assert not any(node.id.startswith("dexter_s") for node in dto.nodes)
+
+    # Narrative edges between characters only — the WORKS_WITH edge whose
+    # endpoint is a Location (edge_12) is dropped by endpoint selection.
+    assert {edge.id for edge in dto.edges} == {
+        "edge_5",
+        "edge_6",
+        "edge_9",
+        "user-rel:test-1",
+    }
+    assert {edge.relation_class for edge in dto.edges} == {
+        "work",
+        "family",
+        "knows",
+    }
+    assert dto.groups == []
+    assert dto.timeline == []
+    assert dto.focus is None
+
+
+def test_character_network_rejects_hidden_rows() -> None:
+    """Boundary safety: a hidden character above the effective boundary is
+    refused before projection (shared T10-LEAK-02 gate)."""
+    graph, _events = _load_fixture("s01e01_safe.json")
+    graph.nodes.append(
+        GraphNode(
+            id="char_future_killer",
+            type="Character",
+            label="A future character",
+            visible_from_order=9,
+            origin="canonical",
+        )
+    )
+    with pytest.raises(InvalidVisibilityOrder, match="Hidden row"):
+        service.project_character_network(graph)
+
+
+def test_plot_threads_projects_events_groups_and_timeline() -> None:
+    """D-36/D-38: containers + characters + every declared safe event; the
+    timeline carries all events; editorial thread groups ride the DTO."""
+    graph, events = _load_fixture("s01e02_cumulative_safe.json")
+    threads = [
+        SafePlotThread(
+            id="thread_family",
+            label="Morgan family",
+            node_ids=["char_dexter_morgan", "char_debra_morgan"],
+        ),
+        SafePlotThread(
+            id="thread_croc",
+            label="Crocodile case",
+            node_ids=["char_vince_masuka", "event_croc_discovery"],
+        ),
+    ]
+    dto = service.project_plot_threads(graph, events, threads)
+
+    assert dto.metadata.view_type == PLOT_THREADS_VIEW_TYPE
+    # All events (any tier) appear as nodes in plot-thread shape.
+    assert "event_first_kill" in {node.id for node in dto.nodes}
+    assert "event_croc_discovery" in {node.id for node in dto.nodes}
+    assert {node.kind for node in dto.nodes} >= {"Series", "Episode", "Character", "Event"}
+    # Narrative edges with both endpoints kept.
+    assert {edge.id for edge in dto.edges} == {
+        "edge_1",
+        "edge_2",
+        "edge_3",
+        "edge_5",
+        "edge_6",
+        "edge_9",
+        "user-rel:test-1",
+    }
+    # Editorial groups, visible members only.
+    assert [(g.id, g.node_ids) for g in dto.groups] == [
+        ("thread_family", ["char_dexter_morgan", "char_debra_morgan"]),
+        ("thread_croc", ["char_vince_masuka", "event_croc_discovery"]),
+    ]
+    # Timeline carries every safe event (D-38).
+    assert [item.id for item in dto.timeline] == [
+        "event_first_kill",
+        "event_croc_discovery",
+    ]
+    assert dto.focus is None
+
+
+def test_plot_threads_without_editorial_threads_projects_empty_groups() -> None:
+    """No thread data: the view still projects in plot-thread shape with
+    empty groups — membership is editorial input, never graph-derived."""
+    graph, events = _load_fixture("s01e02_cumulative_safe.json")
+    dto = service.project_plot_threads(graph, events)
+    assert dto.groups == []
+    assert [item.id for item in dto.timeline] == [
+        "event_first_kill",
+        "event_croc_discovery",
+    ]
+    assert dto.metadata.view_type == PLOT_THREADS_VIEW_TYPE
+
+
+def test_plot_threads_rejects_hidden_or_unknown_members() -> None:
+    """D-36 fail closed: a thread referencing a node outside the visible
+    kept set is refused — never guessed or dropped."""
+    graph, events = _load_fixture("s01e02_cumulative_safe.json")
+    threads = [
+        SafePlotThread(
+            id="thread_bad",
+            label="Bad thread",
+            node_ids=["char_dexter_morgan", "loc_future_warehouse"],
+        )
+    ]
+    with pytest.raises(InvalidVisibilityOrder, match="outside the projected view"):
+        service.project_plot_threads(graph, events, threads)
+
+
+def test_investigation_projects_claim_evidence_source_layers() -> None:
+    """D-28/D-41: one Claim node per visible claim, one Evidence node per
+    referenced evidence fragment, one Source node per referenced source;
+    supported_by / from_source edges only."""
+    graph, _events = _load_fixture("s01e02_cumulative_safe.json")
+    dto = service.project_investigation(graph)
+
+    assert dto.metadata.view_type == INVESTIGATION_VIEW_TYPE
+    assert {node.kind for node in dto.nodes} == {"Claim", "Evidence", "Source"}
+    # 6 claims + 5 evidence + 2 sources.
+    assert len(dto.nodes) == 13
+    assert len([n for n in dto.nodes if n.kind == "Claim"]) == 6
+    assert len([n for n in dto.nodes if n.kind == "Evidence"]) == 5
+    assert len([n for n in dto.nodes if n.kind == "Source"]) == 2
+
+    # One supported_by edge per claim->evidence reference; one from_source
+    # edge per evidence->source reference.
+    assert {edge.relation_class for edge in dto.edges} == {
+        "supported_by",
+        "from_source",
+    }
+    assert len([e for e in dto.edges if e.relation_class == "supported_by"]) == 6
+    assert len([e for e in dto.edges if e.relation_class == "from_source"]) == 5
+    # Every edge is a deterministic id derived from the safe refs.
+    assert "claim_4:supported_by:evidence_1" in {e.id for e in dto.edges}
+    assert "evidence_4:from_source:source_2" in {e.id for e in dto.edges}
+    # Claim display tiers follow D-15 claim status.
+    by_id = {node.id: node for node in dto.nodes}
+    assert by_id["claim_1"].display_tier == DISPLAY_TIER_CORE  # canonical
+    assert by_id["claim_2"].display_tier == DISPLAY_TIER_SUPPORTING  # corroborated
+    assert by_id["claim_4"].display_tier == DISPLAY_TIER_DETAIL  # candidate
+    assert dto.groups == []
+    assert dto.timeline == []
+    assert dto.focus is None
+
+
+def test_investigation_fails_closed_on_missing_provenance() -> None:
+    """D-04: a claim referencing evidence outside the safe payload is
+    refused — the projection never guesses provenance."""
+    graph, _events = _load_fixture("s01e01_safe.json")
+    claim = graph.claims[0]
+    graph.claims[0] = GraphClaim(
+        id=claim.id,
+        label=claim.label,
+        subject_id=claim.subject_id,
+        predicate=claim.predicate,
+        object_id=claim.object_id,
+        claim_type=claim.claim_type,
+        status=claim.status,
+        confidence_level=claim.confidence_level,
+        relationship_effect=claim.relationship_effect,
+        visible_from_order=claim.visible_from_order,
+        valid_from_order=claim.valid_from_order,
+        valid_until_order=claim.valid_until_order,
+        source_id=claim.source_id,
+        evidence_ids=["evidence_missing"],
+        origin=claim.origin,
+    )
+    with pytest.raises(ValueError, match="outside the safe payload"):
+        service.project_investigation(graph)
+
+
+def test_full_projects_every_safe_node_and_edge() -> None:
+    """D-11: the complete safe graph — every node kind and every edge
+    (including the participation family) with human classes; no D-09 caps."""
+    graph, events = _load_fixture("s01e02_cumulative_safe.json")
+    dto = service.project_full(graph, events)
+
+    assert dto.metadata.view_type == FULL_VIEW_TYPE
+    assert {node.id for node in dto.nodes} == {node.id for node in graph.nodes}
+    assert {node.kind for node in dto.nodes} >= {
+        "Series",
+        "Episode",
+        "Character",
+        "Event",
+        "Location",
+    }
+    # Every source edge projects, participation family included, mapped to
+    # human wording (D-14).
+    assert {edge.id for edge in dto.edges} == {edge.id for edge in graph.edges}
+    assert "occurred_in" in {edge.relation_class for edge in dto.edges}
+    assert {edge.relation_class for edge in dto.edges} <= set(FULL_EDGE_CLASSES.values())
+    # Timeline still carries the safe editorial events.
+    assert [item.id for item in dto.timeline] == [
+        "event_first_kill",
+        "event_croc_discovery",
+    ]
+    assert dto.groups == []
+    assert dto.focus is None
+
+
+def test_full_projects_undeclared_events_at_detail_tier() -> None:
+    """Full mode keeps every Event node; without editorial context the least
+    assuming safe tier is detail (3) — never an invented tier."""
+    graph, events = _load_fixture("s01e02_cumulative_safe.json")
+    graph.nodes.append(
+        GraphNode(
+            id="event_undeclared",
+            type="Event",
+            label="An undeclared event",
+            visible_from_order=2,
+            origin="canonical",
+        )
+    )
+    dto = service.project_full(graph, events)
+    by_id = {node.id: node for node in dto.nodes}
+    assert by_id["event_undeclared"].display_tier == DISPLAY_TIER_DETAIL
+
+
+def test_graphrag_focus_projects_focus_and_visible_neighbors() -> None:
+    """D-26/D-27: focus node + visible narrative neighbors, bounded; focus
+    reference resolves inside the DTO (T10-FOCUS-02)."""
+    graph, _events = _load_fixture("s01e02_cumulative_safe.json")
+    dto = service.project_graphrag_focus(graph, ["char_dexter_morgan"])
+
+    assert dto.metadata.view_type == GRAPHRAG_FOCUS_VIEW_TYPE
+    assert dto.focus == VisualizationFocus(node_id="char_dexter_morgan")
+    node_ids = {node.id for node in dto.nodes}
+    assert dto.focus.node_id in node_ids
+    # Dexter's visible narrative neighbors (participation family excluded):
+    # edge_5 -> batista, edge_6 -> debra, edge_9 -> rita, user-rel -> debra.
+    assert node_ids == {
+        "char_dexter_morgan",
+        "char_angel_batista",
+        "char_debra_morgan",
+        "char_rita_bennett",
+    }
+    # Only narrative edges between kept nodes.
+    assert {edge.id for edge in dto.edges} == {
+        "edge_5",
+        "edge_6",
+        "edge_9",
+        "user-rel:test-1",
+    }
+    # Focus node is core; neighbors are supporting.
+    by_id = {node.id: node for node in dto.nodes}
+    assert by_id["char_dexter_morgan"].display_tier == DISPLAY_TIER_CORE
+    assert by_id["char_angel_batista"].display_tier == DISPLAY_TIER_SUPPORTING
+    assert dto.groups == []
+    assert dto.timeline == []
+
+
+def test_graphrag_focus_canonicalizes_deduplicates_and_bounds() -> None:
+    """D-30 canonical form: reordered/duplicated focus sets produce the same
+    deterministic DTO; the primary focus is the first canonical id."""
+    graph, _events = _load_fixture("s01e02_cumulative_safe.json")
+
+    plain = service.project_graphrag_focus(graph, ["char_dexter_morgan"])
+    duplicated = service.project_graphrag_focus(
+        graph, ["char_dexter_morgan", "char_dexter_morgan"]
+    )
+    assert duplicated.model_dump(mode="json") == plain.model_dump(mode="json")
+
+    multi = service.project_graphrag_focus(
+        graph, ["char_rita_bennett", "char_dexter_morgan", "char_rita_bennett"]
+    )
+    assert multi.focus == VisualizationFocus(node_id="char_dexter_morgan")
+    assert {node.id for node in multi.nodes} >= {
+        "char_dexter_morgan",
+        "char_rita_bennett",
+    }
+
+    # D-27 hard cap on distinct ids.
+    with pytest.raises(InvalidVisibilityOrder, match="at most 20"):
+        service.project_graphrag_focus(graph, [f"char_{i}" for i in range(21)])
+
+    # Empty focus is refused by the service too (route-level 422 as well).
+    with pytest.raises(InvalidVisibilityOrder, match="at least one focus id"):
+        service.project_graphrag_focus(graph, [])
+
+
+def test_graphrag_focus_hidden_or_unknown_id_fails_closed() -> None:
+    """T10-FOCUS-02: hidden and unknown focus ids are indistinguishable and
+    both refused — the projection never leaks existence."""
+    graph, _events = _load_fixture("s01e01_safe.json")
+    # Unknown id: not in the safe payload at all.
+    with pytest.raises(InvalidVisibilityOrder, match="not a visible graph resource"):
+        service.project_graphrag_focus(graph, ["char_does_not_exist"])
+    # Hidden id: present in payload but above the effective boundary.
+    graph.nodes.append(
+        GraphNode(
+            id="char_future_killer",
+            type="Character",
+            label="A future character",
+            visible_from_order=9,
+            origin="canonical",
+        )
+    )
+    with pytest.raises(InvalidVisibilityOrder, match="cannot be projected at boundary"):
+        service.project_graphrag_focus(graph, ["char_future_killer"])
+
+
+def test_project_view_dispatches_all_six_views() -> None:
+    """D-29: the typed dispatcher routes each view to its concrete
+    projection; unknown view types fail closed."""
+    graph, events = _load_fixture("s01e02_cumulative_safe.json")
+    assert (
+        service.project_view(graph, EPISODE_OVERVIEW_VIEW_TYPE, events).metadata.view_type
+        == EPISODE_OVERVIEW_VIEW_TYPE
+    )
+    assert (
+        service.project_view(graph, CHARACTER_NETWORK_VIEW_TYPE).metadata.view_type
+        == CHARACTER_NETWORK_VIEW_TYPE
+    )
+    assert (
+        service.project_view(graph, PLOT_THREADS_VIEW_TYPE, events).metadata.view_type
+        == PLOT_THREADS_VIEW_TYPE
+    )
+    assert (
+        service.project_view(graph, INVESTIGATION_VIEW_TYPE).metadata.view_type
+        == INVESTIGATION_VIEW_TYPE
+    )
+    assert (
+        service.project_view(graph, FULL_VIEW_TYPE, events).metadata.view_type
+        == FULL_VIEW_TYPE
+    )
+    assert (
+        service.project_view(
+            graph, GRAPHRAG_FOCUS_VIEW_TYPE, focus_ids=["char_dexter_morgan"]
+        ).metadata.view_type
+        == GRAPHRAG_FOCUS_VIEW_TYPE
+    )
+    with pytest.raises(ValueError, match="Unknown visualization view type"):
+        service.project_view(graph, "banana")

@@ -41,6 +41,31 @@ from spoilerless.app.domain.user_content import Origin
 PROJECTION_VERSION = "1.0.0"
 
 EPISODE_OVERVIEW_VIEW_TYPE = "episode_overview"
+CHARACTER_NETWORK_VIEW_TYPE = "character_network"
+PLOT_THREADS_VIEW_TYPE = "plot_threads"
+INVESTIGATION_VIEW_TYPE = "investigation"
+FULL_VIEW_TYPE = "full"
+GRAPHRAG_FOCUS_VIEW_TYPE = "graphrag_focus"
+
+# D-29: the exact view vocabulary of
+# ``GET /api/series/{series_id}/graph/visualization``.
+VIEW_TYPES: tuple[str, ...] = (
+    EPISODE_OVERVIEW_VIEW_TYPE,
+    CHARACTER_NETWORK_VIEW_TYPE,
+    PLOT_THREADS_VIEW_TYPE,
+    INVESTIGATION_VIEW_TYPE,
+    FULL_VIEW_TYPE,
+    GRAPHRAG_FOCUS_VIEW_TYPE,
+)
+
+# D-29: repeated ``focus_id`` values are accepted only for ``graphrag_focus``
+# and capped at 20 distinct ids after canonicalization (dedupe + sort).
+GRAPHRAG_FOCUS_MAX_IDS = 20
+
+# D-27: the Answer Graph targets 5-20 visual elements; this is the hard node
+# cap for the ``graphrag_focus`` projection (focus nodes + visible narrative
+# neighbors, deterministically bounded).
+GRAPHRAG_FOCUS_MAX_NODES = 20
 
 # D-15 display tiers: 1 core, 2 supporting, 3 detail. Classification is valid
 # only at the resource's visible boundary; the projection derives it from
@@ -148,6 +173,20 @@ class VisualizationFocus(BaseModel):
     """
 
     node_id: str
+
+
+class SafePlotThread(BaseModel):
+    """Spoiler-safe editorial plot-thread group input (D-36).
+
+    Plot threads are editorial story concepts, never automatic graph
+    communities. Membership lists node ids that MUST be visible at the
+    effective boundary — the projection refuses a hidden/unknown reference
+    (fail closed) and never exposes future member totals.
+    """
+
+    id: str
+    label: str
+    node_ids: list[str] = Field(default_factory=list)
 
 
 class VisualizationDTO(BaseModel):

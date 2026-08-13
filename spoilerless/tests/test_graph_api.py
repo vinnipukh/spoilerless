@@ -9,6 +9,7 @@ import time
 import types
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -16,8 +17,13 @@ from fastapi.testclient import TestClient
 from neo4j.exceptions import ServiceUnavailable
 from pydantic import ValidationError
 
-from spoilerless.app.core.errors import install_database_error_handlers
+from spoilerless.app.api.deps import get_optional_current_user
 from spoilerless.app.api.exceptions import install_repository_error_handlers
+from spoilerless.app.api.graph import (
+    get_graph_service,
+    get_progress_service,
+    router as graph_router,
+)
 from spoilerless.app.cache import graph_cache
 from spoilerless.app.cache.graph_cache import (
     _cache_key,
@@ -26,7 +32,9 @@ from spoilerless.app.cache.graph_cache import (
     set_cached_graph,
 )
 from spoilerless.app.core.config import get_settings
+from spoilerless.app.core.errors import install_database_error_handlers
 from spoilerless.app.domain.graph import GraphResponse
+from spoilerless.app.domain.visualization import PROJECTION_VERSION, VisualizationDTO
 from spoilerless.app.graph.database import Neo4jDatabase, get_database
 from spoilerless.app.spoiler.policy import filter_public_metadata
 
@@ -52,19 +60,17 @@ class UnavailableDatabase:
 def cached_live_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[tuple[TestClient, _FakeRedis]]:
-    """live_client with the cache-aside path enabled against a fake Redis.
+    """Graph-route client with the cache-aside path enabled against a fake
+    Redis (no live Neo4j).
 
-    A non-empty redis_url would make main's lifespan call
-    init_rate_limiter() and open a real Upstash connection, so that startup
-    hook is neutralized too — the graph endpoint's cache helpers are what
-    these tests exercise, not the rate limiter. The graph is already seeded
-    by the module-scoped conftest ``live_client`` (seed once per module).
+    The graph router runs against ``_FakeGraphService`` serving the
+    checked-in safe fixture, and graph_cache's get_redis is pointed at an
+    in-memory ``_FakeRedis``. This keeps the INFRA-02 endpoint-level cache
+    contract (hit byte-identical to miss) deterministic and offline.
     """
     fake = _FakeRedis()
     _enable_cache(monkeypatch, fake)
-    main_module = importlib.import_module("spoilerless.app.main")
-    monkeypatch.setattr(main_module, "init_rate_limiter", _async_noop)
-    with TestClient(main_module.app) as client:
+    with TestClient(_stub_graph_app()) as client:
         yield client, fake
 
 
@@ -1059,6 +1065,13 @@ class _FakeRedis:
         for key in keys:
             self._store.pop(key, None)
 
+    async def incr(self, key: str) -> int:
+        raw = self._store.get(key)
+        value = int(raw) if raw is not None else 0
+        value += 1
+        self._store[key] = str(value).encode()
+        return value
+
 
 async def _async_noop() -> None:
     return None
@@ -1116,6 +1129,406 @@ def test_graph_endpoint_cache_hit_matches_miss_byte_for_byte(
     assert miss.json() == hit.json()
     assert json.dumps(miss.json(), sort_keys=True) == json.dumps(hit.json(), sort_keys=True)
     assert any(key.startswith("graph:series_dexter:1:anon") for key in fake._store)
+
+
+# ===================================================================
+# 10-03 (D-29) — typed visualization projection route. No live Neo4j:
+# the graph router runs against _FakeGraphService serving the checked-in
+# safe fixtures, so boundary/focus/cache semantics are exercised with
+# deterministic data. The stub filters rows by the requested boundary the
+# same way the real NODES/EDGES/CLAIMS queries do.
+# ===================================================================
+
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures" / "visualization"
+
+VISUALIZATION_VIEWS = (
+    "episode_overview",
+    "character_network",
+    "plot_threads",
+    "investigation",
+    "full",
+    "graphrag_focus",
+)
+
+
+class _FakeGraphService:
+    """GraphService stand-in serving a checked-in safe fixture (no Neo4j)."""
+
+    def __init__(self, fixture_name: str = "s01e01_safe.json") -> None:
+        with (FIXTURES_DIR / fixture_name).open("r", encoding="utf-8") as fh:
+            fixture = json.load(fh)
+        self._graph = GraphResponse.model_validate(fixture["graph"])
+        self._max_episode_order = max(
+            (
+                node.visible_from_order
+                for node in self._graph.nodes
+                if node.type == "Episode"
+            ),
+            default=0,
+        )
+
+    async def get_series_meta(self, series_id: str) -> dict[str, Any] | None:
+        if series_id != self._graph.series.id:
+            return None
+        return self._graph.series.model_dump()
+
+    async def resolve_boundary(self, series_id: str, visible_until_order: int):
+        if series_id != self._graph.series.id:
+            return None
+        if 1 <= visible_until_order <= self._max_episode_order:
+            return {"id": f"{series_id}:episode:{visible_until_order}"}
+        return None
+
+    async def fetch_graph(
+        self,
+        series_id: str,
+        visible_until_order: int,
+        node_labels: list[str],
+        user_relationship_types: list[str],
+        effective_view_order: int | None = None,
+    ) -> GraphResponse:
+        """Return the fixture graph filtered to the requested boundary —
+        the same row semantics the real NODES/EDGES/CLAIMS queries apply."""
+        effective = (
+            effective_view_order if effective_view_order is not None else visible_until_order
+        )
+        node_ids = {
+            node.id
+            for node in self._graph.nodes
+            if node.visible_from_order <= effective and node.type in node_labels
+        }
+        nodes = [
+            node
+            for node in self._graph.nodes
+            if node.visible_from_order <= effective and node.type in node_labels
+        ]
+        edges = [
+            edge
+            for edge in self._graph.edges
+            if edge.visible_from_order <= effective
+            and edge.source in node_ids
+            and edge.target in node_ids
+        ]
+        claims = [
+            claim
+            for claim in self._graph.claims
+            if claim.visible_from_order <= effective
+        ]
+        sources = [
+            source
+            for source in self._graph.sources
+            if source.visible_from_order <= effective
+        ]
+        evidence = [
+            item
+            for item in self._graph.evidence
+            if item.visible_from_order <= effective
+        ]
+        return GraphResponse(
+            series=self._graph.series,
+            visible_until_order=visible_until_order,
+            effective_view_order=effective,
+            nodes=nodes,
+            edges=edges,
+            claims=claims,
+            sources=sources,
+            evidence=evidence,
+        )
+
+
+class _FakeProgressService:
+    def __init__(self, record: Any = None) -> None:
+        self._record = record
+
+    async def get(self, user_id: str, series_id: str):
+        return self._record
+
+
+class _ProgressRecord:
+    def __init__(self, view_as_of_order: int, watched_through_order: int) -> None:
+        self.view_as_of_order = view_as_of_order
+        self.watched_through_order = watched_through_order
+
+
+def _stub_graph_app(
+    *,
+    user: dict[str, Any] | None = None,
+    progress: Any = None,
+    fixture_name: str = "s01e01_safe.json",
+) -> FastAPI:
+    """Main-app-shaped FastAPI with the graph router over stub services."""
+    app = FastAPI()
+    install_database_error_handlers(app)
+    install_repository_error_handlers(app)
+    app.include_router(graph_router)
+    app.dependency_overrides[get_optional_current_user] = lambda: user
+    app.dependency_overrides[get_graph_service] = lambda: _FakeGraphService(fixture_name)
+    app.dependency_overrides[get_progress_service] = lambda: _FakeProgressService(progress)
+    return app
+
+
+def _viz_client(
+    *,
+    user: dict[str, Any] | None = None,
+    progress: Any = None,
+    fixture_name: str = "s01e01_safe.json",
+) -> TestClient:
+    return TestClient(
+        _stub_graph_app(user=user, progress=progress, fixture_name=fixture_name)
+    )
+
+
+def _viz_url(view: str, episode_order: int = 1, focus_ids: list[str] | None = None) -> str:
+    url = (
+        f"/api/series/series_dexter/graph/visualization?view={view}"
+        f"&episode_order={episode_order}"
+    )
+    for focus_id in focus_ids or []:
+        url += f"&focus_id={focus_id}"
+    return url
+
+
+def test_visualization_route_episode_overview_validated_end_to_end() -> None:
+    """One request returns a validated episode_overview DTO end to end."""
+    client = _viz_client()
+    response = client.get(_viz_url("episode_overview", episode_order=1))
+
+    assert response.status_code == 200, response.text
+    dto = VisualizationDTO.model_validate(response.json())
+    assert dto.metadata.projection_version == PROJECTION_VERSION
+    assert dto.metadata.view_type == "episode_overview"
+    assert dto.metadata.series_id == "series_dexter"
+    # Anonymous readers are fixed at order 1 (PROB-04/#12).
+    assert dto.metadata.episode_order == 1
+    assert dto.metadata.visible_until_order == 1
+    assert dto.metadata.effective_view_order == 1
+    # Deterministic content: containers + characters (the route carries no
+    # editorial event metadata yet, so events are timeline-only).
+    assert {node.kind for node in dto.nodes} == {"Series", "Episode", "Character"}
+    assert dto.nodes
+    assert dto.groups == []
+    assert dto.focus is None
+    assert dto.timeline == []
+
+
+@pytest.mark.parametrize("view", VISUALIZATION_VIEWS)
+def test_visualization_route_all_views_return_valid_dtos(view: str) -> None:
+    """Every D-29 view serializes a strict VisualizationDTO with closure."""
+    client = _viz_client(
+        user={"id": "user:test"},
+        progress=_ProgressRecord(2, 2),
+        fixture_name="s01e02_cumulative_safe.json",
+    )
+    # D-29: focus_id is accepted ONLY for graphrag_focus — other views must
+    # not send it (the route refuses it with a typed 422).
+    focus_ids = ["char_dexter_morgan"] if view == "graphrag_focus" else None
+    response = client.get(_viz_url(view, episode_order=2, focus_ids=focus_ids))
+
+    assert response.status_code == 200, response.text
+    dto = VisualizationDTO.model_validate(response.json())
+    assert dto.metadata.view_type == view
+    assert dto.metadata.effective_view_order == 2
+    # Focus semantics: only graphrag_focus carries a focus reference, and it
+    # always resolves inside the DTO (T10-FOCUS-02).
+    if view == "graphrag_focus":
+        assert dto.focus is not None
+        assert dto.focus.node_id == "char_dexter_morgan"
+        assert dto.focus.node_id in {node.id for node in dto.nodes}
+    else:
+        assert dto.focus is None
+
+
+def test_visualization_route_unknown_series_is_404() -> None:
+    client = _viz_client()
+    response = client.get(
+        "/api/series/unknown/graph/visualization?view=episode_overview&episode_order=1"
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": {"code": "SERIES_NOT_FOUND", "message": "Series not found."}
+    }
+
+
+def test_visualization_route_requires_view_and_positive_episode_order() -> None:
+    client = _viz_client()
+
+    missing_view = client.get(
+        "/api/series/series_dexter/graph/visualization?episode_order=1"
+    )
+    assert missing_view.status_code == 422
+    assert missing_view.json()["detail"]["code"] == "INVALID_REQUEST"
+
+    bad_enum = client.get(
+        "/api/series/series_dexter/graph/visualization?view=banana&episode_order=1"
+    )
+    assert bad_enum.status_code == 422
+    assert bad_enum.json()["detail"]["code"] == "INVALID_REQUEST"
+
+    missing_order = client.get(
+        "/api/series/series_dexter/graph/visualization?view=full"
+    )
+    assert missing_order.status_code == 422
+    assert missing_order.json()["detail"]["code"] == "INVALID_REQUEST"
+
+    zero_order = client.get(
+        "/api/series/series_dexter/graph/visualization?view=full&episode_order=0"
+    )
+    assert zero_order.status_code == 422
+    assert zero_order.json()["detail"]["code"] == "INVALID_REQUEST"
+
+
+def test_visualization_route_invalid_episode_order_is_422() -> None:
+    """An effective boundary with no persisted episode is refused with the
+    typed INVALID_VISIBLE_UNTIL_ORDER envelope."""
+    # Authenticated user whose persisted progress resolves to order 2, but
+    # the fixture's max persisted episode order is 1 -> 422.
+    client = _viz_client(
+        user={"id": "user:test"}, progress=_ProgressRecord(2, 2)
+    )
+    response = client.get(_viz_url("full", episode_order=3))
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "INVALID_VISIBLE_UNTIL_ORDER"
+
+
+def test_visualization_route_anonymous_clamped_to_order_one() -> None:
+    """Anonymous readers are fixed at order 1 even when requesting a higher
+    episode_order (PROB-04/#12)."""
+    client = _viz_client()
+    response = client.get(_viz_url("full", episode_order=99))
+
+    assert response.status_code == 200, response.text
+    dto = VisualizationDTO.model_validate(response.json())
+    assert dto.metadata.episode_order == 1
+    assert dto.metadata.effective_view_order == 1
+
+
+def test_visualization_route_authenticated_clamped_by_progress() -> None:
+    """Authenticated readers are clamped to persisted progress (D-05)."""
+    cumulative = "s01e02_cumulative_safe.json"
+
+    # Progress at order 2 -> requesting order 2 serves order 2.
+    client = _viz_client(
+        user={"id": "user:test"},
+        progress=_ProgressRecord(2, 2),
+        fixture_name=cumulative,
+    )
+    response = client.get(_viz_url("full", episode_order=2))
+    assert response.status_code == 200, response.text
+    dto = VisualizationDTO.model_validate(response.json())
+    assert dto.metadata.effective_view_order == 2
+    assert dto.metadata.episode_order == 2
+
+    # Progress at order 1 -> requesting order 2 clamps to 1 (min rule).
+    client1 = _viz_client(
+        user={"id": "user:test"},
+        progress=_ProgressRecord(1, 1),
+        fixture_name=cumulative,
+    )
+    response1 = client1.get(_viz_url("full", episode_order=2))
+    assert response1.status_code == 200, response1.text
+    dto1 = VisualizationDTO.model_validate(response1.json())
+    assert dto1.metadata.effective_view_order == 1
+    assert dto1.metadata.episode_order == 1
+
+
+def test_visualization_route_focus_id_rejected_for_non_focus_views() -> None:
+    """focus_id is accepted ONLY for graphrag_focus (D-29)."""
+    client = _viz_client()
+    response = client.get(
+        _viz_url("full", focus_ids=["char_dexter_morgan"])
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "INVALID_REQUEST"
+
+
+def test_visualization_route_graphrag_focus_requires_focus_id() -> None:
+    client = _viz_client()
+    response = client.get(_viz_url("graphrag_focus"))
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "INVALID_REQUEST"
+
+
+def test_visualization_route_graphrag_focus_hidden_or_unknown_is_422() -> None:
+    """Hidden and unknown focus ids are indistinguishable and both fail
+    closed with a sanitized envelope (T10-FOCUS-02)."""
+    client = _viz_client()
+    response = client.get(
+        _viz_url("graphrag_focus", focus_ids=["char_brian_moser"])
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "INVALID_REQUEST"
+    assert "char_brian_moser" not in response.text
+
+
+def test_visualization_route_graphrag_focus_caps_distinct_ids() -> None:
+    client = _viz_client()
+    focus_ids = [f"char_{i}" for i in range(21)]
+    response = client.get(_viz_url("graphrag_focus", focus_ids=focus_ids))
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "INVALID_REQUEST"
+
+
+def test_visualization_route_cache_hit_matches_miss_byte_for_byte(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cache-aside on the projection route: hit is byte-identical to miss and
+    the key carries series/effective/view/version/scope."""
+    fake = _FakeRedis()
+    _enable_cache(monkeypatch, fake)
+    client = TestClient(_stub_graph_app())
+
+    miss = client.get(_viz_url("episode_overview", episode_order=1))
+    hit = client.get(_viz_url("episode_overview", episode_order=1))
+
+    assert miss.status_code == hit.status_code == 200
+    assert miss.json() == hit.json()
+    assert json.dumps(miss.json(), sort_keys=True) == json.dumps(hit.json(), sort_keys=True)
+    assert any(
+        key.startswith(f"viz:series_dexter:1:episode_overview:{PROJECTION_VERSION}:anon")
+        for key in fake._store
+    )
+
+
+def test_visualization_route_cache_redis_failure_still_serves(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Redis failure bypasses the cache entirely — the projection still
+    serves 200 (T-08-06-02/D-30)."""
+    monkeypatch.setattr(get_settings(), "redis_url", "rediss://fake:6379")
+
+    class _BrokenRedis:
+        async def get(self, _key: str) -> bytes | None:
+            raise RuntimeError("redis down")
+
+        async def setex(self, *_args, **_kwargs) -> None:
+            raise RuntimeError("redis down")
+
+    monkeypatch.setattr(graph_cache, "get_redis", lambda: _BrokenRedis())
+    client = TestClient(_stub_graph_app())
+
+    response = client.get(_viz_url("episode_overview", episode_order=1))
+    assert response.status_code == 200, response.text
+    VisualizationDTO.model_validate(response.json())
+
+
+def test_visualization_route_preserves_graph_route_behavior() -> None:
+    """The existing GET /graph GraphResponse contract is untouched by the
+    visualization route (same boundary block, same filtered read path)."""
+    client = _viz_client()
+    graph = client.get("/api/series/series_dexter/graph?visible_until_order=1")
+    assert graph.status_code == 200, graph.text
+    body = graph.json()
+    assert body["series"]["id"] == "series_dexter"
+    assert body["visible_until_order"] == 1
+    assert body["effective_view_order"] == 1
+    assert body["nodes"] and body["edges"]
+    GraphResponse.model_validate(body)
 
 
 # --- FEAT-06 / FEAT-05 routes (plan 09-11) --------------------------------
