@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRef } from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -250,14 +250,17 @@ describe('App', () => {
 
     // The inspector stays browsable — no note-adding affordance (tab,
     // button, editor) and no revision history surface (tab, panel) exists.
-    // Same assertion set as DetailPanel.test.tsx readOnly suite.
-    expect(screen.queryByRole('tab', { name: 'Notes' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Add note' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Create relationship' })).not.toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Claims' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Evidence' })).toBeInTheDocument()
+    // Same assertion set as DetailPanel.test.tsx readOnly suite. Scoped to
+    // the Inspector dialog: the new 10-05 top-level tab strip also carries
+    // an "Evidence" tab, so unscoped role queries would be ambiguous.
+    const inspector = within(screen.getByRole('dialog'))
+    expect(inspector.queryByRole('tab', { name: 'Notes' })).not.toBeInTheDocument()
+    expect(inspector.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument()
+    expect(inspector.queryByRole('button', { name: 'Add note' })).not.toBeInTheDocument()
+    expect(inspector.queryByRole('button', { name: 'Create relationship' })).not.toBeInTheDocument()
+    expect(inspector.getByRole('tab', { name: 'Overview' })).toBeInTheDocument()
+    expect(inspector.getByRole('tab', { name: 'Claims' })).toBeInTheDocument()
+    expect(inspector.getByRole('tab', { name: 'Evidence' })).toBeInTheDocument()
   })
 
   it('visitor navigating ABOVE the current boundary gets the spoiler warning modal (08-12 regression)', async () => {
@@ -693,6 +696,107 @@ describe('App', () => {
       expect(screen.getByText('Section error')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Reload Section/i })).toBeInTheDocument()
       consoleSpy.mockRestore()
+    })
+  })
+
+  describe('four-tab narrative hierarchy (10-05, D-16/D-17/D-38/D-47)', () => {
+    async function renderGraphWorkspace(user: ReturnType<typeof userEvent.setup>) {
+      currentAuthState = 'authenticated'
+      sessionStorage.setItem(
+        'spoilerless.watchProgress',
+        JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }),
+      )
+      render(<App />)
+      await screen.findByTestId('graph-canvas-stub')
+    }
+
+    it('renders four accessible top tabs with Story selected by default', async () => {
+      const user = userEvent.setup()
+      await renderGraphWorkspace(user)
+
+      expect(screen.getByRole('tab', { name: 'Story' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByRole('tab', { name: 'Characters' })).toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: 'Evidence' })).toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: 'Advanced' })).toBeInTheDocument()
+    })
+
+    it('Story opens the bounded Episode Overview and reveals the coordinated Event Timeline rail', async () => {
+      const user = userEvent.setup()
+      await renderGraphWorkspace(user)
+
+      // Episode Overview is the default nested mode: the graph workspace is
+      // the primary region and no timeline rail is mounted yet.
+      expect(screen.getByRole('tab', { name: 'Episode Overview' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.queryByRole('complementary', { name: 'Event Timeline' })).not.toBeInTheDocument()
+
+      // Event Timeline mode reveals the rail beside the STILL-MOUNTED canvas.
+      await user.click(screen.getByRole('tab', { name: 'Event Timeline' }))
+      const rail = await screen.findByRole('complementary', { name: 'Event Timeline' })
+      expect(within(rail).getByRole('heading', { name: 'Event Timeline' })).toBeInTheDocument()
+      expect(within(rail).getByRole('button', { name: /Dexter kills Mike Donovan/ })).toBeInTheDocument()
+      // The graph never unmounts when the timeline opens.
+      expect(screen.getByTestId('graph-element-char_dexter_morgan')).toBeInTheDocument()
+    })
+
+    it('exposes the nested responsibilities for Characters, Evidence, and Advanced', async () => {
+      const user = userEvent.setup()
+      await renderGraphWorkspace(user)
+
+      await user.click(screen.getByRole('tab', { name: 'Characters' }))
+      expect(screen.getByRole('tab', { name: 'Character Network' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByRole('tab', { name: 'Local Neighborhood' })).toBeInTheDocument()
+
+      await user.click(screen.getByRole('tab', { name: 'Evidence' }))
+      expect(screen.getByRole('tab', { name: 'Investigation' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByRole('tab', { name: 'Evidence Chain' })).toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: 'Answer Graph' })).toBeInTheDocument()
+
+      await user.click(screen.getByRole('tab', { name: 'Advanced' }))
+      expect(screen.getByRole('tab', { name: 'Full Graph' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByRole('tab', { name: 'Debug' })).toBeInTheDocument()
+    })
+
+    it('Answer Graph nested mode renders the temporary-focus notice copy (UI-SPEC)', async () => {
+      const user = userEvent.setup()
+      await renderGraphWorkspace(user)
+
+      await user.click(screen.getByRole('tab', { name: 'Evidence' }))
+      await user.click(screen.getByRole('tab', { name: 'Answer Graph' }))
+      expect(
+        await screen.findByText('Temporary focus from this answer. Close to restore your scene.'),
+      ).toBeInTheDocument()
+      // Both the top-level Evidence tab and the nested Answer Graph mode tab
+      // are labeled "Answer Graph"-adjacent; assert the selected nested tab.
+      expect(screen.getByRole('tab', { name: 'Answer Graph', selected: true })).toBeInTheDocument()
+    })
+
+    it('graph, timeline, and Inspector selections converge on one shared selection without layout calls', async () => {
+      const user = userEvent.setup()
+      await renderGraphWorkspace(user)
+      // The initial canvas mount runs its layout; measure only what the
+      // selection/tab interactions add.
+      graphStubHooks.layoutRuns = 0
+
+      // Canvas tap -> Inspector.
+      await user.click(screen.getByTestId('graph-element-char_dexter_morgan'))
+      expect(await screen.findByRole('heading', { name: 'Dexter Morgan' })).toBeInTheDocument()
+
+      // Top-tab switches keep the canvas mounted, the selection, and the
+      // Inspector open — no reset, no relayout (D-47/D-24).
+      await user.click(screen.getByRole('tab', { name: 'Characters' }))
+      await user.click(screen.getByRole('tab', { name: 'Story' }))
+      expect(screen.getByTestId('graph-element-char_dexter_morgan')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Dexter Morgan' })).toBeInTheDocument()
+
+      // Timeline rail row -> the SAME shared selection (Inspector opens for
+      // the event) while the canvas stays mounted and layout stays quiet.
+      await user.click(screen.getByRole('tab', { name: 'Event Timeline' }))
+      const rail = await screen.findByRole('complementary', { name: 'Event Timeline' })
+      await user.click(within(rail).getByRole('button', { name: /Dexter kills Mike Donovan/ }))
+      expect(await screen.findByRole('heading', { name: 'Dexter kills Mike Donovan' })).toBeInTheDocument()
+      expect(screen.getByTestId('graph-element-char_dexter_morgan')).toBeInTheDocument()
+
+      expect(graphStubHooks.layoutRuns).toBe(0)
     })
   })
 })

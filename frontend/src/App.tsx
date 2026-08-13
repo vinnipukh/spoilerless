@@ -11,6 +11,7 @@ import { GraphCanvas, type FocusedElementIds, type SelectedElement } from './com
 import { NodeSearch } from './components/graph/NodeSearch'
 import { CommandPalette, type CommandPaletteSelection } from './components/palette/CommandPalette'
 import { TimelineView } from './components/timeline/TimelineView'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs'
 import { SeriesDashboard } from './components/series/SeriesDashboard'
 import { GraphLoadingState, GraphErrorState, GraphEmptyState } from './components/graph/GraphStatus'
 import { DetailPanel } from './components/detail/DetailPanel'
@@ -106,6 +107,17 @@ function LayoutGridIcon() {
   )
 }
 
+// 10-05 (D-16/D-17): the fixed four-tab narrative hierarchy and each tab's
+// nested responsibilities. These are navigation-only values — the shared
+// workspace below the strip stays MOUNTED across switches, so filters,
+// camera, and selection are never silently reset (D-47) and a tab change
+// never triggers a Cytoscape relayout (D-24).
+type StoryTab = 'story' | 'characters' | 'evidence' | 'advanced'
+type StoryMode = 'episode_overview' | 'event_timeline'
+type CharacterMode = 'character_network' | 'local_neighborhood'
+type EvidenceMode = 'investigation' | 'evidence_chain' | 'answer_graph'
+type AdvancedMode = 'full_graph' | 'debug'
+
 function AuthenticatedApp() {
   const { state, logout } = useAuth()
   const user = state.status === 'authenticated' ? state.user : undefined
@@ -180,6 +192,16 @@ function AuthenticatedApp() {
   // 08-06: events toggled in the Timeline view filter the graph to the
   // subgraph around them (nodes participating in the selected events).
   const [timelineFilterIds, setTimelineFilterIds] = useState<string[]>([])
+  // 10-05 (D-16/D-17): the active top tab and its nested mode. Defaults to
+  // Story / Episode Overview. The nested modes remember their last value per
+  // tab; switching top tabs never resets Filters (D-47) because the shared
+  // workspace (GraphCanvas + search + Inspector + chat) stays mounted below
+  // the tab strip.
+  const [topTab, setTopTab] = useState<StoryTab>('story')
+  const [storyMode, setStoryMode] = useState<StoryMode>('episode_overview')
+  const [characterMode, setCharacterMode] = useState<CharacterMode>('character_network')
+  const [evidenceMode, setEvidenceMode] = useState<EvidenceMode>('investigation')
+  const [advancedMode, setAdvancedMode] = useState<AdvancedMode>('full_graph')
   // FEAT-04 (09-10): series dashboard dialog open state.
   const [dashboardOpen, setDashboardOpen] = useState(false)
   // FEAT-09 (09-12): share dialog open state.
@@ -426,10 +448,22 @@ function AuthenticatedApp() {
     // boundary mechanism).
     setView('graph')
   }
-  // FEAT-02 (09-10): a timeline row click selects the node through the
-  // existing onSelect path and switches to the graph view so it is framed.
+  // FEAT-02 (09-10) + 10-05 (D-38): a timeline row click converges on the
+  // SAME shared selection as a canvas tap — it selects through the existing
+  // onSelect path so the Inspector opens — but it never forces a view switch
+  // or a graph focus (graph focus stays optional and camera-preserving) and
+  // never unmounts/relayouts the canvas. The coordinated Story rail sits
+  // next to the graph; the legacy full-screen timeline keeps its own
+  // jump-to-graph handler (handleTimelineSelectAndShowGraph).
   const handleTimelineSelect = (selection: { id: string; label: string; nodeType: string }) => {
-    handleJumpToNode(selection)
+    setSelectedElement({ kind: 'node', id: selection.id, label: selection.label, nodeType: selection.nodeType })
+  }
+
+  // Legacy full-screen timeline (header toggle / palette): select through the
+  // shared path, then switch to the graph view so the node is framed —
+  // pre-10-05 behavior, kept for that surface only.
+  const handleTimelineSelectAndShowGraph = (selection: { id: string; label: string; nodeType: string }) => {
+    handleTimelineSelect(selection)
     setView('graph')
   }
 
@@ -495,13 +529,87 @@ function AuthenticatedApp() {
         </>
       }
     >
-      {view === 'timeline' ? (
+      {view === 'settings' ? (
+        <SettingsPage onBack={() => setView('graph')} />
+      ) : (
+        <div className="flex h-full flex-col">
+          {/* 10-05 (D-16/D-17): fixed four-tab hierarchy. Navigation-only —
+              the workspace below stays mounted across tab switches so
+              Filters/camera/selection are never silently reset (D-47). The
+              strip scrolls horizontally on narrow screens with 44px-tall hit
+              areas (D-18); never bottom navigation. */}
+          <Tabs value={topTab} onValueChange={(value) => setTopTab(value as StoryTab)} className="shrink-0">
+            <TabsList className="w-full justify-start rounded-none border-b border-border bg-background px-2 max-sm:overflow-x-auto">
+              <TabsTrigger value="story" className="max-sm:min-h-[44px] max-sm:flex-none">Story</TabsTrigger>
+              <TabsTrigger value="characters" className="max-sm:min-h-[44px] max-sm:flex-none">Characters</TabsTrigger>
+              <TabsTrigger value="evidence" className="max-sm:min-h-[44px] max-sm:flex-none">Evidence</TabsTrigger>
+              <TabsTrigger value="advanced" className="max-sm:min-h-[44px] max-sm:flex-none">Advanced</TabsTrigger>
+            </TabsList>
+            <TabsContent value="story" className="shrink-0 border-b border-border px-3 py-1">
+              <Tabs value={storyMode} onValueChange={(value) => setStoryMode(value as StoryMode)}>
+                <TabsList variant="line" className="gap-1">
+                  <TabsTrigger value="episode_overview" className="max-sm:min-h-[44px]">Episode Overview</TabsTrigger>
+                  <TabsTrigger value="event_timeline" className="max-sm:min-h-[44px]">Event Timeline</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </TabsContent>
+            <TabsContent value="characters" className="shrink-0 border-b border-border px-3 py-1">
+              <Tabs value={characterMode} onValueChange={(value) => setCharacterMode(value as CharacterMode)}>
+                <TabsList variant="line" className="gap-1">
+                  <TabsTrigger value="character_network" className="max-sm:min-h-[44px]">Character Network</TabsTrigger>
+                  <TabsTrigger value="local_neighborhood" className="max-sm:min-h-[44px]">Local Neighborhood</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              {characterMode === 'local_neighborhood' && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Local Neighborhood shows the selected character&apos;s immediate connections in context.
+                </p>
+              )}
+            </TabsContent>
+            <TabsContent value="evidence" className="shrink-0 border-b border-border px-3 py-1">
+              <Tabs value={evidenceMode} onValueChange={(value) => setEvidenceMode(value as EvidenceMode)}>
+                <TabsList variant="line" className="gap-1">
+                  <TabsTrigger value="investigation" className="max-sm:min-h-[44px]">Investigation</TabsTrigger>
+                  <TabsTrigger value="evidence_chain" className="max-sm:min-h-[44px]">Evidence Chain</TabsTrigger>
+                  <TabsTrigger value="answer_graph" className="max-sm:min-h-[44px]">Answer Graph</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              {evidenceMode === 'evidence_chain' && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Evidence Chain — a layered Claim → Evidence → Source path.
+                </p>
+              )}
+              {evidenceMode === 'answer_graph' && (
+                <p className="mt-1 text-xs">
+                  <span className="font-medium text-foreground">Answer Graph</span>{' '}
+                  <span className="text-muted-foreground">
+                    Temporary focus from this answer. Close to restore your scene.
+                  </span>
+                </p>
+              )}
+            </TabsContent>
+            <TabsContent value="advanced" className="shrink-0 border-b border-border px-3 py-1">
+              <Tabs value={advancedMode} onValueChange={(value) => setAdvancedMode(value as AdvancedMode)}>
+                <TabsList variant="line" className="gap-1">
+                  <TabsTrigger value="full_graph" className="max-sm:min-h-[44px]">Full Graph</TabsTrigger>
+                  <TabsTrigger value="debug" className="max-sm:min-h-[44px]">Debug</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              {advancedMode === 'debug' && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Debug — technical labels and raw relation names appear only here.
+                </p>
+              )}
+            </TabsContent>
+          </Tabs>
+          {view === 'timeline' ? (
+            <div className="min-h-0 flex-1">
         <TimelineView
           nodes={graphState.status === 'success' ? graphState.data.nodes : []}
           claims={graphState.status === 'success' ? graphState.data.claims : []}
           episodes={episodes}
           selectedId={selectedElement?.kind === 'node' ? selectedElement.id : null}
-          onSelect={handleTimelineSelect}
+          onSelect={handleTimelineSelectAndShowGraph}
           filteredIds={timelineFilterIds}
           onToggleFilter={(id) =>
             setTimelineFilterIds((prev) =>
@@ -510,9 +618,10 @@ function AuthenticatedApp() {
           }
           onClearFilter={() => setTimelineFilterIds([])}
         />
-      ) : view === 'settings' ? (
-        <SettingsPage onBack={() => setView('graph')} />
-      ) : (
+            </div>
+          ) : (
+            <div className="relative flex min-h-0 flex-1">
+              <div className="relative min-w-0 flex-1">
         <>
       {watchProgress.pendingChange && (
         <ConfirmAdvanceModal
@@ -621,6 +730,38 @@ function AuthenticatedApp() {
         </>
       )}
         </>
+              </div>
+              {/* 10-05 (D-17/D-38): Story's coordinated Event Timeline rail —
+                  a right-side panel beside the dominant Cytoscape scene, only
+                  in Story / Event Timeline mode, desktop/tablet only
+                  (max-sm hidden keeps ONE primary region on narrow screens,
+                  D-20). The graph canvas stays mounted behind it, so
+                  switching modes never resets filters or camera (D-47). */}
+              {topTab === 'story' && storyMode === 'event_timeline' && (
+                <aside
+                  aria-label="Event Timeline"
+                  className="hidden w-80 shrink-0 flex-col overflow-hidden border-l border-border lg:flex"
+                >
+                  <TimelineView
+                    nodes={graphState.status === 'success' ? graphState.data.nodes : []}
+                    claims={graphState.status === 'success' ? graphState.data.claims : []}
+                    episodes={episodes}
+                    selectedId={selectedElement?.kind === 'node' ? selectedElement.id : null}
+                    onSelect={handleTimelineSelect}
+                    filteredIds={timelineFilterIds}
+                    onToggleFilter={(id) =>
+                      setTimelineFilterIds((prev) =>
+                        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+                      )
+                    }
+                    onClearFilter={() => setTimelineFilterIds([])}
+                    showHeading
+                  />
+                </aside>
+              )}
+            </div>
+          )}
+        </div>
       )}
       {/* FEAT-08 (09-09): ⌘K command palette — available in every view;
           node rows reuse handleJumpToNode, episode rows ride

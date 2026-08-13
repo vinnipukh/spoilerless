@@ -27,6 +27,11 @@ type Props = {
   filteredIds?: string[]
   onToggleFilter?: (id: string) => void
   onClearFilter?: () => void
+  // 10-05: render the "Event Timeline" heading (UI-SPEC copy) above the
+  // list — used by the coordinated Story rail. The legacy full-screen view
+  // renders without it. The heading stays visible in the zero state so the
+  // rail never collapses to an unlabeled panel.
+  showHeading?: boolean
 }
 
 type GroupedEvent = {
@@ -51,6 +56,7 @@ export function TimelineView({
   filteredIds = [],
   onToggleFilter,
   onClearFilter,
+  showHeading = false,
 }: Props) {
   const [activeIndex, setActiveIndex] = useState(0)
 
@@ -110,13 +116,25 @@ export function TimelineView({
     rowRefs.current[activeIndex]?.scrollIntoView({ block: 'nearest' })
   }, [activeIndex, flatEvents.length])
 
+  // 10-05: the coordinated Story rail heading — rendered in BOTH the empty
+  // and populated states so the rail keeps its labeled layout at zero items
+  // (UI-SPEC zero/one/many layout contract).
+  const heading = showHeading ? (
+    <h2 className="shrink-0 border-b border-border px-4 py-2 font-heading text-sm font-semibold text-foreground">
+      Event Timeline
+    </h2>
+  ) : null
+
   if (flatEvents.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center">
-        <p className="font-heading text-base text-foreground">The timeline is empty</p>
-        <p className="text-sm text-muted-foreground">
-          Advance your watch progress to reveal more events.
-        </p>
+      <div className="flex h-full flex-col">
+        {heading}
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
+          <p className="font-heading text-base text-foreground">The timeline is empty</p>
+          <p className="text-sm text-muted-foreground">
+            Advance your watch progress to reveal more events.
+          </p>
+        </div>
       </div>
     )
   }
@@ -145,6 +163,7 @@ export function TimelineView({
 
   return (
     <div className="flex h-full flex-col" onKeyDown={handleKeyDown}>
+      {heading}
       {filteredIds.length > 0 && onClearFilter && (
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2 text-sm">
           <span className="text-muted-foreground">

@@ -148,6 +148,43 @@ describe('TimelineView', () => {
     expect(screen.getByText('Advance your watch progress to reveal more events.')).toBeTruthy()
   })
 
+  describe('coordinated Story rail heading (10-05, D-17)', () => {
+    it('renders the Event Timeline heading when showHeading is set', () => {
+      render(
+        <TimelineView
+          nodes={events}
+          claims={claims}
+          episodes={episodes}
+          selectedId={null}
+          onSelect={vi.fn()}
+          showHeading
+        />,
+      )
+      expect(screen.getByRole('heading', { name: 'Event Timeline' })).toBeTruthy()
+      expect(screen.getByText('Cops arrive')).toBeTruthy()
+    })
+
+    it('keeps the Event Timeline heading visible in the zero state (UI-SPEC layout contract)', () => {
+      render(
+        <TimelineView
+          nodes={events.filter((node) => node.type === 'Location')}
+          claims={[]}
+          episodes={episodes}
+          selectedId={null}
+          onSelect={vi.fn()}
+          showHeading
+        />,
+      )
+      expect(screen.getByRole('heading', { name: 'Event Timeline' })).toBeTruthy()
+      expect(screen.getByText('The timeline is empty')).toBeTruthy()
+    })
+
+    it('renders no heading without showHeading (legacy full-screen view)', () => {
+      renderView()
+      expect(screen.queryByRole('heading', { name: 'Event Timeline' })).toBeNull()
+    })
+  })
+
   describe('timeline graph filter (08-06)', () => {
     function renderFiltered(
       filteredIds: string[] = [],
