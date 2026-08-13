@@ -64,6 +64,12 @@ export function setAllFilters(state: FilterState, enabled: boolean): FilterState
 // and must not share cached positions. Bounded (PROB-09/#74): the
 // per-episode-advance entries used to accumulate forever; the Map's
 // insertion order makes the oldest entry the eviction candidate.
+//
+// 10-04 (D-23): the visualization path passes an explicit `viewKey` (e.g.
+// `viz:episode_overview`), which REPLACES the whole key. Positions then
+// persist across episode switches for the same view — shared characters stay
+// mostly stable when the user changes episode (D-23), and scene keys still
+// separate views (T10-CACHE-04: stale scene state never crosses views).
 type Position = { x: number; y: number }
 const MAX_CACHED_POSITION_KEYS = 20
 const positionCache = new Map<string, Map<string, Position>>()
@@ -72,8 +78,9 @@ export function getCachedPositions(
   seriesId: string,
   visibleUntilOrder: number,
   mode: GraphMode,
+  viewKey?: string,
 ): Map<string, Position> | undefined {
-  const key = `${seriesId}:${visibleUntilOrder}:${mode}`
+  const key = viewKey ? `${seriesId}:${viewKey}` : `${seriesId}:${visibleUntilOrder}:${mode}`
   return positionCache.get(key)
 }
 
@@ -82,11 +89,19 @@ export function setCachedPositions(
   visibleUntilOrder: number,
   positions: Map<string, Position>,
   mode: GraphMode,
+  viewKey?: string,
 ) {
-  const key = `${seriesId}:${visibleUntilOrder}:${mode}`
+  const key = viewKey ? `${seriesId}:${viewKey}` : `${seriesId}:${visibleUntilOrder}:${mode}`
   positionCache.set(key, positions)
   if (positionCache.size > MAX_CACHED_POSITION_KEYS) {
     const oldest = positionCache.keys().next().value
     if (oldest !== undefined) positionCache.delete(oldest)
   }
+}
+
+// Test seam mirroring __resetAutoZoomStateForTests (autoZoomHold.ts): the
+// module-level cache persists across renders, so focused suites reset it in
+// beforeEach.
+export function __resetPositionCacheForTests() {
+  positionCache.clear()
 }

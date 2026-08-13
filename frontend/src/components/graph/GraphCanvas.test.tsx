@@ -4,7 +4,39 @@ import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { GraphCanvas } from './GraphCanvas'
 import { __resetAutoZoomStateForTests } from './autoZoomHold'
+import { __resetPositionCacheForTests } from './filterState'
 import { graphResponseS01E01, graphResponseS01E03 } from '../../test/fixtures/graphResponse'
+import type { VisualizationDTO } from '../../types/graph'
+
+// 10-04: minimal neutral-DTO fixture (mirrors the 10-03 wire shape) for the
+// visualization path — see the domain contract in
+// spoilerless/app/domain/visualization.py.
+function makeVisualizationDto(overrides: Partial<VisualizationDTO> = {}): VisualizationDTO {
+  return {
+    metadata: {
+      projection_version: '1.0.0',
+      view_type: 'episode_overview',
+      series_id: 'series_dexter',
+      series_title: 'Dexter',
+      episode_order: 1,
+      visible_until_order: 1,
+      effective_view_order: 1,
+    },
+    nodes: [
+      { id: 'char_dexter_morgan', kind: 'Character', label: 'Dexter Morgan', display_tier: 1, order: 1, episode_id: 'dexter_s01e01', image_url: null, image_source_url: null, origin: 'canonical' },
+      { id: 'char_debra_morgan', kind: 'Character', label: 'Debra Morgan', display_tier: 1, order: 1, episode_id: 'dexter_s01e01', image_url: null, image_source_url: null, origin: 'canonical' },
+      { id: 'event_first_kill', kind: 'Event', label: 'Dexter kills Mike Donovan', display_tier: 2, order: 1, episode_id: 'dexter_s01e01', image_url: null, image_source_url: null, origin: 'canonical' },
+    ],
+    edges: [
+      { id: 'edge_family', source: 'char_dexter_morgan', target: 'char_debra_morgan', relation_class: 'Family', order: 1, claim_id: 'claim_1', origin: 'canonical' },
+      { id: 'edge_occurred', source: 'char_dexter_morgan', target: 'event_first_kill', relation_class: 'Participated in', order: 1, claim_id: null, origin: 'canonical' },
+    ],
+    groups: [{ id: 'thread_main', label: 'Main plot', node_ids: ['char_dexter_morgan', 'char_debra_morgan'] }],
+    timeline: [],
+    focus: null,
+    ...overrides,
+  }
+}
 
 // 08-06: graphToElements prunes isolated (degree-0) nodes — these
 // expectations mirror that topology filter: every CONNECTED fixture node
@@ -263,6 +295,9 @@ beforeEach(() => {
   // The module-level interaction state survives component remounts (by
   // design, for the 20s hold) — clear it so tests are isolated.
   __resetAutoZoomStateForTests()
+  // 10-04: the position cache is module-level too (stored presets, D-23) —
+  // clear it so layout/stability tests are isolated.
+  __resetPositionCacheForTests()
 })
 
 describe('GraphCanvas', () => {
@@ -755,6 +790,131 @@ describe('GraphCanvas', () => {
       const lastCall = layoutCalls[layoutCalls.length - 1]
       expect(lastCall?.fit).toBe(true)
       expect(lastCall?.cy).toBe(capturedCy)
+    })
+  })
+
+  describe('visualization DTO path (10-04, D-08/D-23/D-44)', () => {
+    it('renders the neutral DTO through the adapter with deterministic ids (groups, nodes, edges)', () => {
+      render(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          visualization={makeVisualizationDto()}
+        />,
+      )
+
+      const ids = capturedElements.map((el) => el.data.id)
+      expect(ids).toEqual([
+        'group:thread_main',
+        'char_dexter_morgan',
+        'char_debra_morgan',
+        'event_first_kill',
+        'edge_family',
+        'edge_occurred',
+      ])
+      const dexter = capturedElements.find((el) => el.data.id === 'char_dexter_morgan')!
+      expect(dexter.data.nodeType).toBe('Character')
+      expect(dexter.data.parent).toBe('group:thread_main')
+      const edge = capturedElements.find((el) => el.data.id === 'edge_family')!
+      expect(edge.data.label).toBe('Family')
+    })
+
+    it('never filters DTO elements client-side — high-order nodes still render (D-05)', () => {
+      const dto = makeVisualizationDto({
+        nodes: makeVisualizationDto().nodes.map((n) => ({ ...n, order: 999 })),
+      })
+      render(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          visualization={dto}
+        />,
+      )
+
+      const ids = capturedElements.map((el) => el.data.id)
+      for (const node of dto.nodes) expect(ids).toContain(node.id)
+      for (const edge of dto.edges) expect(ids).toContain(edge.id)
+    })
+
+    it('keeps the SAME Cytoscape instance across visualization re-renders (stable scene, D-24)', () => {
+      const { rerender } = render(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          visualization={makeVisualizationDto()}
+        />,
+      )
+      const firstCy = capturedCy
+
+      rerender(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          visualization={makeVisualizationDto({ metadata: { ...makeVisualizationDto().metadata, episode_order: 2 } })}
+        />,
+      )
+
+      expect(capturedCy).toBe(firstCy)
+    })
+
+    it('retains the prior scene while a new view is loading (visualization=null) — no flash, no relayout', () => {
+      const { rerender } = render(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          visualization={makeVisualizationDto()}
+        />,
+      )
+      const beforeIds = capturedElements.map((el) => el.data.id)
+      const layoutCallsBefore = layoutCalls.length
+
+      // Loading: the parent passes null; the canvas holds the last DTO.
+      rerender(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          visualization={null}
+        />,
+      )
+
+      expect(capturedElements.map((el) => el.data.id)).toEqual(beforeIds)
+      expect(layoutCalls.length).toBe(layoutCallsBefore)
+    })
+
+    it('passes debugLabels only for the Advanced/full view (technical labels hidden elsewhere, D-14)', () => {
+      const { rerender } = render(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          visualization={makeVisualizationDto()}
+        />,
+      )
+      expect(capturedElements.find((el) => el.data.id === 'char_dexter_morgan')?.data).not.toHaveProperty('debugLabel')
+
+      rerender(
+        <GraphCanvas
+          graph={graphResponseS01E01}
+          onSelect={() => {}}
+          seriesId="series:dexter"
+          episodes={[]}
+          visualization={makeVisualizationDto({ metadata: { ...makeVisualizationDto().metadata, view_type: 'full' } })}
+        />,
+      )
+      expect(capturedElements.find((el) => el.data.id === 'char_dexter_morgan')?.data.debugLabel).toBe('Character')
     })
   })
 })

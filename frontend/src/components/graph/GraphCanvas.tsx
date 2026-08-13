@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import cytoscape from 'cytoscape'
 import CytoscapeComponent from 'react-cytoscapejs'
-import type { GraphNode, GraphResponse } from '../../types/graph'
+import type { GraphNode, GraphResponse, VisualizationDTO, VisualizationViewType } from '../../types/graph'
 import type { EpisodeResponse } from '../../types/series'
 import { graphToElements } from './graphElements'
+import { toCytoscapeElements } from '../../lib/visualizationAdapter'
 import { buildGraphStylesheet } from './graphStylesheet'
 import type { GraphMode } from './overviewTiers'
 import { autoZoomHold } from './autoZoomHold'
@@ -85,6 +86,34 @@ const AUTO_ZOOM_HOLD_MS = 20_000
 // the viewport alone. runLayout below reflows imperatively on graph
 // changes. Guarded so it never throws into an effect that a test double's
 // fake `cy` (no real `.layout()` method) might pass in.
+// 10-04 (D-22): expansion additions are placed LOCALLY (deterministic
+// concentric ring around the existing scene's bounding-box centre) and
+// merged into the stored presets — never a fresh global layout.
+const LOCAL_PLACEMENT_RADIUS = 110
+
+function localPlacementFor(
+  addedNodeIds: string[],
+  cy: cytoscape.Core,
+): Map<string, { x: number; y: number }> {
+  let cx = 0
+  let cyCenter = 0
+  const els = typeof cy.elements === 'function' ? cy.elements() : null
+  if (els && typeof els.boundingBox === 'function') {
+    const bb = els.boundingBox()
+    cx = bb.x1 + bb.w / 2
+    cyCenter = bb.y1 + bb.h / 2
+  }
+  const placed = new Map<string, { x: number; y: number }>()
+  addedNodeIds.forEach((id, i) => {
+    const angle = (2 * Math.PI * i) / Math.max(addedNodeIds.length, 1)
+    placed.set(id, {
+      x: cx + LOCAL_PLACEMENT_RADIUS * Math.cos(angle),
+      y: cyCenter + LOCAL_PLACEMENT_RADIUS * Math.sin(angle),
+    })
+  })
+  return placed
+}
+
 function runLayout(
   cy: cytoscape.Core,
   seriesId?: string | null,
@@ -92,8 +121,19 @@ function runLayout(
   forceRelayout: boolean = false,
   mode: GraphMode = 'full',
   suppressAutoZoom: boolean = false,
+  // 10-04 (D-23): the visualization view doubles as the positions scene key
+  // (`viz:episode_overview`, ...). Stored presets then persist across
+  // episode switches for the same view (shared characters stay stable) and
+  // never cross views (T10-CACHE-04).
+  view: VisualizationViewType | null = null,
+  // 10-04 (D-22): ids of nodes added since the last render. With stored
+  // presets present these get LOCAL concentric placement merged into the
+  // cache — a global layout never re-runs for additions.
+  addedNodeIds: string[] = [],
 ) {
   if (typeof cy.layout !== 'function') return
+
+  const sceneKey = view ? `viz:${view}` : undefined
 
   // 08-06+ (product owner): while the user is actively interacting (touched
   // the screen within AUTO_ZOOM_HOLD_MS), graph-change-driven layouts must
@@ -109,8 +149,12 @@ function runLayout(
     cy.pan({ ...autoZoomHold.lastViewport.pan })
   }
 
-  if (!forceRelayout && seriesId && visibleUntilOrder != null) {
-    const cached = getCachedPositions(seriesId, visibleUntilOrder, mode)
+  if (!forceRelayout && seriesId) {
+    const cached = sceneKey
+      ? getCachedPositions(seriesId, 0, mode, sceneKey)
+      : visibleUntilOrder != null
+        ? getCachedPositions(seriesId, visibleUntilOrder, mode)
+        : undefined
     if (cached && cached.size > 0) {
       const applyPos = () => {
         if (typeof cy.getElementById === 'function') {
@@ -119,6 +163,22 @@ function runLayout(
             if (node && node.length > 0 && typeof node.position === 'function') {
               node.position(pos)
             }
+          }
+        }
+        // D-22: additions get local placement, never a global relayout.
+        if (addedNodeIds.length > 0) {
+          const placed = localPlacementFor(addedNodeIds, cy)
+          for (const [nodeId, pos] of placed.entries()) {
+            const node = cy.getElementById(nodeId)
+            if (node && node.length > 0 && typeof node.position === 'function') {
+              node.position(pos)
+            }
+          }
+          const merged = new Map(cached)
+          for (const [nodeId, pos] of placed.entries()) merged.set(nodeId, pos)
+          if (sceneKey) setCachedPositions(seriesId, 0, merged, mode, sceneKey)
+          else if (visibleUntilOrder != null) {
+            setCachedPositions(seriesId, visibleUntilOrder, merged, mode)
           }
         }
       }
@@ -132,13 +192,16 @@ function runLayout(
     const l = cy.layout(
       layoutOptionsFor(layoutName, prefersReducedMotion, mode, !holdView),
     )
-    if (seriesId && visibleUntilOrder != null && typeof l.one === 'function') {
+    if (seriesId && (visibleUntilOrder != null || sceneKey) && typeof l.one === 'function') {
       l.one('layoutstop', () => {
         const map = new Map<string, { x: number; y: number }>()
         cy.nodes().forEach((n) => {
           map.set(n.id(), n.position())
         })
-        setCachedPositions(seriesId, visibleUntilOrder, map, mode)
+        if (sceneKey) setCachedPositions(seriesId, 0, map, mode, sceneKey)
+        else if (visibleUntilOrder != null) {
+          setCachedPositions(seriesId, visibleUntilOrder, map, mode)
+        }
         // Zoom floor (Overview only): fit zoomed out too far on the sparse
         // layout — lift the view back to OVERVIEW_MIN_ZOOM, anchored on the
         // graph centre (model-coordinate `position` keeps the anchor fixed).
@@ -249,6 +312,15 @@ type Props = {
   // (default) shows the curated tier-1 + connector projection; Full shows
   // every spoiler-safe element.
   initialMode?: GraphMode
+  // 10-04 (D-08/D-44): neutral VisualizationDTO for the Phase 10 projection
+  // path. When set, the scene renders `toCytoscapeElements(visualization)`
+  // through the SAME stable Cytoscape lifecycle (batched element diffs,
+  // stored preset positions); the legacy GraphResponse path stays untouched
+  // when this prop is absent. Pass `null` while a view is loading to retain
+  // the prior scene (the last non-null DTO is held) — no flashing blank
+  // canvas and no instance recreation. The backend already applied the
+  // spoiler boundary; this component never filters (D-05).
+  visualization?: VisualizationDTO | null
 }
 
 
@@ -391,6 +463,7 @@ export function GraphCanvas({
   readOnly = false,
   onShareLink,
   initialMode = 'overview',
+  visualization = null,
 }: Props) {
 
   const [mode, setMode] = useState<GraphMode>(initialMode)
@@ -403,7 +476,44 @@ export function GraphCanvas({
   useEffect(() => {
     graphRef.current = graph
   }, [graph])
-  const elements = useMemo(() => graphToElements(graph, mode), [graph, mode])
+
+  // 10-04 (D-44): the visualization path holds the LAST non-null DTO so a
+  // loading/error `null` prop retains the prior scene instead of flashing a
+  // blank canvas or swapping to the full graph. The legacy path (no
+  // visualization prop ever) is untouched.
+  const lastVisualizationRef = useRef<VisualizationDTO | null>(null)
+  if (visualization) lastVisualizationRef.current = visualization
+  const activeVisualization = visualization ?? lastVisualizationRef.current
+
+  const elements = useMemo(() => {
+    if (activeVisualization) {
+      return toCytoscapeElements(activeVisualization, {
+        // D-14: technical labels (raw kind/relation vocabulary) appear only
+        // in the Advanced/Full debug explorer.
+        debugLabels: activeVisualization.metadata.view_type === 'full',
+      })
+    }
+    return graphToElements(graph, mode)
+  }, [activeVisualization, graph, mode])
+
+  // D-22/D-24: additions (expansion, new custom node) are detected as NEW
+  // node ids vs the previous render — runLayout gives them local placement
+  // instead of a random global relayout. Edges and group/cluster parents are
+  // never "added nodes".
+  const prevElementIdsRef = useRef<Set<string> | null>(null)
+  const addedNodeIds = useMemo(() => {
+    const prev = prevElementIdsRef.current
+    if (!prev) return []
+    return elements
+      .filter((el) => {
+        const data = el.data ?? {}
+        return !('source' in data) && !('target' in data) && !prev.has(String(data.id))
+      })
+      .map((el) => String(el.data?.id))
+  }, [elements])
+  useEffect(() => {
+    prevElementIdsRef.current = new Set(elements.map((el) => String(el.data?.id)))
+  }, [elements])
   // Memoized declarative startup layout. react-cytoscapejs starts this before
   // invoking its `cy` callback; that callback waits for this layoutstop and
   // then performs the same forced layout + fit as Refresh graph. Keeping the
@@ -464,6 +574,11 @@ export function GraphCanvas({
   // from ever re-laying-out an unchanged graph.
   const lastLayoutGraphRef = useRef<GraphResponse | null>(null)
   const lastLayoutModeRef = useRef<GraphMode>(mode)
+  // 10-04: the visualization DTO is a first-class layout trigger alongside
+  // the graph — a new DTO (episode switch, expansion payload) re-enters
+  // runLayout exactly like a graph change, but through the view-scoped
+  // position cache (shared characters stay stable, D-23).
+  const lastLayoutVizRef = useRef<VisualizationDTO | null>(null)
   // 08-10 (product owner): the dedupe guard is keyed to the cy INSTANCE,
   // not just the graph. StrictMode's dev double-mount (and any real
   // remount, e.g. the destructive loading unmount) creates a NEW cy while
@@ -478,10 +593,14 @@ export function GraphCanvas({
     if (!cy) return
     const cyChanged = lastLayoutCyRef.current !== cy
     lastLayoutCyRef.current = cy
-    const graphChanged = lastLayoutGraphRef.current !== graph || cyChanged
+    const graphChanged =
+      lastLayoutGraphRef.current !== graph || lastLayoutVizRef.current !== activeVisualization || cyChanged
     const modeChanged = lastLayoutModeRef.current !== mode
     if (!graphChanged && !modeChanged) return
-    if (graphChanged) lastLayoutGraphRef.current = graph
+    if (graphChanged) {
+      lastLayoutGraphRef.current = graph
+      lastLayoutVizRef.current = activeVisualization
+    }
     if (modeChanged) lastLayoutModeRef.current = mode
     // Skip the destructive full relayout while a reveal is pending too:
     // freshly created edges connect already-positioned nodes, and re-running
@@ -496,8 +615,17 @@ export function GraphCanvas({
     // user is working.
     const suppressAutoZoom =
       performance.now() - autoZoomHold.lastTouchAt < AUTO_ZOOM_HOLD_MS
-    runLayout(cy, seriesId, graph.visible_until_order, modeChanged || cyChanged, mode, suppressAutoZoom)
-  }, [graph, focusedElementIds, revealTarget, seriesId, mode])
+    runLayout(
+      cy,
+      seriesId,
+      graph.visible_until_order,
+      modeChanged || cyChanged,
+      mode,
+      suppressAutoZoom,
+      (activeVisualization?.metadata.view_type ?? null) as VisualizationViewType | null,
+      addedNodeIds,
+    )
+  }, [graph, focusedElementIds, revealTarget, seriesId, mode, activeVisualization, addedNodeIds])
 
   // Launch refresh is registered from the cy callback below. It deliberately
   // waits for react-cytoscapejs's startup layout to STOP before invoking the
@@ -729,9 +857,19 @@ export function GraphCanvas({
               // not launch a competing layout while startup is still running.
               lastLayoutCyRef.current = cy
               lastLayoutGraphRef.current = graph
+              lastLayoutVizRef.current = activeVisualization
               const refreshAfterStartup = () => {
                 if (cyInstanceRef.current === cy) {
-                  runLayout(cy, seriesId, graph.visible_until_order, true, mode)
+                  runLayout(
+                    cy,
+                    seriesId,
+                    graph.visible_until_order,
+                    true,
+                    mode,
+                    false,
+                    (activeVisualization?.metadata.view_type ?? null) as VisualizationViewType | null,
+                    [],
+                  )
                 }
               }
               if (typeof cy.one === 'function') cy.one('layoutstop', refreshAfterStartup)
