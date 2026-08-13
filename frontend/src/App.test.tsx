@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRef } from 'react'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -806,6 +806,72 @@ describe('App', () => {
       expect(screen.getByTestId('graph-element-char_dexter_morgan')).toBeInTheDocument()
 
       expect(graphStubHooks.layoutRuns).toBe(0)
+    })
+
+    it('renders the rail with an accessible resize handle', async () => {
+      const user = userEvent.setup()
+      await renderGraphWorkspace()
+
+      await user.click(screen.getByRole('tab', { name: 'Event Timeline' }))
+      const rail = await screen.findByRole('complementary', { name: 'Event Timeline' })
+      const handle = within(rail).getByRole('separator', { name: 'Resize Event Timeline' })
+
+      expect(rail).toHaveStyle({ width: '320px' })
+      expect(handle).toHaveAttribute('aria-orientation', 'vertical')
+      expect(handle).toHaveAttribute('aria-keyshortcuts', 'ArrowLeft ArrowRight')
+      expect(handle).toHaveAttribute('tabindex', '0')
+    })
+
+    it('keyboard arrows resize the timeline rail by 16px steps', async () => {
+      const user = userEvent.setup()
+      await renderGraphWorkspace()
+
+      await user.click(screen.getByRole('tab', { name: 'Event Timeline' }))
+      const rail = await screen.findByRole('complementary', { name: 'Event Timeline' })
+      const handle = within(rail).getByRole('separator', { name: 'Resize Event Timeline' })
+
+      handle.focus()
+      await user.keyboard('{ArrowRight}')
+      expect(rail).toHaveStyle({ width: '336px' })
+      await user.keyboard('{ArrowLeft}')
+      expect(rail).toHaveStyle({ width: '320px' })
+      await user.keyboard('{ArrowLeft}')
+      expect(rail).toHaveStyle({ width: '304px' })
+    })
+
+    it('dragging the left edge leftwards widens the rail', async () => {
+      const user = userEvent.setup()
+      await renderGraphWorkspace()
+
+      await user.click(screen.getByRole('tab', { name: 'Event Timeline' }))
+      const rail = await screen.findByRole('complementary', { name: 'Event Timeline' })
+      const handle = within(rail).getByRole('separator', { name: 'Resize Event Timeline' })
+
+      fireEvent.pointerDown(handle, { clientX: 700, pointerId: 1 })
+      fireEvent.pointerMove(handle, { clientX: 500, pointerId: 1 })
+      expect(rail).toHaveStyle({ width: '520px' })
+      fireEvent.pointerUp(handle, { clientX: 500, pointerId: 1 })
+    })
+
+    it('rail width clamps to [240, min(640, 60vw)]', async () => {
+      const user = userEvent.setup()
+      await renderGraphWorkspace()
+
+      await user.click(screen.getByRole('tab', { name: 'Event Timeline' }))
+      const rail = await screen.findByRole('complementary', { name: 'Event Timeline' })
+      const handle = within(rail).getByRole('separator', { name: 'Resize Event Timeline' })
+
+      // Drag right (narrow): 320 - 100 = 220 -> clamped to the 240px minimum.
+      fireEvent.pointerDown(handle, { clientX: 700, pointerId: 1 })
+      fireEvent.pointerMove(handle, { clientX: 800, pointerId: 1 })
+      expect(rail).toHaveStyle({ width: '240px' })
+      fireEvent.pointerUp(handle, { clientX: 800, pointerId: 1 })
+
+      // Drag left (wide): 320 + 400 = 720 -> clamped to min(640, 0.6 * 1024 = 614.4).
+      fireEvent.pointerDown(handle, { clientX: 700, pointerId: 1 })
+      fireEvent.pointerMove(handle, { clientX: 300, pointerId: 1 })
+      expect(rail).toHaveStyle({ width: '614.4px' })
+      fireEvent.pointerUp(handle, { clientX: 300, pointerId: 1 })
     })
   })
 })
