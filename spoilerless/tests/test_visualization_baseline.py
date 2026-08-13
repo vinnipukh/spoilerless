@@ -492,3 +492,176 @@ def test_baseline_latency_payload_and_layout_inputs() -> None:
             assert metrics["edge_count"] <= HARD_MAX_EDGES
             assert metrics["procedural_labels"] == 0
     assert evidence["bounds"]["persistent_procedural_labels"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Task 2 — measured Variant A/B comparison and the evidence object consumed by
+# the A/B decision gate (D-10, VIZ-03).  All numbers below are the measured,
+# deterministic values over the checked-in fixed fixtures.
+# ---------------------------------------------------------------------------
+
+
+def test_variant_a_metrics_and_omissions() -> None:
+    """Variant A = characters + major Events; participation edges omitted."""
+    evidence = build_evidence()
+    e01 = evidence["episodes"]["S01E01"]["variants"]["A"]
+    e02 = evidence["episodes"]["S01E02"]["variants"]["A"]
+    assert e01["node_count"] == 9
+    assert e01["edge_count"] == 4
+    assert e01["node_kinds"] == {"Series": 1, "Episode": 1, "Character": 6, "Event": 1}
+    assert e01["edge_types"] == {"PART_OF": 1, "WORKS_WITH": 1, "FAMILY_OF": 1, "KNOWS": 1}
+    assert e01["omitted_node_ids"] == ["loc_dexters_apartment", "loc_miami_metro"]
+    assert e01["omitted_edge_ids"] == ["edge_2", "edge_5", "edge_6"]
+    assert e01["crossings_approx"] == 0
+    assert e01["procedural_labels"] == 0
+    assert e02["node_count"] == 13
+    assert e02["edge_count"] == 7
+    assert e02["node_kinds"] == {"Series": 1, "Episode": 2, "Character": 8, "Event": 2}
+    assert e02["edge_types"] == {
+        "PART_OF": 2,
+        "PRECEDES": 1,
+        "WORKS_WITH": 1,
+        "FAMILY_OF": 2,
+        "KNOWS": 1,
+    }
+    assert e02["omitted_node_ids"] == [
+        "loc_dexters_apartment",
+        "loc_everglades",
+        "loc_miami_metro",
+        "loc_ritas_house",
+    ]
+    assert e02["omitted_edge_ids"] == [
+        "edge_10",
+        "edge_11",
+        "edge_12",  # WORKS_WITH dropped: its location endpoint is not kept
+        "edge_13",
+        "edge_4",
+        "edge_7",
+        "edge_8",
+    ]
+    assert e02["crossings_approx"] == 0
+    assert e02["procedural_labels"] == 0
+
+
+def test_variant_b_metrics_and_omissions() -> None:
+    """Variant B = character-led graph; every Event is timeline-only."""
+    evidence = build_evidence()
+    e01 = evidence["episodes"]["S01E01"]["variants"]["B"]
+    e02 = evidence["episodes"]["S01E02"]["variants"]["B"]
+    assert e01["node_count"] == 8
+    assert e01["edge_count"] == 4
+    assert e01["node_kinds"] == {"Series": 1, "Episode": 1, "Character": 6}
+    assert e01["edge_types"] == {"PART_OF": 1, "WORKS_WITH": 1, "FAMILY_OF": 1, "KNOWS": 1}
+    assert e01["omitted_node_ids"] == [
+        "event_first_kill",
+        "loc_dexters_apartment",
+        "loc_miami_metro",
+    ]
+    assert e01["omitted_edge_ids"] == ["edge_2", "edge_5", "edge_6"]
+    assert e02["node_count"] == 11
+    assert e02["edge_count"] == 7
+    assert e02["node_kinds"] == {"Series": 1, "Episode": 2, "Character": 8}
+    assert e02["edge_types"] == {
+        "PART_OF": 2,
+        "PRECEDES": 1,
+        "WORKS_WITH": 1,
+        "FAMILY_OF": 2,
+        "KNOWS": 1,
+    }
+    assert e02["omitted_node_ids"] == [
+        "event_croc_discovery",
+        "event_first_kill",
+        "loc_dexters_apartment",
+        "loc_everglades",
+        "loc_miami_metro",
+        "loc_ritas_house",
+    ]
+    assert e02["omitted_edge_ids"] == [
+        "edge_10",
+        "edge_11",
+        "edge_12",
+        "edge_13",
+        "edge_4",
+        "edge_7",
+        "edge_8",
+    ]
+    assert e02["crossings_approx"] == 0
+    assert e02["procedural_labels"] == 0
+
+
+def test_variant_hard_bounds_both_episodes() -> None:
+    """VIZ-03 hard caps: max 40 nodes / max 60 edges / zero procedural labels."""
+    evidence = build_evidence()
+    for episode_key in ("S01E01", "S01E02"):
+        for variant in ("A", "B"):
+            metrics = evidence["episodes"][episode_key]["variants"][variant]
+            assert metrics["within_hard_bounds"] is True
+            assert metrics["node_count"] <= HARD_MAX_NODES
+            assert metrics["edge_count"] <= HARD_MAX_EDGES
+            assert metrics["procedural_labels"] == 0
+    assert evidence["bounds"]["persistent_procedural_labels"] == 0
+
+
+def test_variant_target_range_assessment() -> None:
+    """D-09 target 12-28 nodes: measured, including the honest sparse misses."""
+    evidence = build_evidence()
+    # Cumulative S01E02: Variant A lands inside the 12-28 target (13 nodes);
+    # Variant B falls one node short of the floor (11 nodes).
+    assert evidence["episodes"]["S01E02"]["variants"]["A"]["within_target_range"] is True
+    assert evidence["episodes"]["S01E02"]["variants"]["B"]["within_target_range"] is False
+    # S01E01 is a sparse episode: both variants sit below the floor by honest
+    # measurement (9 and 8 nodes) — the sparse-episode empty-state policy
+    # (D-44) applies, and the target is a design goal, not a hard bound.
+    assert evidence["episodes"]["S01E01"]["variants"]["A"]["within_target_range"] is False
+    assert evidence["episodes"]["S01E01"]["variants"]["B"]["within_target_range"] is False
+
+
+def test_variant_stability_between_episodes() -> None:
+    """D-31: shared characters stay stable S01E01 -> cumulative S01E02."""
+    evidence = build_evidence()
+    for variant in ("A", "B"):
+        stability = evidence["stability"][variant]
+        assert stability["retention_ratio"] == 1.0
+        assert stability["shared_character_count"] == 6
+        assert stability["e01_character_count"] == 6
+        assert stability["e02_character_count"] == 8
+        assert stability["displacement"] == 0.0
+        assert stability["displacement_note"]
+
+
+def test_variant_evidence_object_shape() -> None:
+    """The evidence object Task 2 consumes is complete and deterministic."""
+    evidence = build_evidence()
+    assert evidence["projection_version"] == PROJECTION_VERSION
+    assert set(evidence["fixture_files"]) == set(FIXTURE_FILES)
+    assert set(evidence["episodes"]) == {"S01E01", "S01E02"}
+    for episode in evidence["episodes"].values():
+        assert set(episode) == {
+            "fixture",
+            "episode_order",
+            "effective_view_order",
+            "baseline",
+            "variants",
+        }
+        assert set(episode["variants"]) == {"A", "B"}
+        for metrics in episode["variants"].values():
+            assert {
+                "node_count",
+                "edge_count",
+                "node_kinds",
+                "edge_types",
+                "omitted_node_ids",
+                "omitted_edge_ids",
+                "crossings_approx",
+                "procedural_labels",
+                "within_target_range",
+                "within_hard_bounds",
+            } <= set(metrics)
+    assert set(evidence["stability"]) == {"A", "B"}
+    assert set(evidence["narrative_notes"]) == {"A", "B"}
+    assert evidence["bounds"]["target_min_nodes"] == 12
+    assert evidence["bounds"]["target_max_nodes"] == 28
+    assert evidence["bounds"]["hard_max_nodes"] == 40
+    assert evidence["bounds"]["preferred_max_edges"] == 35
+    assert evidence["bounds"]["hard_max_edges"] == 60
+    assert evidence["bounds"]["persistent_procedural_labels"] == 0
