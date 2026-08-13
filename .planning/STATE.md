@@ -5,16 +5,16 @@ milestone_name: Production Deployment & Access Hardening
 current_phase: 10
 current_phase_name: polish-finishing-touches
 status: executing
-stopped_at: Completed 10-01-PLAN.md (safe baselines + A/B decision gate)
-last_updated: "2026-08-13T14:52:00.000Z"
+stopped_at: Completed 10-02-PLAN.md
+last_updated: "2026-08-13T15:04:23.246Z"
 last_activity: 2026-08-13
 last_activity_desc: Plan 10-01 complete — safe S01E01/S01E02 fixtures, baseline tracer, Variant A selected
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 37
-  completed_plans: 27
-  percent: 73
+  completed_plans: 28
+  percent: 67
 ---
 
 # HD Graf Cehennemi — Project State
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-04)
 ## Current Position
 
 Phase: 10 (polish-finishing-touches) — EXECUTING
-Plan: 2 of 11
-Status: Executing Phase 10
+Plan: 3 of 11
+Status: Ready to execute
 Last activity: 2026-08-13 — Plan 10-01 complete: baseline tracer + A/B gate
 
-Progress: [███░░░░░░░] 33% (v1.3, 1/3 phases); 7 phases complete across v1.0–v1.2
+Progress: [████████░░] 76% (v1.3, 1/3 phases); 7 phases complete across v1.0–v1.2
 
 ## Performance Metrics
 
@@ -55,6 +55,11 @@ Progress: [███░░░░░░░] 33% (v1.3, 1/3 phases); 7 phases comp
 **Recent Trend:** v1.3 — Phase 8 (Production Deployment & Automated CI/CD) complete and verified 2026-08-05; Phase 9 planning next.
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 10 P02 | 43min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -71,6 +76,10 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - [v1.3 roadmap]: Phases sequenced access-control/security (8) → data+hosting infra migration (9) → CI/monitoring/docs (10), since exposing the app publicly (Phase 9) should follow session/CORS/rate-limit hardening (Phase 8), and monitoring/docs (Phase 10) need a real deployed target to point at
 - [09-02]: #42 NameError was LIVE (plan premise wrong) — fixed in a36676a; verifier + progress regression nets red-capable
 - [10-01]: Episode Overview production default = Variant A (characters + major Events) at projection_version 1.0.0, from measured fixed-data evidence (13 nodes inside 12–28 target on cumulative S01E02 vs B's 11; edges 4/7, crossings 0, stability 1.0, procedural labels 0 for both). Decision log: docs/decision-logs/phase-10-visualization.md. Full Graph stays Advanced (D-11).
+- [10-02]: Episode Overview projection implements the recorded 10-01 Variant A decision (characters + major Events) at projection_version 1.0.0; display_tier derives from safe editorial event tier (major=1, supporting=2, micro=3; characters=1; containers=2) pending the 10-03 display_tier source audit.
+- [10-02]: Boundary enforcement centralized in policy.resolve_effective_boundary: one pure D-05 resolver for graph/projection/expansion/path/search/focus/restoration inputs; missing progress fails closed to order 1; the projection service rejects hidden rows before projection (T10-LEAK-02/T10-BOUND-02).
+- [10-02]: Neutral DTO carries projection_version + effective_view_order metadata as the T10-CACHE-02 cache contract; no cache introduced in 10-02.
+- [10-02]: Human edge classes (family/work/knows/precedes/part_of/...) replace raw Neo4j relation names in normal DTOs; unmapped relationship types fail closed (D-14).
 
 ### Pending Todos
 
@@ -109,9 +118,9 @@ Items acknowledged and carried forward, not in v1.3 scope:
 
 ## Session Continuity
 
-Last session: 2026-08-13T16:00:05+03:00
-Stopped at: Completed 10-01-PLAN.md (safe baselines + A/B decision gate)
-Resume file: .planning/phases/10-polish-finishing-touches/10-02-PLAN.md
+Last session: 2026-08-13T15:04:23.232Z
+Stopped at: Completed 10-02-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
