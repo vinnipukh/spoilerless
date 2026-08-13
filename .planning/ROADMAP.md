@@ -165,7 +165,7 @@ Plans:
 | 7. Spoiler-Safety Hardening | v1.2 | 8/8 | Complete | 2026-08-03 |
 | 8. Production Deployment & Automated CI/CD | v1.3 | 8/8 | Complete    | 2026-08-04 |
 | 9. Feature Expansion & Full Audit Remediation | v1.3 | 18/18 | Complete    | 2026-08-13 |
-| 10. Polish & Finishing Touches + Narrative Visualization Redesign | v1.3 | 0/11 | Planned | - |
+| 10. Polish & Finishing Touches + Narrative Visualization Redesign | v1.3 | 1/11 | In Progress | - |
 
 Full phase details archived at `.planning/milestones/v1.1-ROADMAP.md` / `.planning/milestones/v1.1-phases/` and `.planning/milestones/v1.2-ROADMAP.md` / `.planning/milestones/v1.2-phases/` (v1.2 archive supersedes the earlier v1.1 archive, which predates Phase 7).
 

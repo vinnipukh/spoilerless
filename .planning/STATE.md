@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Production Deployment & Access Hardening
 current_phase: 10
-current_phase_name: Polish & Finishing Touches + Narrative Visualization Redesign
-status: planned
-stopped_at: Phase 10 planning package independently verified; implementation not started
-last_updated: "2026-08-13T16:00:05+03:00"
+current_phase_name: polish-finishing-touches
+status: executing
+stopped_at: Completed 10-01-PLAN.md (safe baselines + A/B decision gate)
+last_updated: "2026-08-13T14:52:00.000Z"
 last_activity: 2026-08-13
-last_activity_desc: Phase 10 planning package independently verified; implementation not started
+last_activity_desc: Plan 10-01 complete — safe S01E01/S01E02 fixtures, baseline tracer, Variant A selected
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 37
-  completed_plans: 26
-  percent: 67
+  completed_plans: 27
+  percent: 73
 ---
 
 # HD Graf Cehennemi — Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-04)
 
 **Core value:** Users can safely explore a TV-series knowledge graph — and chat about it — without ever seeing information beyond their selected watch progress; the backend filters before data reaches the frontend, the LLM, or any tool call.
-**Current focus:** Phase 10 — planning complete; implementation requires explicit user authorization
+**Current focus:** Phase 10 — polish-finishing-touches
 
 ## Current Position
 
-Phase: 10 — Polish & Finishing Touches + Narrative Visualization Redesign
-Plan: 0/11
-Status: Planned and independently verified; implementation not started
-Last activity: 2026-08-13 — Phase 10 planning package passed final independent verification; no implementation started
+Phase: 10 (polish-finishing-touches) — EXECUTING
+Plan: 2 of 11
+Status: Executing Phase 10
+Last activity: 2026-08-13 — Plan 10-01 complete: baseline tracer + A/B gate
 
 Progress: [███░░░░░░░] 33% (v1.3, 1/3 phases); 7 phases complete across v1.0–v1.2
 
@@ -70,6 +70,7 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - [v1.3 roadmap]: AUTH-01 (email allowlist) and AUTH-02 (`/api/auth/dev` removal) landed ahead of formal planning; mapped to Phase 8 for traceability as verification/regression work, not new build work
 - [v1.3 roadmap]: Phases sequenced access-control/security (8) → data+hosting infra migration (9) → CI/monitoring/docs (10), since exposing the app publicly (Phase 9) should follow session/CORS/rate-limit hardening (Phase 8), and monitoring/docs (Phase 10) need a real deployed target to point at
 - [09-02]: #42 NameError was LIVE (plan premise wrong) — fixed in a36676a; verifier + progress regression nets red-capable
+- [10-01]: Episode Overview production default = Variant A (characters + major Events) at projection_version 1.0.0, from measured fixed-data evidence (13 nodes inside 12–28 target on cumulative S01E02 vs B's 11; edges 4/7, crossings 0, stability 1.0, procedural labels 0 for both). Decision log: docs/decision-logs/phase-10-visualization.md. Full Graph stays Advanced (D-11).
 
 ### Pending Todos
 
@@ -109,8 +110,8 @@ Items acknowledged and carried forward, not in v1.3 scope:
 ## Session Continuity
 
 Last session: 2026-08-13T16:00:05+03:00
-Stopped at: Phase 10 planning package independently verified; implementation not started
-Resume file: .planning/phases/10-polish-finishing-touches/10-01-PLAN.md
+Stopped at: Completed 10-01-PLAN.md (safe baselines + A/B decision gate)
+Resume file: .planning/phases/10-polish-finishing-touches/10-02-PLAN.md
 
 ## Operator Next Steps
 
