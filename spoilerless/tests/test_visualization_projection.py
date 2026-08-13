@@ -22,10 +22,26 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from spoilerless.app.api.deps import get_optional_current_user
+from spoilerless.app.api.exceptions import install_repository_error_handlers
+from spoilerless.app.api.graph import (
+    get_graph_service,
+    get_progress_service,
+    router as graph_router,
+)
+import spoilerless.app.api.graph as graph_api_module
+from spoilerless.app.cache import graph_cache
+from spoilerless.app.core.errors import (
+    install_database_error_handlers,
+    install_error_handlers,
+)
 from spoilerless.app.domain.graph import (
     GraphClaim,
     GraphEdge,
@@ -43,6 +59,9 @@ from spoilerless.app.domain.visualization import (
     EPISODE_OVERVIEW_MAX_EDGES,
     EPISODE_OVERVIEW_MAX_NODES,
     EPISODE_OVERVIEW_VIEW_TYPE,
+    EXPANSION_KEYS,
+    EXPANSION_MAX_LIMIT,
+    EXPANSION_VIEW_TYPE_PREFIX,
     FULL_VIEW_TYPE,
     GRAPHRAG_FOCUS_MAX_IDS,
     GRAPHRAG_FOCUS_MAX_NODES,
@@ -1174,3 +1193,519 @@ def test_project_view_dispatches_all_six_views() -> None:
     )
     with pytest.raises(ValueError, match="Unknown visualization view type"):
         service.project_view(graph, "banana")
+
+
+# ---------------------------------------------------------------------------
+# 10-06 (D-21): allowlisted semantic expansion — delta projection + route.
+# No live Neo4j: the service runs over the checked-in safe fixtures, and the
+# route runs against a stub app serving the same fixtures (the
+# test_graph_api.py _FakeGraphService pattern). No cache call exists on the
+# expansion path (T10-CACHE-06) — the route tests prove it by poisoning every
+# cache function.
+# ---------------------------------------------------------------------------
+
+
+def _expand(
+    name: str, node_id: str, key: str, limit: int = 12
+) -> VisualizationDTO:
+    graph, _ = _load_fixture(name)
+    return service.project_expansion(graph, node_id, key, limit=limit)
+
+
+def _iter_all_keys(obj: Any):
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            yield key
+            yield from _iter_all_keys(value)
+    elif isinstance(obj, list):
+        for item in obj:
+            yield from _iter_all_keys(item)
+
+
+def test_expansion_family_delta_exact_shape_and_no_hidden_totals() -> None:
+    """Family expansion is a strict delta: anchor first, then additions and
+    edges only — no groups/timeline/focus, and no hidden total/count keys
+    anywhere in the serialized payload (T10-LEAK-06)."""
+    dto = _expand("s01e01_safe.json", "char_dexter_morgan", "family")
+
+    assert dto.metadata.view_type == f"{EXPANSION_VIEW_TYPE_PREFIX}family"
+    assert dto.metadata.projection_version == PROJECTION_VERSION
+    assert [node.id for node in dto.nodes] == [
+        "char_dexter_morgan",
+        "char_debra_morgan",
+    ]
+    assert dto.nodes[0].display_tier == DISPLAY_TIER_CORE
+    assert [edge.id for edge in dto.edges] == ["edge_4"]
+    assert dto.edges[0].relation_class == "family"
+    assert dto.groups == []
+    assert dto.timeline == []
+    assert dto.focus is None
+    for key in _iter_all_keys(dto.model_dump(mode="json")):
+        assert not any(word in key for word in ("total", "count", "degree", "restoration"))
+
+
+@pytest.mark.parametrize(
+    ("fixture", "node_id", "key", "addition_ids", "edge_classes"),
+    [
+        (
+            "s01e02_cumulative_safe.json",
+            "char_dexter_morgan",
+            "family",
+            ["char_debra_morgan", "char_rita_bennett"],
+            ["family", "family"],
+        ),
+        (
+            "s01e01_safe.json",
+            "char_dexter_morgan",
+            "work",
+            ["char_angel_batista"],
+            ["work"],
+        ),
+        ("s01e01_safe.json", "char_dexter_morgan", "conflict", [], []),
+        (
+            "s01e02_cumulative_safe.json",
+            "char_dexter_morgan",
+            "locations",
+            ["loc_miami_metro"],
+            ["occurred_in"],
+        ),
+        (
+            "s01e02_cumulative_safe.json",
+            "dexter_s01e01",
+            "episode_events",
+            ["event_first_kill"],
+            [],
+        ),
+        (
+            "s01e02_cumulative_safe.json",
+            "char_dexter_morgan",
+            "clues",
+            [
+                "claim_1",
+                "claim_2",
+                "claim_3",
+                "claim_4",
+                "evidence_1",
+                "evidence_2",
+                "evidence_3",
+                "claim_5",
+                "evidence_4",
+            ],
+            ["supported_by", "supported_by", "supported_by", "supported_by", "supported_by"],
+        ),
+        (
+            "s01e02_cumulative_safe.json",
+            "char_dexter_morgan",
+            "evidence",
+            [
+                "evidence_1",
+                "evidence_2",
+                "evidence_3",
+                "source_1",
+                "evidence_4",
+                "source_2",
+            ],
+            ["from_source", "from_source", "from_source", "from_source"],
+        ),
+    ],
+)
+def test_expansion_all_seven_keys_return_deterministic_deltas(
+    fixture: str,
+    node_id: str,
+    key: str,
+    addition_ids: list[str],
+    edge_classes: list[str],
+) -> None:
+    """D-21: every allowlisted key produces a valid, deterministic delta
+    (anchor + additions ordered by (reveal order, id) + human-class edges)."""
+    dto = _expand(fixture, node_id, key)
+    assert dto.metadata.view_type == f"{EXPANSION_VIEW_TYPE_PREFIX}{key}"
+    assert dto.nodes[0].id == node_id
+    assert [node.id for node in dto.nodes[1:]] == addition_ids
+    assert [edge.relation_class for edge in dto.edges] == edge_classes
+    assert {edge.source for edge in dto.edges} <= {node.id for node in dto.nodes}
+    assert {edge.target for edge in dto.edges} <= {node.id for node in dto.nodes}
+    # Deterministic: byte-identical on repeat (cache/version contract).
+    again = _expand(fixture, node_id, key)
+    assert dto.model_dump(mode="json") == again.model_dump(mode="json")
+
+
+def test_expansion_limit_bounded_deterministic_and_fail_closed() -> None:
+    """D-21: limit truncates additions deterministically; the hard max of
+    EXPANSION_MAX_LIMIT is enforced; unknown keys and out-of-range limits
+    fail closed (T10-BOUND-06)."""
+    graph, _ = _load_fixture("s01e02_cumulative_safe.json")
+
+    capped = service.project_expansion(
+        graph, "char_dexter_morgan", "family", limit=1
+    )
+    assert [node.id for node in capped.nodes] == [
+        "char_dexter_morgan",
+        "char_debra_morgan",
+    ]
+
+    full = service.project_expansion(
+        graph, "char_dexter_morgan", "family", limit=EXPANSION_MAX_LIMIT
+    )
+    assert [node.id for node in full.nodes] == [
+        "char_dexter_morgan",
+        "char_debra_morgan",
+        "char_rita_bennett",
+    ]
+
+    for bad_limit in (0, EXPANSION_MAX_LIMIT + 1, -1):
+        with pytest.raises(ValueError, match="limit"):
+            service.project_expansion(graph, "char_dexter_morgan", "family", limit=bad_limit)
+    with pytest.raises(ValueError, match="Unknown expansion key"):
+        service.project_expansion(graph, "char_dexter_morgan", "banana")
+
+
+def test_expansion_hidden_or_unknown_anchor_fails_closed() -> None:
+    """Hidden and unknown anchors are indistinguishable and both refused
+    (T10-LEAK-06); a hidden payload row is refused before projection."""
+    graph, _ = _load_fixture("s01e01_safe.json")
+    with pytest.raises(InvalidVisibilityOrder, match="not a visible graph resource"):
+        service.project_expansion(graph, "char_future_killer", "family")
+
+    hidden_graph = _empty_graph()
+    hidden_graph.nodes.append(
+        GraphNode(
+            id="hidden_char",
+            type="Character",
+            label="Hidden",
+            visible_from_order=2,
+            origin="canonical",
+            episode_id=None,
+            image_url=None,
+            image_source_url=None,
+        )
+    )
+    with pytest.raises(InvalidVisibilityOrder, match="Hidden row"):
+        service.project_expansion(hidden_graph, "hidden_char", "family")
+
+
+def test_expansion_episode_events_requires_episode_anchor() -> None:
+    """episode_events is episode-scoped: a non-Episode anchor fails closed."""
+    graph, _ = _load_fixture("s01e01_safe.json")
+    with pytest.raises(InvalidVisibilityOrder, match="Episode anchor"):
+        service.project_expansion(graph, "char_dexter_morgan", "episode_events")
+
+
+def test_expansion_conflict_relation_family() -> None:
+    """The conflict key expands through the conflict relation family and the
+    delta carries the human class — never the raw relation name (D-14)."""
+    graph = _empty_graph()
+    graph.nodes.append(
+        GraphNode(
+            id="char_a",
+            type="Character",
+            label="A",
+            visible_from_order=1,
+            origin="canonical",
+            episode_id=None,
+            image_url=None,
+            image_source_url=None,
+        )
+    )
+    graph.nodes.append(
+        GraphNode(
+            id="char_b",
+            type="Character",
+            label="B",
+            visible_from_order=1,
+            origin="canonical",
+            episode_id=None,
+            image_url=None,
+            image_source_url=None,
+        )
+    )
+    graph.edges.append(
+        GraphEdge(
+            id="edge_opposes",
+            source="char_a",
+            target="char_b",
+            type="OPPOSES",
+            visible_from_order=1,
+            origin="canonical",
+        )
+    )
+    dto = service.project_expansion(graph, "char_a", "conflict")
+    assert [node.id for node in dto.nodes] == ["char_a", "char_b"]
+    assert dto.edges[0].relation_class == "opposes"
+    assert "OPPOSES" not in json.dumps(dto.model_dump(mode="json"))
+
+
+# ---------------------------------------------------------------------------
+# Expansion route (stub app — no live Neo4j, no cache)
+# ---------------------------------------------------------------------------
+
+
+class _StubGraphService:
+    """GraphService stand-in serving a checked-in safe fixture (no Neo4j)."""
+
+    def __init__(self, fixture_name: str = "s01e01_safe.json") -> None:
+        with (FIXTURES_DIR / fixture_name).open("r", encoding="utf-8") as fh:
+            fixture = json.load(fh)
+        self._graph = GraphResponse.model_validate(fixture["graph"])
+        self._max_episode_order = max(
+            (
+                node.visible_from_order
+                for node in self._graph.nodes
+                if node.type == "Episode"
+            ),
+            default=0,
+        )
+
+    async def get_series_meta(self, series_id: str) -> dict[str, Any] | None:
+        if series_id != self._graph.series.id:
+            return None
+        return self._graph.series.model_dump()
+
+    async def resolve_boundary(self, series_id: str, visible_until_order: int):
+        if series_id != self._graph.series.id:
+            return None
+        if 1 <= visible_until_order <= self._max_episode_order:
+            return {"id": f"{series_id}:episode:{visible_until_order}"}
+        return None
+
+    async def fetch_graph(
+        self,
+        series_id: str,
+        visible_until_order: int,
+        node_labels: list[str],
+        user_relationship_types: list[str],
+        effective_view_order: int | None = None,
+    ) -> GraphResponse:
+        effective = (
+            effective_view_order
+            if effective_view_order is not None
+            else visible_until_order
+        )
+        node_ids = {
+            node.id
+            for node in self._graph.nodes
+            if node.visible_from_order <= effective and node.type in node_labels
+        }
+        return GraphResponse(
+            series=self._graph.series,
+            visible_until_order=visible_until_order,
+            effective_view_order=effective,
+            nodes=[
+                node
+                for node in self._graph.nodes
+                if node.visible_from_order <= effective and node.type in node_labels
+            ],
+            edges=[
+                edge
+                for edge in self._graph.edges
+                if edge.visible_from_order <= effective
+                and edge.source in node_ids
+                and edge.target in node_ids
+            ],
+            claims=[
+                claim
+                for claim in self._graph.claims
+                if claim.visible_from_order <= effective
+            ],
+            sources=[
+                source
+                for source in self._graph.sources
+                if source.visible_from_order <= effective
+            ],
+            evidence=[
+                item
+                for item in self._graph.evidence
+                if item.visible_from_order <= effective
+            ],
+        )
+
+
+class _StubProgressService:
+    def __init__(self, record: Any = None) -> None:
+        self._record = record
+
+    async def get(self, user_id: str, series_id: str):
+        return self._record
+
+
+class _ProgressRecord:
+    def __init__(self, view_as_of_order: int, watched_through_order: int) -> None:
+        self.view_as_of_order = view_as_of_order
+        self.watched_through_order = watched_through_order
+
+
+def _expansion_app(
+    *,
+    user: dict[str, Any] | None = None,
+    progress: Any = None,
+    fixture_name: str = "s01e01_safe.json",
+) -> FastAPI:
+    app = FastAPI()
+    # The main-app handlers give the stub the same sanitized validation
+    # envelope the production app serves (INVALID_REQUEST, never echoes
+    # request input).
+    install_error_handlers(app)
+    install_database_error_handlers(app)
+    install_repository_error_handlers(app)
+    app.include_router(graph_router)
+    app.dependency_overrides[get_optional_current_user] = lambda: user
+    app.dependency_overrides[get_graph_service] = lambda: _StubGraphService(fixture_name)
+    app.dependency_overrides[get_progress_service] = lambda: _StubProgressService(progress)
+    return app
+
+
+def _expand_url(
+    node_id: str,
+    key: str,
+    episode_order: int = 1,
+    limit: int | None = None,
+) -> str:
+    url = (
+        f"/api/series/series_dexter/graph/expand?node_id={node_id}"
+        f"&expansion_key={key}&episode_order={episode_order}"
+    )
+    if limit is not None:
+        url += f"&limit={limit}"
+    return url
+
+
+def test_expansion_route_family_validated_end_to_end() -> None:
+    """One family expansion request returns a validated delta DTO."""
+    client = TestClient(_expansion_app())
+    response = client.get(_expand_url("char_dexter_morgan", "family"))
+
+    assert response.status_code == 200, response.text
+    dto = VisualizationDTO.model_validate(response.json())
+    assert dto.metadata.view_type == "expansion:family"
+    assert dto.metadata.series_id == "series_dexter"
+    assert [node.id for node in dto.nodes] == [
+        "char_dexter_morgan",
+        "char_debra_morgan",
+    ]
+    assert [edge.relation_class for edge in dto.edges] == ["family"]
+
+
+def test_expansion_route_rejects_unknown_keys_and_out_of_range_limits() -> None:
+    """T10-BOUND-06: the server enum and strict limit validation refuse
+    arbitrary concepts and anything above the hard max of 25."""
+    client = TestClient(_expansion_app())
+
+    for query in (
+        _expand_url("char_dexter_morgan", "banana"),
+        _expand_url("char_dexter_morgan", "family", limit=0),
+        _expand_url("char_dexter_morgan", "family", limit=26),
+        "/api/series/series_dexter/graph/expand?expansion_key=family&episode_order=1",
+    ):
+        response = client.get(query)
+        assert response.status_code == 422, response.text
+        assert response.json() == {
+            "detail": {"code": "INVALID_REQUEST", "message": "Request validation failed."}
+        }
+
+
+def test_expansion_route_unknown_series_is_404() -> None:
+    client = TestClient(_expansion_app())
+    response = client.get(
+        "/api/series/unknown/graph/expand?node_id=x&expansion_key=family&episode_order=1"
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "SERIES_NOT_FOUND"
+
+
+def test_expansion_route_invalid_boundary_is_typed_422() -> None:
+    # PROB-04/#12: anonymous users clamp to order 1, so episode_order=99 is
+    # ignored. An AUTHENTICATED user with persisted progress past the
+    # fixture's max order exercises the fail-closed boundary path.
+    client = TestClient(
+        _expansion_app(
+            user={"id": "user:test", "email": "t@example.com"},
+            progress=_ProgressRecord(2, 2),
+        )
+    )
+    response = client.get(_expand_url("char_dexter_morgan", "family", episode_order=2))
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "INVALID_VISIBLE_UNTIL_ORDER"
+
+
+def test_expansion_route_hidden_anchor_is_sanitized_422() -> None:
+    """Unknown/hidden anchors are indistinguishable; the id is never echoed."""
+    client = TestClient(_expansion_app())
+    response = client.get(_expand_url("char_future_killer", "family"))
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": {
+            "code": "INVALID_REQUEST",
+            "message": "The requested expansion is not visible at the effective boundary.",
+        }
+    }
+    assert "char_future_killer" not in response.text
+
+
+def test_expansion_route_bypasses_cache_entirely(monkeypatch) -> None:
+    """T10-CACHE-06: every cache get/set is poisoned — expansion still serves
+    (and therefore never crossed the cache boundary for any request tuple)."""
+
+    def _no_cache(*_args, **_kwargs):
+        raise AssertionError("expansion route must never touch the cache")
+
+    for cache_fn in (
+        "get_cached_graph",
+        "set_cached_graph",
+        "get_cached_visualization",
+        "set_cached_visualization",
+    ):
+        # Both import styles are poisoned: the cache module's own attribute
+        # and the bound name inside spoilerless.app.api.graph — a cache call
+        # through either binding fails the test.
+        monkeypatch.setattr(graph_cache, cache_fn, _no_cache)
+        monkeypatch.setattr(graph_api_module, cache_fn, _no_cache)
+
+    client = TestClient(
+        _expansion_app(fixture_name="s01e02_cumulative_safe.json")
+    )
+    for key in EXPANSION_KEYS:
+        anchor = "dexter_s01e01" if key == "episode_events" else "char_dexter_morgan"
+        response = client.get(_expand_url(anchor, key))
+        assert response.status_code == 200, response.text
+        VisualizationDTO.model_validate(response.json())
+
+
+def test_expansion_distinct_request_tuples_compute_independently(monkeypatch) -> None:
+    """D-21/T10-CACHE-06: with no cache anywhere on the path, distinct
+    (node_id, expansion_key, limit) tuples return independently computed
+    results — a limit change or key change changes the delta itself."""
+    monkeypatch.setattr(graph_cache, "get_cached_graph", lambda *a, **k: None)
+    client = TestClient(
+        _expansion_app(
+            user={"id": "user:test"},
+            progress=_ProgressRecord(2, 2),
+            fixture_name="s01e02_cumulative_safe.json",
+        )
+    )
+
+    capped = client.get(
+        _expand_url("char_dexter_morgan", "family", episode_order=2, limit=1)
+    ).json()
+    full = client.get(
+        _expand_url("char_dexter_morgan", "family", episode_order=2, limit=2)
+    ).json()
+    work = client.get(
+        _expand_url("char_dexter_morgan", "work", episode_order=2)
+    ).json()
+
+    assert [node["id"] for node in capped["nodes"]] == [
+        "char_dexter_morgan",
+        "char_debra_morgan",
+    ]
+    assert [node["id"] for node in full["nodes"]] == [
+        "char_dexter_morgan",
+        "char_debra_morgan",
+        "char_rita_bennett",
+    ]
+    assert [node["id"] for node in work["nodes"]] == [
+        "char_dexter_morgan",
+        "char_angel_batista",
+    ]
+    # No hidden totals on the wire.
+    for payload in (capped, full, work):
+        assert not any(word in key for key in _iter_all_keys(payload) for word in ("total", "count"))

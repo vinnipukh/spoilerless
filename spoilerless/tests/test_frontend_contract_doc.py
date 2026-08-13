@@ -67,6 +67,8 @@ EXPECTED_OPERATIONS: set[tuple[str, str]] = {
     ("get", "/api/series/{series_id}/export"),
     # Phase 10 (10-03): typed visualization projections (D-29)
     ("get", "/api/series/{series_id}/graph/visualization"),
+    # Phase 10 (10-06): allowlisted semantic expansion (D-21)
+    ("get", "/api/series/{series_id}/graph/expand"),
     ("post", "/api/share"),
     ("get", "/api/share"),
     ("get", "/api/share/{token}/graph"),
@@ -104,8 +106,8 @@ def test_document_and_openapi_have_exact_locked_inventory() -> None:
     assert generated == EXPECTED_OPERATIONS
     assert {path for _, path in documented} == EXPECTED_TEMPLATES
     assert set(app.openapi()["paths"]) == EXPECTED_TEMPLATES
-    assert len(documented) == len(generated) == 51
-    assert len(EXPECTED_TEMPLATES) == 38
+    assert len(documented) == len(generated) == 52
+    assert len(EXPECTED_TEMPLATES) == 39
     assert all("?" not in path for path in EXPECTED_TEMPLATES)
 
 

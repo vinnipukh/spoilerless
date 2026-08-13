@@ -67,6 +67,37 @@ GRAPHRAG_FOCUS_MAX_IDS = 20
 # neighbors, deterministically bounded).
 GRAPHRAG_FOCUS_MAX_NODES = 20
 
+# D-21: the exact allowlisted expansion-key vocabulary of
+# ``GET /api/series/{series_id}/graph/expand``. No arbitrary relation or
+# concept input is ever accepted (T10-BOUND-06).
+EXPANSION_KEY_FAMILY = "family"
+EXPANSION_KEY_WORK = "work"
+EXPANSION_KEY_CONFLICT = "conflict"
+EXPANSION_KEY_EPISODE_EVENTS = "episode_events"
+EXPANSION_KEY_CLUES = "clues"
+EXPANSION_KEY_LOCATIONS = "locations"
+EXPANSION_KEY_EVIDENCE = "evidence"
+
+EXPANSION_KEYS: tuple[str, ...] = (
+    EXPANSION_KEY_FAMILY,
+    EXPANSION_KEY_WORK,
+    EXPANSION_KEY_CONFLICT,
+    EXPANSION_KEY_EPISODE_EVENTS,
+    EXPANSION_KEY_CLUES,
+    EXPANSION_KEY_LOCATIONS,
+    EXPANSION_KEY_EVIDENCE,
+)
+
+# D-21 bounds: expansions prefer 8-12 additions with a hard max of 25 — no
+# request and no server result may ever exceed it (T10-BOUND-06).
+EXPANSION_DEFAULT_LIMIT = 12
+EXPANSION_MAX_LIMIT = 25
+
+# D-21: an expansion delta carries its key in ``metadata.view_type`` under
+# this prefix, so a delta is always distinguishable from a view projection
+# and can never collide with the D-29 view vocabulary.
+EXPANSION_VIEW_TYPE_PREFIX = "expansion:"
+
 # D-15 display tiers: 1 core, 2 supporting, 3 detail. Classification is valid
 # only at the resource's visible boundary; the projection derives it from
 # safe-boundary editorial data (event tier), never from full-graph degree.

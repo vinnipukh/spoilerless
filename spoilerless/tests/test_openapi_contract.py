@@ -154,6 +154,8 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         "/api/series/{series_id}/export",
         # Phase 10 (10-03): typed visualization projections (D-29)
         "/api/series/{series_id}/graph/visualization",
+        # Phase 10 (10-06): allowlisted semantic expansion (D-21)
+        "/api/series/{series_id}/graph/expand",
         "/api/share",
         "/api/share/{token}/graph",
         "/api/share/{token}",
@@ -213,12 +215,14 @@ def test_user_route_openapi_has_exact_operations_and_templates() -> None:
         ("get", "/api/series/{series_id}/export"),
         # Phase 10 (10-03): typed visualization projections (D-29)
         ("get", "/api/series/{series_id}/graph/visualization"),
+        # Phase 10 (10-06): allowlisted semantic expansion (D-21)
+        ("get", "/api/series/{series_id}/graph/expand"),
         ("post", "/api/share"),
         ("get", "/api/share"),
         ("get", "/api/share/{token}/graph"),
         ("delete", "/api/share/{token}"),
     }
-    assert len(schema["paths"]) == 38
+    assert len(schema["paths"]) == 39
     for path, item in schema["paths"].items():
         for method, operation in item.items():
             if method not in {"get", "post", "patch", "delete"}:

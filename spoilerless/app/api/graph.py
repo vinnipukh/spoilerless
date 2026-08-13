@@ -23,6 +23,8 @@ from spoilerless.app.core.errors import error_responses
 from spoilerless.app.domain.series import SeriesResponse
 from spoilerless.app.domain.user_content import VisibleUntilOrder
 from spoilerless.app.domain.visualization import (
+    EXPANSION_DEFAULT_LIMIT,
+    EXPANSION_MAX_LIMIT,
     GRAPHRAG_FOCUS_VIEW_TYPE,
     PROJECTION_VERSION,
     VisualizationDTO,
@@ -58,6 +60,20 @@ VisualizationView = Literal[
     "investigation",
     "full",
     "graphrag_focus",
+]
+
+# D-21: the exact allowlisted expansion-key vocabulary of the expansion
+# route. ``Literal`` keeps the OpenAPI enum and the route's runtime
+# validation in lockstep; the projection service additionally refuses
+# unknown keys (fail closed, T10-BOUND-06).
+ExpansionKey = Literal[
+    "family",
+    "work",
+    "conflict",
+    "episode_events",
+    "clues",
+    "locations",
+    "evidence",
 ]
 
 # Stateless projection service; one shared instance per process.
@@ -262,6 +278,103 @@ async def get_visualization(
         dto.model_dump(mode="json"),
         focus_ids=focus_id,
     )
+    return dto
+
+
+# ---------------------------------------------------------------------------
+# 10-06 (D-21): allowlisted semantic expansion. One GET, seven server-side
+# keys; the response is a strict VisualizationDTO DELTA (anchor + additions +
+# edges only — no hidden total/count). The boundary resolves through the
+# SAME shared block as graph/visualization/path/export and the delta is
+# computed over the complete safe graph read, so a request tuple
+# (node_id, expansion_key, limit) can never collide with another.
+# Expansion BYPASSES Redis/cache-aside entirely in Phase 10
+# (T10-CACHE-06): no get/set cache call exists on this path, so a delta can
+# never be served under a wrong request identity.
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/{series_id}/graph/expand",
+    response_model=VisualizationDTO,
+    summary="Read a spoiler-safe semantic expansion delta",
+    responses=error_responses(404, 422, 503),
+)
+async def get_expansion(
+    series_id: str,
+    node_id: str = Query(
+        min_length=1,
+        description="Required visible graph resource to expand around.",
+    ),
+    expansion_key: ExpansionKey = Query(
+        description="Required allowlisted semantic expansion concept.",
+    ),
+    episode_order: int = Query(
+        gt=0,
+        description="Required positive episode order used as the requested "
+        "spoiler boundary for the expansion.",
+    ),
+    limit: int = Query(
+        default=EXPANSION_DEFAULT_LIMIT,
+        ge=1,
+        le=EXPANSION_MAX_LIMIT,
+        description="Bounded addition cap; the server hard max is 25.",
+    ),
+    service: GraphService = Depends(get_graph_service),
+    progress_service: ProgressService = Depends(get_progress_service),
+    user: dict[str, Any] | None = Depends(get_optional_current_user),
+) -> VisualizationDTO:
+    """Read one allowlisted semantic expansion as a DTO delta (D-21).
+
+    ``expansion_key`` selects one of seven allowlisted concepts (family,
+    work, conflict, episode_events, clues, locations, evidence). ``node_id``
+    is the visible resource expanded around, ``episode_order`` the requested
+    spoiler boundary (anonymous readers fixed at order 1, authenticated
+    readers clamped to persisted progress), and ``limit`` the addition cap
+    (default 12, hard max 25). The response carries the anchor + additions +
+    edges only — no hidden totals, no future hints, and expansion responses
+    are never cached (T10-CACHE-06).
+    """
+    series = await service.get_series_meta(series_id)
+    if series is None:
+        raise _error(404, "SERIES_NOT_FOUND", "Series not found.")
+
+    effective = await _resolve_effective_boundary(
+        service,
+        progress_service,
+        series_id,
+        user,
+        episode_order,
+        boundary_label="episode_order",
+    )
+
+    # Deliberately NO cache-aside here (T10-CACHE-06): every expansion
+    # request resolves the boundary and reads the current safe graph before
+    # projection, so request tuples are always computed independently.
+    result = await service.fetch_graph(
+        series_id,
+        effective,
+        node_labels=VISIBLE_NODE_LABELS,
+        user_relationship_types=USER_RELATIONSHIP_TYPES,
+        effective_view_order=effective,
+    )
+    try:
+        dto = _visualization_service.project_expansion(
+            result, node_id, expansion_key, limit=limit
+        )
+    except InvalidVisibilityOrder as exc:
+        # Hidden/unknown anchors and hidden projection rows are client
+        # request problems; sanitized, never echoing the offending id.
+        raise _error(
+            422,
+            "INVALID_REQUEST",
+            "The requested expansion is not visible at the effective boundary.",
+        ) from exc
+    except ValueError as exc:
+        raise _error(
+            422,
+            "INVALID_REQUEST",
+            "The requested expansion could not be produced.",
+        ) from exc
     return dto
 
 
