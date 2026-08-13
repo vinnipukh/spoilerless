@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { graphToElements } from './graphElements'
 import { graphResponseS01E01 } from '../../test/fixtures/graphResponse'
 
@@ -26,6 +26,72 @@ describe('graphToElements', () => {
     )
 
     expect(nonCharacter.every((el) => !('imageUrl' in el.data))).toBe(true)
+  })
+
+  describe('image_url apiUrl prefixing (quick-260813-gao)', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs()
+    })
+
+    // Minimal connected two-Character graph so the portrait node survives
+    // isolated-node pruning (same inline pattern as the pruning tests below).
+    const portraitGraph = (imageUrl: string | null) => ({
+      series: { id: 's', title: 'S', slug: 's' },
+      nodes: [
+        {
+          id: 'char_portrait', type: 'Character', label: 'Portrait', visible_from_order: 1,
+          origin: 'canonical', episode_id: null, image_url: imageUrl,
+          image_source_url: null,
+        },
+        {
+          id: 'char_other', type: 'Character', label: 'Other', visible_from_order: 1,
+          origin: 'canonical', episode_id: null, image_url: null,
+          image_source_url: null,
+        },
+      ],
+      edges: [
+        {
+          id: 'e1', source: 'char_portrait', target: 'char_other', type: 'KNOWS',
+          visible_from_order: 1, origin: 'canonical', claim_id: null,
+        },
+      ],
+      claims: [],
+      visible_until_order: 1,
+      sources: [],
+      evidence: [],
+    })
+
+    it('prefixes a relative /api/static image_url with VITE_API_BASE_URL', () => {
+      vi.stubEnv('VITE_API_BASE_URL', 'https://api.spoilerless.net')
+      const elements = graphToElements(
+        portraitGraph('/api/static/characters/dexter_morgan.webp'),
+      )
+      const portrait = elements.find((el) => el.data.id === 'char_portrait')
+
+      expect(portrait?.data.imageUrl).toBe(
+        'https://api.spoilerless.net/api/static/characters/dexter_morgan.webp',
+      )
+    })
+
+    it('never prefixes an absolute http(s) image_url', () => {
+      vi.stubEnv('VITE_API_BASE_URL', 'https://api.spoilerless.net')
+      const absolute =
+        'https://static.wikia.nocookie.net/dexter/images/example/dexter_morgan.jpg'
+      const elements = graphToElements(portraitGraph(absolute))
+      const portrait = elements.find((el) => el.data.id === 'char_portrait')
+
+      expect(portrait?.data.imageUrl).toBe(absolute)
+    })
+
+    it('passes a non-leading-slash image_url through unchanged', () => {
+      vi.stubEnv('VITE_API_BASE_URL', 'https://api.spoilerless.net')
+      const elements = graphToElements(
+        portraitGraph('api/static/characters/dexter_morgan.webp'),
+      )
+      const portrait = elements.find((el) => el.data.id === 'char_portrait')
+
+      expect(portrait?.data.imageUrl).toBe('api/static/characters/dexter_morgan.webp')
+    })
   })
 
   describe('simple flag (08-05 Obsidian-style declutter)', () => {

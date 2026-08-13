@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ReactElement } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -55,6 +55,10 @@ const defaultProps = {
 }
 
 describe('DetailPanel', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('renders the locked no-selection placeholder with no Tabs', async () => {
     renderPanel(<DetailPanel selected={null} {...defaultProps} />)
 
@@ -137,6 +141,26 @@ describe('DetailPanel', () => {
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
     expect(screen.queryByText(/dexter\.fandom\.com|wikia\.nocookie/)).not.toBeInTheDocument()
+  })
+
+  it('prefixes a relative /api/static image_url with VITE_API_BASE_URL (quick-260813-gao)', async () => {
+    const graphWithRelativeImage = {
+      ...graphResponseS01E01,
+      nodes: graphResponseS01E01.nodes.map((n) =>
+        n.id === 'char_dexter_morgan'
+          ? { ...n, image_url: '/api/static/characters/dexter_morgan.webp' }
+          : n,
+      ),
+    }
+    vi.stubEnv('VITE_API_BASE_URL', 'https://api.spoilerless.net')
+    const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
+    renderPanel(<DetailPanel selected={selected} {...defaultProps} graph={graphWithRelativeImage} />)
+
+    const portrait = await screen.findByAltText('Dexter Morgan')
+    expect(portrait).toHaveAttribute(
+      'src',
+      'https://api.spoilerless.net/api/static/characters/dexter_morgan.webp',
+    )
   })
 
   it('shows an initials fallback avatar for a Character with no image_url, with no <img>', async () => {
