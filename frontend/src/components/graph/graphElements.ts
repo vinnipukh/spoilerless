@@ -21,6 +21,7 @@
 
 import type { ElementDefinition } from 'cytoscape'
 import type { GraphEdge, GraphResponse } from '../../types/graph'
+import { apiUrl } from '../../api/client'
 import { overviewProjection, type GraphMode } from './overviewTiers'
 
 export function graphToElements(
@@ -85,7 +86,7 @@ export function graphToElements(
     // happens to have image_url set. The `imageUrl` key is omitted entirely
     // (not set to null) when there is no portrait, so Cytoscape's `[imageUrl]`
     // existence selector only matches nodes that actually have one.
-    const imageUrl = node.type === 'Character' ? node.image_url : null
+    const imageUrl = node.type === 'Character' ? apiUrl(node.image_url) : null
     const simple = !imageUrl && (degree.get(node.id) ?? 0) < 3
 
     // Derive cluster key

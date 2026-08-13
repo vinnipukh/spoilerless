@@ -3,6 +3,7 @@ import { Download } from 'lucide-react'
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { SpoilerGuard } from '@/components/ui/SpoilerGuard'
 import { fetchExportMarkdown, downloadMarkdownBlob } from '@/api/export'
+import { apiUrl } from '../../api/client'
 import { renderGraphMarkdown, exportFilename } from '@/lib/exportMarkdown'
 import {
   Sheet,
@@ -75,7 +76,7 @@ function CharacterPortrait({
 
   const avatar = showImage ? (
     <img
-      src={node.image_url ?? undefined}
+      src={apiUrl(node.image_url) ?? undefined}
       alt={node.label}
       className="h-10 w-10 rounded-full object-cover"
       referrerPolicy="no-referrer"

@@ -45,6 +45,18 @@ type FetchOptions = {
 // Vite proxy.
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
 
+// Backend-relative URLs that bypass apiFetch (Character portrait image_url
+// values, served as '/api/static/...') need the same production prefixing.
+// Reads VITE_API_BASE_URL at CALL time (not module scope) so tests can
+// vi.stubEnv it after import. Only '/'-leading paths are prefixed: absolute
+// http(s) URLs and bare relative segments pass through unchanged, and an
+// empty base (local dev, '' ) keeps the Vite-proxy behavior.
+export function apiUrl(path: string | null): string | null {
+  if (path == null) return null
+  if (!path.startsWith('/')) return path
+  return `${import.meta.env.VITE_API_BASE_URL ?? ''}${path}`
+}
+
 export async function apiFetch<T>(url: string, options?: FetchOptions): Promise<T> {
   const { method = 'GET', body, headers } = options ?? {}
   const res = await fetch(`${apiBase}${url}`, {
