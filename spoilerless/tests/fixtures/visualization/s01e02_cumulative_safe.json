@@ -1,0 +1,150 @@
+{
+  "fixture_metadata": {
+    "schema_version": "1",
+    "fixture_type": "episode_safe",
+    "episode": "S01E02",
+    "episode_order": 2,
+    "scope": "cumulative_safe",
+    "series_id": "series_dexter",
+    "effective_view_order": 2,
+    "projection_version": "1.0.0",
+    "immutable": true,
+    "generated_by": "10-01-PLAN.md Task 1 (tracer plan) — synthetic safe baseline; cumulative rows through S01E02 mirroring frontend/src/test/fixtures/graphResponse.ts (graphResponseS01E01 + S01E02 rows of graphResponseS01E03)",
+    "checked_in": "2026-08-13"
+  },
+  "events": [
+    {
+      "id": "event_first_kill",
+      "label": "Dexter kills Mike Donovan",
+      "episode_id": "dexter_s01e01",
+      "tier": "major",
+      "participant_ids": ["char_dexter_morgan"],
+      "location_id": null,
+      "visible_from_order": 1
+    },
+    {
+      "id": "event_croc_discovery",
+      "label": "Alligator crime scene discovered",
+      "episode_id": "dexter_s01e02",
+      "tier": "major",
+      "participant_ids": ["char_vince_masuka"],
+      "location_id": "loc_everglades",
+      "visible_from_order": 2
+    }
+  ],
+  "graph": {
+    "series": { "id": "series_dexter", "title": "Dexter", "slug": "dexter" },
+    "visible_until_order": 2,
+    "effective_view_order": 2,
+    "nodes": [
+      { "id": "series_dexter", "type": "Series", "label": "Dexter", "visible_from_order": 1, "origin": "canonical", "episode_id": null, "image_url": null, "image_source_url": null },
+      { "id": "dexter_s01e01", "type": "Episode", "label": "S01E01 — Dexter", "visible_from_order": 1, "origin": "canonical", "episode_id": "dexter_s01e01", "image_url": null, "image_source_url": null },
+      { "id": "dexter_s01e02", "type": "Episode", "label": "S01E02 — Crocodile", "visible_from_order": 2, "origin": "canonical", "episode_id": "dexter_s01e02", "image_url": null, "image_source_url": null },
+      { "id": "char_dexter_morgan", "type": "Character", "label": "Dexter Morgan", "visible_from_order": 1, "origin": "canonical", "episode_id": "dexter_s01e01", "image_url": "https://static.wikia.nocookie.net/dexter/images/example/dexter_morgan.jpg", "image_source_url": "https://dexter.fandom.com/wiki/Dexter_Morgan" },
+      { "id": "char_debra_morgan", "type": "Character", "label": "Debra Morgan", "visible_from_order": 1, "origin": "canonical", "episode_id": "dexter_s01e01", "image_url": null, "image_source_url": null },
+      { "id": "char_james_doakes", "type": "Character", "label": "James Doakes", "visible_from_order": 1, "origin": "canonical", "episode_id": "dexter_s01e01", "image_url": null, "image_source_url": null },
+      { "id": "char_rita_bennett", "type": "Character", "label": "Rita Bennett", "visible_from_order": 1, "origin": "canonical", "episode_id": "dexter_s01e01", "image_url": null, "image_source_url": null },
+      { "id": "char_angel_batista", "type": "Character", "label": "Angel Batista", "visible_from_order": 1, "origin": "canonical", "episode_id": "dexter_s01e01", "image_url": null, "image_source_url": null },
+      { "id": "char_ice_truck_killer", "type": "Character", "label": "The Ice Truck Killer", "visible_from_order": 1, "origin": "canonical", "episode_id": "dexter_s01e01", "image_url": null, "image_source_url": null },
+      { "id": "char_vince_masuka", "type": "Character", "label": "Vince Masuka", "visible_from_order": 2, "origin": "canonical", "episode_id": "dexter_s01e02", "image_url": null, "image_source_url": null },
+      { "id": "char_maria_laguerta", "type": "Character", "label": "Maria LaGuerta", "visible_from_order": 2, "origin": "canonical", "episode_id": "dexter_s01e02", "image_url": null, "image_source_url": null },
+      { "id": "event_first_kill", "type": "Event", "label": "Dexter kills Mike Donovan", "visible_from_order": 1, "origin": "canonical", "episode_id": "dexter_s01e01", "image_url": null, "image_source_url": null },
+      { "id": "event_croc_discovery", "type": "Event", "label": "Alligator crime scene discovered", "visible_from_order": 2, "origin": "canonical", "episode_id": "dexter_s01e02", "image_url": null, "image_source_url": null },
+      { "id": "loc_miami_metro", "type": "Location", "label": "Miami Metro Police Department", "visible_from_order": 1, "origin": "canonical", "episode_id": "dexter_s01e01", "image_url": null, "image_source_url": null },
+      { "id": "loc_dexters_apartment", "type": "Location", "label": "Dexter's Apartment", "visible_from_order": 1, "origin": "canonical", "episode_id": "dexter_s01e01", "image_url": null, "image_source_url": null },
+      { "id": "loc_ritas_house", "type": "Location", "label": "Rita's House", "visible_from_order": 2, "origin": "canonical", "episode_id": "dexter_s01e02", "image_url": null, "image_source_url": null },
+      { "id": "loc_everglades", "type": "Location", "label": "Everglades crime scene", "visible_from_order": 2, "origin": "canonical", "episode_id": "dexter_s01e02", "image_url": null, "image_source_url": null }
+    ],
+    "edges": [
+      { "id": "edge_1", "source": "dexter_s01e01", "target": "series_dexter", "type": "PART_OF", "visible_from_order": 1, "origin": "canonical", "claim_id": null },
+      { "id": "edge_2", "source": "dexter_s01e02", "target": "series_dexter", "type": "PART_OF", "visible_from_order": 2, "origin": "canonical", "claim_id": null },
+      { "id": "edge_3", "source": "dexter_s01e01", "target": "dexter_s01e02", "type": "PRECEDES", "visible_from_order": 2, "origin": "canonical", "claim_id": null },
+      { "id": "edge_4", "source": "char_dexter_morgan", "target": "loc_miami_metro", "type": "OCCURRED_IN", "visible_from_order": 1, "origin": "canonical", "claim_id": "claim_1" },
+      { "id": "edge_5", "source": "char_dexter_morgan", "target": "char_angel_batista", "type": "WORKS_WITH", "visible_from_order": 1, "origin": "canonical", "claim_id": "claim_2" },
+      { "id": "edge_6", "source": "char_dexter_morgan", "target": "char_debra_morgan", "type": "FAMILY_OF", "visible_from_order": 1, "origin": "canonical", "claim_id": "claim_3" },
+      { "id": "edge_7", "source": "char_debra_morgan", "target": "loc_miami_metro", "type": "OCCURRED_IN", "visible_from_order": 1, "origin": "canonical", "claim_id": null },
+      { "id": "edge_8", "source": "char_dexter_morgan", "target": "event_first_kill", "type": "OCCURRED_IN", "visible_from_order": 1, "origin": "canonical", "claim_id": "claim_4" },
+      { "id": "edge_9", "source": "char_dexter_morgan", "target": "char_rita_bennett", "type": "FAMILY_OF", "visible_from_order": 2, "origin": "canonical", "claim_id": "claim_5" },
+      { "id": "edge_10", "source": "char_rita_bennett", "target": "loc_ritas_house", "type": "OCCURRED_IN", "visible_from_order": 2, "origin": "canonical", "claim_id": null },
+      { "id": "edge_11", "source": "char_vince_masuka", "target": "event_croc_discovery", "type": "OCCURRED_IN", "visible_from_order": 2, "origin": "canonical", "claim_id": "claim_6" },
+      { "id": "edge_12", "source": "char_maria_laguerta", "target": "loc_miami_metro", "type": "WORKS_WITH", "visible_from_order": 2, "origin": "canonical", "claim_id": null },
+      { "id": "edge_13", "source": "event_croc_discovery", "target": "loc_everglades", "type": "OCCURRED_IN", "visible_from_order": 2, "origin": "canonical", "claim_id": null },
+      { "id": "user-rel:test-1", "source": "char_dexter_morgan", "target": "char_debra_morgan", "type": "KNOWS", "visible_from_order": 1, "origin": "user", "claim_id": null }
+    ],
+    "claims": [
+      {
+        "id": "claim_1", "label": "Dexter works at Miami Metro", "subject_id": "char_dexter_morgan", "predicate": "works_at",
+        "object_id": "loc_miami_metro", "claim_type": "explicit_fact", "status": "canonical", "confidence_level": "verified",
+        "relationship_effect": 0.8, "visible_from_order": 1, "valid_from_order": 1, "valid_until_order": null,
+        "source_id": "source_1", "evidence_ids": ["evidence_1"], "origin": "canonical"
+      },
+      {
+        "id": "claim_2", "label": "Dexter works with Angel Batista", "subject_id": "char_dexter_morgan", "predicate": "works_with",
+        "object_id": "char_angel_batista", "claim_type": "observed_event", "status": "corroborated", "confidence_level": "high",
+        "relationship_effect": 0.6, "visible_from_order": 1, "valid_from_order": 1, "valid_until_order": null,
+        "source_id": "source_1", "evidence_ids": ["evidence_2"], "origin": "canonical"
+      },
+      {
+        "id": "claim_3", "label": "Debra is Dexter's sister", "subject_id": "char_dexter_morgan", "predicate": "family_of",
+        "object_id": "char_debra_morgan", "claim_type": "explicit_fact", "status": "canonical", "confidence_level": "verified",
+        "relationship_effect": 0.9, "visible_from_order": 1, "valid_from_order": 1, "valid_until_order": null,
+        "source_id": "source_1", "evidence_ids": ["evidence_3"], "origin": "canonical"
+      },
+      {
+        "id": "claim_4", "label": "Dexter may have killed Mike Donovan", "subject_id": "char_dexter_morgan", "predicate": "involved_in",
+        "object_id": "event_first_kill", "claim_type": "inferred_state", "status": "candidate", "confidence_level": "medium",
+        "relationship_effect": 0.4, "visible_from_order": 1, "valid_from_order": 1, "valid_until_order": 1,
+        "source_id": "source_1", "evidence_ids": ["evidence_1"], "origin": "canonical"
+      },
+      {
+        "id": "claim_5", "label": "Dexter is dating Rita Bennett", "subject_id": "char_dexter_morgan", "predicate": "involved_with",
+        "object_id": "char_rita_bennett", "claim_type": "observed_event", "status": "corroborated", "confidence_level": "high",
+        "relationship_effect": 0.7, "visible_from_order": 2, "valid_from_order": 2, "valid_until_order": null,
+        "source_id": "source_2", "evidence_ids": ["evidence_4"], "origin": "canonical"
+      },
+      {
+        "id": "claim_6", "label": "Masuka processes the alligator crime scene", "subject_id": "char_vince_masuka", "predicate": "involved_in",
+        "object_id": "event_croc_discovery", "claim_type": "observed_event", "status": "canonical", "confidence_level": "verified",
+        "relationship_effect": 0.6, "visible_from_order": 2, "valid_from_order": 2, "valid_until_order": null,
+        "source_id": "source_2", "evidence_ids": ["evidence_5"], "origin": "canonical"
+      }
+    ],
+    "sources": [
+      {
+        "id": "source_1", "label": "S01E01 script", "episode_id": "dexter_s01e01", "source_type": "script",
+        "locator": "S01E01 script", "retrieved_at": "2026-01-01T00:00:00Z", "visible_from_order": 1, "origin": "canonical"
+      },
+      {
+        "id": "source_2", "label": "S01E02 script", "episode_id": "dexter_s01e02", "source_type": "script",
+        "locator": "S01E02 script", "retrieved_at": "2026-01-02T00:00:00Z", "visible_from_order": 2, "origin": "canonical"
+      }
+    ],
+    "evidence": [
+      {
+        "id": "evidence_1", "label": "Opening kill scene", "episode_id": "dexter_s01e01", "source_id": "source_1",
+        "text": "Dexter narrates his ritual before the kill.", "locator": "00:03:12", "content_hash": "hash1",
+        "visible_from_order": 1, "origin": "canonical"
+      },
+      {
+        "id": "evidence_2", "label": "Lab scene", "episode_id": "dexter_s01e01", "source_id": "source_1",
+        "text": "Dexter and Angel process evidence together.", "locator": "00:12:34", "content_hash": "hash2",
+        "visible_from_order": 1, "origin": "canonical"
+      },
+      {
+        "id": "evidence_3", "label": "Sibling dinner scene", "episode_id": "dexter_s01e01", "source_id": "source_1",
+        "text": "Dexter has dinner with his sister Debra.", "locator": "00:22:10", "content_hash": "hash3",
+        "visible_from_order": 1, "origin": "canonical"
+      },
+      {
+        "id": "evidence_4", "label": "Rita and Dexter date night", "episode_id": "dexter_s01e02", "source_id": "source_2",
+        "text": "Dexter has dinner at Rita's house.", "locator": "00:18:45", "content_hash": "hash4",
+        "visible_from_order": 2, "origin": "canonical"
+      },
+      {
+        "id": "evidence_5", "label": "Alligator crime scene processing", "episode_id": "dexter_s01e02", "source_id": "source_2",
+        "text": "Masuka processes the alligator carcass in the Everglades.", "locator": "00:09:20", "content_hash": "hash5",
+        "visible_from_order": 2, "origin": "canonical"
+      }
+    ]
+  }
+}
