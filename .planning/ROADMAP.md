@@ -50,7 +50,7 @@ Plans: 07-01 audit + threat model + domain design · 07-02 progress migration + 
 
 - [x] Phase 8: Production Deployment & Automated CI/CD (8 plans) — planned, ready to execute (completed 2026-08-04)
 - [x] Phase 9: Feature Expansion & Full Audit Remediation (TBD plans) — pending planning (completed 2026-08-13)
-- [ ] Phase 10: Polish & Finishing Touches (TBD plans) — pending planning
+- [ ] Phase 10: Polish & Finishing Touches + Narrative Visualization Redesign (TBD plans) — pending planning
 
 #### Phase 8: Production Deployment & Automated CI/CD
 
@@ -131,18 +131,24 @@ Plans:
 
 **UI hint**: yes
 
-#### Phase 10: Polish & Finishing Touches
+#### Phase 10: Polish & Finishing Touches + Narrative Visualization Redesign
 
-**Goal**: Ship v1.3 in a demonstrably solid state — no known regressions, a verified golden path, and docs that describe the shipped product accurately. No new features or architectural changes in this phase.
-**Depends on**: Phase 9 (polishing requires the features and fixes it's polishing to already exist)
-**Requirements**: POLISH-01, POLISH-02, POLISH-03
+**Goal**: Ship v1.3 as a demonstrably solid, spoiler-safe interactive story map: reduced task-specific visual projections and coordinated Story, Characters, Evidence, and Advanced experiences over the complete Neo4j/GraphRAG data, followed by a green regression pass, verified golden-path UAT, and accurate shipped-state docs.
+**Depends on**: Phase 9 (the redesign builds on the completed graph, timeline, GraphRAG, responsive, and audit-remediation foundations)
+**Requirements**: VIZ-01, VIZ-02, VIZ-03, VIZ-04, VIZ-05, VIZ-06, VIZ-07, VIZ-08, VIZ-09, VIZ-10, POLISH-01, POLISH-02, POLISH-03
+**Scope amendment (D-01)**: Phase 10 includes both the original `POLISH-01..03` closeout obligations and the narrative visualization redesign locked in `10-CONTEXT.md`. This explicitly supersedes the earlier “no new features or architectural changes” boundary. Keep Cytoscape.js; preserve complete Neo4j and spoiler-safe GraphRAG detail; filter before projection; do not redesign unrelated auth, settings, chat, Notes, ChangeSet, ingestion, renderer, or ontology systems.
 **Success Criteria** (what must be TRUE):
 
-  1. Backend `pytest`, frontend `vitest`, `npm run lint`, and `npm run build` are all green with zero known failures
-  2. A conversational UAT pass covers the full golden path (login → series/episode select → graph explore → BYOK chat → notes → export → each new feature) with no unresolved regressions found
-  3. `README.md` and root-level docs reflect the shipped v1.3 state — no stale "prototype only, no deployment" language remains
+  1. A library-neutral, spoiler-safe visualization DTO and task-specific endpoints produce bounded Episode Overview, Character Network, plot-thread, investigation, full, and GraphRAG-focus projections only after `effective_view_order = min(requested_view_order, watched_progress)` is enforced; cache keys cannot cross view, boundary, projection version, graph revision, or required user scope.
+  2. The default desktop and mobile hierarchy is Story, Characters, Evidence, Advanced. Story coordinates Episode Overview with its timeline; mobile uses scrollable top tabs and a half/full-height Inspector sheet; raw Neo4j relation names and procedural edges stay out of non-debug views.
+  3. Fixed S01E01 and cumulative S01E02 snapshots select and prove one of two Episode Overview variants, stay within the 12–28 target / 40-node hard bound and 35-edge preference / 60-edge hard bound, and demonstrate that future elements cannot affect counts, layout, hints, search, focus, or restored scenes.
+  4. Semantic expansion is server-allowlisted, spoiler-safe, bounded, collapsible, undoable, and resettable; stable Cytoscape scene state preserves camera, selection, important positions, expansions, and timeline coordination without random global relayout. GraphRAG Answer Graph and Evidence Chain flows restore the prior scene when closed.
+  5. Automated tests cover projection order/bounds/leaks, cache separation, GraphRAG independence/focus, adapter and scene behavior, timeline/Inspector/responsive coordination, Episode switching, Answer Graph, Evidence Chain, and benchmark datasets at 30/50, 75/150, 150/400, and 300/1000 node/edge scales.
+  6. Backend `pytest`, frontend `vitest`, `npm run lint`, and `npm run build` are green; a real golden-path UAT includes the original flow plus Dexter-family, Doakes-distrust, episode events/clues/cases, Overview restoration, GraphRAG visualization, and Episode 2→1 spoiler disappearance; README and root docs match the shipped architecture and behavior.
 
 **Plans**: TBD
+
+**UI hint**: yes
 
 ## Progress
 
