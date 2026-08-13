@@ -230,6 +230,36 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: 'Open chat' })).not.toBeInTheDocument()
   })
 
+  it('visitor detail inspector hides all note-adding and revision-history UI', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await screen.findByText('Spoilerless')
+    await user.click(screen.getByRole('button', { name: 'Continue as visitor' }))
+
+    // Visitor badge replaces the account block…
+    await waitFor(() => {
+      expect(screen.getByText('Visitor')).toBeInTheDocument()
+    })
+
+    // Visitor entry seeds the first series at order 1 silently, so the graph
+    // renders and the canvas stub exposes a clickable button per node.
+    const nodeButton = await screen.findByTestId('graph-element-char_dexter_morgan')
+    await user.click(nodeButton)
+    await screen.findByRole('heading', { name: 'Dexter Morgan' })
+
+    // The inspector stays browsable — no note-adding affordance (tab,
+    // button, editor) and no revision history surface (tab, panel) exists.
+    // Same assertion set as DetailPanel.test.tsx readOnly suite.
+    expect(screen.queryByRole('tab', { name: 'Notes' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add note' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Create relationship' })).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Claims' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Evidence' })).toBeInTheDocument()
+  })
+
   it('visitor navigating ABOVE the current boundary gets the spoiler warning modal (08-12 regression)', async () => {
     const user = userEvent.setup()
     render(<App />)
