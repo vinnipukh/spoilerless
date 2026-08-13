@@ -42,12 +42,16 @@ export type ExpansionRecord = {
 }
 
 // Snapshot taken when a temporary scene (Answer Graph) opens, so closing it
-// restores camera, selection, expansions, and timeline state (D-27).
+// restores camera, selection, expansions, timeline, filters, and the active
+// view EXACTLY (D-27/D-41).
 export type TemporarySnapshot = {
   camera: SceneCamera | null
   selection: SceneSelection
   expansions: string[]
   timelineSelection: string[] | null
+  nodeKindFilters: Record<string, boolean>
+  edgeClassFilters: Record<string, boolean>
+  activeView: VisualizationViewType
 }
 
 export type SceneTemporary = {
@@ -127,6 +131,9 @@ function takeSnapshot(state: SceneState): TemporarySnapshot {
     selection: state.selection,
     expansions: [...state.expansions],
     timelineSelection: state.timelineSelection,
+    nodeKindFilters: { ...state.nodeKindFilters },
+    edgeClassFilters: { ...state.edgeClassFilters },
+    activeView: state.activeView,
   }
 }
 
@@ -277,7 +284,8 @@ export function sceneReducer(state: SceneState, action: SceneAction): SceneState
     case 'CLOSE_TEMPORARY': {
       if (!state.temporary) return state
       // Restore the snapshot captured when the temporary scene opened
-      // (D-27): camera, selection, expansions, timeline state.
+      // (D-27/D-41): camera, selection, expansions, timeline, filters, and
+      // the active view — the exact scene state, never derived data.
       const { snapshot } = state.temporary
       return {
         ...state,
@@ -286,6 +294,9 @@ export function sceneReducer(state: SceneState, action: SceneAction): SceneState
         selection: snapshot.selection,
         expansions: [...snapshot.expansions],
         timelineSelection: snapshot.timelineSelection,
+        nodeKindFilters: { ...snapshot.nodeKindFilters },
+        edgeClassFilters: { ...snapshot.edgeClassFilters },
+        activeView: snapshot.activeView,
       }
     }
 

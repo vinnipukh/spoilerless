@@ -755,18 +755,28 @@ describe('App', () => {
       expect(screen.getByRole('tab', { name: 'Debug' })).toBeInTheDocument()
     })
 
-    it('Answer Graph nested mode renders the temporary-focus notice copy (UI-SPEC)', async () => {
+    it('Answer Graph nested mode renders the temporary-focus surface (UI-SPEC)', async () => {
       const user = userEvent.setup()
       await renderGraphWorkspace()
 
       await user.click(screen.getByRole('tab', { name: 'Evidence' }))
       await user.click(screen.getByRole('tab', { name: 'Answer Graph' }))
+
+      // 10-07: the real AnswerGraph surface — empty focus shows the safe
+      // empty copy, never a hidden total or an internal error.
       expect(
-        await screen.findByText('Temporary focus from this answer. Close to restore your scene.'),
+        await screen.findByText('No focus resources are visible at the current boundary.'),
       ).toBeInTheDocument()
-      // Both the top-level Evidence tab and the nested Answer Graph mode tab
-      // are labeled "Answer Graph"-adjacent; assert the selected nested tab.
-      expect(screen.getByRole('tab', { name: 'Answer Graph', selected: true })).toBeInTheDocument()
+
+      // Closing restores the Evidence tab's default Investigation mode.
+      await user.click(screen.getByRole('button', { name: 'Close Answer Graph' }))
+      expect(screen.getByRole('tab', { name: 'Investigation' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      )
+      expect(
+        screen.queryByText('No focus resources are visible at the current boundary.'),
+      ).not.toBeInTheDocument()
     })
 
     it('graph, timeline, and Inspector selections converge on one shared selection without layout calls', async () => {

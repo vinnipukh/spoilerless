@@ -28,6 +28,9 @@ import { useGraph } from './hooks/useGraph'
 import { useNotes } from './hooks/useNotes'
 import { useWatchProgress } from './hooks/useWatchProgress'
 import { useHotkey } from './hooks/useHotkey'
+import { useSceneState } from './hooks/useSceneState'
+import { AnswerGraph } from './components/graph/AnswerGraph'
+import { EvidenceChain } from './components/evidence/EvidenceChain'
 import type { CustomRelationshipResponse } from './types/userContent'
 import type { Citation } from './types/chat'
 import type { ChangeSet } from './types/changeSet'
@@ -215,6 +218,25 @@ function AuthenticatedApp() {
   // independent of `selectedElement`/`panelMode` — highlighting never selects
   // a node/edge or switches panel content on its own.
   const [graphFocus, setGraphFocus] = useState<FocusedElementIds | null>(null)
+  // 10-07 (D-27/D-41): the serializable scene state owns the temporary
+  // Answer Graph lifecycle — OPEN_TEMPORARY snapshots the exact scene,
+  // CLOSE_TEMPORARY restores it.
+  const [scene, dispatchScene] = useSceneState()
+
+  useEffect(() => {
+    if (evidenceMode === 'answer_graph') {
+      dispatchScene({
+        type: 'OPEN_TEMPORARY',
+        kind: 'answer_graph',
+        nodeIds: graphFocus?.nodeIds ?? [],
+      })
+    }
+  }, [evidenceMode, graphFocus, dispatchScene])
+
+  function handleCloseAnswerGraph() {
+    dispatchScene({ type: 'CLOSE_TEMPORARY' })
+    setEvidenceMode('investigation')
+  }
 
   function handleClearFocus() {
     setGraphFocus(null)
@@ -575,17 +597,29 @@ function AuthenticatedApp() {
                 </TabsList>
               </Tabs>
               {evidenceMode === 'evidence_chain' && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Evidence Chain — a layered Claim → Evidence → Source path.
-                </p>
+                graphState.status === 'success' ? (
+                  <div className="mt-2">
+                    <EvidenceChain
+                      graph={graphState.data}
+                      focusIds={[]}
+                      onShowInGraph={(id) =>
+                        handleJumpToNode({ id, label: id, nodeType: 'Claim' })
+                      }
+                    />
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Evidence Chain — a layered Claim → Evidence → Source path.
+                  </p>
+                )
               )}
               {evidenceMode === 'answer_graph' && (
-                <p className="mt-1 text-xs">
-                  <span className="font-medium text-foreground">Answer Graph</span>{' '}
-                  <span className="text-muted-foreground">
-                    Temporary focus from this answer. Close to restore your scene.
-                  </span>
-                </p>
+                <div className="mt-2">
+                  <AnswerGraph
+                    nodeIds={scene.temporary?.nodeIds ?? []}
+                    onClose={handleCloseAnswerGraph}
+                  />
+                </div>
               )}
             </TabsContent>
             <TabsContent value="advanced" className="shrink-0 border-b border-border px-3 py-1">

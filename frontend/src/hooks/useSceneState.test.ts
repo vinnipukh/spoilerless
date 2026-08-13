@@ -188,6 +188,8 @@ describe('useSceneState', () => {
     act(() => result.current[1]({ type: 'SELECT', selection: { kind: 'node', id: 'char_dexter_morgan' } }))
     act(() => result.current[1]({ type: 'ADD_EXPANSION', nodeIds: ['char_rita_bennett'] }))
     act(() => result.current[1]({ type: 'SET_TIMELINE_SELECTION', nodeIds: ['event_first_kill'] }))
+    act(() => result.current[1]({ type: 'SET_VIEW', view: 'investigation' }))
+    act(() => result.current[1]({ type: 'SET_NODE_KIND_FILTER', kind: 'Character', visible: false }))
 
     act(() => result.current[1]({ type: 'OPEN_TEMPORARY', kind: 'answer_graph', nodeIds: ['char_ice_truck_killer'] }))
     expect(result.current[0].temporary?.kind).toBe('answer_graph')
@@ -198,8 +200,11 @@ describe('useSceneState', () => {
     act(() => result.current[1]({ type: 'SELECT', selection: null }))
     act(() => result.current[1]({ type: 'CLEAR_EXPANSIONS' }))
     act(() => result.current[1]({ type: 'SET_TIMELINE_SELECTION', nodeIds: null }))
+    act(() => result.current[1]({ type: 'SET_VIEW', view: 'full' }))
+    act(() => result.current[1]({ type: 'SET_ALL_FILTERS', visible: true }))
 
-    // ...and CLOSE_TEMPORARY restores the pre-Answer-Graph scene.
+    // ...and CLOSE_TEMPORARY restores the pre-Answer-Graph scene — camera,
+    // selection, expansions, timeline, filters, AND the active view (D-41).
     act(() => result.current[1]({ type: 'CLOSE_TEMPORARY' }))
     const state = result.current[0]
     expect(state.temporary).toBeNull()
@@ -207,6 +212,8 @@ describe('useSceneState', () => {
     expect(state.selection).toEqual({ kind: 'node', id: 'char_dexter_morgan' })
     expect(state.expansions).toEqual(['char_rita_bennett'])
     expect(state.timelineSelection).toEqual(['event_first_kill'])
+    expect(state.activeView).toBe('investigation')
+    expect(state.nodeKindFilters).toEqual({ Character: false })
   })
 
   it('OPEN_TEMPORARY refuses unsafe node ids (restoration can never leak hidden state)', () => {
