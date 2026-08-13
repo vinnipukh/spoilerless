@@ -1192,3 +1192,34 @@ Verification: focused GraphCanvas suite **25/25**, ESLint clean, production
 TypeScript/Vite build clean (existing chunk-size warning only), `git diff
 --check` clean, and live Chrome cold-open confirmed by the product owner
 without pressing Refresh graph.
+
+## NINETEENTH PASS — Phase 10 regression gate: guarded ephemeral-container runner retires the seven-red baseline (2026-08-13)
+
+### Baseline retirement — 584-pass/7-red → zero known failures — RESOLVED (not whitelisted)
+The documented seven-red state was honestly retired during the Phase 10
+regression gate (plan 10-09). Root causes, each verified before the baseline
+was declared green:
+
+1. **3 doc-contract reds** (frontend-api-contract inventory) — already fixed
+   by the 10-03/10-06 OpenAPI inventory updates (52 operations / 39 templates);
+   the stale expectations were the reds, not the runtime.
+2. **2 seed-image reds** (episode-safe portrait policy) — fixed by the 08-12
+   self-hosted portrait restore: `data/dexter/seed/characters.json` carries 6
+   order-1 `/api/static/characters/*.webp` portraits and 0 above-order-1
+   image URLs (verified directly against the seed file).
+3. **2 constraint-name reds** — engine-tolerant naming on
+   `neo4j:2026.06.0-community`; green on the guarded runner's own ephemeral
+   container. No assertion weakened.
+
+The full suite now runs exclusively through
+`scripts/run_phase10_backend_tests.py` — a fail-closed runner that provisions
+a uniquely-named ephemeral 2026.06.0-community container (random password,
+random loopback ports, no volume mounts), refuses ambient `NEO4J_*`/`aura_*`
+overrides, remote/Aura URIs, the developer containers (`spoilerless-neo4j`,
+`hdgraf-neo4j`) and any pre-existing container/volume with its name, proves
+the effective `Settings` + empty target before testing, and always tears down
+container + volumes (verified absence). 18 mock-driven guard tests cover the
+fail-closed paths without a daemon. `scripts/run_backend_tests.py` CHUNKS now
+carry every `test_*.py` exactly once, asserted against the directory at
+startup. Focused gate evidence: 179 backend tests (8 files) + 40 frontend
+tests green on the ephemeral target; teardown proof recorded.
