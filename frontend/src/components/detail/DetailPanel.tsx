@@ -860,6 +860,7 @@ export function DetailPanel({
                     saving={saving}
                   />
                 ) : (
+                  !readOnly && (
                   <button
                     type="button"
                     className="inline-flex items-center justify-center gap-1.5 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors min-h-[44px]"
@@ -871,6 +872,7 @@ export function DetailPanel({
                     </svg>
                     Add Note
                   </button>
+                  )
                 )}
 
                 {/* Loading state */}
@@ -911,6 +913,7 @@ export function DetailPanel({
                           note={note}
                           onEdit={(n) => setEditingNote(n)}
                           onDelete={handleDeleteNote}
+                          readOnly={readOnly}
                         />
                       )
                     ))}

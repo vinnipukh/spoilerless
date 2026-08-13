@@ -586,6 +586,7 @@ function AuthenticatedApp() {
               onRelationshipCreated={handleRelationshipCreated}
               episodes={episodes}
               open={selectedElement !== null}
+              readOnly={isVisitor}
               onDeselect={() => setSelectedElement(null)}
               onSelectNode={(nodeId) => {
                 // PROB-09/#75: BacklinksTab "Open" must jump to the node via
