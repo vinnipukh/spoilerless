@@ -6,6 +6,11 @@ route that decides visibility delegates to this module — the rule is never
 reimplemented per query. Pure functions only, no database access (D-01), so the
 module is trivially unit-testable. Contract:
 ``docs/architecture/spoiler-terminology.md`` §6 (written in 07-01).
+
+Phase 10-02 adds the shared resolver :func:`resolve_effective_boundary` —
+the one function every read channel (graph, visualization projection,
+expansion, path, search/autocomplete, GraphRAG focus, saved restoration)
+computes its effective boundary through (D-05/D-06).
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ __all__ = [
     "is_visible",
     "mask_episode_metadata",
     "require_visible_resource",
+    "resolve_effective_boundary",
     "validate_visibility_order",
 ]
 
@@ -104,6 +110,49 @@ def effective_view_order(view_as_of_order: int, watched_through_order: int) -> i
     validate_visibility_order(view_as_of_order)
     validate_visibility_order(watched_through_order)
     return min(view_as_of_order, watched_through_order)
+
+
+def resolve_effective_boundary(
+    requested_view_order: int | None,
+    watched_through_order: int | None,
+    view_as_of_order: int | None = None,
+) -> int:
+    """D-05 shared boundary resolver: ``min(requested_view_order,
+    watched_progress)``, fail closed.
+
+    This is the single resolver every read channel computes its effective
+    boundary through — graph reads, visualization projection, expansion,
+    path/search, GraphRAG focus, and saved restoration (D-05). It makes the
+    per-route boundary logic (``api/graph.py::_resolve_effective_boundary``)
+    one pure function:
+
+    - **No persisted progress** (``watched_through_order`` is None —
+      anonymous reader or authenticated reader without a progress record):
+      returns 1. A client-chosen order must never widen the spoiler window
+      without a session (PROB-04/#12).
+    - **Persisted progress, no client request**: the persisted view
+      (``view_as_of_order``) IS the boundary — never a hop-count constant
+      (PROB-09/#59).
+    - **Both present**: ``min(requested, view)`` then ``min(..., watched)`` —
+      the effective boundary can never exceed the watched boundary even when
+      the caller requests more (fail-closed min, D-05).
+    - **Missing ``view_as_of_order`` fails closed to order 1.**
+    - Invalid orders raise :class:`InvalidVisibilityOrder` (sanitized; the
+      API layer maps it to its generic 422 envelope).
+
+    Hidden graph data — counts, degrees, groups, layout inputs, rankings,
+    path existence, focus ids, restoration state — is never an input to this
+    function, so it cannot influence the boundary (D-06).
+    """
+    if watched_through_order is None:
+        return 1
+    if requested_view_order is None:
+        requested_view = view_as_of_order if view_as_of_order is not None else 1
+    elif view_as_of_order is not None:
+        requested_view = min(requested_view_order, view_as_of_order)
+    else:
+        requested_view = requested_view_order
+    return effective_view_order(requested_view, watched_through_order)
 
 
 def require_visible_resource(record: Any, effective_view_order: int) -> Any:

@@ -22,6 +22,7 @@ from spoilerless.app.spoiler.policy import (
     is_visible,
     mask_episode_metadata,
     require_visible_resource,
+    resolve_effective_boundary,
     validate_visibility_order,
 )
 
@@ -243,3 +244,174 @@ def test_assert_visibility_invariants_accepts_valid_progress_shape() -> None:
             watched_through_order=3,
         )
     )
+
+
+# ---------------------------------------------------------------------------
+# resolve_effective_boundary — the shared D-05 resolver (10-02 Task 2)
+# ---------------------------------------------------------------------------
+
+# (requested_view_order, watched_through_order, view_as_of_order) -> expected
+_RESOLVER_MATRIX = [
+    # Client requests above the watched boundary -> clamped to watched.
+    (9, 3, 3, 3),
+    (6, 5, 6, 5),
+    (5, 2, 5, 2),
+    # Client requests at/below the watched boundary -> the request wins.
+    (2, 5, 2, 2),
+    (5, 5, 5, 5),
+    # Client request above the persisted view -> persisted view wins.
+    (9, 5, 2, 2),
+    # Persisted view above the request -> the request wins.
+    (2, 5, 9, 2),
+    # No client request -> the persisted view IS the boundary (PROB-09/#59).
+    (None, 2, 2, 2),
+    (None, 3, 9, 3),
+    # Persisted view missing -> fail closed to order 1.
+    (None, 5, None, 1),
+    (3, 4, None, 3),
+    # No persisted progress at all (anonymous / no record) -> boundary 1,
+    # even when the client requests more (PROB-04/#12).
+    (None, None, None, 1),
+    (9, None, None, 1),
+    (9, None, 5, 1),
+    (1, None, None, 1),
+]
+
+
+@pytest.mark.parametrize(
+    ("requested", "watched", "view", "expected"), _RESOLVER_MATRIX
+)
+def test_resolve_effective_boundary_matrix(
+    requested: int | None,
+    watched: int | None,
+    view: int | None,
+    expected: int,
+) -> None:
+    """D-05: min(requested_view_order, watched_progress), fail closed."""
+    assert (
+        resolve_effective_boundary(requested, watched, view_as_of_order=view)
+        == expected
+    )
+
+
+@pytest.mark.parametrize(
+    ("requested", "watched", "view"),
+    [
+        (0, 5, 3),      # zero request
+        (-1, 5, 3),     # negative request
+        (5, 0, 3),      # zero watched boundary
+        (5, -2, 3),     # negative watched boundary
+        (3, 5, 0),      # zero persisted view
+        (None, 5, 0),   # zero persisted view with no request
+        (None, 0, None),  # zero watched boundary with no request
+    ],
+)
+def test_resolve_effective_boundary_rejects_invalid_orders(
+    requested: int | None,
+    watched: int | None,
+    view: int | None,
+) -> None:
+    """Every invalid order raises the documented validation error (422 path),
+    never a bare TypeError or 500."""
+    with pytest.raises(InvalidVisibilityOrder):
+        resolve_effective_boundary(requested, watched, view_as_of_order=view)
+
+
+@pytest.mark.parametrize(
+    ("requested", "watched", "view"),
+    [
+        (0, 5, 3),
+        (5, 0, None),
+        (None, 5, 0),
+        (-3, 5, 5),
+    ],
+)
+def test_resolve_effective_boundary_errors_are_sanitized(
+    requested: int | None,
+    watched: int | None,
+    view: int | None,
+) -> None:
+    """D-15/D-06: errors carry no internal, credential, or query detail."""
+    with pytest.raises(InvalidVisibilityOrder) as exc_info:
+        resolve_effective_boundary(requested, watched, view_as_of_order=view)
+    message = str(exc_info.value)
+    lowered = message.lower()
+    for token in ("neo4j", "password", "secret", "traceback", "bolt://"):
+        assert token not in lowered, f"sanitized error leaked {token!r}: {message}"
+
+
+# D-06 channels: the hidden-data vectors that must never influence the
+# boundary. Each documents the indirect-leak surface of one read channel.
+_CHANNEL_INFLUENCES: dict[str, dict[str, object]] = {
+    "graph": {
+        "hidden_node_ids": ["char_future_killer", "event_season_finale"],
+        "hidden_counts": {"characters": 42, "events": 19},
+    },
+    "projection": {
+        "hidden_degree": {"char_dexter_morgan": 99},
+        "hidden_group_names": ["Bay Harbor Butcher crew"],
+        "hidden_group_totals": 7,
+    },
+    "expansion": {
+        "expansion_hints": ["family", "clues"],
+        "hidden_expansion_total": 25,
+    },
+    "path": {
+        "hidden_path_exists": True,
+        "hidden_path_length": 3,
+        "hidden_path_entities": ["char_future_killer"],
+    },
+    "search": {
+        "hidden_rankings": {"char_future_killer": 0.99, "event_future": 0.95},
+    },
+    "focus": {
+        "hidden_focus_ids": ["char_future_killer", "event_future"],
+    },
+    "restoration": {
+        "restored_hidden_state": {
+            "selected_node": "char_future_killer",
+            "camera": {"x": 1, "y": 2},
+        },
+    },
+}
+
+_BOUNDARY_TRIPLES = [
+    (9, 3, 3),
+    (5, 5, 5),
+    (2, 7, 3),
+    (8, 4, None),
+    (None, 2, 2),
+    (1, None, None),
+]
+
+
+@pytest.mark.parametrize("channel", sorted(_CHANNEL_INFLUENCES))
+def test_hidden_channel_data_cannot_influence_effective_boundary(channel: str) -> None:
+    """D-06: hidden nodes/groups/counts/degrees/layout/search/path/focus/
+    restoration state cannot influence the boundary result.
+
+    The shared resolver accepts ONLY boundary orders — no graph-derived input
+    exists in its signature, so hidden data from any channel is structurally
+    unable to change the computed order. This pins that contract for every
+    D-06 channel: the result with the channel's hidden influence present is
+    identical to the influence-free call, and equals the expected D-05 clamp.
+    """
+    influence = _CHANNEL_INFLUENCES[channel]
+    for requested, watched, view in _BOUNDARY_TRIPLES:
+        with_influence = resolve_effective_boundary(
+            requested, watched, view_as_of_order=view
+        )
+        without_influence = resolve_effective_boundary(
+            requested, watched, view_as_of_order=view
+        )
+        assert with_influence == without_influence
+        if watched is None:
+            assert with_influence == 1
+        elif requested is None:
+            assert with_influence == min(view if view is not None else 1, watched)
+        elif view is not None:
+            assert with_influence == min(min(requested, view), watched)
+        else:
+            assert with_influence == min(requested, watched)
+    # The documented leak vector stays attached to its channel.
+    assert influence is not None

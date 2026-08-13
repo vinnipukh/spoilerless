@@ -656,3 +656,155 @@ def test_effective_boundary_above_served_order_is_refused() -> None:
     graph.effective_view_order = 2
     with pytest.raises(InvalidVisibilityOrder, match="exceeds the served boundary"):
         service.project_episode_overview(graph, events)
+
+
+# ---------------------------------------------------------------------------
+# Task 2 — boundary-before-projection via the shared resolver (D-05/D-06)
+# ---------------------------------------------------------------------------
+
+
+def test_service_resolve_boundary_clamps_requested_to_watched() -> None:
+    """The projection read path computes min(requested, watched) through the
+    shared resolver (policy.resolve_effective_boundary), fail closed."""
+    assert service.resolve_boundary(9, 3, view_as_of_order=3) == 3
+    assert service.resolve_boundary(2, 5, view_as_of_order=2) == 2
+    assert service.resolve_boundary(None, 5, view_as_of_order=5) == 5
+    assert service.resolve_boundary(None, None, view_as_of_order=None) == 1
+    assert service.resolve_boundary(9, None, view_as_of_order=None) == 1
+    with pytest.raises(InvalidVisibilityOrder):
+        service.resolve_boundary(0, 5, view_as_of_order=3)
+
+
+def test_clamped_request_projects_safe_dto_metadata() -> None:
+    """End-to-end boundary->projection: an unsafe requested order is clamped
+    upstream (resolver), and the DTO carries the clamped effective order with
+    no row above it — hidden data has no observable effect."""
+    # Requested S01E09 while the reader has watched through S01E02: the
+    # resolver clamps to 2, and the served response (as fetch_graph would
+    # build it) carries effective 2.
+    assert service.resolve_boundary(9, 2, view_as_of_order=2) == 2
+
+    graph, events = _load_fixture("s01e02_cumulative_safe.json")
+    dto = service.project_episode_overview(graph, events)
+    assert dto.metadata.effective_view_order == 2
+    assert dto.metadata.visible_until_order == 2
+    for node in dto.nodes:
+        assert node.order <= dto.metadata.effective_view_order
+    for item in dto.timeline:
+        assert item.order <= dto.metadata.effective_view_order
+
+
+def test_hidden_node_rejected_before_projection() -> None:
+    """T10-LEAK-02: a hidden node above the effective boundary is refused —
+    it can never influence DTO shape, counts, or topology."""
+    graph, events = _load_fixture("s01e01_safe.json")
+    graph.nodes.append(
+        GraphNode(
+            id="char_future_killer",
+            type="Character",
+            label="A future character",
+            visible_from_order=9,
+            origin="canonical",
+        )
+    )
+    with pytest.raises(InvalidVisibilityOrder, match="Hidden row"):
+        service.project_episode_overview(graph, events)
+
+
+def test_hidden_edge_rejected_before_projection() -> None:
+    """A hidden edge is refused — hidden topology cannot influence the DTO."""
+    graph, events = _load_fixture("s01e01_safe.json")
+    graph.edges.append(
+        GraphEdge(
+            id="edge_future",
+            source="char_dexter_morgan",
+            target="char_debra_morgan",
+            type="FAMILY_OF",
+            visible_from_order=9,
+            origin="canonical",
+        )
+    )
+    with pytest.raises(InvalidVisibilityOrder, match="Hidden row"):
+        service.project_episode_overview(graph, events)
+
+
+def test_hidden_event_metadata_rejected() -> None:
+    """Events above the boundary are refused — hidden events cannot shape
+    the timeline or group membership."""
+    graph, events = _load_fixture("s01e01_safe.json")
+    events = [
+        *events,
+        SafeEventContext(
+            id="event_future",
+            label="Season finale twist",
+            episode_id="dexter_s01e01",
+            tier="major",
+            participant_ids=["char_future_killer"],
+            location_id=None,
+            visible_from_order=9,
+        ),
+    ]
+    with pytest.raises(InvalidVisibilityOrder, match="not visible at boundary"):
+        service.project_episode_overview(graph, events)
+
+
+def test_missing_event_visibility_fails_closed() -> None:
+    """D-03: an event with no visibility order is HIDDEN — never defaulted
+    visible — and the projection refuses it."""
+    graph, events = _load_fixture("s01e01_safe.json")
+    events = [
+        *events,
+        SafeEventContext(
+            id="event_no_order",
+            label="An event without a reveal point",
+            episode_id="dexter_s01e01",
+            tier="major",
+            participant_ids=[],
+            location_id=None,
+            visible_from_order=None,
+        ),
+    ]
+    with pytest.raises(InvalidVisibilityOrder, match="no visibility order"):
+        service.project_episode_overview(graph, events)
+
+
+def test_hidden_participants_and_location_cannot_influence_timeline() -> None:
+    """D-06: participants/locations outside the safe node set are dropped —
+    hidden names and places have no observable effect on the timeline."""
+    graph, events = _load_fixture("s01e02_cumulative_safe.json")
+    poisoned = [
+        SafeEventContext(
+            id=event.id,
+            label=event.label,
+            episode_id=event.episode_id,
+            tier=event.tier,
+            # Hidden participant appended to every event; hidden location only
+            # where no valid location exists (a valid one is preserved).
+            participant_ids=[*event.participant_ids, "char_future_killer"],
+            location_id=event.location_id or "loc_future_warehouse",
+            visible_from_order=event.visible_from_order,
+        )
+        for event in events
+    ]
+    clean_dto = service.project_episode_overview(graph, events)
+    poisoned_dto = service.project_episode_overview(graph, poisoned)
+    assert poisoned_dto.model_dump(mode="json") == clean_dto.model_dump(mode="json")
+    for item in poisoned_dto.timeline:
+        assert "char_future_killer" not in item.participant_ids
+        assert item.location_id != "loc_future_warehouse"
+    # The valid location still resolves on the timeline.
+    croc = next(item for item in poisoned_dto.timeline if item.id == "event_croc_discovery")
+    assert croc.location_id == "loc_everglades"
+
+
+def test_hidden_claim_reference_cannot_leak() -> None:
+    """Evidence refs stay bounded: a DTO edge may only reference claims that
+    exist in the safe payload — no hidden source detail rides along."""
+    graph, events = _load_fixture("s01e01_safe.json")
+    dto = service.project_episode_overview(graph, events)
+    claim_ids = {claim.id for claim in graph.claims}
+    for edge in dto.edges:
+        assert edge.claim_id is None or edge.claim_id in claim_ids
+    # The projection never synthesizes claim refs for edges that have none.
+    assert dto.edges[0].id == "edge_1"
+    assert dto.edges[0].claim_id is None

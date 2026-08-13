@@ -36,6 +36,7 @@ from spoilerless.app.domain.visualization import (
 from spoilerless.app.spoiler.policy import (
     InvalidVisibilityOrder,
     is_visible,
+    resolve_effective_boundary,
     validate_visibility_order,
 )
 
@@ -93,6 +94,25 @@ _EVENT_TIER_DISPLAY_TIER = {
 class VisualizationProjectionService:
     """Produces library-neutral visualization DTOs over safe graph detail."""
 
+    def resolve_boundary(
+        self,
+        requested_view_order: int | None,
+        watched_through_order: int | None,
+        view_as_of_order: int | None = None,
+    ) -> int:
+        """Shared D-05 resolver (``policy.resolve_effective_boundary``).
+
+        Every projection read path — graph, projection, expansion-ready
+        contracts, path/search/focus/restoration inputs — computes
+        ``min(requested_view_order, watched_progress)`` through this one
+        function and fails closed when progress is absent (boundary 1).
+        """
+        return resolve_effective_boundary(
+            requested_view_order,
+            watched_through_order,
+            view_as_of_order=view_as_of_order,
+        )
+
     def project_episode_overview(
         self,
         graph: GraphResponse,
@@ -116,12 +136,12 @@ class VisualizationProjectionService:
         validate_visibility_order(served)
         validate_visibility_order(effective)
 
-        # D-05 boundary-before-projection: the effective boundary is
-        # min(requested, watched) — it can never exceed the served/requested
-        # order. A response whose effective boundary is above its served
-        # boundary violates the resolver contract and is refused before any
-        # row is projected.
-        if effective > served:
+        # D-05 resolver-before-projection: the effective boundary is
+        # min(requested, watched) via the shared resolver — it can never
+        # exceed the served/requested order. A response whose effective
+        # boundary is above its served boundary violates the resolver
+        # contract and is refused before any row is projected.
+        if effective > self.resolve_boundary(served, served, view_as_of_order=served):
             raise InvalidVisibilityOrder(
                 f"Effective view order {effective} exceeds the served boundary "
                 f"{served}; refusing to project (D-05 min rule)."
