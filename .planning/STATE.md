@@ -6,7 +6,7 @@ current_phase: 10
 current_phase_name: Polish & Finishing Touches
 status: planning
 stopped_at: Phase 9 context gathered
-last_updated: "2026-08-13T08:30:33.592Z"
+last_updated: "2026-08-13T08:36:26.582Z"
 last_activity: 2026-08-13
 last_activity_desc: Phase 09 complete, transitioned to Phase 10
 progress:
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-08-04)
 Phase: 10 — Polish & Finishing Touches
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-08-13 — Phase 09 complete, transitioned to Phase 10
+Last activity: 2026-08-13 — Completed quick task 260813-ftl: hide note-adding UI + revision history from visitor mode
 
 Progress: [███░░░░░░░] 33% (v1.3, 1/3 phases); 7 phases complete across v1.0–v1.2
 
@@ -90,6 +90,7 @@ None yet.
 | 260810-ep1box | Episode-band cluster box is a non-interactive dashed outline — transparent fill (dot-grid shows through), dashed border, events:no (cluster taps no longer open a bogus DetailPanel) | 2026-08-10 | c77874d | — |
 | 260811-prob09 | PROBLEMS.md NINTH-PASS fixes: #58 pipeline ProgressService imports; #59 path-route boundary resolves from persisted progress (never MAX_PATH_HOPS); #75 BacklinksTab jump-to-node + fresh hover card; #76 onRefreshGraph to GraphCanvas (non-destructive custom-node refresh); #80 dead-code sweep (10 items; 3 of the finding's claims verified FALSE at HEAD) | 2026-08-11 | 3d6dc33 | — |
 | 260812-gra | Refresh graph automatically on website open: run the same forced Cytoscape layout and fit used by Refresh graph when the live canvas instance is created | 2026-08-12 | f968788 | [260812-gra-refresh-graph-on-open](./quick/260812-gra-refresh-graph-on-open/) |
+| 260813-ftl | Hide note-adding UI (Add Note / NoteEditor / NoteItem edit-delete) and revision History tab from visitor (misafir) mode; readOnly threaded into DetailPanel from App.tsx | 2026-08-13 | ed24814 | [260813-ftl-hide-note-adding-ui-buttons-and-revision](./quick/260813-ftl-hide-note-adding-ui-buttons-and-revision/) |
 
 ## Deferred Items
 
