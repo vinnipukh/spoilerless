@@ -51,7 +51,7 @@ stack components (no second graph DB, no JWT auth, no frontend rewrite).
 ### Documentation (DOCS)
 
 - [x] **DOCS-03**: `docs/DEPLOYMENT.md` is rewritten to describe the actual production target (Vercel/Render/Aura/Upstash) replacing its current "no production deployment target defined" statement, including a real rollback procedure for the hosted environment.
-- [ ] **DOCS-04**: `docs/API.md`, `docs/ARCHITECTURE.md`, and `docs/ROADMAP.md` are corrected to match live behavior (route counts, ChangeSet chat capability, "known gaps" that already shipped, and no longer deferring auth/CSRF/roles as unstarted). Resolves `docs/PROBLEMS.md` #21, #22, #23, #24.
+- [x] **DOCS-04**: `docs/API.md`, `docs/ARCHITECTURE.md`, and `docs/ROADMAP.md` are corrected to match live behavior (route counts, ChangeSet chat capability, "known gaps" that already shipped, and no longer deferring auth/CSRF/roles as unstarted). Resolves `docs/PROBLEMS.md` #21, #22, #23, #24.
 
 ## Problem Remediation — `docs/PROBLEMS.md` audit (PROB)
 

@@ -49,7 +49,7 @@ Plans: 07-01 audit + threat model + domain design · 07-02 progress migration + 
 **Milestone Goal:** Move HD Graf Cehennemi from a local-only prototype to a real, zero-cost hosted deployment (Vercel + Render + Neo4j AuraDB Free + Upstash Redis) with automated CI/CD, every finding in `docs/PROBLEMS.md`'s 45-item audit resolved, 10 new features, and a final polish pass.
 
 - [x] Phase 8: Production Deployment & Automated CI/CD (8 plans) — planned, ready to execute (completed 2026-08-04)
-- [ ] Phase 9: Feature Expansion & Full Audit Remediation (TBD plans) — pending planning
+- [x] Phase 9: Feature Expansion & Full Audit Remediation (TBD plans) — pending planning (completed 2026-08-13)
 - [ ] Phase 10: Polish & Finishing Touches (TBD plans) — pending planning
 
 #### Phase 8: Production Deployment & Automated CI/CD
@@ -109,14 +109,14 @@ Plans:
 - [x] 09-08-PLAN.md
 - [x] 09-09-PLAN.md
 - [x] 09-10-PLAN.md
-- [ ] 09-11-PLAN.md
-- [ ] 09-12-PLAN.md
-- [ ] 09-13-PLAN.md
-- [ ] 09-14-PLAN.md
-- [ ] 09-15-PLAN.md
-- [ ] 09-16-PLAN.md
-- [ ] 09-17-PLAN.md
-- [ ] 09-18-PLAN.md
+- [x] 09-11-PLAN.md
+- [x] 09-12-PLAN.md
+- [x] 09-13-PLAN.md
+- [x] 09-14-PLAN.md
+- [x] 09-15-PLAN.md
+- [x] 09-16-PLAN.md
+- [x] 09-17-PLAN.md
+- [x] 09-18-PLAN.md
 
 **Phase 8 carry-over (blocked / undone — must land in Phase 9):**
 
@@ -158,7 +158,7 @@ Plans:
 | 6. Spoiler-safe GraphRAG chat and graph-editing agent | v1.1 | 13/13 | Complete | 2026-08-02 |
 | 7. Spoiler-Safety Hardening | v1.2 | 8/8 | Complete | 2026-08-03 |
 | 8. Production Deployment & Automated CI/CD | v1.3 | 8/8 | Complete    | 2026-08-04 |
-| 9. Feature Expansion & Full Audit Remediation | v1.3 | 10/18 | In Progress|  |
+| 9. Feature Expansion & Full Audit Remediation | v1.3 | 18/18 | Complete    | 2026-08-13 |
 | 10. Polish & Finishing Touches | v1.3 | 0/TBD | Not started | - |
 
 Full phase details archived at `.planning/milestones/v1.1-ROADMAP.md` / `.planning/milestones/v1.1-phases/` and `.planning/milestones/v1.2-ROADMAP.md` / `.planning/milestones/v1.2-phases/` (v1.2 archive supersedes the earlier v1.1 archive, which predates Phase 7).
