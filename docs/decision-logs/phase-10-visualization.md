@@ -194,54 +194,54 @@ Machine-readable multi-source coverage audit — verifier: `scripts/verify_phase
 | REQ:POLISH-01 | 10-09 | Full green regression gate on isolated ephemeral Neo4j | scripts/run_phase10_backend_tests.py |
 | REQ:POLISH-02 | 10-10 | Operator-approved golden-path UAT (12 rows + 7 backstop rows) | docs/uat/phase-10-golden-path.md |
 | REQ:POLISH-03 | 10-11 | Shipped-state README/root docs — no stale prototype/deployment wording | README.md |
-| DEC:D-01 | 10-01 | 10-CONTEXT.md decision D-01 — Phase 10 scope amendment | .planning/phases/10-polish-finishing-touches/10-10-01-SUMMARY.md |
-| DEC:D-02 | 10-01 | 10-CONTEXT.md decision D-02 — Incremental work order | .planning/phases/10-polish-finishing-touches/10-10-01-SUMMARY.md |
+| DEC:D-01 | 10-01 | 10-CONTEXT.md decision D-01 — Phase 10 scope amendment | .planning/phases/10-polish-finishing-touches/10-01-SUMMARY.md |
+| DEC:D-02 | 10-01 | 10-CONTEXT.md decision D-02 — Incremental work order | .planning/phases/10-polish-finishing-touches/10-01-SUMMARY.md |
 | DEC:D-03 | 10-01 | 10-CONTEXT.md decision D-03 — Evidence-based Decision Log requirement | docs/decision-logs/phase-10-visualization.md |
-| DEC:D-04 | 10-02 | 10-CONTEXT.md decision D-04 — Storage/retrieval/projection separation | .planning/phases/10-polish-finishing-touches/10-10-02-SUMMARY.md |
-| DEC:D-05 | 10-02 | 10-CONTEXT.md decision D-05 — Mandatory filter-before-projection order | .planning/phases/10-polish-finishing-touches/10-10-02-SUMMARY.md |
-| DEC:D-06 | 10-02 | 10-CONTEXT.md decision D-06 — Indirect leak audit (counts/forces/space/hints) | .planning/phases/10-polish-finishing-touches/10-10-02-SUMMARY.md |
-| DEC:D-07 | 10-04 | 10-CONTEXT.md decision D-07 — Keep Cytoscape; NVL isolated only | .planning/phases/10-polish-finishing-touches/10-10-04-SUMMARY.md |
-| DEC:D-08 | 10-02 | 10-CONTEXT.md decision D-08 — Library-neutral visualization DTO | .planning/phases/10-polish-finishing-touches/10-10-02-SUMMARY.md |
+| DEC:D-04 | 10-02 | 10-CONTEXT.md decision D-04 — Storage/retrieval/projection separation | .planning/phases/10-polish-finishing-touches/10-02-SUMMARY.md |
+| DEC:D-05 | 10-02 | 10-CONTEXT.md decision D-05 — Mandatory filter-before-projection order | .planning/phases/10-polish-finishing-touches/10-02-SUMMARY.md |
+| DEC:D-06 | 10-02 | 10-CONTEXT.md decision D-06 — Indirect leak audit (counts/forces/space/hints) | .planning/phases/10-polish-finishing-touches/10-02-SUMMARY.md |
+| DEC:D-07 | 10-04 | 10-CONTEXT.md decision D-07 — Keep Cytoscape; NVL isolated only | .planning/phases/10-polish-finishing-touches/10-04-SUMMARY.md |
+| DEC:D-08 | 10-02 | 10-CONTEXT.md decision D-08 — Library-neutral visualization DTO | .planning/phases/10-polish-finishing-touches/10-02-SUMMARY.md |
 | DEC:D-09 | 10-01 | 10-CONTEXT.md decision D-09 — Episode Overview bounds 12-28/40, <35/60 edges | docs/decision-logs/phase-10-visualization.md |
 | DEC:D-10 | 10-01 | 10-CONTEXT.md decision D-10 — Two fixed-data variants A/B before choice | docs/decision-logs/phase-10-visualization.md |
 | DEC:D-11 | 10-01 | 10-CONTEXT.md decision D-11 — Full Graph Advanced/debug only | docs/decision-logs/phase-10-visualization.md |
-| DEC:D-12 | 10-02 | 10-CONTEXT.md decision D-12 — Major/supporting/micro event distinction | .planning/phases/10-polish-finishing-touches/10-10-02-SUMMARY.md |
+| DEC:D-12 | 10-02 | 10-CONTEXT.md decision D-12 — Major/supporting/micro event distinction | .planning/phases/10-polish-finishing-touches/10-02-SUMMARY.md |
 | DEC:D-13 | 10-02 | 10-CONTEXT.md decision D-13 — Omit PARTICIPATED_IN/OCCURRED_IN from overview | docs/decision-logs/phase-10-visualization.md |
-| DEC:D-14 | 10-02 | 10-CONTEXT.md decision D-14 — Narrative vs procedural edge classification | .planning/phases/10-polish-finishing-touches/10-10-02-SUMMARY.md |
-| DEC:D-15 | 10-02 | 10-CONTEXT.md decision D-15 — display_tier editorial importance | .planning/phases/10-polish-finishing-touches/10-10-02-SUMMARY.md |
-| DEC:D-16 | 10-05 | 10-CONTEXT.md decision D-16 — Desktop top-level tabs | .planning/phases/10-polish-finishing-touches/10-10-05-SUMMARY.md |
-| DEC:D-17 | 10-05 | 10-CONTEXT.md decision D-17 — Four top-level tab hierarchy | .planning/phases/10-polish-finishing-touches/10-10-05-SUMMARY.md |
-| DEC:D-18 | 10-05 | 10-CONTEXT.md decision D-18 — Mobile scrollable top tabs | .planning/phases/10-polish-finishing-touches/10-10-05-SUMMARY.md |
-| DEC:D-19 | 10-05 | 10-CONTEXT.md decision D-19 — Mobile Inspector half/full bottom sheet | .planning/phases/10-polish-finishing-touches/10-10-05-SUMMARY.md |
-| DEC:D-20 | 10-05 | 10-CONTEXT.md decision D-20 — Never squeeze graph/timeline/Inspector on narrow screens | .planning/phases/10-polish-finishing-touches/10-10-05-SUMMARY.md |
-| DEC:D-21 | 10-06 | 10-CONTEXT.md decision D-21 — Semantic expansion keys/allowlist/max 25 | .planning/phases/10-polish-finishing-touches/10-10-06-SUMMARY.md |
-| DEC:D-22 | 10-04 | 10-CONTEXT.md decision D-22 — Expansion preserves scene; local constrained layout | .planning/phases/10-polish-finishing-touches/10-10-04-SUMMARY.md |
-| DEC:D-23 | 10-04 | 10-CONTEXT.md decision D-23 — fCoSE -> preset; Evidence Dagre; timeline React/CSS | .planning/phases/10-polish-finishing-touches/10-10-04-SUMMARY.md |
-| DEC:D-24 | 10-04 | 10-CONTEXT.md decision D-24 — Stable Cytoscape instance + batched diffs | .planning/phases/10-polish-finishing-touches/10-10-04-SUMMARY.md |
-| DEC:D-25 | 10-04 | 10-CONTEXT.md decision D-25 — Semantic zoom never fetches/expands | .planning/phases/10-polish-finishing-touches/10-10-04-SUMMARY.md |
-| DEC:D-26 | 10-07 | 10-CONTEXT.md decision D-26 — GraphRAG visible-in-place focus; hidden-safe Answer Graph | .planning/phases/10-polish-finishing-touches/10-10-07-SUMMARY.md |
-| DEC:D-27 | 10-07 | 10-CONTEXT.md decision D-27 — Answer Graph 5-20 elements + full restoration | .planning/phases/10-polish-finishing-touches/10-10-07-SUMMARY.md |
-| DEC:D-28 | 10-07 | 10-CONTEXT.md decision D-28 — Investigation layered Claim/Evidence/Source | .planning/phases/10-polish-finishing-touches/10-10-07-SUMMARY.md |
-| DEC:D-29 | 10-03 | 10-CONTEXT.md decision D-29 — Exact read contracts visualization + expand | .planning/phases/10-polish-finishing-touches/10-10-03-SUMMARY.md |
-| DEC:D-30 | 10-03 | 10-CONTEXT.md decision D-30 — Projection cache key dimensions + expansion uncached | .planning/phases/10-polish-finishing-touches/10-10-03-SUMMARY.md |
+| DEC:D-14 | 10-02 | 10-CONTEXT.md decision D-14 — Narrative vs procedural edge classification | .planning/phases/10-polish-finishing-touches/10-02-SUMMARY.md |
+| DEC:D-15 | 10-02 | 10-CONTEXT.md decision D-15 — display_tier editorial importance | .planning/phases/10-polish-finishing-touches/10-02-SUMMARY.md |
+| DEC:D-16 | 10-05 | 10-CONTEXT.md decision D-16 — Desktop top-level tabs | .planning/phases/10-polish-finishing-touches/10-05-SUMMARY.md |
+| DEC:D-17 | 10-05 | 10-CONTEXT.md decision D-17 — Four top-level tab hierarchy | .planning/phases/10-polish-finishing-touches/10-05-SUMMARY.md |
+| DEC:D-18 | 10-05 | 10-CONTEXT.md decision D-18 — Mobile scrollable top tabs | .planning/phases/10-polish-finishing-touches/10-05-SUMMARY.md |
+| DEC:D-19 | 10-05 | 10-CONTEXT.md decision D-19 — Mobile Inspector half/full bottom sheet | .planning/phases/10-polish-finishing-touches/10-05-SUMMARY.md |
+| DEC:D-20 | 10-05 | 10-CONTEXT.md decision D-20 — Never squeeze graph/timeline/Inspector on narrow screens | .planning/phases/10-polish-finishing-touches/10-05-SUMMARY.md |
+| DEC:D-21 | 10-06 | 10-CONTEXT.md decision D-21 — Semantic expansion keys/allowlist/max 25 | .planning/phases/10-polish-finishing-touches/10-06-SUMMARY.md |
+| DEC:D-22 | 10-04 | 10-CONTEXT.md decision D-22 — Expansion preserves scene; local constrained layout | .planning/phases/10-polish-finishing-touches/10-04-SUMMARY.md |
+| DEC:D-23 | 10-04 | 10-CONTEXT.md decision D-23 — fCoSE -> preset; Evidence Dagre; timeline React/CSS | .planning/phases/10-polish-finishing-touches/10-04-SUMMARY.md |
+| DEC:D-24 | 10-04 | 10-CONTEXT.md decision D-24 — Stable Cytoscape instance + batched diffs | .planning/phases/10-polish-finishing-touches/10-04-SUMMARY.md |
+| DEC:D-25 | 10-04 | 10-CONTEXT.md decision D-25 — Semantic zoom never fetches/expands | .planning/phases/10-polish-finishing-touches/10-04-SUMMARY.md |
+| DEC:D-26 | 10-07 | 10-CONTEXT.md decision D-26 — GraphRAG visible-in-place focus; hidden-safe Answer Graph | .planning/phases/10-polish-finishing-touches/10-07-SUMMARY.md |
+| DEC:D-27 | 10-07 | 10-CONTEXT.md decision D-27 — Answer Graph 5-20 elements + full restoration | .planning/phases/10-polish-finishing-touches/10-07-SUMMARY.md |
+| DEC:D-28 | 10-07 | 10-CONTEXT.md decision D-28 — Investigation layered Claim/Evidence/Source | .planning/phases/10-polish-finishing-touches/10-07-SUMMARY.md |
+| DEC:D-29 | 10-03 | 10-CONTEXT.md decision D-29 — Exact read contracts visualization + expand | .planning/phases/10-polish-finishing-touches/10-03-SUMMARY.md |
+| DEC:D-30 | 10-03 | 10-CONTEXT.md decision D-30 — Projection cache key dimensions + expansion uncached | .planning/phases/10-polish-finishing-touches/10-03-SUMMARY.md |
 | DEC:D-31 | 10-01 | 10-CONTEXT.md decision D-31 — Fixed safe baseline snapshots S01E01/S01E02 | docs/decision-logs/phase-10-visualization.md |
 | DEC:D-32 | 10-08 | 10-CONTEXT.md decision D-32 — Benchmark sizes 30/50..300/1000 + metrics | docs/decision-logs/phase-10-visualization.md |
-| DEC:D-33 | 10-09 | 10-CONTEXT.md decision D-33 — Automated coverage list (spoiler/cache/focus/restore/...)  | .planning/phases/10-polish-finishing-touches/10-10-09-SUMMARY.md |
+| DEC:D-33 | 10-09 | 10-CONTEXT.md decision D-33 — Automated coverage list (spoiler/cache/focus/restore/...)  | .planning/phases/10-polish-finishing-touches/10-09-SUMMARY.md |
 | DEC:D-34 | 10-09 | 10-CONTEXT.md decision D-34 — Finish original Phase 10 obligations incl. golden-path UAT | docs/uat/phase-10-golden-path.md |
-| DEC:D-35 | 10-02 | 10-CONTEXT.md decision D-35 — Reveal/publication order authoritative | .planning/phases/10-polish-finishing-touches/10-10-02-SUMMARY.md |
-| DEC:D-36 | 10-02 | 10-CONTEXT.md decision D-36 — Plot threads editorial, never automatic communities | .planning/phases/10-polish-finishing-touches/10-10-02-SUMMARY.md |
-| DEC:D-37 | 10-02 | 10-CONTEXT.md decision D-37 — Visual aggregation never invents canonical facts | .planning/phases/10-polish-finishing-touches/10-10-02-SUMMARY.md |
+| DEC:D-35 | 10-02 | 10-CONTEXT.md decision D-35 — Reveal/publication order authoritative | .planning/phases/10-polish-finishing-touches/10-02-SUMMARY.md |
+| DEC:D-36 | 10-02 | 10-CONTEXT.md decision D-36 — Plot threads editorial, never automatic communities | .planning/phases/10-polish-finishing-touches/10-02-SUMMARY.md |
+| DEC:D-37 | 10-02 | 10-CONTEXT.md decision D-37 — Visual aggregation never invents canonical facts | .planning/phases/10-polish-finishing-touches/10-02-SUMMARY.md |
 | DEC:D-38 | 10-05 | 10-CONTEXT.md decision D-38 — First-class Event Timeline grouped by plot thread | docs/decision-logs/phase-10-visualization.md |
 | DEC:D-39 | 10-08 | 10-CONTEXT.md decision D-39 — episode_difference deferred (secondary) | docs/decision-logs/phase-10-visualization.md |
-| DEC:D-40 | 10-02 | 10-CONTEXT.md decision D-40 — Phase is polish/projection, not backend rewrite | .planning/phases/10-polish-finishing-touches/10-10-02-SUMMARY.md |
-| DEC:D-41 | 10-07 | 10-CONTEXT.md decision D-41 — Claims/Evidence/Sources stay off main story graph | .planning/phases/10-polish-finishing-touches/10-10-07-SUMMARY.md |
-| DEC:D-42 | 10-05 | 10-CONTEXT.md decision D-42 — Restrained origin styling | .planning/phases/10-polish-finishing-touches/10-10-05-SUMMARY.md |
-| DEC:D-43 | 10-05 | 10-CONTEXT.md decision D-43 — Episode-safe character images + fallbacks | .planning/phases/10-polish-finishing-touches/10-10-05-SUMMARY.md |
+| DEC:D-40 | 10-02 | 10-CONTEXT.md decision D-40 — Phase is polish/projection, not backend rewrite | .planning/phases/10-polish-finishing-touches/10-02-SUMMARY.md |
+| DEC:D-41 | 10-07 | 10-CONTEXT.md decision D-41 — Claims/Evidence/Sources stay off main story graph | .planning/phases/10-polish-finishing-touches/10-07-SUMMARY.md |
+| DEC:D-42 | 10-05 | 10-CONTEXT.md decision D-42 — Restrained origin styling | .planning/phases/10-polish-finishing-touches/10-05-SUMMARY.md |
+| DEC:D-43 | 10-05 | 10-CONTEXT.md decision D-43 — Episode-safe character images + fallbacks | .planning/phases/10-polish-finishing-touches/10-05-SUMMARY.md |
 | DEC:D-44 | 10-07 | 10-CONTEXT.md decision D-44 — Graceful loading/error/sparse states | docs/decision-logs/phase-10-visualization.md |
-| DEC:D-45 | 10-07 | 10-CONTEXT.md decision D-45 — Accessibility must not regress | .planning/phases/10-polish-finishing-touches/10-10-07-SUMMARY.md |
-| DEC:D-46 | 10-05 | 10-CONTEXT.md decision D-46 — General polish audits; reuse Tailwind language | .planning/phases/10-polish-finishing-touches/10-10-05-SUMMARY.md |
-| DEC:D-47 | 10-05 | 10-CONTEXT.md decision D-47 — Views and Filters stay separate | .planning/phases/10-polish-finishing-touches/10-10-05-SUMMARY.md |
-| DEC:D-48 | 10-06 | 10-CONTEXT.md decision D-48 — Spoiler-safe search + GraphRAG focus narrowing | .planning/phases/10-polish-finishing-touches/10-10-06-SUMMARY.md |
+| DEC:D-45 | 10-07 | 10-CONTEXT.md decision D-45 — Accessibility must not regress | .planning/phases/10-polish-finishing-touches/10-07-SUMMARY.md |
+| DEC:D-46 | 10-05 | 10-CONTEXT.md decision D-46 — General polish audits; reuse Tailwind language | .planning/phases/10-polish-finishing-touches/10-05-SUMMARY.md |
+| DEC:D-47 | 10-05 | 10-CONTEXT.md decision D-47 — Views and Filters stay separate | .planning/phases/10-polish-finishing-touches/10-05-SUMMARY.md |
+| DEC:D-48 | 10-06 | 10-CONTEXT.md decision D-48 — Spoiler-safe search + GraphRAG focus narrowing | .planning/phases/10-polish-finishing-touches/10-06-SUMMARY.md |
 | DEC:D-49 | 10-11 | 10-CONTEXT.md decision D-49 — Exploration recovery Back/Undo/Collapse/Clear/Reset | .planning/phases/10-polish-finishing-touches/10-10-11-SUMMARY.md |
 | UI:DESIGN-SYSTEM | 10-05 | shadcn radix-nova preset + existing token language | frontend/components.json |
 | UI:INFORMATION-ARCHITECTURE | 10-05 | Four-tab hierarchy + nested modes contract | .planning/phases/10-polish-finishing-touches/10-UI-SPEC.md |
