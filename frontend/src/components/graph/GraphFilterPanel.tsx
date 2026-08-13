@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Filter, ChevronDown, CheckCheck, X } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
 import { NODE_TYPES } from '@/lib/nodeTypes'
 import { NodeSwatch } from './GraphLegend'
 import { EDGE_TYPE_TO_FAMILY, FAMILY_HEX, type EdgeColorFamily } from './relationshipStyles'
@@ -22,6 +23,38 @@ const EDGE_FAMILIES: { family: EdgeColorFamily; hex: string }[] = (() => {
   }))
 })()
 
+// Settings-style toggle (260813): role=switch row control, 44px hit target,
+// visible focus ring, no new dependency.
+function FilterSwitch({
+  checked,
+  label,
+  onCheckedChange,
+}: {
+  checked: boolean
+  label: string
+  onCheckedChange: (next: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onCheckedChange(!checked)}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+        checked ? 'border-primary bg-primary' : 'border-border bg-muted'
+      }`}
+    >
+      <span
+        aria-hidden="true"
+        className={`inline-block size-[18px] rounded-full bg-background shadow transition-transform ${
+          checked ? 'translate-x-[22px]' : 'translate-x-[3px]'
+        }`}
+      />
+    </button>
+  )
+}
+
 export function GraphFilterPanel({
   filterState,
   onToggleNodeType,
@@ -31,7 +64,7 @@ export function GraphFilterPanel({
   const [open, setOpen] = useState(false)
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="fixed top-20 left-1/2 -translate-x-1/2 z-[40] w-72 md:ml-[21.4rem]">
+    <Collapsible open={open} onOpenChange={setOpen} className="fixed top-20 left-1/2 -translate-x-1/2 z-[40] w-80 md:ml-[21.4rem]">
       {/* 08-06: on md+, the Filters pill sits beside the centered search
           bar, immediately right of it. NOTE: the pill is `fixed` (viewport
           coords) while the search bar is `absolute` inside the graph
@@ -54,77 +87,89 @@ export function GraphFilterPanel({
         </Button>
       </CollapsibleTrigger>
 
-      <CollapsibleContent className="mt-2 rounded-lg border border-border bg-card p-3 shadow-md">
-        {/* Node Types */}
-        <div className="mb-3">
-          <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Node Types
+      {/* 260813: settings-style panel — card header + labeled rows with
+          switches (mirrors SettingsPage's form language), Separator between
+          sections, ghost All/None actions in the header. */}
+      <CollapsibleContent className="mt-2 rounded-lg border border-border bg-card p-4 shadow-md">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-heading text-base text-foreground">Graph Filters</h2>
+            <p className="text-xs text-muted-foreground">
+              Control which node and relationship types appear in the scene.
+            </p>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {NODE_TYPES.map((nt) => {
-              const active = filterState.nodeTypes[nt.type] ?? true
-              return (
-                <button
-                  key={nt.type}
-                  type="button"
-                  onClick={() => onToggleNodeType(nt.type)}
-                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition-opacity max-sm:min-h-[44px] ${
-                    active ? 'bg-muted text-foreground' : 'bg-muted/40 text-muted-foreground opacity-40'
-                  }`}
-                >
-                  <NodeSwatch shape={nt.shape} color={nt.color} />
-                  <span>{nt.type}</span>
-                </button>
-              )
-            })}
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="min-h-11 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => onSetAll(true)}
+            >
+              <CheckCheck className="mr-1 size-3" />
+              All
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="min-h-11 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => onSetAll(false)}
+            >
+              <X className="mr-1 size-3" />
+              None
+            </Button>
           </div>
         </div>
+
+        <Separator className="my-3" />
+
+        {/* Node Types */}
+        <div className="flex flex-col">
+          <div className="mb-1 text-sm font-medium text-foreground">Node types</div>
+          {NODE_TYPES.map((nt) => {
+            const active = filterState.nodeTypes[nt.type] ?? true
+            return (
+              <div
+                key={nt.type}
+                className="flex min-h-11 items-center justify-between gap-3 border-b border-border/60 py-2 last:border-b-0"
+              >
+                <span className="flex min-w-0 items-center gap-2 text-sm text-foreground">
+                  <NodeSwatch shape={nt.shape} color={nt.color} />
+                  <span className="truncate">{nt.type}</span>
+                </span>
+                <FilterSwitch
+                  checked={active}
+                  label={`${nt.type} visible`}
+                  onCheckedChange={() => onToggleNodeType(nt.type)}
+                />
+              </div>
+            )
+          })}
+        </div>
+
+        <Separator className="my-3" />
 
         {/* Edge Families */}
-        <div className="mb-3">
-          <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Relationships
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {EDGE_FAMILIES.map((ef) => {
-              const active = filterState.edgeFamilies[ef.family] ?? true
-              return (
-                <button
-                  key={ef.family}
-                  type="button"
-                  onClick={() => onToggleEdgeFamily(ef.family)}
-                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition-opacity max-sm:min-h-[44px] ${
-                    active ? 'bg-muted text-foreground' : 'bg-muted/40 text-muted-foreground opacity-40'
-                  }`}
-                >
-                  <span className="inline-block size-2 rounded-full" style={{ backgroundColor: ef.hex }} />
-                  <span>{ef.family}</span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Footer controls */}
-        <div className="flex items-center justify-between border-t border-border pt-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => onSetAll(true)}
-          >
-            <CheckCheck className="mr-1 size-3" />
-            All
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => onSetAll(false)}
-          >
-            <X className="mr-1 size-3" />
-            None
-          </Button>
+        <div className="flex flex-col">
+          <div className="mb-1 text-sm font-medium text-foreground">Relationships</div>
+          {EDGE_FAMILIES.map((ef) => {
+            const active = filterState.edgeFamilies[ef.family] ?? true
+            return (
+              <div
+                key={ef.family}
+                className="flex min-h-11 items-center justify-between gap-3 border-b border-border/60 py-2 last:border-b-0"
+              >
+                <span className="flex min-w-0 items-center gap-2 text-sm text-foreground">
+                  <span className="inline-block size-2 shrink-0 rounded-full" style={{ backgroundColor: ef.hex }} />
+                  <span className="truncate">{ef.family}</span>
+                </span>
+                <FilterSwitch
+                  checked={active}
+                  label={`${ef.family} visible`}
+                  onCheckedChange={() => onToggleEdgeFamily(ef.family)}
+                />
+              </div>
+            )
+          })}
         </div>
       </CollapsibleContent>
     </Collapsible>
