@@ -700,7 +700,7 @@ describe('App', () => {
   })
 
   describe('four-tab narrative hierarchy (10-05, D-16/D-17/D-38/D-47)', () => {
-    async function renderGraphWorkspace(user: ReturnType<typeof userEvent.setup>) {
+    async function renderGraphWorkspace() {
       currentAuthState = 'authenticated'
       sessionStorage.setItem(
         'spoilerless.watchProgress',
@@ -711,8 +711,7 @@ describe('App', () => {
     }
 
     it('renders four accessible top tabs with Story selected by default', async () => {
-      const user = userEvent.setup()
-      await renderGraphWorkspace(user)
+      await renderGraphWorkspace()
 
       expect(screen.getByRole('tab', { name: 'Story' })).toHaveAttribute('aria-selected', 'true')
       expect(screen.getByRole('tab', { name: 'Characters' })).toBeInTheDocument()
@@ -722,7 +721,7 @@ describe('App', () => {
 
     it('Story opens the bounded Episode Overview and reveals the coordinated Event Timeline rail', async () => {
       const user = userEvent.setup()
-      await renderGraphWorkspace(user)
+      await renderGraphWorkspace()
 
       // Episode Overview is the default nested mode: the graph workspace is
       // the primary region and no timeline rail is mounted yet.
@@ -740,7 +739,7 @@ describe('App', () => {
 
     it('exposes the nested responsibilities for Characters, Evidence, and Advanced', async () => {
       const user = userEvent.setup()
-      await renderGraphWorkspace(user)
+      await renderGraphWorkspace()
 
       await user.click(screen.getByRole('tab', { name: 'Characters' }))
       expect(screen.getByRole('tab', { name: 'Character Network' })).toHaveAttribute('aria-selected', 'true')
@@ -758,7 +757,7 @@ describe('App', () => {
 
     it('Answer Graph nested mode renders the temporary-focus notice copy (UI-SPEC)', async () => {
       const user = userEvent.setup()
-      await renderGraphWorkspace(user)
+      await renderGraphWorkspace()
 
       await user.click(screen.getByRole('tab', { name: 'Evidence' }))
       await user.click(screen.getByRole('tab', { name: 'Answer Graph' }))
@@ -772,7 +771,7 @@ describe('App', () => {
 
     it('graph, timeline, and Inspector selections converge on one shared selection without layout calls', async () => {
       const user = userEvent.setup()
-      await renderGraphWorkspace(user)
+      await renderGraphWorkspace()
       // The initial canvas mount runs its layout; measure only what the
       // selection/tab interactions add.
       graphStubHooks.layoutRuns = 0

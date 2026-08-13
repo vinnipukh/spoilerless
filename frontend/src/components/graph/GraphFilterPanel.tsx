@@ -46,7 +46,7 @@ export function GraphFilterPanel({
         <Button
           variant="outline"
           size="sm"
-          className="mx-auto flex h-8 items-center gap-1.5 rounded-full bg-card/95 px-3 text-xs text-muted-foreground shadow-sm ring-1 ring-border hover:text-foreground backdrop-blur-sm"
+          className="mx-auto flex min-h-[44px] h-8 items-center gap-1.5 rounded-full bg-card/95 px-3 text-xs text-muted-foreground shadow-sm ring-1 ring-border hover:text-foreground backdrop-blur-sm"
         >
           <Filter className="size-3.5" />
           <span>Filters</span>
@@ -68,7 +68,7 @@ export function GraphFilterPanel({
                   key={nt.type}
                   type="button"
                   onClick={() => onToggleNodeType(nt.type)}
-                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition-opacity ${
+                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition-opacity max-sm:min-h-[44px] ${
                     active ? 'bg-muted text-foreground' : 'bg-muted/40 text-muted-foreground opacity-40'
                   }`}
                 >
@@ -93,7 +93,7 @@ export function GraphFilterPanel({
                   key={ef.family}
                   type="button"
                   onClick={() => onToggleEdgeFamily(ef.family)}
-                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition-opacity ${
+                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition-opacity max-sm:min-h-[44px] ${
                     active ? 'bg-muted text-foreground' : 'bg-muted/40 text-muted-foreground opacity-40'
                   }`}
                 >

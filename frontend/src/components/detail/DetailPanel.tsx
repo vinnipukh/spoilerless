@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Download } from 'lucide-react'
+import { Download, X } from 'lucide-react'
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { SpoilerGuard } from '@/components/ui/SpoilerGuard'
 import { fetchExportMarkdown, downloadMarkdownBlob } from '@/api/export'
@@ -604,6 +604,18 @@ export function DetailPanel({
     'Details'
 
   const [exported, setExported] = useState(false)
+  // 10-05 (D-20/D-42): mobile Inspector bottom sheet has two heights —
+  // half (default) and full — toggled by the drag handle. Desktop (sm+)
+  // keeps the fixed left-side sheet; the state only affects max-sm classes.
+  const [sheetHeight, setSheetHeight] = useState<'half' | 'full'>('half')
+
+  const closeInspector = useCallback(() => {
+    // Escape / explicit close both funnel through onDeselect — the single
+    // selection-clearing path App.tsx already owns. Radix restores focus to
+    // the trigger on close; the canvas tap target remains the primary
+    // return-focus destination (D-42).
+    onDeselect()
+  }, [onDeselect])
 
   const handleExport = async () => {
     if (!seriesId) return
@@ -641,11 +653,17 @@ export function DetailPanel({
         // focus-outside on the other (Radix Dialog closes a non-modal dialog
         // when a second dialog steals focus) and the first silently closes.
         // Close is driven by selection state (onDeselect), never by outside
-        // interaction or Escape.
+        // interaction. Escape CLOSES the inspector (10-05, D-42) but only via
+        // the explicit onDeselect funnel — it never lets Radix auto-close.
         onInteractOutside={(event) => event.preventDefault()}
-        onEscapeKeyDown={(event) => event.preventDefault()}
+        onEscapeKeyDown={(event) => {
+          event.preventDefault()
+          closeInspector()
+        }}
         className={cn(
-          'mt-0 max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!h-auto max-sm:!w-full max-sm:!border-t max-sm:!border-l-0 max-sm:max-h-[70vh]',
+          'mt-0 max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!h-auto max-sm:!w-full max-sm:!border-t max-sm:!border-l-0 max-sm:rounded-t-xl max-sm:pb-[env(safe-area-inset-bottom)] max-sm:transition-[max-height] max-sm:duration-300',
+          // 10-05 (D-20/D-42): half/full-height mobile bottom sheet.
+          sheetHeight === 'half' ? 'max-sm:max-h-[50vh]' : 'max-sm:max-h-[85vh]',
           // 08-06+: the base shadcn sheet pins the width with a
           // DATA-ATTRIBUTE variant (`data-[side=left]:sm:max-w-sm`, 384px) —
           // higher specificity than plain lg:max-w-xl, so the inspector was
@@ -656,6 +674,17 @@ export function DetailPanel({
           'border-r border-border shadow-lg',
         )}
       >
+        {/* 10-05 (D-42): mobile drag handle — 44×4px touch target that toggles
+            the sheet between half and full height. Desktop-hidden. */}
+        <button
+          type="button"
+          aria-label="Toggle Inspector height"
+          aria-expanded={sheetHeight === 'full'}
+          onClick={() => setSheetHeight((h) => (h === 'half' ? 'full' : 'half'))}
+          className="sm:hidden mx-auto mt-2 flex h-11 w-16 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span className="h-1 w-8 rounded-full bg-muted-foreground/40" aria-hidden="true" />
+        </button>
         {/* Fix 2/3: flex-col layout with sticky header + tab bar, scrollable body */}
         <SheetHeader className="shrink-0">
           <div className="flex min-w-0 items-center justify-between gap-3">
@@ -679,6 +708,21 @@ export function DetailPanel({
                 )}
               </SheetTitle>
             </div>
+            {selected && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Close Inspector"
+                    className="shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={closeInspector}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Close Inspector</TooltipContent>
+              </Tooltip>
+            )}
             {selected && (
               <Tooltip>
                 <TooltipTrigger asChild>

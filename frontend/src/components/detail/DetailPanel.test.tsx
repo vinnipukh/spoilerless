@@ -318,6 +318,41 @@ describe('DetailPanel', () => {
       expect(screen.queryByRole('heading', { name: 'Ask about Dexter' })).not.toBeInTheDocument()
     })
 
+    // --- 10-05 (D-20/D-42): mobile Inspector sheet behavior ---
+
+    it('toggles the mobile sheet between half and full height via the drag handle', async () => {
+      const user = userEvent.setup()
+      const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
+      renderPanel(<DetailPanel selected={selected} {...defaultProps} />)
+
+      const handle = screen.getByRole('button', { name: 'Toggle Inspector height' })
+      expect(handle).toHaveAttribute('aria-expanded', 'false')
+
+      await user.click(handle)
+      expect(screen.getByRole('button', { name: 'Toggle Inspector height' })).toHaveAttribute('aria-expanded', 'true')
+
+      await user.click(handle)
+      expect(screen.getByRole('button', { name: 'Toggle Inspector height' })).toHaveAttribute('aria-expanded', 'false')
+    })
+
+    it('closes via the explicit Close Inspector button and via Escape', async () => {
+      const user = userEvent.setup()
+      const onDeselect = vi.fn()
+      const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
+      const { rerender } = renderPanel(
+        <DetailPanel selected={selected} {...defaultProps} onDeselect={onDeselect} />,
+      )
+
+      // Explicit close button (accessible name per UI-SPEC).
+      await user.click(screen.getByRole('button', { name: 'Close Inspector' }))
+      expect(onDeselect).toHaveBeenCalledTimes(1)
+
+      // Escape funnels through the same onDeselect path (D-42).
+      rerender(<DetailPanel selected={selected} {...defaultProps} onDeselect={onDeselect} />)
+      await user.keyboard('{Escape}')
+      expect(onDeselect).toHaveBeenCalledTimes(2)
+    })
+
   it('refreshes the graph in place after creating a relationship', async () => {
     const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
     const onRefreshGraph = vi.fn()
