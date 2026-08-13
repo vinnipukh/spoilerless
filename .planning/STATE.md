@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-08-04)
 Phase: 10 — Polish & Finishing Touches
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-08-13 — Completed quick task 260813-ftl: hide note-adding UI + revision history from visitor mode
+Last activity: 2026-08-13 — Completed quick task 260813-gao: fix broken node portrait images in production (apiUrl prefixing)
 
 Progress: [███░░░░░░░] 33% (v1.3, 1/3 phases); 7 phases complete across v1.0–v1.2
 
@@ -91,6 +91,7 @@ None yet.
 | 260811-prob09 | PROBLEMS.md NINTH-PASS fixes: #58 pipeline ProgressService imports; #59 path-route boundary resolves from persisted progress (never MAX_PATH_HOPS); #75 BacklinksTab jump-to-node + fresh hover card; #76 onRefreshGraph to GraphCanvas (non-destructive custom-node refresh); #80 dead-code sweep (10 items; 3 of the finding's claims verified FALSE at HEAD) | 2026-08-11 | 3d6dc33 | — |
 | 260812-gra | Refresh graph automatically on website open: run the same forced Cytoscape layout and fit used by Refresh graph when the live canvas instance is created | 2026-08-12 | f968788 | [260812-gra-refresh-graph-on-open](./quick/260812-gra-refresh-graph-on-open/) |
 | 260813-ftl | Hide note-adding UI (Add Note / NoteEditor / NoteItem edit-delete) and revision History tab from visitor (misafir) mode; readOnly threaded into DetailPanel from App.tsx | 2026-08-13 | ed24814 | [260813-ftl-hide-note-adding-ui-buttons-and-revision](./quick/260813-ftl-hide-note-adding-ui-buttons-and-revision/) |
+| 260813-gao | Fix broken node portrait images in production: apiUrl() helper prefixes relative image_url with VITE_API_BASE_URL at both consumption sites (Cytoscape imageUrl + DetailPanel img src); local vite-proxy behavior unchanged | 2026-08-13 | 73ed961 | [260813-gao-fix-broken-node-portrait-images-in-produ](./quick/260813-gao-fix-broken-node-portrait-images-in-produ/) |
 
 ## Deferred Items
 
