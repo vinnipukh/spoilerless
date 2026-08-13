@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AuthProvider } from './providers/AuthProvider'
 import { useAuth } from './providers/useAuth'
 import { LoginPage } from './components/auth/LoginPage'
@@ -772,10 +772,7 @@ function AuthenticatedApp() {
                   D-20). The graph canvas stays mounted behind it, so
                   switching modes never resets filters or camera (D-47). */}
               {topTab === 'story' && storyMode === 'event_timeline' && (
-                <aside
-                  aria-label="Event Timeline"
-                  className="hidden w-80 shrink-0 flex-col overflow-hidden border-l border-border lg:flex"
-                >
+                <EventTimelineRail>
                   <TimelineView
                     nodes={graphState.status === 'success' ? graphState.data.nodes : []}
                     claims={graphState.status === 'success' ? graphState.data.claims : []}
@@ -791,7 +788,7 @@ function AuthenticatedApp() {
                     onClearFilter={() => setTimelineFilterIds([])}
                     showHeading
                   />
-                </aside>
+                </EventTimelineRail>
               )}
             </div>
           )}
@@ -835,6 +832,92 @@ function AuthenticatedApp() {
         />
       )}
     </AppShell>
+  )
+}
+
+const TIMELINE_MIN_WIDTH = 240
+const TIMELINE_MAX_WIDTH = 640
+const TIMELINE_WIDTH_STEP = 16
+
+function clampTimelineWidth(width: number) {
+  const viewportMax = typeof window === 'undefined' ? TIMELINE_MAX_WIDTH : window.innerWidth * 0.6
+  return Math.max(TIMELINE_MIN_WIDTH, Math.min(Math.min(TIMELINE_MAX_WIDTH, viewportMax), width))
+}
+
+function EventTimelineRail({ children }: { children: ReactNode }) {
+  const [timelineWidth, setTimelineWidth] = useState(320)
+  const [dragging, setDragging] = useState(false)
+  const dragStart = useRef<{ x: number; width: number } | null>(null)
+
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    } catch {
+      // jsdom does not implement pointer capture — drag still works via the
+      // pointer events dispatched directly on the handle (ChatSheet.tsx:60-69).
+    }
+    dragStart.current = { x: event.clientX, width: timelineWidth }
+    setDragging(true)
+  }
+
+  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragStart.current) return
+    setTimelineWidth(clampTimelineWidth(dragStart.current.width + (dragStart.current.x - event.clientX)))
+  }
+
+  const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    dragStart.current = null
+    setDragging(false)
+    try {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      }
+    } catch {
+      // jsdom (mirrors ChatSheet.tsx:81-86)
+    }
+  }
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      setTimelineWidth((width) => clampTimelineWidth(width - TIMELINE_WIDTH_STEP))
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      setTimelineWidth((width) => clampTimelineWidth(width + TIMELINE_WIDTH_STEP))
+    }
+  }
+
+  return (
+    <aside
+      aria-label="Event Timeline"
+      style={{ width: timelineWidth }}
+      className="hidden shrink-0 flex-col overflow-hidden border-l border-border lg:flex"
+    >
+      <div className="flex h-full min-h-0">
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize Event Timeline"
+          aria-keyshortcuts="ArrowLeft ArrowRight"
+          tabIndex={0}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onKeyDown={onKeyDown}
+          className="group flex w-11 shrink-0 cursor-ew-resize touch-none select-none items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span
+            className={
+              'h-12 w-0.5 rounded-full bg-border group-hover:bg-foreground/40' +
+              (dragging ? ' bg-primary' : '')
+            }
+          />
+        </div>
+        <div className="min-w-0 flex-1">{children}</div>
+      </div>
+    </aside>
   )
 }
 
