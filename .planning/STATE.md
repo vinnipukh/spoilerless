@@ -5,7 +5,7 @@ milestone_name: Production Deployment & Access Hardening
 current_phase: 10
 current_phase_name: polish-finishing-touches
 status: executing
-stopped_at: Completed 10-05-PLAN.md
+stopped_at: Completed 10-06-PLAN.md
 last_updated: "2026-08-13T19:50:00.000Z"
 last_activity: 2026-08-13
 last_activity_desc: Plan 10-04 complete — DTO adapters, scene reducer, dagre/fcose layout contracts
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-04)
 ## Current Position
 
 Phase: 10 (polish-finishing-touches) — EXECUTING
-Plan: 6 of 11
+Plan: 7 of 11
 Status: Ready to execute
-Last activity: 2026-08-13 — Plan 10-05 complete: four-tab story-map hierarchy + responsive Inspector
+Last activity: 2026-08-13 — Plan 10-06 complete: semantic expansion endpoint + history-based recovery
 
-Progress: [████████░░] 82% (v1.3, 1/3 phases); 7 phases complete across v1.0–v1.2
+Progress: [████████░░] 84% (v1.3, 1/3 phases); 7 phases complete across v1.0–v1.2
 
 ## Performance Metrics
 
