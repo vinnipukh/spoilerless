@@ -140,3 +140,35 @@ Bounds proof for the selected default (VIZ-03 acceptance):
 - Requirements: VIZ-03, VIZ-10 (this log is the D-03 evidence record consumed by 10-02+).
 - Related decisions: D-09 (bounds), D-10 (variant evaluation), D-11 (Full Graph Advanced),
   D-13 (edge omission), D-31 (baselines), D-38 (timeline first-class), D-44 (sparse states).
+
+## 8. Benchmark evidence (10-08, D-32/D-39)
+
+Harness: `scripts/benchmark_visualization.py` (seeded `random.Random(0x1008)`, in-memory,
+stdlib + repository code only — zero network/database/provider access) + schema
+`scripts/benchmark_visualization_schema.json`. Four required sizes, rerun at zero cost:
+
+| Scale | Overview (Variant A) | Cumulative | Hard gates |
+|---|---|---|---|
+| 30n/50e | 15n/13e — target 12–28 ✓ | 27n/28e | 16/16 |
+| 75n/150e | 22n/37e | cap raised (D-09 fail-closed) | 16/16 |
+| 150n/400e | 25n/46e | cap raised (D-09 fail-closed) | 16/16 |
+| 300n/1000e | 28n/60e — target 12–28 ✓ | cap raised (D-09 fail-closed) | 16/16 |
+
+- The cumulative-overview cap raise at ≥75-node scales is the D-09 bounded-view
+  behavior (refuse >40 nodes), not a defect.
+- Deterministic fingerprint is byte-identical across reruns; wall-clock timings
+  (graph validation, projections — all <2 ms even at 300n/1000e on this machine)
+  live in `observations` as environment-sensitive per D-32.
+
+**Refinement decision (D-03/D-39):** no product-code change.
+- Evidence: every hard gate passed at every size (payload bounds, adapter input,
+  focus ≤20 + resolves-inside-DTO, expansion ≤25 + allowlist, view-switch cache
+  identity, episode-switch displacement 0, zero procedural labels, human edge
+  vocabulary, hidden-row fail-closed + byte-identity, schema validity, determinism).
+- Alternatives considered: micro-optimize projection dict-building (rejected —
+  sub-2 ms at the largest required size; adds risk to the fail-closed paths for
+  no measurable product gain); cache view switches (rejected — expansion and
+  focus are deliberately uncached in Phase 10 per T10-CACHE-06).
+- Remaining risk: synthetic datasets are not live payloads — real browser
+  render/layout cost and live-count re-measurement are deferred to the
+  disposable-container regression gate (10-09) and operator UAT (10-10).
