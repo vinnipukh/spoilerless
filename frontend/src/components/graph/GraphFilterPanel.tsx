@@ -90,7 +90,7 @@ export function GraphFilterPanel({
       {/* 260813: settings-style panel — card header + labeled rows with
           switches (mirrors SettingsPage's form language), Separator between
           sections, ghost All/None actions in the header. */}
-      <CollapsibleContent className="mt-2 rounded-lg border border-border bg-card p-4 shadow-md">
+      <CollapsibleContent className="mt-2 max-h-[calc(100vh-9rem)] overflow-y-auto overscroll-contain rounded-lg border border-border bg-card p-4 shadow-md">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="font-heading text-base text-foreground">Graph Filters</h2>
