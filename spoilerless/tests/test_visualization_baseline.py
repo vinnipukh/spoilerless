@@ -25,6 +25,7 @@ and no LLM calls are made anywhere in this module.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import time
@@ -32,6 +33,8 @@ from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from spoilerless.app.domain.graph import GraphResponse
 from spoilerless.app.spoiler.policy import effective_view_order, is_visible
@@ -665,3 +668,85 @@ def test_variant_evidence_object_shape() -> None:
     assert evidence["bounds"]["preferred_max_edges"] == 35
     assert evidence["bounds"]["hard_max_edges"] == 60
     assert evidence["bounds"]["persistent_procedural_labels"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Task 1 — benchmark harness contract (plan 10-08, VIZ-10): the deterministic
+# in-memory harness produces schema-valid, deterministic output for the four
+# required scales with all hard gates passing. ``pytest -k benchmark`` selects
+# this via both the marker and the name.
+# ---------------------------------------------------------------------------
+
+_BENCHMARK_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "benchmark_visualization.py"
+_BENCHMARK_SCHEMA = (
+    Path(__file__).resolve().parents[2] / "scripts" / "benchmark_visualization_schema.json"
+)
+REQUIRED_BENCHMARK_SIZES = ("30x50", "75x150", "150x400", "300x1000")
+
+
+def _load_benchmark_harness() -> Any:
+    """Import scripts/benchmark_visualization.py (scripts/ is not a package)."""
+    spec = importlib.util.spec_from_file_location("benchmark_visualization", _BENCHMARK_SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.benchmark
+def test_benchmark_harness_schema_valid_deterministic_output() -> None:
+    """Plan 10-08 Task 1: four scales, schema-valid, deterministic, zero I/O.
+
+    Runs the FULL harness twice in memory and asserts: (a) the result
+    validates against scripts/benchmark_visualization_schema.json with zero
+    errors, (b) the four required D-32 scales are present, (c) every hard
+    gate passes, (d) the deterministic fingerprint of every size block is
+    identical across both runs (rerunnable at zero cost, T10-SC-08), and
+    (e) every environment-sensitive observation carries a rationale and the
+    environment block declares no network/database/provider/subprocess use.
+    """
+    harness = _load_benchmark_harness()
+    schema = json.loads(_BENCHMARK_SCHEMA.read_text(encoding="utf-8"))
+
+    first = harness.run_benchmark()
+    second = harness.run_benchmark()
+
+    errors = harness.validate_against_schema(first, schema)
+    assert errors == [], f"Schema validation failed: {errors[:5]}"
+
+    labels = [block["size"]["label"] for block in first["sizes"]]
+    assert labels == list(REQUIRED_BENCHMARK_SIZES), (
+        f"Expected exactly the four required scales, got {labels}"
+    )
+    assert first["environment"]["network"] is False
+    assert first["environment"]["database"] is False
+    assert first["environment"]["llm_provider"] is False
+    assert first["environment"]["subprocess"] is False
+    assert first["projection_version"] == PROJECTION_VERSION
+
+    for block in first["sizes"]:
+        label = block["size"]["label"]
+        # Every hard gate passes — the deterministic product bounds hold at
+        # every required scale (D-09/D-14/D-21/D-27, T10-LEAK-08/T10-CACHE-08).
+        failures = [g["name"] for g in block["hard_gates"] if not g["passed"]]
+        assert failures == [], f"{label}: hard-gate failures: {failures}"
+        # Environment-sensitive metrics are explicit and rationalized (D-32).
+        for obs in block["observations"]:
+            assert obs["environment_sensitive"] is True, f"{label}: {obs['metric']}"
+            assert obs["rationale"].strip(), f"{label}: {obs['metric']} lacks rationale"
+        # Determinism: identical fingerprint across two in-process runs.
+        assert (
+            block["deterministic_fingerprint"]
+            == second["sizes"][first["sizes"].index(block)]["deterministic_fingerprint"]
+        ), f"{label}: deterministic fingerprint differs between runs"
+
+    # Deterministic spot-checks of the measured D-09/D-21/D-27 bounds.
+    for block in first["sizes"]:
+        det = block["deterministic"]
+        assert det["overview"]["nodes"] <= HARD_MAX_NODES
+        assert det["overview"]["edges"] <= HARD_MAX_EDGES
+        assert det["overview"]["within_target_12_28"] is True
+        assert det["focus"]["nodes"] <= 20
+        assert det["episode_switch"]["displacement"] == 0.0
+        assert det["episode_switch"]["shared_characters"]
+        assert max(entry["additions"] for entry in det["expansion"].values()) <= 25

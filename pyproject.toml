@@ -30,3 +30,6 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "module"
 asyncio_default_test_loop_scope = "module"
 testpaths = ["spoilerless/tests"]
+markers = [
+  "benchmark: deterministic zero-cost in-memory visualization benchmark harness (plan 10-08)",
+]
