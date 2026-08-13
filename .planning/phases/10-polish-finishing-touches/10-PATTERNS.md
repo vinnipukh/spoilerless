@@ -93,7 +93,7 @@ This is the authoritative policy. Missing `visible_from_order` fails closed (80-
 
 **Analog:** `spoilerless/app/cache/graph_cache.py::_cache_key`, `get_cached_graph`, `set_cached_graph`, `invalidate_series` (lines 1-87)
 
-Retain cache-aside semantics: Redis is optional, errors return a miss, values are JSON payloads, writes use TTL, and content-changing writes invalidate conservatively. Use a Redis-local per-series cache epoch as `graph_revision`; default 0, atomically increment it in existing `invalidate_series` write paths, and bypass cache when epoch resolution fails. Extend keys with view, projection version, epoch, effective order, series, and user scope. A hit must never cross view, user, revision, or spoiler boundary.
+Retain cache-aside semantics: Redis is optional, errors return a miss, values are JSON payloads, writes use TTL, and content-changing writes invalidate conservatively. Use a Redis-local per-series cache epoch as `graph_revision`; default 0, atomically increment it in existing `invalidate_series` write paths, and bypass cache when epoch resolution fails. Extend keys with view, projection version, epoch, effective order, series, user scope, and request signature. GraphRAG focus uses a deterministic digest of validated/deduplicated/sorted focus IDs. Expansion bypasses cache in Phase 10. A hit must never cross view, user, revision, focus set, or spoiler boundary.
 
 ```python
 def _cache_key(series_id: str, effective_boundary: int, user_id: str | None) -> str:
