@@ -136,7 +136,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await app.state.session_repo.sweep_expired()
                 await app.state.share_repo.sweep_expired()
             except Exception:
-                logger.exception("session/share sweep iteration failed; will retry")
+                log.exception("session/share sweep iteration failed; will retry")
             await asyncio.sleep(SESSION_SWEEP_INTERVAL_SECONDS)
 
 

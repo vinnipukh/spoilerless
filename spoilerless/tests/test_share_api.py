@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from spoilerless.app.api import deps
+from spoilerless.app.api import graph as graph_api
 from spoilerless.app.api.share import router as share_router
 from spoilerless.app.core.errors import install_database_error_handlers
 from spoilerless.app.api.exceptions import install_repository_error_handlers
@@ -134,6 +135,16 @@ def database() -> Iterator[Neo4jDatabase]:
     yield db
 
 
+class _FakeProgressService:
+    """In-memory progress stand-in for share-create clamp tests (CR-01)."""
+
+    def __init__(self, record) -> None:
+        self._record = record
+
+    async def get(self, user_id: str, series_id: str):
+        return self._record
+
+
 def test_share_api_create_read_revoke_flow(database: Neo4jDatabase) -> None:
     app = FastAPI()
     repo = InMemoryShareRepository()
@@ -151,6 +162,12 @@ def test_share_api_create_read_revoke_flow(database: Neo4jDatabase) -> None:
     app.dependency_overrides[deps.get_database] = lambda: database
     app.dependency_overrides[deps.get_share_repo] = lambda: repo
     app.dependency_overrides[deps.require_current_user] = lambda: mock_user
+    # CR-01: creator has watched through order 2, so boundary 2 is in-window.
+    app.dependency_overrides[graph_api.get_progress_service] = lambda: (
+        _FakeProgressService(
+            type("R", (), {"view_as_of_order": 2, "watched_through_order": 2})()
+        )
+    )
 
     with TestClient(app) as client:
         # 1. Create a share link for boundary 2
@@ -194,6 +211,52 @@ def test_share_api_create_read_revoke_flow(database: Neo4jDatabase) -> None:
         assert err["detail"]["code"] == "TOKEN_NOT_FOUND"
 
 
+def test_share_api_create_clamps_boundary_to_creator_progress(
+    database: Neo4jDatabase,
+) -> None:
+    """CR-01 (09-REVIEW): a share token must never widen the creator's window.
+
+    A creator who has only watched through order 1 cannot mint a token for
+    order 60; the stored boundary must equal their effective view (1). A
+    creator with no progress record at all fails closed to boundary 1.
+    """
+    app = FastAPI()
+    repo = InMemoryShareRepository()
+    install_database_error_handlers(app)
+    install_repository_error_handlers(app)
+    app.include_router(share_router)
+
+    mock_user = {"id": "user:clamp_tester", "email": "c@example.com", "role": "user"}
+    app.dependency_overrides[deps.get_database] = lambda: database
+    app.dependency_overrides[deps.get_share_repo] = lambda: repo
+    app.dependency_overrides[deps.require_current_user] = lambda: mock_user
+
+    with TestClient(app) as client:
+        # Creator with progress at order 1 requests order 60 -> clamped to 1.
+        app.dependency_overrides[graph_api.get_progress_service] = lambda: (
+            _FakeProgressService(
+                type("R", (), {"view_as_of_order": 1, "watched_through_order": 1})()
+            )
+        )
+        res = client.post(
+            "/api/share",
+            json={"series_id": "series_dexter", "visible_until_order": 60},
+        )
+        assert res.status_code == 201, res.text
+        assert res.json()["visible_until_order"] == 1
+
+        # Creator with NO progress record fails closed to boundary 1.
+        app.dependency_overrides[graph_api.get_progress_service] = lambda: (
+            _FakeProgressService(None)
+        )
+        res = client.post(
+            "/api/share",
+            json={"series_id": "series_dexter", "visible_until_order": 2},
+        )
+        assert res.status_code == 201, res.text
+        assert res.json()["visible_until_order"] == 1
+
+
 def test_share_api_invalid_boundary_and_forbidden_revoke(database: Neo4jDatabase) -> None:
     app = FastAPI()
     repo = InMemoryShareRepository()
@@ -208,14 +271,19 @@ def test_share_api_invalid_boundary_and_forbidden_revoke(database: Neo4jDatabase
     app.dependency_overrides[deps.get_share_repo] = lambda: repo
 
     with TestClient(app) as client:
-        # Invalid episode order
+        # CR-01: an out-of-window episode order is clamped (fail-closed to the
+        # creator's boundary — here no progress record => boundary 1), never
+        # stored as requested.
         app.dependency_overrides[deps.require_current_user] = lambda: user1
-        bad_res = client.post(
+        app.dependency_overrides[graph_api.get_progress_service] = lambda: (
+            _FakeProgressService(None)
+        )
+        clamped_res = client.post(
             "/api/share",
             json={"series_id": "series_dexter", "visible_until_order": 999999},
         )
-        assert bad_res.status_code == 422
-        assert bad_res.json()["detail"]["code"] == "INVALID_VISIBLE_UNTIL_ORDER"
+        assert clamped_res.status_code == 201
+        assert clamped_res.json()["visible_until_order"] == 1
 
         # Valid create by user1
         create_res = client.post(
