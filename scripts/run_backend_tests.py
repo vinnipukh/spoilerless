@@ -119,6 +119,7 @@ CHUNKS: dict[str, list[str]] = {
         "test_share_api.py",
         "test_error_handlers.py",
         "test_rate_limit.py",
+        "test_phase10_coverage_audit.py",
     ],
     "phase10-viz": [
         "test_visualization_baseline.py",
