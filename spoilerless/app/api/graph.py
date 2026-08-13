@@ -221,7 +221,7 @@ async def get_visualization(
     # is re-validated against its own metadata on read.
     user_id = user["id"] if user is not None else None
     cached = await get_cached_visualization(
-        series_id, effective, view, PROJECTION_VERSION, user_id
+        series_id, effective, view, PROJECTION_VERSION, user_id, focus_ids=focus_id
     )
     if cached is not None:
         return VisualizationDTO.model_validate(cached)
@@ -250,7 +250,9 @@ async def get_visualization(
             "The requested projection could not be produced.",
         ) from exc
 
-    # Write-through on miss (best-effort; swallows Redis errors).
+    # Write-through on miss (best-effort; swallows Redis errors). The epoch
+    # and (for graphrag_focus) the canonical focus signature are cache key
+    # dimensions (D-30).
     await set_cached_visualization(
         series_id,
         effective,
@@ -258,6 +260,7 @@ async def get_visualization(
         PROJECTION_VERSION,
         user_id,
         dto.model_dump(mode="json"),
+        focus_ids=focus_id,
     )
     return dto
 

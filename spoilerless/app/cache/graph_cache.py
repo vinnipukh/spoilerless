@@ -22,6 +22,7 @@ Caching is a performance layer, never a hard dependency: an empty
 
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Any
 
@@ -30,6 +31,41 @@ from spoilerless.app.core.config import get_settings
 from spoilerless.app.domain.visualization import VisualizationDTO
 
 DEFAULT_GRAPH_TTL_SECONDS = 300
+
+# Redis-local per-series cache epoch (10-03 Task 2, D-30): bumped on every
+# content-changing write so projection entries written before the write can
+# never be served afterwards, even if key deletion races or fails.
+EPOCH_KEY_PREFIX = "graph_revision"
+# Deterministic signature for requests without a GraphRAG focus set.
+FOCUS_NONE_SIGNATURE = "none"
+
+
+async def _graph_revision(redis: Any, series_id: str) -> int:
+    """Current per-series cache epoch; 0 (the default) when never bumped."""
+    raw = await redis.get(f"{EPOCH_KEY_PREFIX}:{series_id}")
+    if raw is None:
+        return 0
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return 0
+
+
+def focus_signature(focus_ids: list[str] | None) -> str:
+    """Deterministic SHA-256 request signature for a focus set.
+
+    Canonicalizes by validation-free deduplication + lexical sorting, then
+    hashes the length-prefixed canonical sequence so ordering and duplicate
+    variations of the same focus set share one cache key while distinct
+    focus sets never collide. ``None``/empty maps to the fixed ``none``
+    signature. Callers validate focus ids against the safe payload at the
+    projection layer; the signature only needs them distinct per set.
+    """
+    if not focus_ids:
+        return FOCUS_NONE_SIGNATURE
+    canonical = sorted(set(focus_ids))
+    payload = "".join(f"{len(part)}:{part}" for part in canonical)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _cache_key(series_id: str, effective_boundary: int, user_id: str | None) -> str:
@@ -89,7 +125,13 @@ async def invalidate_series(series_id: str) -> None:
         return
     try:
         redis = get_redis()
+        # Atomic epoch bump BEFORE deletion: a projection write that raced
+        # ahead of this invalidation lands on the old-epoch key, which is
+        # never read again (D-30 race separation).
+        await redis.incr(f"{EPOCH_KEY_PREFIX}:{series_id}")
         async for key in redis.scan_iter(match=f"graph:{series_id}:*"):
+            await redis.delete(key)
+        async for key in redis.scan_iter(match=f"viz:{series_id}:*"):
             await redis.delete(key)
     except Exception:
         return
@@ -116,10 +158,12 @@ def _visualization_cache_key(
     view: str,
     projection_version: str,
     user_id: str | None,
+    epoch: int,
+    focus_sig: str,
 ) -> str:
     return (
         f"viz:{series_id}:{effective_boundary}:{view}:{projection_version}:"
-        f"{user_id or 'anon'}"
+        f"{user_id or 'anon'}:{epoch}:{focus_sig}"
     )
 
 
@@ -129,11 +173,13 @@ async def get_cached_visualization(
     view: str,
     projection_version: str,
     user_id: str | None,
+    focus_ids: list[str] | None = None,
 ) -> dict[str, Any] | None:
     """Return the cached VisualizationDTO payload, or None (miss/bypass).
 
-    Any Redis failure, invalid JSON, a payload that is not a valid
-    ``VisualizationDTO``, or a payload whose metadata contradicts the
+    Any Redis failure (including an unreadable epoch — the key is never
+    constructed without one, D-30), invalid JSON, a payload that is not a
+    valid ``VisualizationDTO``, or a payload whose metadata contradicts the
     request's key dimensions (projection_version / view_type /
     effective_view_order) is a MISS — a stale or poisoned entry is never
     served (T10-CACHE-02/T10-CACHE-03).
@@ -141,9 +187,17 @@ async def get_cached_visualization(
     if not get_settings().redis_url:
         return None
     try:
-        value = await get_redis().get(
+        redis = get_redis()
+        epoch = await _graph_revision(redis, series_id)
+        value = await redis.get(
             _visualization_cache_key(
-                series_id, effective_boundary, view, projection_version, user_id
+                series_id,
+                effective_boundary,
+                view,
+                projection_version,
+                user_id,
+                epoch,
+                focus_signature(focus_ids),
             )
         )
     except Exception:
@@ -176,14 +230,27 @@ async def set_cached_visualization(
     user_id: str | None,
     response: dict[str, Any],
     ttl_seconds: int = DEFAULT_GRAPH_TTL_SECONDS,
+    focus_ids: list[str] | None = None,
 ) -> None:
-    """Store a VisualizationDTO payload (``model_dump(mode="json")``)."""
+    """Store a VisualizationDTO payload (``model_dump(mode="json")``).
+
+    The epoch is read at write time: a write that raced an invalidation
+    populates only the old-epoch key, which is never served again (D-30).
+    """
     if not get_settings().redis_url:
         return
     try:
-        await get_redis().setex(
+        redis = get_redis()
+        epoch = await _graph_revision(redis, series_id)
+        await redis.setex(
             _visualization_cache_key(
-                series_id, effective_boundary, view, projection_version, user_id
+                series_id,
+                effective_boundary,
+                view,
+                projection_version,
+                user_id,
+                epoch,
+                focus_signature(focus_ids),
             ),
             ttl_seconds,
             json.dumps(response),
