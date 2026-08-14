@@ -104,6 +104,7 @@ None yet.
 | 260813-gao | Fix broken node portrait images in production: apiUrl() helper prefixes relative image_url with VITE_API_BASE_URL at both consumption sites (Cytoscape imageUrl + DetailPanel img src); local vite-proxy behavior unchanged | 2026-08-13 | 73ed961 | [260813-gao-fix-broken-node-portrait-images-in-produ](./quick/260813-gao-fix-broken-node-portrait-images-in-produ/) |
 | 260813-wyp | Resizable Story Event Timeline rail: drag its left edge leftwards to widen (pointer events, 240..min(640,60vw) clamp) or use ArrowLeft/ArrowRight on the focused separator handle (±16px); no new dependencies | 2026-08-13 | b714e79, 316b938 | [260813-wyp-make-the-story-event-timeline-rail-horiz](./quick/260813-wyp-make-the-story-event-timeline-rail-horiz/) |
 | 260813-fil | Graph Filters panel restyled to the Settings language: card header with All/None ghost actions, Separator sections, labeled rows with role=switch toggles (44px rows, focus rings); new GraphFilterPanel.test.tsx (5 tests) | 2026-08-13 | 98c5270 | — |
+| 260814-viz | Phase-10 visualization frontend wiring (milestone-audit GAP-1 closure): Characters/Evidence tabs fetch character_network/investigation projections, Expand menu (7 keys) → /graph/expand with delta merge + Undo/Collapse, Answer Graph fetches graphrag_focus with citation focus ids; GraphCanvas visualization prop: undefined=leave-projection, null=loading-retain; Story/Advanced keep legacy scene (user content) | 2026-08-14 | b133ee7, ec13d3d | — |
 
 ## Deferred Items
 
