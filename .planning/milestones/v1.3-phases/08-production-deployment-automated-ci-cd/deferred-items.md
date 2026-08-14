@@ -23,4 +23,6 @@ tracked here for the phase owner).
   seeded series + origin='canonical'), or add teardown that deletes
   test-ingested candidate claims in `test_candidate_ingest.py` /
   `test_candidate_review.py`.
-- **Status:** Open technical debt — mapped to no v1.3 requirement (STATE.md).
+- **Status:** RESOLVED 2026-08-14 (Phase 9, plan 09-08, commit `cc148a5`) —
+  scratch-series isolation + teardown fixtures, drift-agnostic seed
+  assertions, and a CI DB-pollution gate (PROB-22/#46); no longer open.

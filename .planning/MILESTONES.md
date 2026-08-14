@@ -1,5 +1,22 @@
 # Milestones
 
+## v1.3 Production Deployment & Access Hardening (Shipped: 2026-08-14)
+
+**Phases completed:** 3 phases, 37 plans, 58 tasks
+
+**Key accomplishments:**
+
+- Live zero-cost production deployment (Phase 8): Render + Vercel + AuraDB Free + Upstash Redis, email allowlist, admin role, BYOK LLM chat (browser-held key), hardened cookie/CORS/CSRF/rate-limits (Redis multi-worker 429s), graph-cache invalidation, GitHub Actions CI, UptimeRobot monitoring
+- Full audit remediation + rebrand (Phase 9): all 45+ PROBLEMS.md findings resolved, `hdgrafcehennemi` → `spoilerless` rename, 10 new features (search/jump, timeline, reveal highlight, dashboard, export, path finder, full-text search, command palette, shareable snapshots, mobile) + FEAT-11 backlinks/hover/⌘K/filters/properties
+- Deterministic test infrastructure (Phase 9): scratch-series isolation + drift-agnostic seed asserts, zombie sweep + CI DB-pollution gate, lint 0 errors, core-module direct tests — suite green without touching the live DB
+- Narrative visualization redesign (Phase 10): library-neutral spoiler-safe DTO, 6 projections, four-view hierarchy (Story/Characters/Evidence/Advanced), Episode Overview variants with hard bounds, server-allowlisted semantic expansion (undo/collapse), GraphRAG Answer Graph, benchmark harness (30/50→300/1000)
+- GAP-1 wiring closure (`260814-viz`): frontend fetches `character_network`/`investigation`/`graphrag_focus` projections + Expand menu end-to-end — 400 frontend / 130 backend tests green
+- Closeout gates: 98/98 coverage audit, 11/11 regression chunks, operator golden-path UAT (12/12 scenarios, 1 BYOK-chat row blocked by zero-cost policy)
+
+**Closeout type:** verified_closeout (all 3 phases verified passed, 75/75 requirements checked; GAP-2 requirement checkboxes fixed inline; audit-open items acknowledged — 1 deferred quick task `dexter-s01e01-enrichment`, 4 stale Phase-08 deferred rows marked RESOLVED in `deferred-items.md`)
+
+---
+
 ## v1.1 MVP (Shipped: 2026-08-02)
 
 **Phases completed:** 8 phases, 35 plans, 47 tasks (supersedes v1.0 below — adds Phase 6: Spoiler-Safe GraphRAG Chat and Graph-Editing Agent)

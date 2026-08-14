@@ -2,38 +2,36 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Production Deployment & Access Hardening
-current_phase: 10
-current_phase_name: polish-finishing-touches
-status: executing
-stopped_at: Phase 10 verified (v1.3, 3/3 phases)
-last_updated: "2026-08-13T21:35:00.000Z"
-last_activity: 2026-08-13
-last_activity_desc: Plan 10-11 complete — shipped-state docs + 98-source coverage audit; Phase 10 DONE
+status: Awaiting next milestone
+stopped_at: Completed 10-02-PLAN.md
+last_updated: "2026-08-14T16:10:42.433Z"
+last_activity: 2026-08-14
+last_activity_desc: Milestone v1.3 completed and archived
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 37
-  completed_plans: 35
-  percent: 67
+  completed_plans: 37
+  percent: 100
+current_phase: 10
+current_phase_name: polish-finishing-touches
 ---
 
 # HD Graf Cehennemi — Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-04)
+See: .planning/PROJECT.md (updated 2026-08-14 after v1.3)
 
 **Core value:** Users can safely explore a TV-series knowledge graph — and chat about it — without ever seeing information beyond their selected watch progress; the backend filters before data reaches the frontend, the LLM, or any tool call.
-**Current focus:** Phase 10 — polish-finishing-touches
+**Current focus:** Planning next milestone (v1.3 shipped and archived 2026-08-14)
 
 ## Current Position
 
-Phase: 10 (polish-finishing-touches) — EXECUTING
-Plan: 11 of 11 (COMPLETE) — phase verified 2026-08-14
-Status: Ready to execute
-Last activity: 2026-08-13 — Plan 10-09 complete: full regression gate green (11/11 chunks, 388 frontend)
-
-Progress: [████████░░] 100% (v1.3, 3/3 phases); 7 phases complete across v1.0–v1.2
+Phase: Milestone v1.3 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-14 — Milestone v1.3 completed and archived
 
 ## Performance Metrics
 
@@ -112,6 +110,7 @@ Items acknowledged and carried forward, not in v1.3 scope:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
+| quick_task | dexter-s01e01-enrichment (20260804) — data/code/offline tests (47) green; live AuraDB seed + DB-backed tests + browser acceptance unverified (Aura auth failure at the time) | Incomplete | Acknowledged at v1.3 close 2026-08-14 (milestone audit §4.1) |
 | OPS | Full CI/CD: dependency scanning, artifact publication, staged promotion, branch-protection enforcement (OPS-01 is a minimal PR gate only) | Deferred | v1.3 requirements gathering |
 | OPS | Full observability: centralized logs, metrics dashboards, incident/rollback runbook automation (OPS-02 is a single health-check ping only) | Deferred | v1.3 requirements gathering |
 | Content | Person / ACTED_AS / APPEARS_IN actor model | Deferred | Carried from v1.1/v1.2 |
@@ -127,5 +126,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Phase 8 is CLOSED — no open Phase 8 action items. UptimeRobot monitor is live (UAT #11 pass; free-tier false-downs during Render sleep are a known free-tier cost, not a defect).
-- Resume with Phase 9 planning (feature expansion + full audit remediation, per `.planning/REQUIREMENTS.md`). Phase 9 carries 8 Phase 8 carry-over plans (09-01..09-08) listed in ROADMAP.md — CI smoke re-run to main (09-02) and admin-role live check (09-03) are the two user-action-adjacent ones.
+- Start the next milestone with /gsd-new-milestone
