@@ -9,14 +9,14 @@
 | # | Scenario | Result | Evidence |
 |---|---|---|---|
 | 1 | Login (visitor + authenticated path) → series/episode select → Story opens bounded Episode Overview + Event Timeline rail | ✅ PASS | Operator hands-on; automated: App.test.tsx four-tab suite (34 tests) + 392-test full frontend suite |
-| 2 | Characters tab — Character Network / Local Neighborhood; camera preserved across views | ✅ PASS | Operator hands-on; GraphCanvas/useSceneState suites green |
-| 3 | Evidence tab — Investigation / Evidence Chain layered Claim → Evidence → Source; "Show in graph" explicit | ✅ PASS | Operator hands-on; App.test.tsx Evidence Chain surface tests |
+| 2 | Characters tab — Character Network / Local Neighborhood; camera preserved across views | ✅ PASS (re-verified 2026-08-14 after 260814-viz wiring) | Operator hands-on; Characters tab now fetches the `character_network` projection (App.test.tsx wiring test); GraphCanvas/useSceneState suites green |
+| 3 | Evidence tab — Investigation / Evidence Chain layered Claim → Evidence → Source; "Show in graph" explicit | ✅ PASS (re-verified 2026-08-14) | Operator hands-on; Evidence tab now fetches the `investigation` projection; EvidenceChain surface tests green |
 | 4 | Advanced tab — Full Graph + debug labels | ✅ PASS | Operator hands-on; debugLabels test green (GraphCanvas.test.tsx) |
 | 5 | BYOK chat contract (settings masking/headers/response handling) | ⏸ BLOCKED (operator-touch) | No zero-cost provider key approved at UAT time; automated chat-llm chunk green on FakeLLM (10-09 full gate). External-provider call requires an operator-approved zero-cost key — recorded, not deferred silently |
 | 6 | Notes + export | ✅ PASS | Operator hands-on; DetailPanel readOnly + export tests green |
 | 7 | Search / path / focus | ✅ PASS | Operator hands-on; NodeSearch/PathFinder suites green |
-| 8 | Expansion → collapse/undo (no global relayout) | ✅ PASS | Operator hands-on; useSceneState history tests + GraphCanvas no-relayout tests green |
-| 9 | Answer Graph open → close restores camera/selection/expansions/timeline | ✅ PASS | Operator hands-on; CLOSE_TEMPORARY snapshot tests (filters + active view) green |
+| 8 | Expansion → collapse/undo (no global relayout) | ✅ PASS (re-verified 2026-08-14 — was NOT wired at first approval; audit GAP-1) | Expand menu (7 keys) wired to `/graph/expand` + delta merge + Undo/Collapse (App.test.tsx expansion flow test); useSceneState history tests + GraphCanvas no-relayout tests green |
+| 9 | Answer Graph open → close restores camera/selection/expansions/timeline | ✅ PASS (re-verified 2026-08-14 — graphrag_focus fetch was NOT wired at first approval; audit GAP-1) | Answer Graph now fetches `graphrag_focus` with citation focus ids (App.test.tsx wiring test); CLOSE_TEMPORARY snapshot tests (filters + active view) green |
 | 10 | **Episode 2 → Episode 1 spoiler disappearance** (mandatory leak check) | ✅ PASS | Operator hands-on; boundary fail-closed matrix (spoiler policy + projection suites) green |
 | 11 | Event Timeline rail resize (drag left edge / keyboard) — quick task 260813-wyp | ✅ PASS | Operator hands-on; 4 resize tests green |
 | 12 | Graph Filters settings-style panel + scrolling — quick task 260813-fil | ✅ PASS | Operator hands-on; GraphFilterPanel.test.tsx (5 tests) green |
