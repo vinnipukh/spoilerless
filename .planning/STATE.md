@@ -111,6 +111,7 @@ Items acknowledged and carried forward, not in v1.3 scope:
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
 | quick_task | dexter-s01e01-enrichment (20260804) — data/code/offline tests (47) green; live AuraDB seed + DB-backed tests + browser acceptance unverified (Aura auth failure at the time) | Incomplete | Acknowledged at v1.3 close 2026-08-14 (milestone audit §4.1) |
+| quick_task | 20260814-security-audit — 10-subagent adversarial audit; deliverables SECURITY_AUDIT.md / SECURITY_ATTACK_SURFACE.md / SECURITY_TEST_PLAN.md; verdict NOT public-ready (spoiler-boundary bypass anonymous + certain; 10-item P0 list) | Complete | 2026-08-15 |
 | OPS | Full CI/CD: dependency scanning, artifact publication, staged promotion, branch-protection enforcement (OPS-01 is a minimal PR gate only) | Deferred | v1.3 requirements gathering |
 | OPS | Full observability: centralized logs, metrics dashboards, incident/rollback runbook automation (OPS-02 is a single health-check ping only) | Deferred | v1.3 requirements gathering |
 | Content | Person / ACTED_AS / APPEARS_IN actor model | Deferred | Carried from v1.1/v1.2 |
