@@ -1231,7 +1231,7 @@ tests green on the ephemeral target; teardown proof recorded.
 source (README, ARCHITECTURE, CONFIGURATION, GETTING-STARTED, DEVELOPMENT,
 TESTING, API, DEPLOYMENT, CONTRIBUTING) and 16 hand-written/reference docs
 re-verified; ~1,400 claims checked by verifier subagents against the live
-codebase, zero failures at close (every doc 100% after fix iterations).
+codebase, zero failures at close (every doc 100% after fix iterations). Commit: 23f619e.
 
 ### Fixes this pass (all verifier-confirmed, Edit-only)
 - **Line-pin drift** — threat-model (~30 refs) and others: symbols correct,
