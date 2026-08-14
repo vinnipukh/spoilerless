@@ -481,11 +481,20 @@ export function GraphCanvas({
 
   // 10-04 (D-44): the visualization path holds the LAST non-null DTO so a
   // loading/error `null` prop retains the prior scene instead of flashing a
-  // blank canvas or swapping to the full graph. The legacy path (no
-  // visualization prop ever) is untouched.
+  // blank canvas or swapping to the full graph.
+  // 260814-viz: `undefined` (the legacy callers never pass the prop) is the
+  // EXPLICIT leave-projection signal — the DTO hold is dropped so Story /
+  // Advanced render the legacy GraphResponse scene again (user content
+  // exists only there). `null` still means "loading, retain".
   const lastVisualizationRef = useRef<VisualizationDTO | null>(null)
-  if (visualization) lastVisualizationRef.current = visualization
-  const activeVisualization = visualization ?? lastVisualizationRef.current
+  let activeVisualization: VisualizationDTO | null
+  if (visualization === undefined) {
+    lastVisualizationRef.current = null
+    activeVisualization = null
+  } else {
+    if (visualization) lastVisualizationRef.current = visualization
+    activeVisualization = visualization ?? lastVisualizationRef.current
+  }
 
   const elements = useMemo(() => {
     if (activeVisualization) {

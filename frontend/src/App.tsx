@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AuthProvider } from './providers/AuthProvider'
 import { useAuth } from './providers/useAuth'
 import { LoginPage } from './components/auth/LoginPage'
@@ -12,6 +12,7 @@ import { NodeSearch } from './components/graph/NodeSearch'
 import { CommandPalette, type CommandPaletteSelection } from './components/palette/CommandPalette'
 import { TimelineView } from './components/timeline/TimelineView'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs'
+import { Button } from './components/ui/button'
 import { SeriesDashboard } from './components/series/SeriesDashboard'
 import { GraphLoadingState, GraphErrorState, GraphEmptyState } from './components/graph/GraphStatus'
 import { DetailPanel } from './components/detail/DetailPanel'
@@ -27,6 +28,8 @@ import { useEpisodes } from './hooks/useEpisodes'
 import { useGraph } from './hooks/useGraph'
 import { useNotes } from './hooks/useNotes'
 import { useWatchProgress } from './hooks/useWatchProgress'
+import { fetchExpansion, fetchVisualization, type ExpansionKey } from './api/graph'
+import type { VisualizationDTO, VisualizationViewType } from './types/graph'
 import { useHotkey } from './hooks/useHotkey'
 import { useSceneState } from './hooks/useSceneState'
 import { AnswerGraph } from './components/graph/AnswerGraph'
@@ -36,6 +39,26 @@ import type { Citation } from './types/chat'
 import type { ChangeSet } from './types/changeSet'
 import { operationTargetRefs } from './types/changeSet'
 import type { GraphResponse } from './types/graph'
+
+// 260814-viz: the 7 allowlisted expansion keys + human labels (D-21).
+const EXPANSION_KEYS: ExpansionKey[] = [
+  'family',
+  'work',
+  'conflict',
+  'episode_events',
+  'clues',
+  'locations',
+  'evidence',
+]
+const EXPANSION_KEY_LABELS: Record<ExpansionKey, string> = {
+  family: 'Family',
+  work: 'Work',
+  conflict: 'Conflict',
+  episode_events: 'Episode events',
+  clues: 'Clues',
+  locations: 'Locations',
+  evidence: 'Evidence',
+}
 
 // Inline SVG gear icon for the topBar Settings toggle (matches the inline
 // icon pattern used by AppShell's UserIcon and ChatLauncher).
@@ -133,7 +156,7 @@ function AuthenticatedApp() {
   const watchProgress = useWatchProgress({ persist: !isVisitor })
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(watchProgress.seriesId)
   const episodesState = useEpisodes(selectedSeriesId, watchProgress.viewAsOfOrder)
-  const graphState = useGraph(watchProgress.seriesId, watchProgress.confirmedOrder)
+  const graphState = useGraph(watchProgress.seriesId, watchProgress.viewAsOfOrder)
 
   // PROB-09/#74: the last successfully loaded graph survives refetch and
   // boundary loads so GraphCanvas never unmounts (loading/error render as
@@ -236,6 +259,147 @@ function AuthenticatedApp() {
   function handleCloseAnswerGraph() {
     dispatchScene({ type: 'CLOSE_TEMPORARY' })
     setEvidenceMode('investigation')
+  }
+
+  // 260814-viz: the Phase 10 visualization wiring (audit-gap closure).
+  // activeView maps the four-tab hierarchy to projection view types; the DTO
+  // fetch drives GraphCanvas's `visualization` prop; expansions merge their
+  // delta DTOs into the base scene; Answer Graph swaps in the graphrag_focus
+  // projection while open. All spoiler filtering stays backend-side (D-05).
+  const activeView = useMemo<VisualizationViewType | null>(() => {
+    // 260814-viz: Story keeps the legacy scene (user content lives in the
+    // legacy GraphResponse — custom nodes/edges are never part of a
+    // projection DTO); Advanced keeps the legacy full graph for the same
+    // reason. Characters and Evidence render the narrative projections.
+    switch (topTab) {
+      case 'characters':
+        return 'character_network'
+      case 'evidence':
+        return evidenceMode === 'answer_graph' ? 'graphrag_focus' : 'investigation'
+      default:
+        return null
+    }
+  }, [topTab, evidenceMode])
+
+  // The effective boundary the backend clamps to; falls back to episode 1
+  // before progress resolves (the backend re-clamps anyway).
+  const confirmedOrder = watchProgress.confirmedOrder ?? 1
+
+  const [baseVisualization, setBaseVisualization] = useState<VisualizationDTO | null>(null)
+  const [focusVisualization, setFocusVisualization] = useState<VisualizationDTO | null>(null)
+  const [expansionRecords, setExpansionRecords] = useState<
+    { anchorId: string; key: string; additionIds: string[]; dto: VisualizationDTO }[]
+  >([])
+  const [expandOpen, setExpandOpen] = useState(false)
+
+  useEffect(() => {
+    if (!activeView || activeView === 'graphrag_focus' || !watchProgress.seriesId) return
+    let cancelled = false
+    fetchVisualization(watchProgress.seriesId, activeView, confirmedOrder)
+      .then((dto) => {
+        if (!cancelled) setBaseVisualization(dto)
+      })
+      .catch((error: unknown) => {
+        // Keep the prior scene (and the legacy backbone) on failure — never
+        // blank the canvas; the last non-null DTO is held by GraphCanvas.
+        console.error('visualization fetch failed', error)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeView, watchProgress.seriesId, watchProgress.confirmedOrder])
+
+  // Expansions belong to the active scene — reset when the view changes.
+  useEffect(() => {
+    setExpansionRecords([])
+  }, [activeView])
+
+  useEffect(() => {
+    if (evidenceMode !== 'answer_graph' || !graphFocus?.nodeIds.length || !watchProgress.seriesId) {
+      setFocusVisualization(null)
+      return
+    }
+    let cancelled = false
+    fetchVisualization(watchProgress.seriesId, 'graphrag_focus', confirmedOrder, graphFocus.nodeIds)
+      .then((dto) => {
+        if (!cancelled) setFocusVisualization(dto)
+      })
+      .catch((error: unknown) => {
+        console.error('graphrag focus fetch failed', error)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [evidenceMode, graphFocus, watchProgress.seriesId, watchProgress.confirmedOrder])
+
+  const mergedVisualization = useMemo<VisualizationDTO | null>(() => {
+    const base = activeView === 'graphrag_focus' ? focusVisualization : baseVisualization
+    if (!base) return null
+    if (expansionRecords.length === 0) return base
+    const nodes = [...base.nodes]
+    const edges = [...base.edges]
+    const timeline = [...(base.timeline ?? [])]
+    const seenNodes = new Set(nodes.map((n) => n.id))
+    const seenEdges = new Set(edges.map((e) => e.id))
+    const seenTimeline = new Set(timeline.map((t) => t.id))
+    for (const record of expansionRecords) {
+      for (const node of record.dto.nodes) {
+        if (!seenNodes.has(node.id)) {
+          seenNodes.add(node.id)
+          nodes.push(node)
+        }
+      }
+      for (const edge of record.dto.edges) {
+        if (!seenEdges.has(edge.id)) {
+          seenEdges.add(edge.id)
+          edges.push(edge)
+        }
+      }
+      for (const item of record.dto.timeline ?? []) {
+        if (!seenTimeline.has(item.id)) {
+          seenTimeline.add(item.id)
+          timeline.push(item)
+        }
+      }
+    }
+    return { ...base, nodes, edges, timeline }
+  }, [baseVisualization, focusVisualization, expansionRecords, activeView])
+
+  async function handleExpand(key: string) {
+    if (!selectedElement || selectedElement.kind !== 'node' || !watchProgress.seriesId) return
+    try {
+      const dto = await fetchExpansion(
+        watchProgress.seriesId,
+        selectedElement.id,
+        key as ExpansionKey,
+        confirmedOrder,
+      )
+      const record = {
+        anchorId: selectedElement.id,
+        key,
+        additionIds: dto.nodes.map((n) => n.id),
+        dto,
+      }
+      setExpansionRecords((prev) => [...prev, record])
+      dispatchScene({
+        type: 'ADD_EXPANSION',
+        nodeIds: record.additionIds,
+        record: { anchorId: record.anchorId, key: record.key, additionIds: record.additionIds },
+      })
+      setExpandOpen(false)
+    } catch (error: unknown) {
+      console.error('expansion failed', error)
+    }
+  }
+
+  function handleUndoExpansion() {
+    setExpansionRecords((prev) => prev.slice(0, -1))
+    dispatchScene({ type: 'UNDO_EXPANSION' })
+  }
+
+  function handleCollapseExpansion(anchorId: string) {
+    setExpansionRecords((prev) => prev.filter((r) => r.anchorId !== anchorId))
+    dispatchScene({ type: 'COLLAPSE_EXPANSION', anchorId })
   }
 
   function handleClearFocus() {
@@ -363,7 +527,7 @@ function AuthenticatedApp() {
   const episodes = episodesState.status === 'success' ? episodesState.data : []
 
   // FEAT-03 (09-07): newly-revealed highlight on episode advance. When a
-  // FORWARD advance changes watchProgress.confirmedOrder, diff the node/edge
+  // FORWARD advance changes confirmedOrder, diff the node/edge
   // id sets of the previous and current graph payloads and pass the
   // newly-appeared ids to GraphCanvas for a transient 4000ms glow. Uses the
   // established "adjust state when a key changes" pattern (state copies,
@@ -703,7 +867,66 @@ function AuthenticatedApp() {
             onNewlyRevealedDone={() => setNewlyRevealedIds(null)}
             readOnly={isVisitor}
             onShareLink={isVisitor ? undefined : () => setShareDialogOpen(true)}
+            visualization={activeView ? mergedVisualization : undefined}
           />
+
+          {/* 260814-viz: semantic expansion — visible in projection views
+              when a node is selected; menu offers the 7 allowlisted keys;
+              Undo pops the newest record, Collapse removes an anchor's
+              records. Local placement + no global relayout (D-23). */}
+          {activeView && activeView !== 'graphrag_focus' && selectedElement?.kind === 'node' && (
+            <div className="fixed top-20 left-4 z-[40] w-56">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex min-h-[44px] h-8 w-full items-center justify-between gap-1.5 rounded-lg bg-card/95 px-3 text-xs text-muted-foreground shadow-sm ring-1 ring-border hover:text-foreground backdrop-blur-sm"
+                onClick={() => setExpandOpen((v) => !v)}
+                aria-expanded={expandOpen}
+              >
+                <span className="truncate">Expand {selectedElement.label}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-3.5 shrink-0" aria-hidden="true">
+                  <path d="M5 12h14M12 5v14" />
+                </svg>
+              </Button>
+              {expandOpen && (
+                <div className="mt-2 rounded-lg border border-border bg-card p-2 shadow-md">
+                  <div className="flex flex-col gap-1">
+                    {EXPANSION_KEYS.map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => handleExpand(key)}
+                        className="flex min-h-[44px] items-center rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        {EXPANSION_KEY_LABELS[key]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {expansionRecords.length > 0 && (
+                <div className="mt-2 flex flex-col gap-1 rounded-lg border border-border bg-card p-2 shadow-md">
+                  <button
+                    type="button"
+                    onClick={handleUndoExpansion}
+                    className="flex min-h-[44px] items-center rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    Undo last expansion
+                  </button>
+                  {Array.from(new Set(expansionRecords.map((r) => r.anchorId))).map((anchorId) => (
+                    <button
+                      key={anchorId}
+                      type="button"
+                      onClick={() => handleCollapseExpansion(anchorId)}
+                      className="flex min-h-[44px] items-center rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      Collapse expansions of {anchorId}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* FEAT-01/07 (09-09): floating search bar over the canvas — the
               '/' hotkey focuses it via searchInputRef; rows select through
@@ -754,7 +977,7 @@ function AuthenticatedApp() {
               seriesTitle={activeGraph.series.title}
               viewAsOfOrder={watchProgress.viewAsOfOrder}
               currentEpisodeCode={
-                episodes.find((episode) => episode.episode_order === watchProgress.confirmedOrder)?.code ?? null
+                episodes.find((episode) => episode.episode_order === confirmedOrder)?.code ?? null
               }
               onShowInGraph={handleShowInGraph}
               onOpenDetail={handleOpenDetail}

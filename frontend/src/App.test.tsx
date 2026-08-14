@@ -14,6 +14,44 @@ import {
 import { useChatMessages } from './hooks/useChatMessages'
 import { BYOK_STORAGE_KEY } from '@/lib/byok'
 import type { SeriesResponse, EpisodeResponse } from './types/series'
+import type { VisualizationDTO } from './types/graph'
+
+// 260814-viz: minimal projection DTO fixtures for the Phase 10 wiring tests.
+// Shape mirrors spoilerless/app/domain/visualization.py (D-08/D-29).
+const vizFixture: VisualizationDTO = {
+  metadata: {
+    projection_version: '1.0.0',
+    view_type: 'episode_overview',
+    series_id: 'series_dexter',
+    series_title: 'Dexter',
+    episode_order: 1,
+    visible_until_order: 1,
+    effective_view_order: 1,
+  },
+  nodes: [
+    { id: 'char_dexter_morgan', kind: 'Character', label: 'Dexter Morgan', display_tier: 1, order: 1, episode_id: 'ep_s01e01', image_url: null, image_source_url: null, origin: 'canonical' },
+    { id: 'char_debra_morgan', kind: 'Character', label: 'Debra Morgan', display_tier: 1, order: 2, episode_id: 'ep_s01e01', image_url: null, image_source_url: null, origin: 'canonical' },
+  ],
+  edges: [
+    { id: 'edge_family_dexter_debra', source: 'char_dexter_morgan', target: 'char_debra_morgan', relation_class: 'Family', order: 1, claim_id: null, origin: 'canonical' },
+  ],
+  groups: [],
+  timeline: [],
+  focus: null,
+}
+
+const expansionFixture: VisualizationDTO = {
+  ...vizFixture,
+  metadata: { ...vizFixture.metadata, view_type: 'expansion:family' },
+  nodes: [
+    ...vizFixture.nodes,
+    { id: 'char_harry_morgan', kind: 'Character', label: 'Harry Morgan', display_tier: 2, order: 5, episode_id: null, image_url: null, image_source_url: null, origin: 'canonical' },
+  ],
+  edges: [
+    ...vizFixture.edges,
+    { id: 'edge_family_dexter_harry', source: 'char_dexter_morgan', target: 'char_harry_morgan', relation_class: 'Family', order: 2, claim_id: null, origin: 'canonical' },
+  ],
+}
 import type { UserResponse } from './types/auth'
 import type { Citation } from './types/chat'
 import type { ChangeSet } from './types/changeSet'
@@ -160,6 +198,14 @@ function fetchStub(input: RequestInfo | URL): Promise<Response> {
   // App endpoints
   if (url === '/api/series') return Promise.resolve(jsonResponse(seriesFixture))
   if (url.startsWith('/api/series/series_dexter/episodes')) return Promise.resolve(jsonResponse(episodesFixture))
+  // 260814-viz: Phase 10 projection routes — checked BEFORE the generic
+  // /graph branch (their URLs also start with /graph).
+  if (url.includes('/graph/visualization')) {
+    return Promise.resolve(jsonResponse(vizFixture))
+  }
+  if (url.includes('/graph/expand')) {
+    return Promise.resolve(jsonResponse(expansionFixture))
+  }
   if (url.startsWith('/api/series/series_dexter/graph')) {
     // 06-10: routed by boundary order — most tests only ever confirm order 1
     // (graphResponseS01E01), but the progress-decrease-clears-stale-focus
@@ -191,7 +237,30 @@ function fetchStub(input: RequestInfo | URL): Promise<Response> {
 }
 
 function graphFetchCalls() {
-  return vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('/graph'))
+  // 260814-viz: the projection/expansion fetches also carry '/graph' — the
+  // legacy-route assertions must only count the plain /graph fetch.
+  return vi.mocked(fetch).mock.calls.filter(
+    ([url]) => String(url).includes('/graph') && !String(url).includes('/graph/visualization') && !String(url).includes('/graph/expand'),
+  )
+}
+
+// Module-scoped citation helper (used by the 06-10 focus wiring describe AND
+// the 260814-viz Answer Graph flow test).
+function chatMessagesWithCitation() {
+  return {
+    ...defaultChatMessagesReturn(),
+    status: 'success' as const,
+    messages: [
+      {
+        id: 'message_assistant_1',
+        role: 'assistant',
+        content: 'Dexter works at Miami Metro.',
+        created_at: '2026-01-01T00:01:05Z',
+        visible_until_order_snapshot: 1,
+      },
+    ],
+    citations: [claimCitation],
+  }
 }
 
 beforeEach(() => {
@@ -458,23 +527,6 @@ describe('App', () => {
   })
 
   describe('citation graph-focus wiring (06-10, RAG-17)', () => {
-    function chatMessagesWithCitation() {
-      return {
-        ...defaultChatMessagesReturn(),
-        status: 'success' as const,
-        messages: [
-          {
-            id: 'message_assistant_1',
-            role: 'assistant',
-            content: 'Dexter works at Miami Metro.',
-            created_at: '2026-01-01T00:01:05Z',
-            visible_until_order_snapshot: 1,
-          },
-        ],
-        citations: [claimCitation],
-      }
-    }
-
     it('clicking a citation chip\'s "Show in graph" icon updates the graph focus without leaving Chat mode', async () => {
       currentAuthState = 'authenticated'
       sessionStorage.setItem('spoilerless.watchProgress', JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }))
@@ -791,11 +843,15 @@ describe('App', () => {
       expect(await screen.findByRole('heading', { name: 'Dexter Morgan' })).toBeInTheDocument()
 
       // Top-tab switches keep the canvas mounted, the selection, and the
-      // Inspector open — no reset, no relayout (D-47/D-24).
+      // Inspector open — no reset, no relayout (D-47/D-24). Characters now
+      // renders the character_network projection (260814-viz), so returning
+      // to Story may have run a view-switch layout — reset the counter so the
+      // timeline-selection segment below asserts selection never lays out.
       await user.click(screen.getByRole('tab', { name: 'Characters' }))
       await user.click(screen.getByRole('tab', { name: 'Story' }))
       expect(screen.getByTestId('graph-element-char_dexter_morgan')).toBeInTheDocument()
       expect(screen.getByRole('heading', { name: 'Dexter Morgan' })).toBeInTheDocument()
+      graphStubHooks.layoutRuns = 0
 
       // Timeline rail row -> the SAME shared selection (Inspector opens for
       // the event) while the canvas stays mounted and layout stays quiet.
@@ -872,6 +928,98 @@ describe('App', () => {
       fireEvent.pointerMove(handle, { clientX: 300, pointerId: 1 })
       expect(rail).toHaveStyle({ width: '614.4px' })
       fireEvent.pointerUp(handle, { clientX: 300, pointerId: 1 })
+    })
+  })
+
+  describe('phase-10 visualization wiring (260814-viz, audit-gap closure)', () => {
+    it('fetches the character_network projection when the Characters tab is opened', async () => {
+      currentAuthState = 'authenticated'
+      sessionStorage.setItem(
+        'spoilerless.watchProgress',
+        JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }),
+      )
+      const user = userEvent.setup()
+      render(<App />)
+
+      await user.click(await screen.findByRole('tab', { name: 'Characters' }))
+
+      await waitFor(() => {
+        expect(
+          vi.mocked(fetch).mock.calls.some(([url]) =>
+            String(url).includes('/graph/visualization') && String(url).includes('view=character_network'),
+          ),
+        ).toBe(true)
+      })
+    })
+
+    it('selecting a node reveals the Expand menu; Family expansion calls /graph/expand and Undo appears', async () => {
+      currentAuthState = 'authenticated'
+      sessionStorage.setItem(
+        'spoilerless.watchProgress',
+        JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }),
+      )
+      const user = userEvent.setup()
+      render(<App />)
+
+      // The projection views live on the Characters/Evidence tabs — open
+      // Characters so the Expand affordance is active.
+      await user.click(await screen.findByRole('tab', { name: 'Characters' }))
+
+      // Select a node through the search bar (the same handleJumpToNode path
+      // the palette uses). Canvas mock buttons render before the search
+      // dropdown in DOM order — pick the LAST match (the dropdown row).
+      await user.type(await screen.findByPlaceholderText(/search/i), 'Dexter')
+      const searchRows = await screen.findAllByRole('button', { name: /Dexter Morgan/i })
+      await user.click(searchRows[searchRows.length - 1])
+
+      const expandButton = await screen.findByRole('button', { name: /Expand Dexter Morgan/i })
+      await user.click(expandButton)
+      // The canvas edge button also reads "Family" — the menu renders later
+      // in DOM order, so take the LAST match.
+      const familyButtons = await screen.findAllByRole('button', { name: 'Family' })
+      await user.click(familyButtons[familyButtons.length - 1])
+
+      await waitFor(() => {
+        expect(
+          vi.mocked(fetch).mock.calls.some(
+            ([url]) => String(url).includes('/graph/expand') && String(url).includes('expansion_key=family'),
+          ),
+        ).toBe(true)
+      })
+      expect(await screen.findByRole('button', { name: 'Undo last expansion' })).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Undo last expansion' }))
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: 'Undo last expansion' })).not.toBeInTheDocument()
+      })
+    })
+
+    it('Answer Graph mode fetches the graphrag_focus projection with the focus ids', async () => {
+      currentAuthState = 'authenticated'
+      sessionStorage.setItem(
+        'spoilerless.watchProgress',
+        JSON.stringify({ seriesId: 'series_dexter', visibleUntilOrder: 1 }),
+      )
+      vi.mocked(useChatMessages).mockReturnValue(chatMessagesWithCitation())
+      const user = userEvent.setup()
+      render(<App />)
+
+      // Give the citation its focus: "Show in graph" sets graphFocus.
+      await user.click(await screen.findByRole('button', { name: 'Open chat' }))
+      await user.click(await screen.findByRole('button', { name: 'Show in graph' }))
+      expect(await screen.findByText('Highlighting 3')).toBeInTheDocument()
+
+      // Enter the Evidence tab's Answer Graph nested mode.
+      await user.click(screen.getByRole('tab', { name: 'Evidence' }))
+      await user.click(screen.getByRole('tab', { name: 'Answer Graph' }))
+
+      await waitFor(() => {
+        expect(
+          vi.mocked(fetch).mock.calls.some(
+            ([url]) => String(url).includes('/graph/visualization') && String(url).includes('view=graphrag_focus'),
+          ),
+        ).toBe(true)
+      })
     })
   })
 })
