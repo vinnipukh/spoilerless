@@ -9,7 +9,7 @@ The backend is a FastAPI application defined by `spoilerless.app.main:app`. Its 
 - API version: `0.1.0`
 - Registered surface: **52 method/path operations over 39 path templates** (locked by `spoilerless/tests/test_frontend_contract_doc.py`)
 
-All paths below are relative to the backend origin. JSON field names use `snake_case`. The deployed production backend origin is `https://api.spoilerless.net` (Render service `spoilerless` — build `uv sync --frozen`, start `uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT`; see [DEPLOYMENT.md](./DEPLOYMENT.md)); local development serves the same app at `http://localhost:8000`.
+All paths below are relative to the backend origin. JSON field names use `snake_case`. The intended production backend origin is `https://api.spoilerless.net` (example `VITE_API_BASE_URL` in `frontend/.env.example`); the Render service declared in `render.yaml` is `spoilerless-api`, built with `uv sync --frozen` and started with `uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT` — see [DEPLOYMENT.md](./DEPLOYMENT.md). <!-- VERIFY: live production origin https://api.spoilerless.net and DNS/domain state are external to this repository --> Local development serves the same app at `http://localhost:8000`.
 
 ## Authentication
 
@@ -41,7 +41,7 @@ All paths below are relative to the backend origin. JSON field names use `snake_
 
 `google_sub` is an internal identity key and is deliberately excluded from `UserPublic` responses.
 
-The sign-in and logout routes check the request `Origin`, or the origin reconstructed from `Referer`, against `FRONTEND_ORIGINS` via the `verify_origin` dependency. The check fails closed: a request with neither header, or with a `Referer` that cannot be parsed into a candidate origin, is rejected with `403 AUTH_ORIGIN_NOT_ALLOWED`. A literal `*` in `FRONTEND_ORIGINS` disables the check. `SameSite=Lax` on the session cookie is the complementary cookie-level defense against cross-site POSTs.
+Every cookie-authenticated state-changing route — Google sign-in and logout, candidate ingest/edit/approve/reject, ChangeSet propose/confirm/reject/revert, chat session create/delete and message send/stream, progress upsert, revision revert, user-content create/update/delete, LLM-settings PUT, and share create/revoke — checks the request `Origin`, or the origin reconstructed from `Referer`, against `FRONTEND_ORIGINS` via the `CsrfGuardDependency` (an alias of `verify_origin` in `spoilerless/app/api/deps.py`). The check fails closed: a request with neither header, or with a `Referer` that cannot be parsed into a candidate origin, is rejected with `403 AUTH_ORIGIN_NOT_ALLOWED`. A literal `*` in `FRONTEND_ORIGINS` disables the check. `SameSite=Lax` on the session cookie is the complementary cookie-level defense against cross-site POSTs.
 
 ### Session cookie
 
@@ -198,7 +198,7 @@ The `503` body has the same shape with `"status": "degraded"` and `"database": "
 }
 ```
 
-Every graph node and narrative item is filtered by `visible_from_order`. Claims also honor `valid_from_order` and `valid_until_order`. Returned edges are closed over the returned nodes: both endpoints must be present. Canonical/candidate claim projections carry their Claim ID; structural edges and user-authored relationship Claims both carry `claim_id: null`. User-origin edges are emitted only when both endpoints survive same-series node visibility filtering, so clients must not use null `claim_id` alone to classify an edge as structural. `GraphNode` additionally supports optional `image_url` and `image_source_url` fields.
+Every graph node and narrative item is filtered by `visible_from_order`. Claims also honor `valid_from_order` and `valid_until_order`. Returned edges are closed over the returned nodes: both endpoints must be present. Canonical/candidate claim projections carry their Claim ID; structural edges and user-authored relationship Claims both carry `claim_id: null`. User-origin edges are emitted only when both endpoints survive same-series node visibility filtering, so clients must not use null `claim_id` alone to classify an edge as structural. `GraphNode` additionally supports optional `image_url` and `image_source_url` fields; self-hosted character portraits are served from the StaticFiles mount at `/api/static/characters/<id>.webp` (`spoilerless/app/main.py`, PROBLEMS #28 contract — images are never external CDNs), so `image_url` values are origin-relative and pass the CSP `img-src 'self'` rule. The mount is not part of the OpenAPI operation inventory.
 
 #### Shortest path
 
@@ -439,7 +439,7 @@ Only confirm requires `RequireAdminDependency` — applying an AI-proposed Chang
 }
 ```
 
-The boundary must be positive and identify a persisted episode order. The route currently validates the requested order but does **not** clamp it to the creator's persisted watch progress. It generates a `secrets.token_urlsafe(32)` raw token, stores only its SHA-256 hash in a Neo4j `ShareToken`, and returns `201` with `token`, `expires_at`, frontend-relative `url` (`/share/{token}`), `series_id`, `visible_until_order`, and `created_at`. The fixed repository TTL is 2,592,000 seconds (30 days).
+The boundary must be positive and identify a persisted episode order. Since the CR-01 fix (09-REVIEW), the requested order is clamped to the creator's persisted watch progress: no progress record fails closed to order 1, and with a record the effective boundary is `effective_view_order(min(requested, view_as_of_order), watched_through_order)` — a snapshot can never widen the creator's own spoiler-safe window. It generates a `secrets.token_urlsafe(32)` raw token, stores only its SHA-256 hash in a Neo4j `ShareToken`, and returns `201` with `token`, `expires_at`, frontend-relative `url` (`/share/{token}`), `series_id`, `visible_until_order`, and `created_at`. The fixed repository TTL is 2,592,000 seconds (30 days).
 
 `GET /api/share` requires a session and returns only the caller's active, unexpired tokens, newest first. Each item contains `id`, `token_hash`, `series_id`, `visible_until_order`, `created_at`, and `expires_at`; the raw token is returned only at creation.
 
@@ -544,7 +544,7 @@ FastAPI installs `CORSMiddleware` with:
 | Methods | Explicit list: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS` — no wildcard |
 | Headers | Explicit list: `Content-Type`, `Authorization`, `X-LLM-Api-Key`, `X-LLM-Provider`, `X-LLM-Base-URL`, `X-LLM-Model` — no wildcard |
 
-CORS controls browser access but does not authenticate a request. Except for the `verify_origin` dependency on Google sign-in and logout, state-changing routes do not perform their own general Origin/Referer or CSRF-token validation; the `SameSite=Lax` session cookie is the complementary defense.
+CORS controls browser access but does not authenticate a request. Separately, every cookie-authenticated state-changing route carries the `CsrfGuardDependency` origin check described under [Authentication](#authentication) — fail-closed on a missing `Origin`/`Referer`; the `SameSite=Lax` session cookie is the complementary defense, not the only one. `POST /api/series/{series_id}/graph/path` takes only an optional session (`OptionalUserDependency`) and performs no origin check.
 
 ## Security Headers
 

@@ -5,7 +5,7 @@ Spoilerless includes repository configuration for a Vercel frontend, a
 Render FastAPI service, pull-request CI, and local Neo4j through Docker
 Compose. **The production deployment is live and operator-verified (v1.3,
 2026-08-13):** Vercel `app.spoilerless.net`, Render `api.spoilerless.net`
-(service `spoilerless`, build `uv sync --frozen`, start
+(service `spoilerless-api`, build `uv sync --frozen`, start
 `uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT`),
 Neo4j AuraDB Free (`03a8623b`), Upstash Redis (`darling-rat-221809`), and
 Cloudflare DNS + apex redirect. The named tiers and managed-service
@@ -303,17 +303,21 @@ The required/production environment settings are:
 - `REDIS_URL` (Upstash-style `rediss://` TLS connection string; empty
   disables rate limiting and the graph cache)
 
-**Optional server-managed LLM fallback**
+**Optional server-side LLM settings (environment fallback)**
 - `LLM_ENABLED` (default `false`)
 - `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL`
+  (`LLM_PROVIDER` supports `openai_compatible` — the default — and `gemini`)
 - `LLM_TIMEOUT_SECONDS`, `LLM_MAX_OUTPUT_TOKENS`, `LLM_TEMPERATURE`,
   `LLM_MAX_TOOL_ROUNDS`, `LLM_MAX_CONTEXT_ITEMS`, and
   `LLM_MAX_CONTEXT_CHARACTERS`
 - `LLM_FALLBACK_EN` and `LLM_FALLBACK_TR` (optional localized fallback text)
 
 These settings are optional when users supply request-scoped BYOK headers.
-See [CONFIGURATION.md](./CONFIGURATION.md) for provider resolution order,
-defaults, and runtime settings stored in Neo4j.
+Provider resolution order is: BYOK `X-LLM-*` headers first, then non-empty
+settings stored in the Neo4j `:AppSetting {key: 'llm'}` node (admin-managed
+via `GET`/`PUT /api/settings/llm`), with the environment variables above as
+the fallback. See [CONFIGURATION.md](./CONFIGURATION.md) for the full
+resolution order and defaults.
 
 `ALLOWED_EMAILS`, `ADMIN_EMAILS`, `REDIS_URL`,
 `SESSION_COOKIE_SAMESITE`, `LLM_FALLBACK_EN`, and `LLM_FALLBACK_TR` are
@@ -395,11 +399,10 @@ fetch queries Neo4j directly.
   container and a DB-pollution gate.
 - **Structured exception logging**: the chat stream handler logs
   `LLMProviderUnavailable` and bare exceptions with `logger.exception`
-  before yielding the SSE error event. The session/share sweep intends to log
-  failed iterations, but its exception branch calls undefined `logger` while
-  the module defines `log`; a failed sweep therefore raises `NameError`
-  instead of producing that log. Database and LLM error handlers are installed
-  during startup (`install_database_error_handlers`,
+  before yielding the SSE error event. The session/share sweep's background
+  loop catches failed iterations and logs them via `log.exception` — a
+  failed sweep iteration is logged, never fatal. Database and LLM error
+  handlers are installed during startup (`install_database_error_handlers`,
   `install_llm_error_handlers`).
 - **Request-logging middleware**: completed requests are logged with method,
   path, status, and duration (ms); `X-LLM-*`, `Cookie`, `Set-Cookie`, and
@@ -427,7 +430,7 @@ fetch queries Neo4j directly.
   services; production secrets and resource bindings are dashboard-only.
 - `release.yml` does not enforce its stated CI gate and cannot push tags with
   its current `contents: read` permission.
-- A deployment smoke-test workflow is not committed; there is no infrastructure-as-code for DNS, no committed external uptime monitor configuration (the live UptimeRobot monitor is operator-configured, OPS-02), and no automated database backup/restore job.
+- A deployment smoke-test workflow is not committed; there is no infrastructure-as-code for DNS, no committed external uptime monitor configuration (the UptimeRobot monitor is operator-planned, not yet configured — OPS-02; see Outstanding below), and no automated database backup/restore job.
 - No `RENDER_API_KEY` (or equivalent deployment-automation credential)
   exists in the repository or the root `.env`, so dashboard-level fixes —
   most importantly a stale Start Command override — are operator-touch
@@ -435,11 +438,15 @@ fetch queries Neo4j directly.
 
 ### Outstanding (not yet configured)
 
-- **External uptime monitor:** an UptimeRobot HTTPS monitor polls
-  `GET https://api.spoilerless.net/health` every 5 minutes with an email
-  alert contact (OPS-02, live since Phase 8 UAT #11). Free-tier Render
-  sleep cycles can produce false-downs — a known free-tier cost, not a
-  defect. See `docs/ops/runbook.md` §1 for the detection flow.
+- **External uptime monitor (planned, not yet configured):** an UptimeRobot
+  HTTPS monitor polls `GET https://api.spoilerless.net/health` every 5
+  minutes with an email alert contact (OPS-02). Per `docs/ops/runbook.md`
+  §1 the monitor is **planned, not yet configured** — no monitor
+  configuration is tracked in the repository, so until an operator
+  provisions it, detect outages manually with the runbook's §1 curl check.
+  Free-tier Render sleep cycles can produce false-downs — a known free-tier
+  cost, not a defect. See the operator-step VERIFY in [Monitoring](#monitoring)
+  before relying on an external monitor's existence.
 
 ## Rollback
 
@@ -527,8 +534,8 @@ The backend includes partial structured logging infrastructure:
   (`X-LLM-*`, `Cookie`, `Set-Cookie`, `Authorization`) redacted. Unhandled
   request exceptions bypass this middleware's log.
 - **Exception logging** works in the chat stream handler. The session/share
-  sweep's exception branch currently raises `NameError` because it calls
-  undefined `logger` instead of the module's `log` logger.
+  sweep's background loop catches failed iterations and logs them with
+  `log.exception` — a failed sweep iteration is logged, never fatal.
 - **Database and LLM error handlers** installed at startup
   (`install_database_error_handlers`, `install_llm_error_handlers`).
 

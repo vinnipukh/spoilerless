@@ -180,7 +180,7 @@ App computes the forward-boundary graph set difference and passes the result int
 | `NodeSearch`, `NodeSearchSelection` | Payload-local node plus notes/claims search; selection is returned to App. |
 | `PathFinder`, `PathPick` | Two-node path-picking mode using `frontend/src/api/graph.ts`. |
 | `graphToElements` | Converts `GraphResponse` to Cytoscape elements and applies overview projection metadata. |
-| `buildGraphStylesheet`, `graphStylesheet` | Cytoscape styling and interaction classes. |
+| `buildGraphStylesheet` | Cytoscape styling and interaction classes. |
 | `overviewProjection`, `displayTierFor`, `GraphMode` | Curated overview/full graph projection. |
 | `layoutOptionsFor`, `nodeRepulsionFor` | fcose/cose layout configuration. |
 | `initialFilterState`, filter mutators, position-cache functions | Filter state and per-series/boundary/mode position caching. |
@@ -291,7 +291,7 @@ Use `useGraph.refresh()` after an in-place mutation when preserving the mounted 
 
 `GraphCanvas.readOnly` hides custom-node creation and suppresses its share-link callback. It does not alter server data; it only removes those frontend affordances.
 
-**Current integration note:** `DetailPanel` supports a `readOnly` prop that hides relationship creation plus Notes and History tabs, but the current `App.tsx` `DetailPanel` call does not pass `readOnly={isVisitor}`. Because the prop defaults to `false`, those inspector affordances are not currently suppressed by App-level visitor wiring. Treat the backend's write authorization as the final guard and pass this existing prop when fixing or extending visitor behavior.
+**Current integration note:** `DetailPanel` supports a `readOnly` prop that hides relationship creation plus Notes and History tabs, and the current `App.tsx` `DetailPanel` call passes `readOnly={isVisitor}`, so visitor sessions have those inspector affordances suppressed by App-level wiring while non-visitor sessions keep them (the prop defaults to `false`). Treat the backend's write authorization as the final guard when fixing or extending visitor behavior.
 
 ### Shared snapshot
 

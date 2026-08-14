@@ -28,10 +28,10 @@ Many backend files are unit or contract tests, but the suite is not split into s
 ```bash
 source scripts/env-local.sh
 docker compose up -d neo4j
-uv run --project spoilerless python -m spoilerless.app.graph.setup
+uv run python -m spoilerless.app.graph.setup
 ```
 
-`scripts/env-local.sh` exports `NEO4J_URI=neo4j://localhost:7687`, username `neo4j`, password `hdgraf-local-password`, and database `neo4j`. Sourcing it **before** `docker compose up` also supplies that password to Compose. A container previously initialized with another password keeps the credential stored in `neo4j_data`; changing the shell variable does not reset an existing database.
+(The repository-root `pyproject.toml` is the `spoilerless` project — there is no `spoilerless/pyproject.toml`; `uv run spoilerless-setup` is the equivalent console-script form.) `scripts/env-local.sh` exports `NEO4J_URI=neo4j://localhost:7687`, username `neo4j`, password `hdgraf-local-password`, and database `neo4j`. Sourcing it **before** `docker compose up` also supplies that password to Compose. A container previously initialized with another password keeps the credential stored in `neo4j_data`; changing the shell variable does not reset an existing database.
 
 Alternatively, provide the four `NEO4J_*` variables yourself and make them match the database you intend to test. `spoilerless/tests/conftest.py` does **not** create an isolated database or supply connection settings. It adds the repository root and `spoilerless/` to `sys.path`, so run backend commands from the repository root. This also avoids failures in tests that open repository-relative fixtures such as `data/dexter/test/extraction_fixture.json` and `docs/extraction-schema.json`.
 
@@ -53,8 +53,10 @@ Install the committed dependency tree:
 
 ```bash
 cd frontend
-npm ci
+npm ci --include=dev   # --include=dev is required when a global omit=dev npm setting is active
 ```
+
+A plain `npm ci` on this repo's dev host skips devDependencies because a global `omit=dev` npm setting is active (`npm config get omit` → `dev`) — vitest, Testing Library, and jsdom would be missing from the install. `npm ci --include=dev` (or `npm install --include=dev`) installs the full tree.
 
 The setup file registers jest-dom matchers and browser API shims needed by React 19, Radix components, and graph components, including pointer capture, `ResizeObserver`, and `matchMedia`.
 
@@ -94,7 +96,7 @@ Useful pytest options can be appended to any command:
 uv run pytest -x -v
 ```
 
-There are no configured pytest marker groups such as `unit` or `integration`; select subsets by file path or `-k` expression.
+There are no configured pytest marker groups such as `unit` or `integration`; select subsets by file path or `-k` expression. No `pytest-timeout` plugin is configured, so a `--timeout` flag is not available for `uv run pytest`.
 
 **Chunked runner.** `scripts/run_backend_tests.py` splits the suite into 11 named chunks (core, domain-models, series-api, graph, change-set, candidates, auth, user-content, chat-llm, contract-ops, phase10-viz), each test file appearing in exactly one chunk. Before every run it asserts the chunk inventory matches `spoilerless/tests/` exactly once per file — a new test file that lands on disk without a chunk fails the runner instead of silently dropping out of `--all`:
 
@@ -125,11 +127,11 @@ unset PYTHONPATH && uv run python scripts/run_phase10_backend_tests.py --files \
     spoilerless/tests/test_graph_api.py spoilerless/tests/test_seed_idempotency.py
 ```
 
-The runner's fail-closed/cleanup behavior is locked by mock-driven tests in `spoilerless/tests/test_phase10_test_runner.py` (no docker daemon required). The chunk inventory itself is guarded: `run_backend_tests.py` asserts before every run that every `test_*.py` on disk appears in exactly one chunk.
+The runner's fail-closed/cleanup behavior is locked by 18 mock-driven guard tests in `spoilerless/tests/test_phase10_test_runner.py` (no docker daemon required). The chunk inventory itself is guarded: `run_backend_tests.py` asserts before every run that every `test_*.py` on disk appears in exactly one chunk.
 
 ### Baseline: zero known failures
 
-The full-suite baseline is **0 failed** on the ephemeral container (and on a fresh local docker Neo4j). The historical "584 passed / 7 failed" baseline is retired: the 3 doc-contract failures were fixed by the Phase 10 10-03/10-06 inventory updates (52 operations / 39 templates, locked by `test_frontend_contract_doc.py` and `test_openapi_contract.py`), the 2 seed-image failures by the self-hosted portrait restore (order-1 characters may carry `/api/static/` images; above-order-1 resources must not — locked by `TestSeedImageCuration`), and the 2 constraint-name failures by engine-tolerant assertions in `test_seed_idempotency.py` (verified against `neo4j:2026.06.0-community`). **Any failure now is a real regression** — there is no accepted red list.
+The full-suite baseline is **0 failed** on the ephemeral container (and on a fresh local docker Neo4j) — verified end-to-end: all 11 chunks pass on the guarded runner in about two minutes, with teardown confirmed. The historical "584 passed / 7 failed" baseline is retired: the 3 doc-contract failures were fixed by the Phase 10 10-03/10-06 inventory updates (52 operations / 39 templates, locked by `test_frontend_contract_doc.py` and `test_openapi_contract.py`), the 2 seed-image failures by the self-hosted portrait restore (order-1 characters may carry `/api/static/` images; above-order-1 resources must not — locked by `TestSeedImageCuration`), and the 2 constraint-name failures by engine-tolerant assertions in `test_seed_idempotency.py` (verified against `neo4j:2026.06.0-community`). **Any failure now is a real regression** — there is no accepted red list.
 
 ### Frontend commands
 
@@ -140,7 +142,7 @@ cd frontend
 NODE_ENV=test CI=1 npx vitest run
 ```
 
-The current frontend suite is 333 passed across 40 files. Setting `NODE_ENV=test` is important: a shell that retains `NODE_ENV=production` can load React's production behavior and cause misleading failures. Setting `CI=1` additionally forces non-watch mode. The equivalent `npm` spelling of the same command is:
+The current frontend suite is 404 passed across 44 files. Setting `NODE_ENV=test` is important: a shell that retains `NODE_ENV=production` can load React's production behavior and cause misleading failures. Setting `CI=1` additionally forces non-watch mode. The equivalent `npm` spelling of the same command is:
 
 ```bash
 cd frontend
@@ -185,9 +187,9 @@ The package defines only the `test` script (`vitest`); there are no separate `te
 - Prefer existing fakes for isolated service tests, such as `FakeUserRepo`, `FakeGoogleVerifier`, `InMemorySessionRepository`, and `FakeLLMProvider`.
 - Use a context-managed `TestClient` when the app owns an async Neo4j driver so requests share one portal event loop.
 - Keep spoiler-boundary assertions fail-closed: assert that hidden content is absent, not only that visible content is present.
-- Add API inventory changes to both contract tests and `docs/reference/frontend-api-contract.md`. `test_frontend_contract_doc.py` locks the live 50-operation, 37-template inventory; its `test_document_and_openapi_have_exact_locked_inventory` is green, while its doc-content test (`test_document_has_examples_projection_rules_non_goals_and_pending_status`) is part of the documented baseline failures. `test_openapi_contract.py` is an intended companion gate but is currently stale and red: it still expects 32 templates, omits the graph-path, export, and share templates, and assumes every DELETE response is 204 even though share-token revocation returns 200. Do not treat those two files as passing bounded gates until their assertions are updated.
+- Add API inventory changes to both contract tests and `docs/reference/frontend-api-contract.md`. `test_frontend_contract_doc.py` locks the live 52-operation, 39-template inventory (including the doc-content markers test), and `test_openapi_contract.py` locks the same 39-template surface with fully typed operations — every DELETE is typed as 204 no-content (user content, chat sessions, custom nodes) or 200-with-body (share-token revocation returns the revoked record) — plus uppercase error-code registry gates. Both files are green members of the zero-failure baseline: the Phase 10 10-03/10-06 inventory updates replaced `test_openapi_contract.py`'s stale 32-template snapshot and its assumption that every DELETE returns 204.
 
-`spoilerless/tests/conftest.py` contains shared import-path setup, scratch-series helpers, and an autouse `_disable_rate_limiter` fixture that patches `RateLimiter.__call__` to a no-op so rate-limited routes are testable without a live Redis. It does not configure Neo4j credentials. Since the 2026-08-10 suite-time pass it also hosts the shared test infrastructure (see `docs/PROBLEMS.md` SEVENTH PASS), extended in the 2026-08-11 ELEVENTH PASS with the shared `NoopGoogleVerifier` (PROB-09/#77 follow-up — `AuthService` requires a verifier, and tests that never exercise Google verification share this one no-op):
+`spoilerless/tests/conftest.py` contains shared import-path setup, scratch-series helpers, and two autouse fixtures: `_disable_rate_limiter` patches `RateLimiter.__call__` to a no-op so rate-limited routes are testable without a live Redis, and `_csrf_bypass_default` defaults `FRONTEND_ORIGINS=*` so API tests need no Origin header (CSRF-specific tests override the setting themselves; the fixture skips the `test_config` module, whose production-defaults assertions need the pristine environment). It does not configure Neo4j credentials. Since the 2026-08-10 suite-time pass it also hosts the shared test infrastructure (see `docs/PROBLEMS.md` SEVENTH PASS), extended in the 2026-08-11 ELEVENTH PASS with the shared `NoopGoogleVerifier` (PROB-09/#77 follow-up — `AuthService` requires a verifier, and tests that never exercise Google verification share this one no-op):
 
 - `seed_live_database()` / `live_client` — one seeded main-app TestClient definition (was copy-pasted in six files).
 - `module_cleanup_fixture(queries)` / `cleanup_with_fresh_driver(queries)` — per-test second-driver cleanup moved to once-per-module teardown; `(query, params)` tuples supported. The factory's return value MUST be bound to a module-level name (e.g. `_cleanup_after_module = module_cleanup_fixture(...)`) or pytest never registers the fixture.
@@ -235,6 +237,7 @@ The HTTP surface is a closed inventory. Adding, removing, or changing a route re
 | Many unrelated live-DB failures after an aborted run | Shared Neo4j contains partial fixture state | Stop; inspect/backup the database, then clean or reseed only with explicit data-loss awareness. Re-run a focused file before blaming source. |
 | Any backend failure on the ephemeral runner | A real regression — there is no accepted red list | Investigate the failure; `scripts/run_phase10_backend_tests.py` teardown is automatic and verified. |
 | `REFUSED: ...` from the guarded runner | A forbidden target/override was detected (remote/Aura URI, developer port `:7687`, running developer container, pre-existing container/volume, ambient connection override) | Stop the shared target or unset the ambient `NEO4J_*`/`aura_*` variables and rerun; the runner owns its connection. |
+| `vitest: not found` or missing Testing Library after `npm ci` | A global `omit=dev` npm setting skipped devDependencies | Reinstall with `npm ci --include=dev` (or `npm install --include=dev`). |
 | React renders an empty container or many Testing Library lookups fail | `NODE_ENV=production` leaked into Vitest | Re-run with `NODE_ENV=test CI=1 npx vitest run`. |
 | `toBeInTheDocument` is missing | Wrong jest-dom entry/setup | Keep `@testing-library/jest-dom/vitest` in `frontend/src/test/setup.ts`. |
 | Pointer capture, `ResizeObserver`, `matchMedia`, or `React.act` fails | Required jsdom shim is absent | Add a suite-wide shim to `frontend/src/test/setup.ts`, not per test. |

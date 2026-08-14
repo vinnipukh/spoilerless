@@ -51,7 +51,7 @@ Attack: sign in → PUT `{provider: "openai_compatible", base_url: "https://atta
 The live root `.env` defines **`AUTH_DEV_CODE`** (verified: key names `GOOGLE_CLIENT_ID`, `AUTH_DEV_CODE`). `POST /api/auth/dev` (`api/auth.py:206`) then lets anyone who knows the code sign in as the fixed `dev-local` identity and do everything a user can do — including the settings exfiltration in #5. The route is documented "Never enable in production"; a copied `.env` is the classic way it ships. **Fix:** delete the variable, or gate the route on a debug flag that fails closed when not in debug.
 
 ### 8. Session cookie defaults to insecure, and the example config ships insecure
-**RESOLVED** — verified fixed as of 2026-08-04: `core/config.py:34` now defines `session_cookie_secure` with `default=True`, and `.env.example:10` is `SESSION_COOKIE_SECURE=true`. The cookie is Secure-by-default in production; local HTTP dev must explicitly opt out. This finding is left in place for the audit trail; the description below reflects the state before the fix.
+**RESOLVED** — verified fixed as of 2026-08-04: `core/config.py:34` now defines `session_cookie_secure` with `default=True`, and `.env.example:16` is `SESSION_COOKIE_SECURE=true`. The cookie is Secure-by-default in production; local HTTP dev must explicitly opt out. This finding is left in place for the audit trail; the description below reflects the state before the fix.
 
 `SESSION_COOKIE_SECURE=false` is the default (`core/config.py:26-29`) **and** the value in `.env.example:10`. On any HTTP deployment the session cookie travels plaintext — session hijack with one packet capture. The cookie is the ONLY credential. **Fix:** default `true`, fail deployment on false outside localhost, HSTS on the host.
 
@@ -964,9 +964,10 @@ runtime/test items, and closed the baseline.
   (approve/reject/edit, ~85% duplicated) moved into `graph/candidates.py`
   as real keyword-param repository methods + module-level work functions;
   the 175-line revert closure moved into `revisions/__init__.py` as
-  `revert_revision_work`. Routes shrink to command build +
-  invalidate_series; router-level query constants deleted. Candidate +
-  revision suites 34/34.
+  `revert_revision_work`. Candidate routes shrink to command build +
+  invalidate_series; router-level query constants deleted. The revert
+  path still omits `invalidate_series` (known bug, cf. DEPLOYMENT.md).
+  Candidate + revision suites 34/34.
 - **#70 — FIXED (this pass, uncommitted at write time).** One sentinel→
   envelope registry in `api/exceptions.py` (`install_repository_error_handlers`)
   — layer-correct (api, not core); uniform mappings for UserContent*,
@@ -1223,3 +1224,34 @@ fail-closed paths without a daemon. `scripts/run_backend_tests.py` CHUNKS now
 carry every `test_*.py` exactly once, asserted against the directory at
 startup. Focused gate evidence: 179 backend tests (8 files) + 40 frontend
 tests green on the ephemeral target; teardown proof recorded.
+
+## TWENTIETH PASS — full docs-update sweep: 25 docs claim-verified, 16 surgically fixed (2026-08-14)
+
+`/gsd-docs-update` full run. All 9 canonical docs refreshed against live
+source (README, ARCHITECTURE, CONFIGURATION, GETTING-STARTED, DEVELOPMENT,
+TESTING, API, DEPLOYMENT, CONTRIBUTING) and 16 hand-written/reference docs
+re-verified; ~1,400 claims checked by verifier subagents against the live
+codebase, zero failures at close (every doc 100% after fix iterations).
+
+### Fixes this pass (all verifier-confirmed, Edit-only)
+- **Line-pin drift** — threat-model (~30 refs) and others: symbols correct,
+  `file:NN` pins refreshed to live locations.
+- **Retired/landed states** — rate limiter now fully fail-open (PROB-23);
+  retrieval queries gate the matched Claim (`visible_claim_where`, 08-14);
+  share creation clamps to creator progress (CR-01); CSRF guard on all 26
+  state-changing routes; reject_change_set intentionally NOT admin-gated;
+  `LLM_DISABLED` (not `LLM_PROVIDER_DISABLED`); `TOOL_SPECS` single registry
+  (PROB-09/#63); contract re-locked 52 ops / 39 templates.
+- **Archived-phase references** — decision log cites `.planning/phases/…`
+  artifacts archived with the v1.3 milestone (e62e664); archival note added,
+  phantom `10-10-11-SUMMARY.md` corrected to `10-11-SUMMARY.md`.
+- **PROBLEMS.md itself** — 2 live claims corrected: #8 RESOLVED banner line
+  pin (`.env.example:16`), #60 FIXED record now states the revision-revert
+  route still omits `invalidate_series` (known bug, matches DEPLOYMENT.md).
+  9 historical audit-trail entries left untouched per ledger convention.
+
+### Process lesson (verifier quality)
+First-pass verifiers produced false negatives on test-name claims
+(`test_retrieval_tools.py` reported as 4 tests; live is 40 — `async def
+test_*` extraction trap). Re-verified with async-tolerant extraction; fix
+agents verify live before editing and may leave correct claims alone.

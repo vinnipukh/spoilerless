@@ -10,6 +10,12 @@ all measurements are deterministic over synthetic safe rows.
 **Verification:** `uv run pytest spoilerless/tests/test_visualization_baseline.py -q` (14 passed);
 `uv run pytest spoilerless/tests/test_visualization_baseline.py -q -k "variant or bound"` (7 passed).
 
+> **Archival note (2026-08-14):** Phase-10 planning artifacts under
+> `.planning/phases/10-polish-finishing-touches/` were archived with the v1.3
+> milestone (commit `e62e664`, 2026-08-14); the traceability references below
+> point at files that no longer exist in the working tree (they now live under
+> `.planning/milestones/v1.3-phases/10-polish-finishing-touches/`).
+
 ---
 
 ## 1. Observed problem
@@ -242,7 +248,7 @@ Machine-readable multi-source coverage audit — verifier: `scripts/verify_phase
 | DEC:D-46 | 10-05 | 10-CONTEXT.md decision D-46 — General polish audits; reuse Tailwind language | .planning/phases/10-polish-finishing-touches/10-05-SUMMARY.md |
 | DEC:D-47 | 10-05 | 10-CONTEXT.md decision D-47 — Views and Filters stay separate | .planning/phases/10-polish-finishing-touches/10-05-SUMMARY.md |
 | DEC:D-48 | 10-06 | 10-CONTEXT.md decision D-48 — Spoiler-safe search + GraphRAG focus narrowing | .planning/phases/10-polish-finishing-touches/10-06-SUMMARY.md |
-| DEC:D-49 | 10-11 | 10-CONTEXT.md decision D-49 — Exploration recovery Back/Undo/Collapse/Clear/Reset | .planning/phases/10-polish-finishing-touches/10-10-11-SUMMARY.md |
+| DEC:D-49 | 10-11 | 10-CONTEXT.md decision D-49 — Exploration recovery Back/Undo/Collapse/Clear/Reset | .planning/phases/10-polish-finishing-touches/10-11-SUMMARY.md |
 | UI:DESIGN-SYSTEM | 10-05 | shadcn radix-nova preset + existing token language | frontend/components.json |
 | UI:INFORMATION-ARCHITECTURE | 10-05 | Four-tab hierarchy + nested modes contract | .planning/phases/10-polish-finishing-touches/10-UI-SPEC.md |
 | UI:COPYWRITING | 10-05 | Primary copy table (empty/loading/error/recovery strings) | .planning/phases/10-polish-finishing-touches/10-UI-SPEC.md |

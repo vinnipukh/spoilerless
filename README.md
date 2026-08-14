@@ -26,7 +26,7 @@ Explore characters, events, locations, claims, and relationships through an inte
 ### Platform environment variables
 
 <!-- VERIFY: Render platform deployment environment variables and target database URL. -->
-**Render — `api.spoilerless.net`** — service `spoilerless` (Blueprint `render.yaml`): build **`uv sync --frozen`**, start **`uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT`**. Required environment unless noted:
+**Render — `api.spoilerless.net`** — service `spoilerless-api` (Blueprint `render.yaml`): build **`uv sync --frozen`**, start **`uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT`**. Required environment unless noted:
 
 ```
 NEO4J_URI=neo4j+s://03a8623b.databases.neo4j.io
@@ -69,9 +69,9 @@ Full platform-specific procedures, rollback, and monitoring: [`docs/DEPLOYMENT.m
 
 ## Product direction
 
-Spoilerless v1.3 is **shipped and deployed** (Vercel + Render + AuraDB + Upstash) as a spoiler-aware, provenance-backed narrative knowledge graph: an Obsidian-like graph, human-authored knowledge, revision history, and GraphRAG over only the viewer-visible subgraph, presented through the Story / Characters / Evidence / Advanced projection views. Candidate review and chat are implemented; automated subtitle/script ingestion, broader product scope, and further deployment hardening remain future work (see [`docs/ROADMAP.md`](./docs/ROADMAP.md)).
+Spoilerless v1.3 is **shipped, deployed, and archived** (git tag `v1.3`) as a spoiler-aware, provenance-backed narrative knowledge graph: an Obsidian-like graph, human-authored knowledge, revision history, and GraphRAG over only the viewer-visible subgraph, presented through the Story / Characters / Evidence / Advanced projection views. Candidate review and chat are implemented; automated subtitle/script ingestion, broader product scope, and further deployment hardening remain future work (see [`docs/ROADMAP.md`](./docs/ROADMAP.md)).
 
-Coding agents should use [`docs/PROJECT-SPEC.md`](./docs/architecture/project-spec.md) for product intent and non-negotiable invariants. The document distinguishes implemented capability, historical prototype scope, and future requirements; implementation status must still be verified against live source and tests before acting on it.
+Coding agents should use [`docs/architecture/project-spec.md`](./docs/architecture/project-spec.md) for product intent and non-negotiable invariants. The document distinguishes implemented capability, historical prototype scope, and future requirements; implementation status must still be verified against live source and tests before acting on it.
 
 ---
 
@@ -84,8 +84,8 @@ Coding agents should use [`docs/PROJECT-SPEC.md`](./docs/architecture/project-sp
 - **Revision history** — All user edits, corrections, and rejections are recorded in a revision log, enabling inspect-and-revert workflows.
 - **Candidate claim review** — Extraction candidates go through a review workflow before entering the canonical graph.
 - **Change sets** — Batched, confirmable edits with revision tracking and protection against conflicting changes.
-- **Google OAuth + visitor mode** — Sign in with Google ID tokens for persisted progress and write features, or continue as a read-only visitor without an account. Authenticated sessions use HttpOnly cookies with configurable TTL. A user's role (`admin` or `user`) is derived server-side at login from the `ADMIN_EMAILS` allowlist; the admin role gates candidate review commits, change-set commits, and the application settings endpoints.
-- **Spoiler-grounded LLM chat (optional, BYOK)** — Disabled by default. When enabled, an OpenAI-compatible chat model answers questions using only spoiler-filtered, tool-allowlisted graph context for the user's watch progress. Browser-stored BYOK settings travel per request in `X-LLM-*` headers; when those headers are absent, the backend can fall back to its own `LLM_*` configuration.
+- **Google OAuth + visitor mode** — Sign in with Google ID tokens for persisted progress and write features, or continue as a read-only visitor without an account. Authenticated sessions use HttpOnly cookies with configurable TTL. A user's role (`admin` or `user`) is derived server-side at login from the `ADMIN_EMAILS` allowlist; the admin role gates candidate review commits, change-set commits, and the application settings endpoints. All state-changing cookie-authenticated endpoints are additionally protected by a shared CSRF origin guard.
+- **Spoiler-grounded LLM chat (optional, BYOK)** — Disabled by default. When enabled, an LLM (Google Gemini or any OpenAI-compatible chat model, selectable per deployment) answers questions using only spoiler-filtered, tool-allowlisted graph context for the user's watch progress. Browser-stored BYOK settings travel per request in `X-LLM-*` headers; when those headers are absent, the backend falls back to its own configuration — either the `LLM_*` environment variables or admin-managed application settings stored in Neo4j (`:AppSetting {key: 'llm'}`, managed through the admin-gated `GET/PUT /api/settings/llm` endpoints, where the API key is write-only and displayed only in masked form, e.g. `••••1234`).
 - **Redis-backed rate limiting and caching (optional)** — When `REDIS_URL` is set, login, chat-send, and content-write routes are rate-limited, and spoiler-filtered graph responses are cached. An empty `REDIS_URL` disables both features rather than failing startup.
 - **Stale-while-refetch graph** — Refetching keeps the last-known-good graph on screen; loading/error/empty states render as overlays above the canvas instead of unmounting it.
 - **Command palette (⌘K)** — Jump to any node, episode, or action from a keyboard-first palette; `/` focuses the floating search bar.
@@ -199,10 +199,10 @@ Neo4j Browser will be available at `http://localhost:7474`.
 
 ```bash
 uv sync
-uv run --project spoilerless python -m spoilerless.app.graph.setup
+uv run python -m spoilerless.app.graph.setup
 ```
 
-The setup module creates Neo4j constraints and seeds the Dexter series, episodes, characters, locations, events, claims, sources, and evidence fragments. Although `pyproject.toml` declares an `spoilerless-setup` script, the current project packaging configuration does not install that executable through `uv sync`.
+The setup module creates Neo4j constraints and seeds the Dexter series, episodes, characters, locations, events, claims, sources, and evidence fragments. Although `pyproject.toml` declares a `spoilerless-setup` script, the current project packaging configuration (no `[build-system]` section) does not install that executable through `uv sync`.
 
 ### 5. Start the backend
 
@@ -234,26 +234,27 @@ For a full walkthrough with troubleshooting, see [`docs/GETTING-STARTED.md`](./d
 .
 ├── spoilerless/
 │   ├── app/
-│   │   ├── api/            # Route handlers (auth, graph, share, chat, candidates, change sets, writes)
+│   │   ├── api/            # Route handlers (auth, graph, share, chat, candidates, change sets, writes, settings)
 │   │   ├── cache/          # Redis client and graph response cache (optional)
 │   │   ├── core/           # Configuration, error handling, token helpers (core/tokens.py)
 │   │   ├── domain/         # Pydantic models / schemas
 │   │   ├── graph/          # Neo4j driver (single row normalizer / executor in database.py),
 │   │   │                   #   label constants (labels.py), ontology, seed, setup
-│   │   ├── llm/            # LLM providers, fallbacks, and GraphRAG prompt
-│   │   ├── repository/     # Data access (sessions, users, user content, shares, etc.)
+│   │   ├── llm/            # LLM providers (OpenAI-compatible + Gemini), fallbacks, GraphRAG prompt
+│   │   ├── repository/     # Data access (sessions, users, user content, shares, settings, etc.)
 │   │   ├── retrieval/      # Chat retrieval pipeline: context section registry (context.py),
 │   │   │                   #   ToolSpec tool registry (pipeline.py), shared BFS (tools.py)
 │   │   ├── revisions/      # Revision history repository
-│   │   ├── services/       # Business logic (auth, change sets, graph, chat, progress, …)
+│   │   ├── services/       # Business logic (auth, change sets, graph, chat, progress, rate limit, …)
 │   │   ├── spoiler/        # Spoiler-aware filtering logic
+│   │   ├── static/         # Self-hosted character portraits (served under /api/static/)
 │   │   └── main.py         # FastAPI application entry point
-│   ├── scripts/            # Backend maintenance utilities
+│   ├── scripts/            # Backend maintenance utilities (smoke.sh, zombie_sweep.py, test runners)
 │   └── tests/              # pytest suite
 ├── frontend/
 │   └── src/
 │       ├── api/            # API client calls
-│       ├── components/     # React components (graph/ includes canvas + status overlays)
+│       ├── components/     # React components (graph/ includes canvas + status overlays; settings/ hosts the admin LLM settings page)
 │       ├── hooks/          # Custom React hooks (shared useFetchState fetch machine)
 │       ├── lib/            # Graph highlight helper, search index, BYOK, export (lib/graph/highlight.ts)
 │       ├── providers/      # React context providers
@@ -274,7 +275,7 @@ For a full walkthrough with troubleshooting, see [`docs/GETTING-STARTED.md`](./d
 ### Recent structural consolidations
 
 - **Repository layer** — One row normalizer (`neo4j_row_to_python`) and one query executor (`run_single`) in `graph/database.py` replace per-repository duplicates; token helpers live in `core/tokens.py` and label constants in `graph/labels.py`.
-- **Chat retrieval** — `retrieval/context.py` defines a single `CONTEXT_SECTIONS` registry whose delimiters are derived from it (they cannot drift); `retrieval/pipeline.py` registers all allowlisted tools as a single `ToolSpec` list (replacing three parallel schema/executor/input-model tables); neighborhood and path reads share one `_walk_visible_claims` BFS in `retrieval/tools.py`.
+- **Chat retrieval** — `retrieval/context.py` defines a single `CONTEXT_SECTIONS` registry whose delimiters are derived from it (they cannot drift); `retrieval/pipeline.py` registers all allowlisted tools as a single `ToolSpec` list (replacing three parallel schema/executor/input-model tables); neighborhood and path reads share one `_walk_visible_claims` BFS in `retrieval/tools.py`, with server-side ceilings (e.g. `MAX_PATH_HOPS = 4`) clamping any requested depth or hop count.
 - **Change sets** — `services/change_set.py` applies operations through a table-driven dispatch and validates targets in parallel; `AuthService` now requires an explicit `session_repo` and verifier at construction (a missing dependency is a wiring bug, never a silent fallback).
 - **Frontend** — All fetch hooks run on one shared `useFetchState` machine (`hooks/useFetchState.ts`); a single `applyHighlight` helper in `lib/graph/highlight.ts` replaces four cytoscape class-juggling copies; the graph canvas never unmounts on refetch — loading/error/empty overlays render above the last-known-good graph.
 
@@ -298,9 +299,9 @@ The backend exposes REST endpoints grouped by area, documented via OpenAPI at `/
 | Revisions | `/api/series/{series_id}/...` | Revision history for user edits |
 | Candidates | `/api/series/{series_id}/candidates` | Candidate claim review workflow |
 | Progress | `/api/series/{series_id}/progress` | User watch-progress tracking |
-| Chat | `/api/series/{series_id}/chat` | Spoiler-grounded LLM chat (enabled through stored application settings or the `LLM_ENABLED` environment fallback) |
+| Chat | `/api/series/{series_id}/chat` | Spoiler-grounded LLM chat (Gemini or OpenAI-compatible provider; enabled through stored application settings or the `LLM_ENABLED` environment fallback) |
 | Change sets | `/api/series/{series_id}/change-sets` | Batched, confirmable graph edits |
-| Settings | `/api/settings` | Application settings |
+| Settings | `/api/settings` | Admin-gated LLM provider configuration stored in Neo4j (`:AppSetting {key: 'llm'}`); the API key is write-only and masked in responses |
 | Share links | `/api/share` | Create/list/revoke snapshots and read a token-gated graph |
 
 Spoiler boundaries vary by endpoint: graph and boundary-aware user-content reads require a positive `visible_until_order` query parameter, chat resolves persisted watch progress server-side, and both candidate list and detail require `visible_until_order`, rejecting omission or a non-persisted episode order with 422.
@@ -338,7 +339,7 @@ Watch progress is persisted per user via `GET/POST /api/series/{series_id}/progr
 | Document | What it covers |
 |---|---|
 | [`docs/GETTING-STARTED.md`](./docs/GETTING-STARTED.md) | Step-by-step local setup and demo walkthrough |
-| [`docs/PROJECT-SPEC.md`](./docs/architecture/project-spec.md) | Canonical product aim, invariants, coding-agent rules, and future architecture |
+| [`docs/architecture/project-spec.md`](./docs/architecture/project-spec.md) | Canonical product aim, invariants, coding-agent rules, and future architecture |
 | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | System architecture, layer breakdown, spoiler model, ontology |
 | [`docs/CONFIGURATION.md`](./docs/CONFIGURATION.md) | Environment variables, Docker Compose, backend settings |
 | [`docs/API.md`](./docs/API.md) | Full HTTP API reference |
@@ -347,16 +348,23 @@ Watch progress is persisted per user via `GET/POST /api/series/{series_id}/progr
 | [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) | Deployment targets and pipeline |
 | [`docs/uat/phase-10-golden-path.md`](./docs/uat/phase-10-golden-path.md) | Phase 10 (v1.3) operator-approved golden-path UAT record — 12 scenarios + 7 responsive/accessibility backstop rows |
 | [`docs/decision-logs/phase-10-visualization.md`](./docs/decision-logs/phase-10-visualization.md) | Phase 10 evidence-based decision log (Episode Overview variant selection, bounds, cache, benchmark evidence) + final multi-source coverage audit |
-| [`docs/RUNBOOK.md`](./docs/ops/runbook.md) | Operations runbook — zombie sweep, DB-pollution gate, CI checks |
-| [`docs/PROBLEMS.md`](./docs/PROBLEMS.md) | Audit ledger — findings and fixes across passes (ELEVENTH PASS: repository-layer consolidation, ToolSpec registry, shared BFS, change-set refactor, AuthService wiring, frontend fetch-state/highlight/graph-overlay refactors) |
-| [`docs/frontend-api-contract.md`](./docs/reference/frontend-api-contract.md) | Frontend-facing API contract |
+| [`docs/ops/runbook.md`](./docs/ops/runbook.md) | Operations runbook — zombie sweep, DB-pollution gate, CI checks |
+| [`docs/PROBLEMS.md`](./docs/PROBLEMS.md) | Audit ledger — findings and fixes across passes (NINETEENTH PASS: Phase 10 regression gate — guarded ephemeral-container test runner retires the seven-red baseline, 2026-08-13) |
+| [`docs/ROADMAP.md`](./docs/ROADMAP.md) | Authoritative roadmap — milestones and acceptance status, known gaps, future direction |
+| [`docs/reference/frontend-api-contract.md`](./docs/reference/frontend-api-contract.md) | Frontend-facing API contract |
 
 ### Enabling the GraphRAG chat locally (optional)
 
 The chat feature is **disabled by default**. To try it, point the backend at any
 OpenAI-compatible chat-completions endpoint by setting `LLM_ENABLED=true`,
 `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL` in your root `.env` (never commit
-real key values). See [`docs/GETTING-STARTED.md`](./docs/GETTING-STARTED.md)
+real key values) — or use Google Gemini with `LLM_PROVIDER=gemini` (the Gemini
+base URL defaults to `https://generativelanguage.googleapis.com`). Alternatively,
+an admin can configure the provider from the Settings page in the app: the
+`GET/PUT /api/settings/llm` endpoints persist the configuration in Neo4j as
+`:AppSetting {key: 'llm'}`, which takes precedence over the environment
+fallback, and never return the full API key — only a masked form such as
+`••••1234`. See [`docs/GETTING-STARTED.md`](./docs/GETTING-STARTED.md)
 and [`docs/CONFIGURATION.md`](./docs/CONFIGURATION.md) for the full `LLM_*`
 reference. The LLM only ever sees the spoiler-filtered, tool-allowlisted
 context — see [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the

@@ -30,7 +30,7 @@
 
 ## 4. Provenance and trust
 
-- **Navigable source links.** Already tracked as a known gap (ROADMAP §8.4) — worth restating as a feature: turn plain-text locators into real links wherever the source is a rights-safe URL, without ever republishing copyrighted script/subtitle text.
+- **Navigable source links.** Already tracked as a known gap (ROADMAP §8 item 3) — worth restating as a feature: turn plain-text locators into real links wherever the source is a rights-safe URL, without ever republishing copyrighted script/subtitle text.
 - **Claim confidence legend.** A small always-visible key explaining `low/medium/high/verified` and `candidate/corroborated/canonical/disputed/rejected` so the distinction in PROJECT-SPEC §4 is legible to a first-time user, not just implied by color.
 - **"Why do you believe this?" evidence drill-down.** One click from a claim to its full evidence chain (source → fragment → claim), collapsing what today requires reading several detail-panel sections separately.
 

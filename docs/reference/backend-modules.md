@@ -47,7 +47,7 @@ The layering is intentional but not absolute:
 
 - `api/user_content.py` constructs `UserContentRepository` directly.
 - `api/share.py` uses `ShareRepoDependency` directly and delegates graph rendering to `GraphService`.
-- `api/candidates.py` uses `CandidateRepository`, `RevisionRepository`, and managed transactions directly.
+- `api/candidates.py` uses `CandidateRepository` and `GraphService`; managed writes and revision logging live inside `CandidateRepository` (graph/candidates.py).
 - `api/revisions.py` performs revision read/revert data access directly.
 - `services/chat.py` imports `DatabaseDependency` to expose `get_llm_provider()` as a FastAPI dependency.
 
@@ -95,7 +95,7 @@ Route modules are under `spoilerless/app/api/` and expose an `APIRouter` named `
 | `chat.py` | `/api/series/{series_id}/chat` | Authenticated chat-session CRUD and non-streaming/SSE turns through `ChatService`; injects a request-scoped `LLMProvider`; applies chat rate limits and concurrent-generation checks. |
 | `change_set.py` | `/api/series/{series_id}/change-sets` | Authenticated propose/confirm/reject/revert through `ChangeSetService`. Confirm is admin-gated. Successful graph mutations invalidate the per-series Redis graph cache. |
 | `user_content.py` | `/api/series/{series_id}/notes`, `/custom-nodes`, `/custom-relationships` | Boundary-filtered reads plus authenticated owner-scoped writes through `UserContentRepository`. Admins can bypass owner checks. All writes are rate-limited. Successful custom-node and custom-relationship mutations invalidate the graph cache; note mutations do not. |
-| `candidates.py` | `/api/series/{series_id}/candidates` | Authenticated ingest; anonymous boundary-filtered list/get; admin-only approve/reject/edit. Uses `CandidateRepository`, managed Neo4j writes, and `RevisionRepository`. |
+| `candidates.py` | `/api/series/{series_id}/candidates` | Authenticated ingest; anonymous boundary-filtered list/get; admin-only approve/reject/edit. Uses `CandidateRepository`, which owns managed Neo4j writes and revision logging. |
 | `revisions.py` | `/api/series/{series_id}/revisions` | Boundary-filtered revision list/get and authenticated owner-aware revert. Canonical create revisions and invalid revert actions are rejected. |
 | `settings.py` | `/api/settings/llm` | Admin-only get/update of shared server-side LLM configuration through `SettingsService`. |
 | `share.py` | `/api/share` | Authenticated create/list/revoke of hashed share tokens through `ShareRepository`; anonymous token graph read through `GraphService`. |
@@ -110,7 +110,7 @@ Route functions are the public HTTP boundary. Request validation belongs in doma
 |---|---|
 | `auth.py` | `GoogleAuthRequest`, `UserPublic`, `UserResponse` |
 | `series.py` | `SeriesResponse`, `EpisodeResponse` |
-| `graph.py` | `GraphNode`, `GraphEdge`, `GraphClaim`, `GraphSource`, `GraphEvidence`, `GraphResponse`, `model_records()` |
+| `graph.py` | `GraphNode`, `GraphEdge`, `GraphClaim`, `GraphSource`, `GraphEvidence`, `GraphResponse` |
 | `progress.py` | `UserSeriesProgressResponse`, `ProgressUpdateRequest`; the request validator enforces exactly one confirmation alias or a view-only update shape. |
 | `chat.py` | `MessageStatus`, `Citation`, `GraphFocus`, `ChatMessageResponse`, `ChatSessionResponse`, `ChatSessionDetailResponse`, `MessageResponseEnvelope`, create requests |
 | `change_set.py` | Closed discriminated operation union covering node, relationship, claim, evidence, and note create/update/delete operations; `ChangeSetCreateRequest`, `ChangeSetResponse` |
@@ -118,7 +118,7 @@ Route functions are the public HTTP boundary. Request validation belongs in doma
 | `extraction.py` | `EvidencePayload`, `SourcePayload`, `ExtractionClaim`, `ExtractionBatchEnvelope` for candidate ingest |
 | `revision.py` | `RevisionAction`, `RevisionResponse` |
 | `settings.py` | `LLMSettingsUpdate`, `LLMSettingsResponse`, `mask_api_key()`, `settings_payload()` |
-| `share.py` | `ShareTokenCreate`, `ShareTokenRecord` |
+| `share.py` | `ShareCreateRequest`, `ShareTokenRecord` |
 
 `StrictModel` configures `extra="forbid"`, so the user-content models that inherit it reject unexpected fields. The graph models (`GraphNode`, `GraphEdge`, `GraphClaim`, `GraphSource`, `GraphEvidence`, and `GraphResponse`) and series models (`SeriesResponse` and `EpisodeResponse`) inherit plain `BaseModel`; they ignore unexpected fields under Pydantic's default configuration. Extend the relevant domain module first when changing a wire contract, then update the route, downstream implementation, frontend mirror, and OpenAPI tests together.
 
@@ -170,7 +170,7 @@ Repository exceptions are part of the internal contract: `UserContentNotFound`, 
 
 | Module | Responsibility / public symbols |
 |---|---|
-| `database.py` | `Neo4jDatabase`, `get_database()`, `get_driver()`. The class exposes `open()`, `close()`, `verify_connection()`, `execute_query()`, and `execute_write()`. It has no import-time connection side effect. TLS `neo4j+s://`/`bolt+s://` URIs are normalized to explicit encryption with the certifi trust store. |
+| `database.py` | `Neo4jDatabase`, `get_database()`. The class exposes `open()`, `close()`, `verify_connection()`, `execute_query()`, and `execute_write()`. It has no import-time connection side effect. TLS `neo4j+s://`/`bolt+s://` URIs are normalized to explicit encryption with the certifi trust store. |
 | `ontology.py` | `Ontology`, `OntologyValidationError`, `load_ontology()`. Loads versioned YAML and validates node, relationship, claim, status, and confidence values. `user_safe_node_types()` and `user_safe_relationship_types()` define the client-safe creation subset. |
 | `seed.py` | `load_seed_data()`, `validate_seed()`, `create_constraints()`, `audit_visibility_integrity()`, `seed_graph()`, `setup_database()`. Loads `data/dexter`, validates against ontology, creates indexes/constraints, upserts seed graph, and audits non-null visibility. |
 | `setup.py` | CLI/module entry with `async_main()` and `main()`. Calls `setup_database()` and `_check_visibility_schema()` for seeded story labels. |
@@ -209,7 +209,7 @@ This module is the allowlisted graph read surface. Public async tools are:
 
 `fetch_episode_codes()` is a citation-enrichment helper. Server ceilings are `MAX_TRAVERSAL_DEPTH`, `MAX_PATH_HOPS`, `MAX_SEARCH_RESULTS`, and `MAX_RESULT_LIMIT`. Tool signatures are keyword-only for caller arguments; `series_id` and `visible_until_order` are injected by trusted server code. No tool accepts raw Cypher.
 
-`find_path()` performs bounded breadth-first search over visible claims. A claim enters the frontier only when both endpoints satisfy the boundary. `get_neighborhood()` annotates hop `distance`, which context assembly uses for priority.
+`find_path()` performs bounded breadth-first search over visible claims. A claim enters the frontier only when both endpoints satisfy the boundary. Context assembly prioritizes by hop `distance`, sorting with `item.get("distance") or 0` (missing distance = direct, priority 0).
 
 ### `spoilerless/app/retrieval/pipeline.py`
 
@@ -217,19 +217,19 @@ This module is the allowlisted graph read surface. Public async tools are:
 
 1. Resolve progress through `ProgressService`; missing progress becomes a `None` boundary, causing fail-closed empty Cypher matches.
 2. Call the configured `LLMProvider` with `TOOL_SCHEMAS` for at most `Settings.llm_max_tool_rounds`.
-3. Validate model arguments with the per-tool Pydantic input model in `_TOOL_INPUT_MODELS`.
-4. For read tools, inject trusted `series_id` and boundary through `_TOOL_EXECUTORS`, adding `user_id` only for `get_user_notes`. The separately dispatched `propose_changeset` path receives server-injected `user_id`, `series_id`, and `chat_session_id` before calling `ChangeSetService.propose()`.
+3. Validate model arguments with the per-tool Pydantic input model in `TOOL_SPECS` (per-spec `input_model` field).
+4. For read tools, inject trusted `series_id` and boundary through each spec's `executor` in `TOOL_SPECS`, adding `user_id` only for `get_user_notes`. The separately dispatched `propose_changeset` path receives server-injected `user_id`, `series_id`, and `chat_session_id` before calling `ChangeSetService.propose()`.
 5. Deduplicate nodes, edges, claims, evidence, sources, and notes into the current turn's accumulator. Only the model-visible replay is capped by `_bounded_tool_result()`; full retrieved rows remain available for validation.
 6. `assemble_context()` renders the fixed `CONTEXT_SECTIONS` order, applies a second boundary check, deduplicates stable ids, prioritizes shorter distance, and enforces item/character budgets.
 7. Make a final provider call with tools disabled.
 8. Validate citations against ids retrieved in this turn, enrich them with episode codes and graph-focus ids, and replace empty or wholly invalid-citation output with the localized fallback.
 
-The twelfth schema, `propose_changeset`, is intentionally not a direct mutation. `_propose_changeset()` validates the closed operation union and calls `ChangeSetService.propose()` to persist only an `awaiting_confirmation` draft linked to the chat session.
+The twelfth schema, `propose_changeset`, is intentionally not a direct mutation. `_propose_changeset_executor()` validates the closed operation union and calls `ChangeSetService.propose()` to persist only an `awaiting_confirmation` draft linked to the chat session.
 
 ### `spoilerless/app/llm/`
 
 - `provider.py` defines `LLMEvent`, the `LLMProvider` protocol, `OpenAICompatibleProvider`, `GeminiProvider`, and deterministic `FakeLLMProvider`. `install_llm_error_handlers()` maps disabled/unavailable providers to stable sanitized responses.
-- `system_prompt.py` owns `SYSTEM_PROMPT_VERSION`, English/Turkish prompts, context delimiters, and `compose_system_prompt()`.
+- `system_prompt.py` owns `SYSTEM_PROMPT_ENG`, `SYSTEM_PROMPT_TR`, `SYSTEM_PROMPT_LANGUAGES`, `CONTEXT_DATA_FRAMING`, and `compose_system_prompt()`.
 - `fallbacks.py` owns English/Turkish insufficient-evidence text and `DEFAULT_FALLBACKS`.
 
 `OpenAICompatibleProvider` serves `openai_compatible`, `vllm`, and `ollama` configuration. `GeminiProvider` translates messages and tools to Gemini's REST shape. Provider credentials belong only in constructor state and HTTP headers sent to the provider; they must not enter logs, domain responses, graph context, chat messages, or revisions.

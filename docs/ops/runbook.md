@@ -180,7 +180,7 @@ Alternatively, delete and re-create the service from the Blueprint (`render.yaml
 
 The full `uv run pytest` suite can be slow in some local and networked-Neo4j
 environments. Pull requests still run the full suite and DB-pollution gate in
-CI. For targeted local diagnosis, the suite is split into **10 named chunks** —
+CI. For targeted local diagnosis, the suite is split into **11 named chunks** —
 every file in `spoilerless/tests/` appears in exactly one chunk. A chunk bounds
 the test scope, but it has no enforced runtime limit; duration depends on the
 selected files, Neo4j environment, network, and current load.
@@ -189,7 +189,7 @@ selected files, Neo4j environment, network, and current load.
 `PYTHONPATH` that shadows the venv, so `import spoilerless` works):
 
 ```powershell
-uv run python scripts/run_backend_tests.py          # all 10 chunks
+uv run python scripts/run_backend_tests.py          # all 11 chunks
 uv run python scripts/run_backend_tests.py --list   # show chunk/file mapping
 uv run python scripts/run_backend_tests.py --chunk 7
 uv run python scripts/run_backend_tests.py --chunk auth
@@ -208,7 +208,8 @@ Equivalent raw pytest invocations (chunk → files):
 | 7 | `auth` | `test_auth.py` `test_google_verifier.py` `test_session_repository.py` `test_settings_api.py` | auth + middleware, ~medium |
 | 8 | `user-content` | `test_user_content_api.py` `test_user_content_repository.py` | API + repo, ~medium |
 | 9 | `chat-llm` | `test_chat_api.py` `test_chat_persistence.py` `test_retrieval_pipeline.py` `test_retrieval_tools.py` `test_prompt_injection.py` `test_llm_provider.py` | chat/LLM, ~slow |
-| 10 | `contract-ops` | `test_frontend_contract_doc.py` `test_openapi_contract.py` `test_share_api.py` `test_error_handlers.py` `test_rate_limit.py` | contract/doc, ~medium |
+| 10 | `contract-ops` | `test_frontend_contract_doc.py` `test_openapi_contract.py` `test_share_api.py` `test_error_handlers.py` `test_rate_limit.py` `test_phase10_coverage_audit.py` | contract/doc, ~medium |
+| 11 | `phase10-viz` | `test_visualization_baseline.py` `test_visualization_projection.py` `test_visualization_cache.py` `test_visualization_graphrag.py` `test_phase10_test_runner.py` | fixture/offline, ~fast |
 
 Run chunks in parallel only when every worker uses an **isolated Neo4j** that
 cannot race with another worker (for example, separately isolated CI service
@@ -225,12 +226,12 @@ the durable guidance stands: against shared AuraDB run single chunks
 instances. The graph chunk alone is ~15 min (per-test re-seed is required for
 isolation — module-scoped clients broke cookie/get_database state). Local
 docker Neo4j (`scripts/env-local.sh` + the `aura_*` exports; correct container
-is `hdgrafcehennemi-neo4j` on 2026.06.0, NOT the stale `hdgraf-neo4j`
+is `spoilerless-neo4j` on 2026.06.0, NOT the stale `hdgraf-neo4j`
 5-community) makes seeding ~4.6s — but the green full suite is still ~42 min
 because the function-scoped `live_client` re-seeds per test (~10s/test). The
 EIGHTH PASS "<8m (2:01)" figure was measured on the stale 5-community
 container with 35 fast-failing tests — never a green-suite benchmark. Suite
-speedup task is tracked in docs/ROADMAP.md §8.7.
+speedup task is tracked in docs/ROADMAP.md §8 item 7 (Testing isolation).
 
 **Environment pitfall (why agents historically "could not run" the suite):**
 the Hermes terminal exports `PYTHONPATH` pointing at the hermes-agent

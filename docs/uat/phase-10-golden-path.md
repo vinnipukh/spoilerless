@@ -8,7 +8,7 @@
 
 | # | Scenario | Result | Evidence |
 |---|---|---|---|
-| 1 | Login (visitor + authenticated path) → series/episode select → Story opens bounded Episode Overview + Event Timeline rail | ✅ PASS | Operator hands-on; automated: App.test.tsx four-tab suite (34 tests) + 392-test full frontend suite |
+| 1 | Login (visitor + authenticated path) → series/episode select → Story opens bounded Episode Overview + Event Timeline rail | ✅ PASS | Operator hands-on; automated: App.test.tsx four-tab suite (32 tests) + 392-test full frontend suite |
 | 2 | Characters tab — Character Network / Local Neighborhood; camera preserved across views | ✅ PASS (re-verified 2026-08-14 after 260814-viz wiring) | Operator hands-on; Characters tab now fetches the `character_network` projection (App.test.tsx wiring test); GraphCanvas/useSceneState suites green |
 | 3 | Evidence tab — Investigation / Evidence Chain layered Claim → Evidence → Source; "Show in graph" explicit | ✅ PASS (re-verified 2026-08-14) | Operator hands-on; Evidence tab now fetches the `investigation` projection; EvidenceChain surface tests green |
 | 4 | Advanced tab — Full Graph + debug labels | ✅ PASS | Operator hands-on; debugLabels test green (GraphCanvas.test.tsx) |

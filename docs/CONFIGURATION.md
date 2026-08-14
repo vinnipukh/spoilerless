@@ -159,13 +159,19 @@ honored on cross-origin requests from any listed origin.
 
 ### CSRF protection
 
-The same `FRONTEND_ORIGINS` value also drives `verify_origin()` in `spoilerless/app/api/auth.py`, a FastAPI
-dependency applied to both `POST /api/auth/google` and `POST /api/auth/logout`. It compares the request's `Origin` (or, if absent,
-`Referer`) header against the configured origin list and rejects mismatches with `403 AUTH_ORIGIN_NOT_ALLOWED`.
-A request with neither header is also rejected (fail-closed). Setting `FRONTEND_ORIGINS=*` disables this
-check entirely (not recommended). `SESSION_COOKIE_SAMESITE` (see below) is the complementary cookie-level
-defense — `verify_origin()` covers cases `SameSite` alone does not (subdomain-based attacks, top-level
-navigations).
+The same `FRONTEND_ORIGINS` value also drives the CSRF origin guard: `verify_origin()` in
+`spoilerless/app/api/deps.py` is exposed as `CsrfGuardDependency` (`Annotated[None, Depends(verify_origin)]`),
+and every cookie-authenticated state-changing route declares it as an underscore-ignored `_csrf` parameter —
+`POST /api/auth/google`, `POST /api/auth/logout`, `PUT /api/settings/llm`, and the write routes in
+`spoilerless/app/api/candidates.py`, `spoilerless/app/api/change_set.py`, and `spoilerless/app/api/chat.py`.
+(`spoilerless/app/api/auth.py` re-exports `verify_origin` and `AUTH_ORIGIN_NOT_ALLOWED` for backward
+compatibility only.) The guard compares the request's `Origin` header (preferred) or, if absent, the
+scheme+host of the `Referer` header against the configured origin list and rejects mismatches with
+`403 AUTH_ORIGIN_NOT_ALLOWED`. A request with neither header is also rejected (fail-closed — SEC-02,
+docs/PROBLEMS.md #10); browsers send `Origin` on cross-origin and same-origin POSTs alike, so a missing
+header signals a non-browser client. Setting `FRONTEND_ORIGINS=*` disables the check entirely (not
+recommended). `SESSION_COOKIE_SAMESITE` (see below) is the complementary cookie-level defense —
+`verify_origin()` covers cases `SameSite` alone does not (subdomain-based attacks, top-level navigations).
 
 ### Session cookie SameSite policy
 

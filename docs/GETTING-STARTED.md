@@ -48,11 +48,13 @@ npm --version
 
 3. Edit the root `.env`:
 
-   - Keep `NEO4J_PASSWORD=change-me` for the default local Compose setup, or choose another password.
-     Compose substitutes this value into `NEO4J_AUTH` and the backend reads the same file, so the container
-     and the backend must use the same value. If you use the `scripts/env-local.sh` flow described under
-     [First Run](#first-run) instead, that script's exported password (`hdgraf-local-password`) overrides
-     `.env` for the current shell and must match the container that Compose creates.
+   - Set `NEO4J_PASSWORD=hdgraf-local-password` so the Compose container, the backend, and the test
+     suite all use one database. `scripts/env-local.sh` (used by the [First Run](#first-run) flow and by
+     the pytest suite) exports `hdgraf-local-password`, and `docker-compose.yml` interpolates
+     `${NEO4J_PASSWORD:-change-me}` — a container created with the `change-me` fallback rejects every
+     test connection. If you deliberately choose a different password, keep it identical in `.env`, in
+     Compose, and in any shell that sources `scripts/env-local.sh`; `NEO4J_AUTH` is fixed when the
+     container is first created, so change it before the first `docker compose up`.
    - Keep the local Neo4j URI on Bolt port `7687` and the database name `neo4j` unless you intentionally changed Compose.
    - Set `GOOGLE_CLIENT_ID` to a Google OAuth 2.0 Web Client ID if you want to sign in.
    - Set `ADMIN_EMAILS` to your own Google account email (comma-separated for more than one) to grant yourself
@@ -83,7 +85,10 @@ npm --version
    cd ..
    ```
 
-`uv` uses `pyproject.toml` and `uv.lock`; npm uses `frontend/package.json` and `frontend/package-lock.json`.
+   `uv` uses `pyproject.toml` and `uv.lock`; npm uses `frontend/package.json` and `frontend/package-lock.json`.
+   If your npm is configured with a global `omit=dev` (`npm config get omit` prints `dev`), a plain
+   `npm install` skips devDependencies such as Vitest — use `npm install --include=dev` instead (see
+   [Common Setup Issues](#common-setup-issues)).
 
 ## First Run
 
@@ -132,13 +137,13 @@ The backend listens on `http://localhost:8000` (Swagger UI at `/docs`) and the V
 
 ## Demo Walkthrough
 
-The seeded identifiers are `series_dexter` and `dexter_s01e01` through `dexter_s01e03`. Sign in before following the full walkthrough: visitor mode hides chat and canvas write controls, keeps progress local to the browser tab, and backend graph reads remain fixed at anonymous order 1. The current detail inspector still displays Notes, History, and relationship/note write affordances to visitors, but the backend rejects those unauthenticated writes.
+The seeded identifiers are `series_dexter` and `dexter_s01e01` through `dexter_s01e03`. Sign in before following the full walkthrough: visitor mode hides chat and canvas write controls, keeps progress local to the browser tab, and backend graph reads remain fixed at anonymous order 1. The detail inspector hides the Notes and History tabs and note/relationship write affordances from visitors via `readOnly`, and the backend also rejects unauthenticated writes.
 
 1. Select **Dexter** and set progress to **S01E01**. The initial graph contains only episode-1-visible data.
-2. Select a character or claim-backed relationship. The left inspector shows graph details, claims, evidence/source metadata, notes, and revision history where applicable.
+2. Select a character or claim-backed relationship. The left inspector shows graph details, claims, evidence/source metadata, notes, and revision history where applicable. The Cytoscape-based canvas (v1.3 visualization) offers layout switching, a legend, a filter panel, node search, and a path finder from the graph toolbar.
 3. Advance to **S01E02**. Confirm the spoiler warning, then observe the newly unlocked nodes and relationships. Moving backward to an already-watched episode applies immediately without confirmation and contracts the visible graph while preserving the highest watched episode.
 4. Add a note or user-created graph item from the available inspector/canvas controls. User content remains visually distinguishable and participates in revision/refresh flows.
-5. Open **Settings** with the top-bar gear to configure the optional browser-held LLM provider, model, base URL, and API key. Saving writes only to this browser's `localStorage`; chat sends non-blank BYOK values in `X-LLM-*` request headers. This frontend page does not call the admin-only `/api/settings/llm` endpoints and does not configure the assistant language.
+5. Open **Settings** with the top-bar gear to configure the optional browser-held LLM provider, model, base URL, and API key — Google Gemini is the default provider (key plus optional model; the official Gemini REST endpoint is used when the base URL is blank), with OpenAI-compatible endpoints selectable; vLLM and Ollama are scaffolding options. Saving writes only to this browser's `localStorage`; chat sends non-blank BYOK values in `X-LLM-Api-Key`, `X-LLM-Provider`, `X-LLM-Base-URL`, and `X-LLM-Model` request headers. This frontend page does not call the admin-only `/api/settings/llm` endpoints — that separate server-managed configuration (stored in Neo4j as `:AppSetting {key: 'llm'}`, API key write-only and returned masked to its last four characters) also holds the assistant language and is edited via the API or Swagger UI.
 6. If signed in, open chat and ask about a relationship visible at the current progress. Chat is hidden in visitor mode. With no browser BYOK key, the backend falls back to its Neo4j-stored/admin-managed configuration and then `LLM_*` environment values; if none is effectively enabled, chat reports a disabled/provider error. Retrieval remains bounded by persisted watch progress.
 
 Candidate extraction review is currently an API workflow rather than a dedicated frontend screen. Use Swagger UI at `http://localhost:8000/docs` to inspect the ingest, list/get, edit, approve, and reject routes under `/api/series/{series_id}/candidates`. Ingest requires any authenticated user; list/get are anonymous reads that require a valid `visible_until_order` boundary; edit, approve, and reject require the `admin` role. Candidate ingestion accepts structured, evidence-bearing records; it is not an automatic subtitle/script ingestion pipeline.
@@ -157,6 +162,15 @@ uv run python -m spoilerless.app.graph.setup
 
 - The backend requires Python `>=3.13`. Run `uv run python --version`; uv can provision a compatible interpreter when one is available for the platform.
 - The committed frontend dependency graph requires Node.js `^22.22.2`, `^24.15.0`, or `>=26.0.0` because `jsdom` 30.0.1 is stricter than Vite itself. Upgrade Node.js if `npm install` reports an `EBADENGINE` warning or Vite refuses to start.
+
+### `npm install` skipped devDependencies (Vitest missing)
+
+If `npm config get omit` prints `dev`, your global npm configuration excludes devDependencies from installs, so `vitest` and other test tooling are missing. Re-run with:
+
+```bash
+cd frontend
+npm install --include=dev
+```
 
 ### Neo4j is unavailable or the seed command cannot connect
 

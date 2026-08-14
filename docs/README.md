@@ -22,7 +22,7 @@
 - [DEVELOPMENT.md](DEVELOPMENT.md) — dev loop, layout, pitfalls
 
 ### docs/reference/ — facts that mirror code
-- [API.md](API.md) — backend HTTP surface (50 ops / 37 templates)
+- [API.md](API.md) — backend HTTP surface (52 ops / 39 templates)
 - [frontend-api-contract.md](reference/frontend-api-contract.md) — backend↔frontend contract (test-locked)
 - [CONFIGURATION.md](CONFIGURATION.md) — env/config reference
 - [backend-modules.md](reference/backend-modules.md) — backend module map (snapshot)
