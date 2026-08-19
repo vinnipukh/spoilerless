@@ -42,6 +42,34 @@ export const EDGE_TYPE_TO_FAMILY: Record<string, EdgeColorFamily> = {
   REVERTS_TO: 'slate',
 }
 
+// VisualizationDTO intentionally exposes human semantic classes instead of
+// raw relationship types. Keep their colors aligned with legacy edges while
+// preserving that public contract.
+const RELATION_CLASS_TO_FAMILY: Record<string, EdgeColorFamily> = {
+  part_of: 'slate',
+  precedes: 'slate',
+  knows: 'cyan',
+  family: 'violet',
+  work: 'cyan',
+  trusts: 'green',
+  distrusts: 'red',
+  helps: 'green',
+  opposes: 'red',
+  threatens: 'red',
+  attacks: 'red',
+  kills: 'red',
+  participated_in: 'teal',
+  occurred_in: 'amber',
+  located_in: 'amber',
+  witnessed: 'teal',
+  caused: 'teal',
+  affected: 'teal',
+  targeted: 'teal',
+  mentioned: 'teal',
+  supported_by: 'teal',
+  from_source: 'amber',
+}
+
 export const FAMILY_HEX: Record<EdgeColorFamily, string> = {
   violet: '#A78BFA',
   slate: DEFAULT_HEX,
@@ -52,8 +80,10 @@ export const FAMILY_HEX: Record<EdgeColorFamily, string> = {
   red: '#EF4444',
 }
 
-export function edgeColorFor(edgeType: string): string {
-  const family = EDGE_TYPE_TO_FAMILY[edgeType]
+export function edgeColorFor(edgeType: string | undefined): string {
+  const family = edgeType
+    ? EDGE_TYPE_TO_FAMILY[edgeType] ?? RELATION_CLASS_TO_FAMILY[edgeType.toLowerCase()]
+    : undefined
   if (!family) return DEFAULT_HEX
   return FAMILY_HEX[family]
 }

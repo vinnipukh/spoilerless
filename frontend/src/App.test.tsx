@@ -752,7 +752,7 @@ describe('App', () => {
   })
 
   describe('four-tab narrative hierarchy (10-05, D-16/D-17/D-38/D-47)', () => {
-    async function renderGraphWorkspace() {
+    async function renderGraphWorkspace(fullMode = true) {
       currentAuthState = 'authenticated'
       sessionStorage.setItem(
         'spoilerless.watchProgress',
@@ -760,9 +760,25 @@ describe('App', () => {
       )
       render(<App />)
       await screen.findByTestId('graph-canvas-stub')
+      if (fullMode) {
+        await userEvent.setup().click(screen.getByRole('button', { name: 'Full mode' }))
+      }
     }
 
-    it('renders four accessible top tabs with Story selected by default', async () => {
+    it('keeps Overview vanilla and hides narrative navigation', async () => {
+      await renderGraphWorkspace(false)
+
+      expect(screen.getByTestId('graph-canvas-stub')).toBeInTheDocument()
+      expect(screen.queryByRole('tab', { name: 'Story' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('tab', { name: 'Characters' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('tab', { name: 'Evidence' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('tab', { name: 'Advanced' })).not.toBeInTheDocument()
+      expect(
+        vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/graph/visualization')),
+      ).toBe(false)
+    })
+
+    it('renders four accessible top tabs in Full mode with Story selected by default', async () => {
       await renderGraphWorkspace()
 
       expect(screen.getByRole('tab', { name: 'Story' })).toHaveAttribute('aria-selected', 'true')
@@ -941,6 +957,7 @@ describe('App', () => {
       const user = userEvent.setup()
       render(<App />)
 
+      await user.click(await screen.findByRole('button', { name: 'Full mode' }))
       await user.click(await screen.findByRole('tab', { name: 'Characters' }))
 
       await waitFor(() => {
@@ -963,6 +980,7 @@ describe('App', () => {
 
       // The projection views live on the Characters/Evidence tabs — open
       // Characters so the Expand affordance is active.
+      await user.click(await screen.findByRole('button', { name: 'Full mode' }))
       await user.click(await screen.findByRole('tab', { name: 'Characters' }))
 
       // Select a node through the search bar (the same handleJumpToNode path
@@ -1010,6 +1028,7 @@ describe('App', () => {
       expect(await screen.findByText('Highlighting 3')).toBeInTheDocument()
 
       // Enter the Evidence tab's Answer Graph nested mode.
+      await user.click(screen.getByRole('button', { name: 'Full mode' }))
       await user.click(screen.getByRole('tab', { name: 'Evidence' }))
       await user.click(screen.getByRole('tab', { name: 'Answer Graph' }))
 

@@ -41,6 +41,7 @@ import { fetchExportMarkdown, downloadMarkdownBlob } from '@/api/export'
 import { renderGraphMarkdown, exportFilename } from '@/lib/exportMarkdown'
 import { ALLOWED_NODE_TYPES, NODE_TYPES } from '@/lib/nodeTypes'
 import { applyHighlight } from '@/lib/graph/highlight'
+import { reconcileCytoscapeElements } from './cytoscapeReconciler'
 
 
 
@@ -314,6 +315,10 @@ type Props = {
   // (default) shows the curated tier-1 + connector projection; Full shows
   // every spoiler-safe element.
   initialMode?: GraphMode
+  // Optional controlled mode seam. App uses this to keep surrounding
+  // navigation in lockstep with the canvas mode.
+  mode?: GraphMode
+  onModeChange?: (mode: GraphMode) => void
   // 10-04 (D-08/D-44): neutral VisualizationDTO for the Phase 10 projection
   // path. When set, the scene renders `toCytoscapeElements(visualization)`
   // through the SAME stable Cytoscape lifecycle (batched element diffs,
@@ -465,10 +470,17 @@ export function GraphCanvas({
   readOnly = false,
   onShareLink,
   initialMode = 'overview',
+  mode: controlledMode,
+  onModeChange,
   visualization = null,
 }: Props) {
 
-  const [mode, setMode] = useState<GraphMode>(initialMode)
+  const [internalMode, setInternalMode] = useState<GraphMode>(initialMode)
+  const mode = controlledMode ?? internalMode
+  const handleModeChange = useCallback((nextMode: GraphMode) => {
+    if (controlledMode === undefined) setInternalMode(nextMode)
+    onModeChange?.(nextMode)
+  }, [controlledMode, onModeChange])
   // PROB-09/#75: the cy event callbacks are registered once per cy instance
   // and would close over the mount-time `graph` forever. Keep a ref synced to
   // the latest payload so the hover card reads fresh data after an in-place
@@ -507,6 +519,13 @@ export function GraphCanvas({
     return graphToElements(graph, mode)
   }, [activeVisualization, graph, mode])
 
+  // Keep react-cytoscapejs's declared element prop stable after mount. Its
+  // id-only patcher removes obsolete compound parents before detaching shared
+  // children, so a compound -> flat scene switch cascade-removes shared
+  // nodes and then throws while adding their edges. The topology-aware
+  // reconciler below owns every subsequent scene update instead.
+  const initialElementsRef = useRef(elements)
+
   // D-22/D-24: additions (expansion, new custom node) are detected as NEW
   // node ids vs the previous render — runLayout gives them local placement
   // instead of a random global relayout. Edges and group/cluster parents are
@@ -541,6 +560,10 @@ export function GraphCanvas({
       ),
     [mode, layoutView],
   )
+  // Layout changes are applied by the guarded imperative effect below. A
+  // changing declarative prop would make react-cytoscapejs run an additional
+  // uncontrolled global layout during each narrative-tab switch.
+  const initialLayoutRef = useRef(layout)
   // 08-06+ (product owner): timestamp of the last touch anywhere in the app
   // (document-level capture) — stored at MODULE level so the 20s hold
   // survives the destructive unmount/remount that every graph refetch does.
@@ -555,6 +578,15 @@ export function GraphCanvas({
   }, [])
   const wiredCyRef = useRef<cytoscape.Core | null>(null)
   const cyInstanceRef = useRef<cytoscape.Core | null>(null)
+  // Unit-test adapters and lightweight embedders may expose only the small cy
+  // surface needed for interaction tests. They cannot run the topology-aware
+  // reconciler, so retain declarative element updates for those adapters.
+  const useImperativeReconcileRef = useRef(true)
+  useEffect(() => {
+    const cy = cyInstanceRef.current
+    if (!cy || !useImperativeReconcileRef.current) return
+    reconcileCytoscapeElements(cy, elements)
+  }, [elements])
   const stylesheet = useMemo(() => buildGraphStylesheet(prefersReducedMotion), [])
   const [dialogOpen, setDialogOpen] = useState(false)
   // Locally-created custom node reveal (the dialog lives inside this
@@ -858,14 +890,22 @@ export function GraphCanvas({
           onDismiss={() => setHoveredNodeInfo(null)}
         />
         <CytoscapeComponent
-          elements={elements}
-          layout={layout}
+          elements={useImperativeReconcileRef.current ? initialElementsRef.current : elements}
+          layout={useImperativeReconcileRef.current ? initialLayoutRef.current : layout}
           stylesheet={stylesheet}
           style={{ width: '100%', height: '100%' }}
           minZoom={0.3}
           maxZoom={2.5}
           cy={(cy) => {
             cyInstanceRef.current = cy
+            useImperativeReconcileRef.current =
+              typeof cy.elements === 'function' &&
+              typeof cy.elements().map === 'function' &&
+              typeof cy.nodes === 'function' &&
+              typeof cy.edges === 'function' &&
+              typeof cy.add === 'function' &&
+              typeof cy.remove === 'function' &&
+              typeof cy.batch === 'function'
 
             if (wiredCyRef.current === cy) return
             wiredCyRef.current = cy
@@ -961,7 +1001,7 @@ export function GraphCanvas({
               onSelect({
                 kind: 'edge',
                 id: edge.id(),
-                edgeType: edge.data('edgeType'),
+                edgeType: edge.data('edgeType') ?? edge.data('relationClass'),
                 source: edge.data('source'),
                 target: edge.data('target'),
               })
@@ -1021,7 +1061,7 @@ export function GraphCanvas({
         <GraphControls
           cyRef={cyInstanceRef}
           mode={mode}
-          onModeChange={setMode}
+          onModeChange={handleModeChange}
           onReset={() => {
             const cy = cyInstanceRef.current
             if (cy) runLayout(cy, seriesId, graph.visible_until_order, true, mode)

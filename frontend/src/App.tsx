@@ -39,6 +39,7 @@ import type { Citation } from './types/chat'
 import type { ChangeSet } from './types/changeSet'
 import { operationTargetRefs } from './types/changeSet'
 import type { GraphResponse } from './types/graph'
+import type { GraphMode } from './components/graph/overviewTiers'
 
 // 260814-viz: the 7 allowlisted expansion keys + human labels (D-21).
 const EXPANSION_KEYS: ExpansionKey[] = [
@@ -224,6 +225,7 @@ function AuthenticatedApp() {
   // workspace (GraphCanvas + search + Inspector + chat) stays mounted below
   // the tab strip.
   const [topTab, setTopTab] = useState<StoryTab>('story')
+  const [graphMode, setGraphMode] = useState<GraphMode>('overview')
   const [storyMode, setStoryMode] = useState<StoryMode>('episode_overview')
   const [characterMode, setCharacterMode] = useState<CharacterMode>('character_network')
   const [evidenceMode, setEvidenceMode] = useState<EvidenceMode>('investigation')
@@ -261,12 +263,24 @@ function AuthenticatedApp() {
     setEvidenceMode('investigation')
   }
 
+  function handleGraphModeChange(nextMode: GraphMode) {
+    setGraphMode(nextMode)
+    if (nextMode === 'overview') {
+      // Overview is the original curated graph, not a narrative workspace.
+      // Reset hidden navigation so returning to Full starts from Story.
+      setTopTab('story')
+      setStoryMode('episode_overview')
+      if (evidenceMode === 'answer_graph') handleCloseAnswerGraph()
+    }
+  }
+
   // 260814-viz: the Phase 10 visualization wiring (audit-gap closure).
   // activeView maps the four-tab hierarchy to projection view types; the DTO
   // fetch drives GraphCanvas's `visualization` prop; expansions merge their
   // delta DTOs into the base scene; Answer Graph swaps in the graphrag_focus
   // projection while open. All spoiler filtering stays backend-side (D-05).
   const activeView = useMemo<VisualizationViewType | null>(() => {
+    if (graphMode === 'overview') return null
     // 260814-viz: Story keeps the legacy scene (user content lives in the
     // legacy GraphResponse — custom nodes/edges are never part of a
     // projection DTO); Advanced keeps the legacy full graph for the same
@@ -279,7 +293,7 @@ function AuthenticatedApp() {
       default:
         return null
     }
-  }, [topTab, evidenceMode])
+  }, [graphMode, topTab, evidenceMode])
 
   // The effective boundary the backend clamps to; falls back to episode 1
   // before progress resolves (the backend re-clamps anyway).
@@ -719,11 +733,10 @@ function AuthenticatedApp() {
         <SettingsPage onBack={() => setView('graph')} />
       ) : (
         <div className="flex h-full flex-col">
-          {/* 10-05 (D-16/D-17): fixed four-tab hierarchy. Navigation-only —
-              the workspace below stays mounted across tab switches so
-              Filters/camera/selection are never silently reset (D-47). The
-              strip scrolls horizontally on narrow screens with 44px-tall hit
-              areas (D-18); never bottom navigation. */}
+          {/* The Phase 10 narrative workspace belongs to Full mode. Overview
+              intentionally remains the original curated graph without extra
+              Story/Characters/Evidence/Advanced navigation. */}
+          {graphMode === 'full' && (
           <Tabs value={topTab} onValueChange={(value) => setTopTab(value as StoryTab)} className="shrink-0">
             <TabsList className="w-full justify-start rounded-none border-b border-border bg-background px-2 max-sm:overflow-x-auto">
               <TabsTrigger value="story" className="max-sm:min-h-[44px] max-sm:flex-none">Story</TabsTrigger>
@@ -800,6 +813,7 @@ function AuthenticatedApp() {
               )}
             </TabsContent>
           </Tabs>
+          )}
           {view === 'timeline' ? (
             <div className="min-h-0 flex-1">
         <TimelineView
@@ -867,6 +881,8 @@ function AuthenticatedApp() {
             onNewlyRevealedDone={() => setNewlyRevealedIds(null)}
             readOnly={isVisitor}
             onShareLink={isVisitor ? undefined : () => setShareDialogOpen(true)}
+            mode={graphMode}
+            onModeChange={handleGraphModeChange}
             visualization={activeView ? mergedVisualization : undefined}
           />
 
@@ -994,7 +1010,7 @@ function AuthenticatedApp() {
                   (max-sm hidden keeps ONE primary region on narrow screens,
                   D-20). The graph canvas stays mounted behind it, so
                   switching modes never resets filters or camera (D-47). */}
-              {topTab === 'story' && storyMode === 'event_timeline' && (
+              {graphMode === 'full' && topTab === 'story' && storyMode === 'event_timeline' && (
                 <EventTimelineRail>
                   <TimelineView
                     nodes={graphState.status === 'success' ? graphState.data.nodes : []}
