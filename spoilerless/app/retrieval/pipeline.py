@@ -97,6 +97,19 @@ from spoilerless.app.retrieval.context import (
 )
 
 
+def _neutralize_answer_delimiters(content: str) -> str:
+    """Escape exact context-delimiter tags in the model's answer.
+
+    Only the exact `<name>`/`</name>` shapes for CONTEXT_SECTIONS are
+    replaced — ordinary text containing angle brackets is untouched, so
+    answer fidelity is preserved.
+    """
+    for name in CONTEXT_SECTIONS:
+        content = content.replace(f"<{name}>", f"&lt;{name}&gt;")
+        content = content.replace(f"</{name}>", f"&lt;/{name}&gt;")
+    return content
+
+
 # Cap on the serialized tool-result content replayed into the conversation
 # messages on every round (PROB-28/#52): the full rows still accumulate in
 # ``retrieved`` for citation validation and context assembly — only the
@@ -357,9 +370,10 @@ class ProposeChangesetInput(BaseModel):
     )
     operations: list[ChangeSetOperation] = Field(
         min_length=1,
+        max_length=20,
         description=(
             "The graph operations to propose (create/update/delete node, "
-            "relationship, claim, or note)."
+            "relationship, claim, or note); max 20."
         ),
     )
 
@@ -374,47 +388,18 @@ async def _propose_changeset_executor(
 ) -> dict[str, Any]:
     """Persist a ChangeSet draft via the service at the effective boundary.
 
-    The one state-changing tool (D-13): nothing is applied until the user
-    confirms. Visibility is always derived server-side from the current
-    effective view — never accepted from the model. Validation/session
-    errors surface as a model-visible error string so the turn can
-    continue, exactly like the read-only tools. ``visible_until_order``
-    rides in ``**args`` injected by the dispatcher (the turn boundary
-    resolved in ``answer()``) and is threaded into the service — the
-    proposal never stamps a model-supplied boundary.
+    Thin delegation to :meth:`ChangeSetService.propose_via_tool` (QUAL-02)
+    — the service owns validation + persistence, the pipeline only threads
+    the server-resolved boundary.
     """
-    # The dispatcher injects the turn boundary (server-resolved) — pop it
-    # and reuse it: never stamps a model-supplied boundary, and the value
-    # comes from answer()'s resolve (PROB-10/#78).
     boundary = args.pop("visible_until_order", None)
-    try:
-        parsed = ProposeChangesetInput.model_validate(args)
-    except ValidationError:
-        return {"error": "invalid arguments for propose_changeset"}
-    try:
-        proposed = await ChangeSetService(database).propose(
-            user_id,
-            series_id,
-            ChangeSetCreateRequest(
-                series_id=series_id,
-                chat_session_id=chat_session_id,
-                summary=parsed.summary,
-                operations=parsed.operations,
-            ),
-            # PROB-10/#78: the turn boundary was resolved once in answer()
-            # and threaded through the dispatcher (visible_until_order is
-            # popped above, never trusted from the model) — reuse it so the
-            # draft snapshot cannot drift from the context the model saw,
-            # and the propose call pays no second progress DB read.
-            visible_until_order=boundary,
-        )
-    except Exception as exc:  # noqa: BLE001 — tool errors stay turn-continuable
-        # Never leak internal details (paths, hostnames, parameter values)
-        # into a model-visible tool result — the exception TYPE alone keeps
-        # the turn continuable without disclosing the failure internals
-        # (PROBLEMS #78).
-        return {"error": f"propose_changeset failed: {type(exc).__name__}"}
-    return {"proposed_change_set": proposed.model_dump(mode="json")}
+    return await ChangeSetService(database).propose_via_tool(
+        user_id=user_id,
+        series_id=series_id,
+        chat_session_id=chat_session_id,
+        visible_until_order=boundary,
+        tool_args=args,
+    )
 
 
 @dataclass(frozen=True)
@@ -796,6 +781,7 @@ class RetrievalPipeline:
                 if _call_args(call.tool_name or "", call.arguments or {})
                 not in executed
             ]
+            new_calls = new_calls[: settings.llm_max_tool_calls_per_round]
             if not calls or not new_calls:
                 # Final round: no (new) tool calls — the done event in this
                 # round carries the model's answer.
@@ -1074,6 +1060,7 @@ class RetrievalPipeline:
             content = fallback
         elif not content.strip():
             content = fallback
+        content = _neutralize_answer_delimiters(content)
 
         node_ids = sorted(
             {node for citation in citations for node in citation["related_node_ids"]}

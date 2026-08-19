@@ -67,7 +67,12 @@ def _admin_emails() -> frozenset[str]:
 
 
 def _make_cookie(response: Response, raw_token: str, secure: bool, cookie_name: str) -> None:
-    """Set the HttpOnly session cookie on the response."""
+    """Set the HttpOnly session cookie on the response.
+
+    max_age = session_ttl_seconds keeps the browser-side expiry in lockstep
+    with the server-side TTL (SEC-BE-010): a shared-machine browser profile
+    no longer keeps the session beyond the intended lifetime.
+    """
     response.set_cookie(
         key=cookie_name,
         value=raw_token,
@@ -75,6 +80,7 @@ def _make_cookie(response: Response, raw_token: str, secure: bool, cookie_name: 
         secure=secure,
         samesite=get_settings().session_cookie_samesite,
         path="/",
+        max_age=get_settings().session_ttl_seconds,
     )
 
 

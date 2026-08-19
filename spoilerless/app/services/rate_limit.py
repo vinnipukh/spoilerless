@@ -45,9 +45,13 @@ async def rate_limit_identifier(request: Request) -> str:
     AppUser record (see ``api/deps.py``), so authenticated requests key on the
     user id; anonymous requests (e.g. user_content routes, which gain an
     ownership dependency only in Phase 9) fall back to the client IP.
+    BUG-BE-02: request.client may be None on ASGI/unix-socket test clients.
     """
     user = getattr(request.state, "user", None)
-    return f"user:{user['id']}" if user else f"ip:{request.client.host}"
+    if user:
+        return f"user:{user['id']}"
+    host = request.client.host if request.client else "unknown"
+    return f"ip:{host}"
 
 
 async def rate_limit_callback(
@@ -86,21 +90,45 @@ class RateLimiter:
     async def __call__(self, request: Request, response: Response) -> None:
         limiter = self._limiter
         if limiter is None:
-            return  # Redis not configured — rate limiting disabled.
+            # D-05: never a SILENT no-op for login/chat/content-write in
+            # production. Local dev (empty REDIS_URL) keeps the documented
+            # no-op; non-production or explicit fail-open keeps degrade.
+            from spoilerless.app.core.config import get_settings
+
+            settings = get_settings()
+            if not settings.redis_url:
+                return  # dev contract: empty REDIS_URL = disabled
+            if settings.environment != "production" or settings.rate_limit_fail_open:
+                logger.warning(
+                    "rate_limit: Redis unavailable — rate limiting disabled for this request"
+                )
+                return
+            raise http_error(
+                503,
+                "rate_limit_unavailable",
+                "Rate limiting is unavailable; try again shortly.",
+            )
         rate_key = await rate_limit_identifier(request)
         key = f"{rate_key}:{self.bucket_key}"
         try:
             success = await limiter.try_acquire_async(key, blocking=False)
         except Exception:
-            # A Redis outage must degrade rate limiting to a no-op, never
-            # 500 the login/chat/content-write routes (PROB-23, SEVENTEENTH
-            # PASS). Mirrors the graph cache's degrade-to-Neo4j behavior
-            # (cache/graph_cache.py).
-            logger.warning(
-                "rate_limit: Redis unavailable — rate limiting disabled for this request",
-                exc_info=True,
+            from spoilerless.app.core.config import get_settings
+
+            settings = get_settings()
+            if not settings.redis_url:
+                return
+            if settings.environment != "production" or settings.rate_limit_fail_open:
+                logger.warning(
+                    "rate_limit: Redis unavailable — rate limiting disabled for this request",
+                    exc_info=True,
+                )
+                return
+            raise http_error(
+                503,
+                "rate_limit_unavailable",
+                "Rate limiting is unavailable; try again shortly.",
             )
-            return
         if not success:
             await rate_limit_callback(request, response, pexpire=0)
 
@@ -142,7 +170,19 @@ async def init_rate_limiter() -> None:
             )
             instance._limiter = Limiter(SingleBucketFactory(bucket))
     except Exception:
-        logger.warning(
-            "init_rate_limiter: Redis unavailable at startup — rate limiting disabled",
-            exc_info=True,
-        )
+        from spoilerless.app.core.config import get_settings
+
+        settings = get_settings()
+        # In production with fail-closed, log ERROR to highlight that every
+        # limited route will 503; do NOT raise — per-request 503 is the
+        # designed failure mode (startup blip must not kill deploy).
+        if settings.redis_url and settings.environment == "production" and not settings.rate_limit_fail_open:
+            logger.error(
+                "init_rate_limiter: Redis unavailable at startup — rate limiting unavailable and every limited route will 503",
+                exc_info=True,
+            )
+        else:
+            logger.warning(
+                "init_rate_limiter: Redis unavailable at startup — rate limiting disabled",
+                exc_info=True,
+            )

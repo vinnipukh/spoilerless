@@ -2,8 +2,9 @@ import os
 import sys
 import re
 import json
+from pathlib import Path
 
-root = r"C:\Users\arhan\PycharmProjects\hdgrafcehennemi"
+root = str(Path(__file__).resolve().parent)
 doc_rel = "docs/ARCHITECTURE.md"
 doc_full = os.path.join(root, doc_rel.replace('/', os.sep))
 

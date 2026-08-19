@@ -31,37 +31,47 @@ CONTEXT_SECTIONS: tuple[str, ...] = (
 CONTEXT_DELIMITERS: tuple[str, ...] = tuple(f"<{name}>" for name in CONTEXT_SECTIONS)
 
 
+def _neutralize(text: str | None) -> str:
+    """Escape angle brackets so delimiter-shaped tags are inert text.
+
+    D-12: user/retrieved content may contain literal `<claims>`-style tags;
+    if passed through verbatim they could close/reopen the pipeline's section
+    framing. Escaping both brackets makes them text, not syntax.
+    """
+    return (text or "").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def _entity_line(item: dict[str, Any]) -> str:
-    return f"- {item.get('label') or item.get('id')} ({item.get('id')}, {item.get('type')})"
+    return f"- {_neutralize(item.get('label') or item.get('id'))} ({item.get('id')}, {item.get('type')})"
 
 
 def _edge_line(item: dict[str, Any]) -> str:
     return (
-        f"- {item.get('source')} -[{item.get('type')}]-> "
+        f"- {item.get('source')} -[{_neutralize(item.get('type'))}]-> "
         f"{item.get('target')} ({item.get('id')})"
     )
 
 
 def _claim_line(item: dict[str, Any]) -> str:
     return (
-        f"- {item.get('label') or item.get('id')} ({item.get('id')}): "
-        f"{item.get('subject_id')} {item.get('predicate')} {item.get('object_id')}"
+        f"- {_neutralize(item.get('label') or item.get('id'))} ({item.get('id')}): "
+        f"{item.get('subject_id')} {_neutralize(item.get('predicate'))} {item.get('object_id')}"
     )
 
 
 def _evidence_line(item: dict[str, Any]) -> str:
-    return f"- {item.get('label') or item.get('id')} ({item.get('id')}): {item.get('text') or ''}"
+    return f"- {_neutralize(item.get('label') or item.get('id'))} ({item.get('id')}): {_neutralize(item.get('text') or '')}"
 
 
 def _source_line(item: dict[str, Any]) -> str:
     return (
-        f"- {item.get('label') or item.get('id')} ({item.get('id')}, "
-        f"{item.get('source_type')}): {item.get('locator') or ''}"
+        f"- {_neutralize(item.get('label') or item.get('id'))} ({item.get('id')}, "
+        f"{item.get('source_type')}): {_neutralize(item.get('locator') or '')}"
     )
 
 
 def _note_line(item: dict[str, Any]) -> str:
-    content = (item.get("content") or "").strip()
+    content = _neutralize(item.get("content") or "").strip()
     return f"- {content or item.get('id')}"
 
 

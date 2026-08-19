@@ -5,11 +5,15 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from spoilerless.app.api.deps import CsrfGuardDependency, CurrentUserDependency
+from spoilerless.app.api.boundary import resolve_effective_boundary
+from spoilerless.app.api.deps import CsrfGuardDependency, CurrentUserDependency, OptionalUserDependency
 from spoilerless.app.core.errors import error_responses, http_error
 from spoilerless.app.domain.revision import RevisionResponse
 from spoilerless.app.graph.database import Neo4jDatabase, get_database
+from spoilerless.app.repository.user_content import UserContentRepository
 from spoilerless.app.revisions import REVISION_GET_QUERY, revert_revision_work
+from spoilerless.app.services.graph import GraphService
+from spoilerless.app.services.progress import ProgressService
 
 router = APIRouter(prefix="/api/series", tags=["revisions"])
 DatabaseDependency = Annotated[Neo4jDatabase, Depends(get_database)]
@@ -36,6 +40,28 @@ def _not_found() -> Exception:
     return http_error(404, "RESOURCE_NOT_FOUND", "Resource not found.")
 
 
+def get_graph_service(database: Neo4jDatabase = Depends(get_database)) -> GraphService:
+    return GraphService(database)
+
+
+def get_progress_service(database: Neo4jDatabase = Depends(get_database)) -> ProgressService:
+    return ProgressService(database)
+
+
+GraphServiceDependency = Annotated[GraphService, Depends(get_graph_service)]
+ProgressServiceDependency = Annotated[ProgressService, Depends(get_progress_service)]
+
+
+def _shape_revision_response(revision: dict, user: dict | None) -> dict:
+    """D-02: non-owner responses never expose before/after snapshots or user_id."""
+    owner = user["id"] if user is not None else None
+    is_admin = bool(user and user.get("role") == "admin")
+    if revision.get("user_id") != owner and not is_admin:
+        for key in ("before", "after", "user_id"):
+            revision.pop(key, None)
+    return revision
+
+
 # ---------------------------------------------------------------------------
 # GET /api/series/{series_id}/revisions
 # ---------------------------------------------------------------------------
@@ -51,6 +77,9 @@ async def list_revisions(
     series_id: str,
     visible_until_order: Boundary,
     database: DatabaseDependency,
+    graph_service: GraphServiceDependency,
+    progress_service: ProgressServiceDependency,
+    user: OptionalUserDependency,
     resource_type: str | None = Query(default=None),
     resource_id: str | None = Query(default=None),
 ) -> list[RevisionResponse]:
@@ -58,15 +87,19 @@ async def list_revisions(
         resource_type = None
     if resource_id is not None and resource_id.strip() == "":
         resource_id = None
-
+    await UserContentRepository(database)._require_persisted_boundary(series_id, visible_until_order)
+    effective = await resolve_effective_boundary(
+        graph_service, progress_service, series_id, user, visible_until_order
+    )
     rows = await database.execute_query(
         REVISION_LIST_QUERY,
         series_id=series_id,
-        visible_until_order=visible_until_order,
+        visible_until_order=effective,
         resource_type=resource_type,
         resource_id=resource_id,
     )
-    return [RevisionResponse.model_validate(row) for row in rows]
+    shaped = [_shape_revision_response(dict(row), user) for row in rows]
+    return [RevisionResponse.model_validate(row) for row in shaped]
 
 
 # ---------------------------------------------------------------------------
@@ -85,16 +118,24 @@ async def get_revision(
     revision_id: str,
     visible_until_order: Boundary,
     database: DatabaseDependency,
+    graph_service: GraphServiceDependency,
+    progress_service: ProgressServiceDependency,
+    user: OptionalUserDependency,
 ) -> RevisionResponse:
+    await UserContentRepository(database)._require_persisted_boundary(series_id, visible_until_order)
+    effective = await resolve_effective_boundary(
+        graph_service, progress_service, series_id, user, visible_until_order
+    )
     rows = await database.execute_query(
         REVISION_GET_QUERY,
         revision_id=revision_id,
         series_id=series_id,
-        visible_until_order=visible_until_order,
+        visible_until_order=effective,
     )
     if not rows:
         raise _not_found()
-    return RevisionResponse.model_validate(rows[0])
+    shaped = _shape_revision_response(dict(rows[0]), user)
+    return RevisionResponse.model_validate(shaped)
 
 
 # ---------------------------------------------------------------------------

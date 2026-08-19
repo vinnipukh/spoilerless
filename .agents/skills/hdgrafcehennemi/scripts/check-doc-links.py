@@ -2,7 +2,7 @@
 """Verify markdown link targets and GitHub-style anchor slugs in a doc set.
 
 Usage:  python check-doc-links.py [file ...]
-Default: the hdgrafcehennemi final-state doc set (roots + docs/).
+Default: the hdgrafcehennemi final-state doc set (roots + docs/ tree).
 Checks that every relative ](...) target file exists and every #anchor slug
 matches a heading in the target file (same-file and cross-file). Prints any
 problems and exits 1; prints "N links checked" and exits 0 when clean.
@@ -14,9 +14,11 @@ import sys
 
 
 def gslug(s: str) -> str:
-    s = s.lower()
-    s = re.sub(r"[^\w\- ]", "", s)
-    return s.replace(" ", "-")
+    s = s.lower().strip()
+    s = re.sub(r"[^\w\s-]", "", s)
+    s = re.sub(r"[\s_]+", "-", s)
+    s = re.sub(r"-+", "-", s)
+    return s.strip("-")
 
 
 def check(f: str, base: str):
@@ -26,7 +28,7 @@ def check(f: str, base: str):
     heads = {gslug(h) for h in re.findall(r"^#{1,6}\s+(.+)$", txt, re.M)}
     for m in re.finditer(r"\]\(([^)]*)\)", txt):
         t = m.group(1)
-        if t.startswith(("http", "mailto")):
+        if t.startswith(("http://", "https://", "mailto:", "javascript:")):
             continue
         path, _, anch = t.partition("#")
         target = os.path.normpath(os.path.join(base, path)) if path else f
@@ -39,6 +41,8 @@ def check(f: str, base: str):
             bad_anchors.append((t, "same-file"))
             continue
         if path:
+            if os.path.isdir(target):
+                continue
             with open(target, encoding="utf-8", errors="replace") as th:
                 theads = {gslug(h) for h in re.findall(r"^#{1,6}\s+(.+)$", th.read(), re.M)}
             if gslug(anch) not in theads:
@@ -49,15 +53,29 @@ def check(f: str, base: str):
 def main(argv):
     files = argv or [
         "README.md",
-        "docs/PROJECT-SPEC.md", "docs/ROADMAP.md",
-        "docs/API.md", "docs/ARCHITECTURE.md", "docs/CONFIGURATION.md",
-        "docs/DEPLOYMENT.md", "docs/DEVELOPMENT.md", "docs/GETTING-STARTED.md",
-        "docs/TESTING.md", "docs/frontend-api-contract.md",
-        "ROADMAP.md", "HD_GRAF_CEHENNEMI_CODING_AGENT_SPEC_V2.md",
+        "CONTRIBUTING.md",
+        "docs/README.md",
+        "docs/API.md",
+        "docs/ARCHITECTURE.md",
+        "docs/CONFIGURATION.md",
+        "docs/DEPLOYMENT.md",
+        "docs/DEVELOPMENT.md",
+        "docs/GETTING-STARTED.md",
+        "docs/PROBLEMS.md",
+        "docs/ROADMAP.md",
+        "docs/TESTING.md",
+        "docs/architecture/project-spec.md",
+        "docs/architecture/spoiler-deferred-design.md",
+        "docs/architecture/spoiler-terminology.md",
+        "docs/architecture/spoiler-threat-model.md",
+        "docs/reference/backend-modules.md",
+        "docs/reference/frontend-api-contract.md",
+        "docs/reference/frontend-components.md",
+        "docs/ops/runbook.md",
     ]
     total, bad = 0, 0
     for f in files:
-        base = "docs" if f.startswith("docs/") else "."
+        base = os.path.dirname(f) or "."
         try:
             bf, ba = check(f, base)
         except FileNotFoundError:
@@ -70,7 +88,7 @@ def main(argv):
         if bf or ba:
             bad += 1
             print(f"{f}: broken_file_targets={bf} bad_anchors={ba}")
-    print(f"{total} links checked, {bad} files with problems")
+    print(f"{total} links checked across {len(files)} files, {bad} files with problems")
     sys.exit(1 if bad else 0)
 
 

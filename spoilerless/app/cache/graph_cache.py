@@ -51,6 +51,29 @@ async def _graph_revision(redis: Any, series_id: str) -> int:
         return 0
 
 
+FOCUS_SET_CAP = 64            # distinct focus signatures cached per series
+FOCUS_SET_TTL_SECONDS = 3600
+
+
+async def _focus_capacity_allows(redis: Any, series_id: str, focus_sig: str) -> bool:
+    """True when this signature may be cached (member, or set under the cap).
+
+    The per-series signature set bounds cache-key cardinality: an attacker
+    enumerating focus_id combinations creates at most FOCUS_SET_CAP distinct
+    viz keys per series per TTL window — the 2^256 signature space can no
+    longer mint unbounded Redis entries (each miss still pays the fetch, but
+    memory growth is bounded).
+    """
+    key = f"vizfocus:{series_id}"
+    if await redis.sismember(key, focus_sig):
+        return True
+    if await redis.scard(key) >= FOCUS_SET_CAP:
+        return False
+    await redis.sadd(key, focus_sig)
+    await redis.expire(key, FOCUS_SET_TTL_SECONDS)
+    return True
+
+
 def focus_signature(focus_ids: list[str] | None) -> str:
     """Deterministic SHA-256 request signature for a focus set.
 
@@ -241,6 +264,10 @@ async def set_cached_visualization(
         return
     try:
         redis = get_redis()
+        if focus_ids:
+            sig = focus_signature(focus_ids)
+            if not await _focus_capacity_allows(redis, series_id, sig):
+                return  # compute-fresh, never store: bounded cardinality (D-12)
         epoch = await _graph_revision(redis, series_id)
         await redis.setex(
             _visualization_cache_key(

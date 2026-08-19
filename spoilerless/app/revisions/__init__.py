@@ -5,8 +5,11 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
-from spoilerless.app.domain.revision import RevisionAction
 from spoilerless.app.core.errors import http_error
+from spoilerless.app.domain.change_set import CustomNodeType  # noqa: F401
+from spoilerless.app.domain.revision import RevisionAction
+from spoilerless.app.domain.user_content import CustomNodeType as UserContentCustomNodeType
+from spoilerless.app.domain.user_content import NoteTargetType
 
 REVISION_CREATE_QUERY = """
 CREATE (revision:Revision {
@@ -27,6 +30,17 @@ RETURN revision.id AS id, revision.series_id AS series_id,
   revision.after AS after, revision.visible_from_order AS visible_from_order,
   revision.user_id AS user_id, revision.created_at AS created_at
 """
+
+
+_REVERT_LABEL_ALLOWLIST: frozenset[str] = frozenset({
+    "Claim",
+    "UserNote",
+    "ChangeSet",
+    "EvidenceFragment",
+    *(t.value for t in CustomNodeType),
+    *(t.value for t in UserContentCustomNodeType),
+    *(t.value for t in NoteTargetType),
+})
 
 
 class RevisionRepository:
@@ -180,6 +194,14 @@ async def revert_revision_work(tx: Any, command: dict[str, Any]) -> dict[str, An
 
     resource_id: str = revision["resource_id"]
     resource_type: str = revision["resource_type"]
+    # SEC-GR-014: validate labels before interpolation
+    if resource_type not in _REVERT_LABEL_ALLOWLIST:
+        raise http_error(422, "INVALID_ACTION", "Cannot revert revision with an unknown resource type.")
+    # target_type lives in before_snapshot for UserNote; validate if present
+    _tmp_before = RevisionRepository._from_json(revision.get("before")) or {}
+    _target_type_tmp = _tmp_before.get("target_type")
+    if _target_type_tmp is not None and _target_type_tmp not in _REVERT_LABEL_ALLOWLIST:
+        raise http_error(422, "INVALID_ACTION", "Cannot revert revision with an unknown target type.")
     before_snapshot_raw: dict[str, Any] | None = RevisionRepository._from_json(revision.get("before"))
     before_snapshot: dict[str, Any] = before_snapshot_raw or {}
     vfo: int = revision["visible_from_order"]
@@ -203,12 +225,10 @@ async def revert_revision_work(tx: Any, command: dict[str, Any]) -> dict[str, An
                 "Cannot revert a canonical or candidate resource.",
             )
 
-        # Owner check (PROB-02, #4): a user-origin resource owned by a
-        # different user cannot be reverted by that other user — only
-        # the owner or an admin. Legacy resources created before owner
-        # binding (no stored user_id) are admin-only, fail-closed.
+        # Owner check (PROB-02, #4) — fail closed: unowned/legacy resources
+        # (stored_owner is None) require admin (SEC-AUTH-01).
         stored_owner = resource_props.get("user_id")
-        if stored_owner is not None and stored_owner != command["user_id"] and not command["is_admin"]:
+        if stored_owner != command["user_id"] and not command["is_admin"]:
             raise http_error(
                 403,
                 "FORBIDDEN",
@@ -244,9 +264,9 @@ async def revert_revision_work(tx: Any, command: dict[str, Any]) -> dict[str, An
         # Owner check from the stored before-snapshot (the resource is
         # gone, so the snapshot's user_id is the only owner evidence).
         # Revisions logged before owner binding carry no user_id — those
-        # are admin-only, fail-closed (PROB-02, #4).
+        # are admin-only, fail-closed (SEC-AUTH-01).
         snapshot_owner = before_snapshot.get("user_id")
-        if snapshot_owner is not None and snapshot_owner != command["user_id"] and not command["is_admin"]:
+        if snapshot_owner != command["user_id"] and not command["is_admin"]:
             raise http_error(
                 403,
                 "FORBIDDEN",

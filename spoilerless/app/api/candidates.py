@@ -6,9 +6,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Query
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from spoilerless.app.api.boundary import resolve_effective_boundary
 from spoilerless.app.api.deps import (
     CsrfGuardDependency,
     CurrentUserDependency,
+    OptionalUserDependency,
     RequireAdminDependency,
 )
 from spoilerless.app.cache.graph_cache import invalidate_series
@@ -18,6 +20,8 @@ from spoilerless.app.domain.user_content import Identifier
 from spoilerless.app.graph.candidates import CandidateRepository
 from spoilerless.app.graph.database import Neo4jDatabase, get_database
 from spoilerless.app.services.graph import GraphService
+from spoilerless.app.services.progress import ProgressService
+from spoilerless.app.services.rate_limit import content_write_rate_limiter
 
 router = APIRouter(prefix="/api/series/{series_id}/candidates", tags=["candidates"])
 
@@ -30,8 +34,13 @@ async def get_graph_service(db: Neo4jDatabase = Depends(get_database)) -> GraphS
     return GraphService(db)
 
 
+async def get_progress_service(db: Neo4jDatabase = Depends(get_database)) -> ProgressService:
+    return ProgressService(db)
+
+
 CandidateRepoDependency = Annotated[CandidateRepository, Depends(get_candidate_repo)]
 GraphServiceDependency = Annotated[GraphService, Depends(get_graph_service)]
+ProgressServiceDependency = Annotated[ProgressService, Depends(get_progress_service)]
 SeriesId = Annotated[Identifier, Path(description="Series identifier.")]
 ClaimId = Annotated[Identifier, Path(description="Candidate claim identifier.", examples=["extracted:a1b2c3d4e5f6g7h8"])]
 
@@ -123,6 +132,7 @@ async def ingest_candidates(
     envelope: ExtractionBatchEnvelope,
     repo: CandidateRepoDependency,
     user: CurrentUserDependency,
+    _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
     _csrf: CsrfGuardDependency,
 ) -> dict:
     """Ingest a batch of candidate claims from a future extractor.
@@ -139,7 +149,9 @@ async def ingest_candidates(
     # driver/Neo4j failure inside the transaction must reach the global
     # error handlers, not be relabeled as a payload problem with raw
     # str(exc) interpolated into the response.
-    return await repo.ingest_batch(series_id, envelope)
+    result = await repo.ingest_batch(series_id, envelope)
+    await invalidate_series(series_id)
+    return result
 
 
 @router.get(
@@ -155,20 +167,39 @@ async def list_candidates(
     series_id: SeriesId,
     repo: CandidateRepoDependency,
     graph_service: GraphServiceDependency,
+    progress_service: ProgressServiceDependency,
+    user: OptionalUserDependency,
     visible_until_order: int | None = Query(
         default=None,
         ge=1,
         description="Spoiler boundary for filtering (REQUIRED since PROB-05/#13).",
     ),
+    limit: int = Query(default=100, ge=1, le=500),
+    after_created_at: datetime | None = Query(default=None),
+    after_id: str | None = Query(default=None),
 ) -> list[dict]:
     """List candidate claims for a series, filtered by a RESOLVED boundary.
 
     PROB-05/#13: the boundary is resolved server-side — an omitted
     ``visible_until_order`` returns 422 (never a default-to-everything dump),
     and a present boundary must identify a persisted episode of the series.
+    D-01: the EFFECTIVE boundary replaces the client-chosen order — anonymous
+    and record-less callers are fixed at 1.
     """
-    await _require_resolved_boundary(graph_service, series_id, visible_until_order)
-    return await repo.list_candidate_claims(series_id, visible_until_order)
+    if visible_until_order is None:
+        raise http_error(
+            422,
+            "INVALID_REQUEST",
+            "visible_until_order is required to read candidates — an omitted "
+            "boundary must never default to every visibility level.",
+        )
+    effective = await resolve_effective_boundary(
+        graph_service, progress_service, series_id, user, visible_until_order
+    )
+    await _require_resolved_boundary(graph_service, series_id, effective)
+    return await repo.list_candidate_claims(
+        series_id, effective, limit=limit, after_created_at=after_created_at, after_id=after_id
+    )
 
 
 @router.get(
@@ -186,6 +217,8 @@ async def get_candidate(
     claim_id: ClaimId,
     repo: CandidateRepoDependency,
     graph_service: GraphServiceDependency,
+    progress_service: ProgressServiceDependency,
+    user: OptionalUserDependency,
     visible_until_order: int | None = Query(
         default=None,
         ge=1,
@@ -197,10 +230,21 @@ async def get_candidate(
     PROB-05/#13: like the list endpoint, the boundary is required and
     validated against a persisted episode; an above-boundary claim reads as
     missing (D-15 — hidden and missing are indistinguishable).
+    D-01: effective boundary clamped via shared resolver.
     """
-    await _require_resolved_boundary(graph_service, series_id, visible_until_order)
+    if visible_until_order is None:
+        raise http_error(
+            422,
+            "INVALID_REQUEST",
+            "visible_until_order is required to read candidates — an omitted "
+            "boundary must never default to every visibility level.",
+        )
+    effective = await resolve_effective_boundary(
+        graph_service, progress_service, series_id, user, visible_until_order
+    )
+    await _require_resolved_boundary(graph_service, series_id, effective)
     claim = await repo.get_candidate_claim(
-        series_id, claim_id, visible_until_order=visible_until_order
+        series_id, claim_id, visible_until_order=effective
     )
     if claim is None:
         raise http_error(404, "CANDIDATE_NOT_FOUND", f"Candidate claim not found: {claim_id}")

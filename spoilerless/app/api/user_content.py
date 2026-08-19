@@ -4,9 +4,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, Response
 
-from spoilerless.app.api.deps import CsrfGuardDependency, CurrentUserDependency
+from spoilerless.app.api.boundary import resolve_effective_boundary
+from spoilerless.app.api.deps import CsrfGuardDependency, CurrentUserDependency, OptionalUserDependency
 from spoilerless.app.core.errors import error_responses
 from spoilerless.app.cache.graph_cache import invalidate_series
+from spoilerless.app.services.graph import GraphService
+from spoilerless.app.services.progress import ProgressService
 from spoilerless.app.domain.user_content import (
     NoteCreate,
     NoteResponse,
@@ -27,6 +30,32 @@ Boundary = Annotated[int, Query(gt=0, description="Persisted positive spoiler bo
 
 def _repository(database: Neo4jDatabase) -> UserContentRepository:
     return UserContentRepository(database)
+
+
+def get_graph_service(database: Neo4jDatabase = Depends(get_database)) -> GraphService:
+    return GraphService(database)
+
+
+def get_progress_service(database: Neo4jDatabase = Depends(get_database)) -> ProgressService:
+    return ProgressService(database)
+
+
+GraphServiceDependency = Annotated[GraphService, Depends(get_graph_service)]
+ProgressServiceDependency = Annotated[ProgressService, Depends(get_progress_service)]
+
+
+def _owner_id(user: dict | None) -> str | None:
+    return user["id"] if user is not None else None
+
+
+def _shape_note_response(row: dict, user: dict | None) -> dict:
+    """Non-owner responses never carry another user's id (D-02)."""
+    owner = _owner_id(user)
+    is_admin = bool(user and user.get("role") == "admin")
+    if row.get("user_id") and row["user_id"] != owner and not is_admin:
+        row = dict(row)
+        row.pop("user_id", None)
+    return row
 
 
 def _actor(user: dict) -> tuple[str, bool]:
@@ -56,13 +85,20 @@ async def list_notes(
     series_id: str,
     visible_until_order: Boundary,
     database: DatabaseDependency,
+    graph_service: GraphServiceDependency,
+    progress_service: ProgressServiceDependency,
+    user: OptionalUserDependency,
     target_type: NoteTargetType | None = Query(default=None),
     target_id: str | None = Query(default=None),
 ) -> list[NoteResponse]:
-    rows = await _repository(database).list_notes(
-        series_id, visible_until_order, target_type, target_id
+    await _repository(database)._require_persisted_boundary(series_id, visible_until_order)
+    effective = await resolve_effective_boundary(
+        graph_service, progress_service, series_id, user, visible_until_order
     )
-    return [NoteResponse.model_validate(row) for row in rows]
+    rows = await _repository(database).list_notes(
+        series_id, effective, target_type, target_id
+    )
+    return [NoteResponse.model_validate(_shape_note_response(dict(row), user)) for row in rows]
 
 
 @router.get(
@@ -70,10 +106,20 @@ async def list_notes(
     summary="Read one visible user note", responses=error_responses(404, 422, 503),
 )
 async def get_note(
-    series_id: str, note_id: str, visible_until_order: Boundary, database: DatabaseDependency
+    series_id: str,
+    note_id: str,
+    visible_until_order: Boundary,
+    database: DatabaseDependency,
+    graph_service: GraphServiceDependency,
+    progress_service: ProgressServiceDependency,
+    user: OptionalUserDependency,
 ) -> NoteResponse:
-    row = await _repository(database).get_note(series_id, note_id, visible_until_order)
-    return NoteResponse.model_validate(row)
+    await _repository(database)._require_persisted_boundary(series_id, visible_until_order)
+    effective = await resolve_effective_boundary(
+        graph_service, progress_service, series_id, user, visible_until_order
+    )
+    row = await _repository(database).get_note(series_id, note_id, effective)
+    return NoteResponse.model_validate(_shape_note_response(dict(row), user))
 
 
 @router.patch(
@@ -125,8 +171,23 @@ async def create_custom_node(
 
 @router.get("/{series_id}/custom-nodes/{node_id}", response_model=CustomNodeResponse,
             summary="Read one visible custom node", responses=error_responses(404, 422, 503))
-async def get_custom_node(series_id: str, node_id: str, visible_until_order: Boundary, database: DatabaseDependency) -> CustomNodeResponse:
-    return CustomNodeResponse.model_validate(await _repository(database).get_custom_node(series_id, node_id, visible_until_order))
+async def get_custom_node(
+    series_id: str,
+    node_id: str,
+    visible_until_order: Boundary,
+    database: DatabaseDependency,
+    graph_service: GraphServiceDependency,
+    progress_service: ProgressServiceDependency,
+    user: OptionalUserDependency,
+) -> CustomNodeResponse:
+    await _repository(database)._require_persisted_boundary(series_id, visible_until_order)
+    effective = await resolve_effective_boundary(
+        graph_service, progress_service, series_id, user, visible_until_order
+    )
+    row = await _repository(database).get_custom_node(series_id, node_id, effective)
+    # Custom nodes are user-owned; hide user_id for non-owners
+    shaped = _shape_note_response(dict(row), user)
+    return CustomNodeResponse.model_validate(shaped)
 
 
 @router.patch("/{series_id}/custom-nodes/{node_id}", response_model=CustomNodeResponse,
@@ -176,8 +237,22 @@ async def create_custom_relationship(
 
 @router.get("/{series_id}/custom-relationships/{relationship_id}", response_model=CustomRelationshipResponse,
             summary="Read one visible custom relationship", responses=error_responses(404, 422, 503))
-async def get_custom_relationship(series_id: str, relationship_id: str, visible_until_order: Boundary, database: DatabaseDependency) -> CustomRelationshipResponse:
-    return CustomRelationshipResponse.model_validate(await _repository(database).get_custom_relationship(series_id, relationship_id, visible_until_order))
+async def get_custom_relationship(
+    series_id: str,
+    relationship_id: str,
+    visible_until_order: Boundary,
+    database: DatabaseDependency,
+    graph_service: GraphServiceDependency,
+    progress_service: ProgressServiceDependency,
+    user: OptionalUserDependency,
+) -> CustomRelationshipResponse:
+    await _repository(database)._require_persisted_boundary(series_id, visible_until_order)
+    effective = await resolve_effective_boundary(
+        graph_service, progress_service, series_id, user, visible_until_order
+    )
+    row = await _repository(database).get_custom_relationship(series_id, relationship_id, effective)
+    shaped = _shape_note_response(dict(row), user)
+    return CustomRelationshipResponse.model_validate(shaped)
 
 
 @router.patch("/{series_id}/custom-relationships/{relationship_id}", response_model=CustomRelationshipResponse,

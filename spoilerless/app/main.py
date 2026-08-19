@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator
 
+from urllib.parse import urlparse
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
@@ -109,10 +113,80 @@ class HealthResponse(BaseModel):
     service: str
 
 
+class BodyTooLarge(Exception):
+    """Internal signal: the streamed body exceeded the cap."""
+
+
+class BodySizeLimitMiddleware:
+    """Reject request bodies over ``max_size`` bytes with 413.
+
+    Pure ASGI: a Content-Length header over the cap is rejected before any
+    body byte is read; chunked bodies (no Content-Length) are counted as they
+    stream and cut off at the cap. The response reuses the sanitized error
+    envelope with a lowercase code (^[a-z][a-z0-9_]*$).
+    """
+
+    def __init__(self, app, max_size: int):
+        self.app = app
+        self.max_size = max_size
+
+    async def _reject_413(self, send) -> None:
+        body = json.dumps({
+            "detail": {"code": "payload_too_large", "message": "Request body too large."}
+        }).encode()
+        await send({
+            "type": "http.response.start",
+            "status": 413,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode()),
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        headers = dict(scope.get("headers") or [])
+        raw_length = headers.get(b"content-length")
+        if raw_length is not None:
+            try:
+                if int(raw_length) > self.max_size:
+                    await self._reject_413(send)
+                    return
+            except ValueError:
+                pass
+
+        received = 0
+
+        async def guarded_receive():
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > self.max_size:
+                    raise BodyTooLarge()
+            return message
+
+        try:
+            await self.app(scope, guarded_receive, send)
+        except BodyTooLarge:
+            await self._reject_413(send)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     verify_google_client_id_equality(settings)
+    # D-07: loud warning on prod open signup (helper defined in 11-05)
+    try:
+        from spoilerless.app.services.chat import warn_if_open_signup
+
+        warn_if_open_signup(settings)
+    except Exception:
+        # helper is tested in 11-05; wiring must not crash startup if import fails
+        pass
     database = Neo4jDatabase(settings)
     database.open()
     app.state.neo4j = database
@@ -161,10 +235,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await database.close()
 
 
+# Docs are disabled when ENVIRONMENT=production — the FastAPI constructor
+# arguments are fixed at import time, so ENVIRONMENT must be set before the
+# process starts (Render dashboard env; render.yaml does not set it).
+try:
+    _app_settings = get_settings()
+except Exception:
+    _app_settings = None
+_docs_kwargs = (
+    {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    if _app_settings is not None and _app_settings.environment == "production"
+    else {}
+)
+
 app = FastAPI(
     title="Spoilerless API",
     version="0.1.0",
     lifespan=lifespan,
+    **_docs_kwargs,
 )
 
 app.include_router(series_router)
@@ -188,13 +276,38 @@ _STATIC_DIR = Path(__file__).resolve().parent / "static"
 app.mount("/api/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 
-settings = get_settings()
-_allowed_origins = [
-    origin.strip()
-    for origin in settings.frontend_origins.split(",")
-    if origin.strip()
-]
+def _trusted_hosts() -> list[str]:
+    try:
+        settings = get_settings()
+    except Exception:
+        return ["localhost", "127.0.0.1", "api.spoilerless.net", "testserver"]
+    if settings.allowed_hosts.strip():
+        return [h.strip() for h in settings.allowed_hosts.split(",") if h.strip()]
+    hosts: list[str] = []
+    for origin in (o.strip() for o in settings.frontend_origins.split(",") if o.strip()):
+        hostname = urlparse(origin).hostname
+        if hostname:
+            hosts.append(hostname)
+            if ":" in origin.split("//", 1)[-1].split("/", 1)[0]:
+                hosts.append(origin.split("//", 1)[1].split("/", 1)[0])
+    hosts += ["localhost", "127.0.0.1", "api.spoilerless.net", "testserver"]
+    return hosts
 
+
+try:
+    settings = get_settings()
+    _allowed_origins = [
+        origin.strip()
+        for origin in settings.frontend_origins.split(",")
+        if origin.strip()
+    ]
+    _max_body_size = settings.max_body_size_bytes
+except Exception:
+    settings = None  # type: ignore[assignment]
+    _allowed_origins = ["http://localhost:5173"]
+    _max_body_size = 1048576
+
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=_trusted_hosts())
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
@@ -212,6 +325,7 @@ app.add_middleware(
         "X-LLM-Model",
     ],
 )
+app.add_middleware(BodySizeLimitMiddleware, max_size=_max_body_size)
 app.middleware("http")(_security_headers_middleware)
 app.middleware("http")(_request_logging_middleware)
 install_database_error_handlers(app)

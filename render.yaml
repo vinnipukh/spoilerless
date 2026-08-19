@@ -7,4 +7,10 @@ services:
     plan: free
     autoDeploy: true
     buildCommand: uv sync --frozen
-    startCommand: uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT
+    # Trusted proxy: uvicorn only trusts X-Forwarded-For from Render's proxy CIDRs,
+    # so request.client.host is the REAL client IP and the per-IP login limiter
+    # (10/5min) is per-IP again. Never use "*" — that would make XFF spoofable.
+    # TODO(operator): confirm the final Render proxy CIDR list before deploy
+    # (https://render.com/docs/request-ip — Render's published proxy ranges).
+    # Local docker dev intentionally runs WITHOUT these flags (no proxy in front).
+    startCommand: uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips "34.160.168.0/24,35.190.0.0/17,35.191.0.0/16,209.20.0.0/16,209.23.0.0/16"

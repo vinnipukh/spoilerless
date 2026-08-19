@@ -158,6 +158,13 @@ class AuthService:
         """
         info = await self._verifier.verify(credential, client_id)
 
+        # SEC-BE-007: only Google-attested email ownership may drive the
+        # allowlist and admin-role derivation. A token without
+        # email_verified=true (or missing the claim entirely) is rejected
+        # before any email-based decision.
+        if info.get("email_verified") is not True:
+            raise GoogleVerificationError("email_not_verified")
+
         google_sub: str = info["sub"]
         email: str = info.get("email", "")
         display_name: str = info.get("name", "")

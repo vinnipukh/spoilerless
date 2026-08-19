@@ -10,6 +10,8 @@ via :func:`install_llm_error_handlers`, never 401/403.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from typing import Annotated, Any, AsyncIterator
 
 from fastapi import Depends, Header
@@ -40,6 +42,29 @@ from spoilerless.app.repository.chat import ChatRepository, ChatSessionNotFound
 from spoilerless.app.repository.settings import SettingsRepository
 from spoilerless.app.retrieval.pipeline import RetrievalPipeline
 from spoilerless.app.services.progress import ProgressNotFoundError, ProgressService
+
+
+logger = logging.getLogger(__name__)
+
+
+def warn_if_open_signup(settings) -> None:
+    """Warn at startup when production runs with open signup (D-07)."""
+    if settings.environment == "production" and not settings.allowed_emails.strip():
+        logger.warning(
+            "ALLOWED_EMAILS is empty in production — open signup is enabled "
+            "(operator action required)"
+        )
+
+
+_llm_semaphore: asyncio.Semaphore | None = None
+
+
+def _get_llm_semaphore() -> asyncio.Semaphore:
+    """Process-wide bound on concurrent generations (D-07, SEC-DOS-002)."""
+    global _llm_semaphore
+    if _llm_semaphore is None:
+        _llm_semaphore = asyncio.Semaphore(get_settings().llm_max_concurrent_generations)
+    return _llm_semaphore
 
 
 # Bounded concurrent generations per user (T-06-13, DoS mitigation).  A plain
@@ -299,6 +324,8 @@ class ChatService:
         so the slot never leaks (T-06-13).
         """
         self.acquire_generation_slot(user_id)
+        semaphore = _get_llm_semaphore()
+        await semaphore.acquire()
         user_message: ChatMessageResponse | None = None
         turn_completed = False
         try:
@@ -407,6 +434,7 @@ class ChatService:
                     pass
             raise
         finally:
+            semaphore.release()
             self.release_generation_slot(user_id)
 
     async def answer(

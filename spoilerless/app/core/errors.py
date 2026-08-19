@@ -63,6 +63,7 @@ ERROR_CODES: frozenset[str] = frozenset({
     "LLM_DISABLED",
     "LLM_PROVIDER_UNAVAILABLE",
     "LLM_STREAM_FAILED",
+    "PAYLOAD_TOO_LARGE",
 })
 
 
@@ -129,6 +130,7 @@ _SAFE_ERRORS: tuple[type[BaseException], ...] = (
 )
 
 _ERROR_SPECS: dict[int, tuple[str, str, str]] = {
+    413: ("PAYLOAD_TOO_LARGE", "Request body too large.", "The request body is too large."),
     401: ("UNAUTHENTICATED", "Authentication required.", "Authentication is required for this resource."),
     403: ("FORBIDDEN", "Forbidden.", "The request is forbidden."),
     404: ("RESOURCE_NOT_FOUND", "Resource not found.", "The resource was not found."),
@@ -209,6 +211,17 @@ def request_validation_error_response() -> JSONResponse:
     )
 
 
+_SAFE_VALIDATION_ERROR_FIELDS = ("loc", "type", "msg", "code")
+
+
+def _sanitized_validation_errors(exc: RequestValidationError) -> list[dict]:
+    """Drop input/ctx (raw submitted values) from validation-error records."""
+    return [
+        {k: v for k, v in err.items() if k in _SAFE_VALIDATION_ERROR_FIELDS}
+        for err in exc.errors()
+    ]
+
+
 def install_error_handlers(app: FastAPI) -> None:
     """Install sanitized validation and Neo4j handlers on a FastAPI application."""
 
@@ -231,7 +244,9 @@ def install_error_handlers(app: FastAPI) -> None:
     async def validation_handler(
         _request: Request, exc: RequestValidationError
     ) -> JSONResponse:
-        logger.error("validation_error", exc_info=exc)
+        # D-11 (SEC-LOG-001): never log raw submitted values — RequestValidationError.__str__
+        # embeds json.dumps(errors()) incl. input/ctx, so the exception object itself is never logged.
+        logger.error("validation_error", extra={"errors": _sanitized_validation_errors(exc)})
         return request_validation_error_response()
 
     app.add_exception_handler(RequestValidationError, validation_handler)

@@ -10,12 +10,15 @@ class Settings(BaseSettings):
     # names used in deployed environments (Render/Aura credential file). The
     # aura_* alias wins when both are present.
     neo4j_uri: str = Field(
+        default="bolt://127.0.0.1:7687",
         validation_alias=AliasChoices("aura_uri", "neo4j_uri")
     )
     neo4j_username: str = Field(
+        default="neo4j",
         validation_alias=AliasChoices("aura_username", "neo4j_username")
     )
     neo4j_password: str = Field(
+        default="hdgraf-local-password",
         validation_alias=AliasChoices("aura_password", "neo4j_password")
     )
     neo4j_database: str = Field(
@@ -74,6 +77,33 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Deployment environment — "production" gates fail-closed rate limiting
+    # (rate_limit_fail_open=false), docs-off (11-06), and the open-signup
+    # startup warning (11-06 wiring). Local dev stays "development".
+    environment: str = Field(
+        default="development",
+        description="deployment environment: production | development",
+    )
+    # Fail-closed rate limiting (D-05, SEC-DOS-001): when False (default) and
+    # ENVIRONMENT=production, an unavailable Redis makes login/chat/content-write
+    # limits return 503 instead of silently running unthrottled. Local dev with
+    # an empty REDIS_URL always keeps the documented no-op.
+    rate_limit_fail_open: bool = Field(
+        default=False,
+        description="Allow rate limiting to degrade to a no-op on Redis outage in production",
+    )
+
+    allowed_hosts: str = Field(
+        default="",
+        description="Comma-separated Host allowlist for TrustedHostMiddleware. Empty derives from FRONTEND_ORIGINS hosts + localhost + the api domain placeholder.",
+    )
+
+    max_body_size_bytes: int = Field(
+        default=1048576,
+        ge=1024,
+        description="Maximum accepted request body size in bytes; requests above this are rejected with 413 (D-08, SEC-DOS-004)",
+    )
+
     # Rate limiting / cache (Upstash Redis). Empty disables both — see
     # services/rate_limit.py and cache/redis_client.py.
     redis_url: str = Field(
@@ -122,6 +152,16 @@ class Settings(BaseSettings):
     llm_max_tool_rounds: int = Field(
         default=4,
         description="Maximum bounded tool-calling rounds per chat turn.",
+    )
+    llm_max_concurrent_generations: int = Field(
+        default=4,
+        ge=1,
+        description="Process-wide asyncio.Semaphore bound on concurrent LLM generation turns (in addition to the per-user slot, D-07)",
+    )
+    llm_max_tool_calls_per_round: int = Field(
+        default=8,
+        ge=1,
+        description="Maximum tool calls executed per tool round in the retrieval pipeline (D-07, SEC-DOS-002)",
     )
     llm_max_context_items: int = Field(
         default=40,

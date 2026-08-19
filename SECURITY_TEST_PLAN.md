@@ -117,3 +117,41 @@ Regression tests derived from SECURITY_AUDIT.md (2026-08-15 audit). Each test ma
 - **vitest:** sections 9 via component tests + eslint rule for `dangerouslySetInnerHTML`.
 - **GitHub Actions:** gate the PR pipeline on the full P0 set (sec-1..3, 8, 11) once implemented; npm audit gate must be fixed first (SEC-DEP-007 — red today).
 - **Not CI-able:** 3.2 (prod fail-closed flag), 7.1/7.4 (external verifier), 11.3 (prod logs) — flagged as manual/ops checks in the audit.
+
+---
+
+## Phase 11 — Ticked checkboxes (11-01..11-07)
+
+| 1.1 | Anonymous candidates 999 → order-1 | SEC-BE-002 | [x] (11-01) |
+| 1.2 | Anonymous notes/custom reads clamped | SEC-BE-002 | [x] (11-02) |
+| 1.3 | Anonymous revisions shaped | SEC-BE-002 | [x] (11-02) |
+| 1.4 | Graph/episodes no-record → 1 | SEC-BE-001 | [x] (11-01/11-02) |
+| 1.5 | Auth WITH progress min | SEC-BE-001 | [x] (11-01) |
+| 1.6 | Invalid orders 422 | SEC-ADV-003 | [x] (11-02) |
+| 1.7 | Viz/expand/export/path anonymous →1 | SEC-BE-001 | [x] (11-02) |
+| 1.8 | Share snapshot | CR-01 | [x] (11-02) |
+| 2.1 | Ingest server-derived visibility | SEC-BE-003 | [x] (11-03) |
+| 2.2 | Ingest non-existent refs | SEC-BE-003 | [x] (11-03) |
+| 2.3 | Ingest rate limit | SEC-ADV-001 | [x] (11-03) |
+| 2.4 | Cache invalidation | SEC-ADV-002 | [x] (11-03) |
+| 2.5 | Anonymous ingest 401 | SEC-BE-003 | [x] (11-03) |
+| 2.6 | Approve admin-only | — | [x] (11-03) |
+| 3.1 | Per-IP limiter | SEC-BE-004 | [x] (11-04) |
+| 3.2 | Fail-closed 503 | SEC-DOS-001 | [x] (11-04) |
+| 3.3 | Chat limiter | SEC-DOS-002 | [x] (11-04) |
+| 3.4 | XFF spoof | SEC-BE-004 | [x] (11-04) |
+| 3.5 | Ingest batch limit | SEC-ADV-001 | [x] (11-03) |
+| 5.1 | SSRF loopback | SEC-LLM-001 | [x] (11-05) |
+| 5.2 | SSRF decimal/hex | SEC-LLM-001 | [x] (11-05) |
+| 5.3 | Redirect not followed | SEC-LLM-001 | [x] (11-05) |
+| 5.4 | Gemini model sanitize | SEC-LLM-001 | [x] (11-05) |
+| 5.5 | Stored SSRF | SEC-LLM-002 | [x] (11-05) |
+| 8.1 | Body limit 413 | SEC-DOS-004 | [x] (11-06) |
+| 8.2 | Ops cap 422 | SEC-DOS-004 | [x] (11-06) |
+| 8.3 | Question cap | SEC-LOG-001 | [x] (11-06) |
+| 11.1 | Docs off 404 | SEC-INF-003 | [x] (11-06) |
+| 11.2 | Log sanitized | SEC-LOG-001 | [x] (11-06) |
+| 11.3 | Request log allowlist | — | [x] (11-06) |
+| 7.1 | email_verified false → 401 | SEC-BE-007 | [x] (11-07) |
+| 7.2 | Max-Age cookie | SEC-BE-010 | [x] (11-07) |
+| 9.3 | vercel.json CSP | SEC-FE-001 | [x] (11-07) |

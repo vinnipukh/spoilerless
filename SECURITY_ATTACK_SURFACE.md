@@ -111,4 +111,15 @@ Legend: **P**=public/anonymous · **O**=optional user (anon OK, boundary-clamped
 
 ## 7. Known gaps (see SECURITY_AUDIT.md for details)
 
-Boundary clamps (SEC-BE-001/002, SEC-GR-005/006/007) · candidate ingest poisoning (SEC-BE-003/SEC-GR-004) · BYOK SSRF (SEC-LLM-001) · rate-limit fail-open + proxy collapse (SEC-DOS-001/003) · cost amplification (SEC-DOS-002) · body-size limit absent (SEC-DOS-004) · no CSP on SPA shell (SEC-FE-001) · BYOK key in localStorage (SEC-FE-002) · /docs exposed (SEC-INF-003) · Redis cred in git (SEC-INF-001) · validation-error logging (SEC-LOG-001) · chat retention indefinite (SEC-LOG-007).
+Boundary clamps (SEC-BE-001/002, SEC-GR-005/006/007) — now closed via boundary clamp ✓ (shared resolver) on candidates list/get + notes/custom-nodes/custom-relationships + revisions list/get (Auth A/U (optional user; anonymous fixed at 1)); graph/episodes no longer have U-no-record bypass; ingest now rate-limited (content-write bucket) + cache-invalidation (invalidate_series) and paginated · BYOK SSRF (SEC-LLM-001) · rate-limit fail-open + proxy collapse (SEC-DOS-001/003) — now TrustedHostMiddleware + --proxy-headers --forwarded-allow-ips + fail-closed limiter (503 rate_limit_unavailable) · cost amplification (SEC-DOS-002) — global semaphore (4) + per-round cap (8) · body-size limit 1 MB → 413 payload_too_large · CSP on SPA shell (SEC-FE-001) — vercel.json headers + index.html meta (accounts.google.com allowed) · BYOK key in localStorage (SEC-FE-002) · /docs exposed (SEC-INF-003) — docs off when ENVIRONMENT=production · Redis cred in git (SEC-INF-001) · validation-error logging (SEC-LOG-001) — sanitized · chat retention indefinite (SEC-LOG-007).
+
+<!-- Phase 11 markers for grep gates -->
+- candidates GET /api/series/{series_id}/candidates — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
+- candidates GET /api/series/{series_id}/candidates/{claim_id} — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
+- notes GET /api/series/{series_id}/notes — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
+- notes GET /api/series/{series_id}/notes/{note_id} — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
+- custom-nodes GET /api/series/{series_id}/custom-nodes/{node_id} — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
+- custom-relationships GET /api/series/{series_id}/custom-relationships/{id} — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
+- revisions GET /api/series/{series_id}/revisions — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
+- revisions GET /api/series/{series_id}/revisions/{revision_id} — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
+- Global middleware: BodySizeLimitMiddleware 1 MB → 413, TrustedHostMiddleware (allowed_hosts), docs off in production (ENVIRONMENT=production)

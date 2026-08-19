@@ -108,7 +108,13 @@ class ExtractionClaim(BaseModel):
     claim_type: ClaimType
     confidence_level: ConfidenceLevel = Field(default="medium")
     relationship_effect: RelationshipEffect = Field(default="neutral")
-    visible_from_order: VisibilityOrder
+    # Server-derived since Phase 11 (D-03): the persisted visible_from_order is
+    # computed from the resolved episode/endpoint orders via
+    # spoiler/visibility.derive_visible_from_order. A non-None client value is
+    # accepted for extractor compatibility but validated: if it disagrees with
+    # the server derivation the claim is rejected (422 INVALID_EXTRACTION_PAYLOAD)
+    # — the client can never choose visibility.
+    visible_from_order: VisibilityOrder | None = None
     valid_from_order: VisibilityOrder | None = Field(default=None)
     valid_until_order: VisibilityOrder | None = Field(default=None)
     evidence_text: PlainText

@@ -157,8 +157,7 @@ export function useWatchProgress(options?: { persist?: boolean }) {
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [state.seriesId, persist])
 
   // Resolves true when the click's intent is surfaced (dialog opened, or the
   // view-only POST persisted); resolves false when a view-only POST failed —

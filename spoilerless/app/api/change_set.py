@@ -159,6 +159,7 @@ async def revert_change_set(
     change_set_id: str,
     user: CurrentUserDependency,
     service: ChangeSetServiceDependency,
+    _admin: RequireAdminDependency,
     _csrf: CsrfGuardDependency,
 ) -> ChangeSetResponse:
     """Revert a previously applied ChangeSet's create-shaped operations.

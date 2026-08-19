@@ -4,14 +4,15 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from spoilerless.app.api.boundary import resolve_effective_boundary
 from spoilerless.app.api.deps import OptionalUserDependency
 from spoilerless.app.domain.series import EpisodeResponse, SeriesResponse
 from spoilerless.app.domain.user_content import VisibleUntilOrder
 from spoilerless.app.graph.database import Neo4jDatabase, get_database
 from spoilerless.app.core.errors import error_responses
+from spoilerless.app.services.graph import GraphService
 from spoilerless.app.services.progress import ProgressService
 from spoilerless.app.services.series import SeriesService
-from spoilerless.app.spoiler.policy import effective_view_order
 
 router = APIRouter(prefix="/api/series", tags=["series"])
 DatabaseDependency = Annotated[Neo4jDatabase, Depends(get_database)]
@@ -25,8 +26,13 @@ def get_progress_service(database: DatabaseDependency) -> ProgressService:
     return ProgressService(database)
 
 
+def get_graph_service(database: DatabaseDependency) -> GraphService:
+    return GraphService(database)
+
+
 SeriesServiceDependency = Annotated[SeriesService, Depends(get_series_service)]
 ProgressServiceDependency = Annotated[ProgressService, Depends(get_progress_service)]
+GraphServiceDependency = Annotated[GraphService, Depends(get_graph_service)]
 
 
 @router.get("", response_model=list[SeriesResponse], summary="List series", responses=error_responses(503))
@@ -56,6 +62,7 @@ async def list_episodes(
     series_id: str,
     service: SeriesServiceDependency,
     progress_service: ProgressServiceDependency,
+    graph_service: GraphServiceDependency,
     user: OptionalUserDependency,
     visible_until_order: VisibleUntilOrder = 1,
 ) -> list[EpisodeResponse]:
@@ -80,18 +87,8 @@ async def list_episodes(
             detail={"code": "SERIES_NOT_FOUND", "message": "Series not found."},
         )
 
-    # PROB-04/#12: an anonymous reader's effective boundary is FIXED at
-    # order 1 — the client-chosen visible_until_order is ignored without a
-    # session (fail-closed). Authenticated callers keep the D-05 fail-closed
-    # min against their persisted split progress record.
-    effective = 1 if user is None else visible_until_order
-    if user is not None:
-        record = await progress_service.get(user["id"], series_id)
-        if record is not None:
-            requested_view = min(visible_until_order, record.view_as_of_order)
-            effective = effective_view_order(
-                requested_view, record.watched_through_order
-            )
-
+    effective = await resolve_effective_boundary(
+        graph_service, progress_service, series_id, user, visible_until_order
+    )
     masked = await service.list_episodes(series_id, effective_view_order=effective)
     return [EpisodeResponse(**record) for record in masked]

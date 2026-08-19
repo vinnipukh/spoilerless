@@ -260,7 +260,7 @@ class ChangeSetCreateRequest(StrictModel):
     series_id: Identifier
     chat_session_id: Identifier
     summary: Summary
-    operations: list[ChangeSetOperation] = Field(min_length=1)
+    operations: list[ChangeSetOperation] = Field(min_length=1, max_length=50)
 
 
 class ChangeSetResponse(StrictModel):

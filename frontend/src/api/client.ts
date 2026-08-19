@@ -62,7 +62,7 @@ export async function apiFetch<T>(url: string, options?: FetchOptions): Promise<
   const res = await fetch(`${apiBase}${url}`, {
     method,
     headers: {
-      'Content-Type': body !== undefined ? 'application/json' : '',
+      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       ...headers,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,

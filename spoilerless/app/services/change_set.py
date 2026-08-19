@@ -27,6 +27,8 @@ import asyncio
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from pydantic import ValidationError
+
 from spoilerless.app.domain.change_set import (
     DIRECT_MUTATION_OPERATION_TYPES,
     ChangeSetCreateRequest,
@@ -256,6 +258,45 @@ class ChangeSetService:
                 now=_utc_now(),
             )
         )
+
+    async def propose_via_tool(
+        self,
+        *,
+        user_id: str,
+        series_id: str,
+        chat_session_id: str,
+        visible_until_order: int | None,
+        tool_args: dict,
+    ) -> dict:
+        """Executor for the ``propose_changeset`` LLM tool (QUAL-02).
+
+        Validates ``tool_args`` via the closed ``ProposeChangesetInput``
+        union (max 20 ops) and persists the draft at the server-resolved
+        boundary. Returns the model-visible dict (either the proposal or
+        the error shape) so the pipeline turn can continue.
+        """
+        # Import locally to avoid circular import at module load time
+        from spoilerless.app.retrieval.pipeline import ProposeChangesetInput
+
+        try:
+            parsed = ProposeChangesetInput.model_validate(tool_args)
+        except ValidationError:
+            return {"error": "invalid arguments for propose_changeset"}
+        try:
+            proposed = await self.propose(
+                user_id,
+                series_id,
+                ChangeSetCreateRequest(
+                    series_id=series_id,
+                    chat_session_id=chat_session_id,
+                    summary=parsed.summary,
+                    operations=parsed.operations,
+                ),
+                visible_until_order=visible_until_order,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return {"error": f"propose_changeset failed: {type(exc).__name__}"}
+        return {"proposed_change_set": proposed.model_dump(mode="json")}
 
     async def _validate_and_protect(
         self, operation: ChangeSetOperation, series_id: str, boundary: int

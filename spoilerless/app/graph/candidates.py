@@ -4,6 +4,8 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Any
 
+from spoilerless.app.spoiler.visibility import derive_visible_from_order
+
 from spoilerless.app.domain.extraction import ExtractionBatchEnvelope, ExtractionClaim
 from spoilerless.app.domain.revision import RevisionAction
 from spoilerless.app.domain.user_content import Origin
@@ -30,6 +32,60 @@ def _derive_evidence_id(claim: ExtractionClaim) -> str:
     """Derive deterministic evidence ID from evidence text + locator."""
     raw = f"{claim.evidence_text}:{claim.evidence_locator}:{claim.episode_id}"
     return f"extracted:evidence:{hashlib.sha256(raw.encode()).hexdigest()[:16]}"
+
+
+_VISIBILITY_PREPASS_QUERY = """
+MATCH (episode:Episode {id: $episode_id, series_id: $series_id})
+WHERE episode.episode_order IS NOT NULL AND episode.episode_order >= 1
+OPTIONAL MATCH (subject {id: $subject_id, series_id: $series_id})
+OPTIONAL MATCH (object {id: $object_id, series_id: $series_id})
+RETURN episode.episode_order AS episode_order,
+       subject.visible_from_order AS subject_vfo,
+       object.visible_from_order AS object_vfo
+"""
+
+
+async def _resolve_claim_visibility(tx: Any, series_id: str, claim: Any) -> int | None:
+    """Return the server-derived visible_from_order, or None when a referenced
+    node does not exist in the series (claim must be skipped, D-03)."""
+    result = await (await tx.run(
+        _VISIBILITY_PREPASS_QUERY,
+        episode_id=claim.episode_id,
+        series_id=series_id,
+        subject_id=claim.subject_id,
+        object_id=claim.object_id,
+    )).single()
+    if result is None:
+        return None
+    row = result.data()
+    # Check episode existence: if no episode matched, row will have None episode_order
+    if row.get("episode_order") is None:
+        return None
+    # Check subject/object existence: OPTIONAL MATCH returns null for missing nodes.
+    # We need to verify nodes exist: run existence check via count or by querying ids.
+    # Use second query for existence: if subject/object ids don't match any node with series_id.
+    # Simplified: treat missing subject/object as non-existent when their visible_from_order lookup returns None AND node id not found.
+    # We check by querying count for subject/object.
+    subject_exists = row.get("subject_vfo") is not None
+    object_exists = row.get("object_vfo") is not None
+    # Need explicit existence check for nodes that may have null visible_from_order (should not exist) but we still need to differentiate missing node vs null vfo.
+    # Do explicit existence checks.
+    subj_check = await (await tx.run(
+        "MATCH (n {id: $id, series_id: $sid}) RETURN n.id AS id", id=claim.subject_id, sid=series_id
+    )).single()
+    obj_check = await (await tx.run(
+        "MATCH (n {id: $id, series_id: $sid}) RETURN n.id AS id", id=claim.object_id, sid=series_id
+    )).single()
+    if subj_check is None or obj_check is None:
+        return None
+    endpoint_vfos = (row.get("subject_vfo"), row.get("object_vfo"))
+    return derive_visible_from_order(
+        episode_order=row.get("episode_order"),
+        current_progress=(
+            max(v for v in endpoint_vfos if v)
+            if any(endpoint_vfos) else None
+        ),
+    )
 
 
 INGEST_CANDIDATE_QUERY = """
@@ -115,6 +171,24 @@ async def _ingest_candidate_claims(tx: Any, cmd: dict[str, Any]) -> dict[str, An
             source_id = _derive_source_id(claim)
             evidence_id = _derive_evidence_id(claim)
 
+            derived = await _resolve_claim_visibility(tx, series_id, claim)
+            if derived is None:
+                errors.append({
+                    "index": i,
+                    "claim_id": claim.candidate_id,
+                    "code": "INGEST_ERROR",
+                    "message": "referenced node not found in series",
+                })
+                continue
+            if claim.visible_from_order is not None and claim.visible_from_order != derived:
+                errors.append({
+                    "index": i,
+                    "claim_id": claim.candidate_id,
+                    "code": "INVALID_EXTRACTION_PAYLOAD",
+                    "message": "visible_from_order must match the server-derived value",
+                })
+                continue
+
             valid_from = claim.valid_from_order
             valid_until = claim.valid_until_order
 
@@ -129,7 +203,7 @@ async def _ingest_candidate_claims(tx: Any, cmd: dict[str, Any]) -> dict[str, An
                 "claim_type": claim.claim_type,
                 "confidence_level": claim.confidence_level,
                 "relationship_effect": claim.relationship_effect,
-                "visible_from_order": claim.visible_from_order,
+                "visible_from_order": derived,
                 "valid_from_order": valid_from,
                 "valid_until_order": valid_until,
                 "evidence_text": claim.evidence_text,
@@ -293,10 +367,17 @@ class CandidateRepository:
         self,
         series_id: str,
         visible_until_order: int | None = None,
+        *,
+        limit: int = 100,
+        after_created_at: datetime | None = None,
+        after_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        """List all candidate claims for a series, optionally filtered by spoiler boundary."""
+        """List candidate claims for a series, optionally filtered by spoiler boundary.
+
+        Paginated via composite (created_at, id) keyset cursor (SEC-ADV-001).
+        """
         where_clause = "WHERE claim.origin = 'candidate'"
-        params: dict[str, Any] = {"series_id": series_id}
+        params: dict[str, Any] = {"series_id": series_id, "limit": limit, "after_created_at": after_created_at, "after_id": after_id}
 
         if visible_until_order is not None:
             where_clause += " AND claim.visible_from_order <= $visible_until_order"
@@ -305,6 +386,9 @@ class CandidateRepository:
         query = f"""
         MATCH (claim:Claim {{series_id: $series_id}})
         {where_clause}
+        AND ($after_created_at IS NULL
+             OR claim.created_at < $after_created_at
+             OR (claim.created_at = $after_created_at AND claim.id > $after_id))
         OPTIONAL MATCH (claim)-[:SUPPORTED_BY]->(evidence:EvidenceFragment)
         OPTIONAL MATCH (evidence)-[:REFERS_TO]->(source:Source)
         RETURN claim.id AS id,
@@ -331,7 +415,8 @@ class CandidateRepository:
                    source_type: source.source_type,
                    locator: source.locator
                }}) AS sources
-        ORDER BY claim.created_at DESC
+        ORDER BY claim.created_at DESC, claim.id ASC
+        LIMIT $limit
         """
         result = await self._db.execute_query(query, **params)
         return list(result)

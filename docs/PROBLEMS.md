@@ -1262,3 +1262,40 @@ Local stack (docker spoilerless-neo4j + uvicorn 8000 + vite 5173) verified in Ch
 
 ### New finding (Phase 11 candidate)
 - **S01E02/S01E03 episode radio labels duplicate the prefix** — renders "S01E02 — S01E02 — Episode 2" / "S01E03 — S01E03 — Episode 3" (S01E01 shows "S01E01 — Dexter" correctly). Cosmetic UI bug; fix in phase 11 (frontend label construction).
+
+## TWENTY-SECOND PASS — Phase 11 Security Hardening (P0/P1 audit remediation) — 11-01..11-07 (2026-08-20)
+
+Phase 11 closes the 2026-08-15 adversarial audit P0/P1 findings (SECURITY_AUDIT.md). Plans 11-01..11-07 landed; 11-08 deferred. Each finding maps to the closing plan number.
+
+| Finding | Title | Plan |
+|---|---|---|
+| SEC-BE-001 | Anonymous + no-record boundary clamp (graph/episodes/visualization) | 11-01/11-02 |
+| SEC-BE-002 | Anonymous reads clamped (candidates/notes/custom/revisions) + shaping | 11-01/11-02 |
+| SEC-BE-003 | Candidate ingest server-derived visibility + existence validation | 11-03 |
+| SEC-BE-004 | Trusted proxy per-IP limiter | 11-04 |
+| SEC-BE-007 | email_verified gate | 11-07 |
+| SEC-BE-010 | Session Max-Age cookie | 11-07 |
+| SEC-DOS-001 | Rate-limit fail-closed (503) | 11-04 |
+| SEC-DOS-002 | LLM cost bounds (semaphore + tool cap) | 11-05 |
+| SEC-DOS-003 | Proxy allowlist | 11-04 |
+| SEC-DOS-004 | Body-size 413 | 11-06 |
+| SEC-DOS-005 | Cache-key bounded focus | 11-06 |
+| SEC-LLM-001 | BYOK SSRF blocklist | 11-05 |
+| SEC-LLM-002 | Stored SSRF blocklist | 11-05 |
+| SEC-LLM-004 | Output guard | 11-06 |
+| SEC-LLM-007 | Propose cap | 11-06 |
+| SEC-INF-003 | Docs off in production | 11-06 |
+| SEC-FE-001 | CSP on Vercel shell + meta fallback | 11-07 |
+| SEC-LOG-001 | Validation log sanitized | 11-06 |
+| SEC-LOG-006 | TrustedHostMiddleware | 11-07 |
+| SEC-ADV-001 | Ingest rate-limit + pagination | 11-03 |
+| SEC-ADV-002 | Cache invalidation after ingest | 11-03 |
+| SEC-ADV-003 | Persisted-episode validation | 11-02 |
+| SEC-GR-014 | Revert label allowlist | 11-06 |
+| SEC-AUTH-01 | Revert ownership fail-closed | 11-06 |
+| SEC-AUTH-02 | ChangeSet revert admin gate | 11-06 |
+| BUG-BE-01 | get_graph pre-clamping alignment | 11-02 |
+| BUG-BE-02 | rate_limit_identifier client None | 11-04 |
+| BUG-FE-01 | useWatchProgress series-switch hydration | 11-07 |
+| BUG-FE-02 | apiFetch bodyless Content-Type | 11-07 |
+| QUAL-01 | run_doc_verification dynamic Path + delete superseded scripts | 11-07 |
