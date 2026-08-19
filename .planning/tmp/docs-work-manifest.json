@@ -1,19 +1,225 @@
 {
   "canonical_queue": [
-    { "type": "readme", "resolved_path": "README.md", "mode": "update", "preservation_mode": "regenerate", "wave": 1, "status": "verified" },
-    { "type": "architecture", "resolved_path": "docs/ARCHITECTURE.md", "mode": "update", "preservation_mode": "regenerate", "wave": 1, "status": "verified" },
-    { "type": "configuration", "resolved_path": "docs/CONFIGURATION.md", "mode": "update", "preservation_mode": "regenerate", "wave": 1, "status": "verified" },
-    { "type": "getting_started", "resolved_path": "docs/GETTING-STARTED.md", "mode": "update", "preservation_mode": "regenerate", "wave": 2, "status": "verified" },
-    { "type": "development", "resolved_path": "docs/DEVELOPMENT.md", "mode": "update", "preservation_mode": "regenerate", "wave": 2, "status": "verified" },
-    { "type": "testing", "resolved_path": "docs/TESTING.md", "mode": "update", "preservation_mode": "regenerate", "wave": 2, "status": "verified" },
-    { "type": "api", "resolved_path": "docs/API.md", "mode": "update", "preservation_mode": "regenerate", "wave": 3, "status": "verified" },
-    { "type": "deployment", "resolved_path": "docs/DEPLOYMENT.md", "mode": "update", "preservation_mode": "regenerate", "wave": 3, "status": "verified" }
+    {
+      "type": "readme",
+      "resolved_path": "README.md",
+      "mode": "update",
+      "preservation_mode": null,
+      "wave": 1,
+      "status": "verified"
+    },
+    {
+      "type": "architecture",
+      "resolved_path": "docs/ARCHITECTURE.md",
+      "mode": "update",
+      "preservation_mode": null,
+      "wave": 1,
+      "status": "verified"
+    },
+    {
+      "type": "configuration",
+      "resolved_path": "docs/CONFIGURATION.md",
+      "mode": "update",
+      "preservation_mode": null,
+      "wave": 2,
+      "status": "verified"
+    },
+    {
+      "type": "getting_started",
+      "resolved_path": "docs/GETTING-STARTED.md",
+      "mode": "update",
+      "preservation_mode": null,
+      "wave": 2,
+      "status": "verified"
+    },
+    {
+      "type": "development",
+      "resolved_path": "docs/DEVELOPMENT.md",
+      "mode": "update",
+      "preservation_mode": null,
+      "wave": 3,
+      "status": "verified"
+    },
+    {
+      "type": "testing",
+      "resolved_path": "docs/TESTING.md",
+      "mode": "update",
+      "preservation_mode": null,
+      "wave": 3,
+      "status": "verified"
+    },
+    {
+      "type": "api",
+      "resolved_path": "docs/API.md",
+      "mode": "update",
+      "preservation_mode": null,
+      "wave": 4,
+      "status": "verified",
+      "source": "codebase-discovered FastAPI package (docs-init false-negative)"
+    },
+    {
+      "type": "deployment",
+      "resolved_path": "docs/DEPLOYMENT.md",
+      "mode": "update",
+      "preservation_mode": null,
+      "wave": 4,
+      "status": "verified"
+    },
+    {
+      "type": "contributing",
+      "resolved_path": "CONTRIBUTING.md",
+      "mode": "update",
+      "preservation_mode": null,
+      "wave": 5,
+      "status": "verified"
+    }
   ],
   "review_queue": [
-    { "path": "docs/frontend-api-contract.md", "type": "hand-written", "status": "verified" },
-    { "path": "docs/PROJECT-SPEC.md", "type": "hand-written", "status": "verified" },
-    { "path": "docs/ROADMAP.md", "type": "hand-written", "status": "verified" }
+    {
+      "path": "docs/architecture/project-spec.md",
+      "type": "hand-written",
+      "status": "verified",
+      "changed_since_verify": true
+    },
+    {
+      "path": "docs/architecture/spoiler-deferred-design.md",
+      "type": "hand-written",
+      "status": "verified",
+      "changed_since_verify": true
+    },
+    {
+      "path": "docs/architecture/spoiler-terminology.md",
+      "type": "hand-written",
+      "status": "verified",
+      "changed_since_verify": true
+    },
+    {
+      "path": "docs/architecture/spoiler-threat-model.md",
+      "type": "hand-written",
+      "status": "verified",
+      "changed_since_verify": true
+    },
+    {
+      "path": "docs/decision-logs/phase-10-visualization.md",
+      "type": "hand-written",
+      "status": "verified",
+      "changed_since_verify": true
+    },
+    {
+      "path": "docs/ideas/feature-ideas.md",
+      "type": "hand-written",
+      "status": "verified",
+      "changed_since_verify": true
+    },
+    {
+      "path": "docs/ideas/feature-research.md",
+      "type": "hand-written",
+      "status": "verified",
+      "changed_since_verify": true
+    },
+    {
+      "path": "docs/internship-report/ACADEMIC_CONNECTION_TEMPLATE_EN.md",
+      "type": "hand-written",
+      "status": "verified_reuse",
+      "changed_since_verify": false
+    },
+    {
+      "path": "docs/internship-report/COMPANY_INFORMATION_TEMPLATE_EN.md",
+      "type": "hand-written",
+      "status": "verified_reuse",
+      "changed_since_verify": false
+    },
+    {
+      "path": "docs/internship-report/INTERNSHIP_REPORT_DRAFT_EN.md",
+      "type": "hand-written",
+      "status": "verified_reuse",
+      "changed_since_verify": false
+    },
+    {
+      "path": "docs/internship-report/REPORT_DIAGRAMS_EN.md",
+      "type": "hand-written",
+      "status": "verified_reuse",
+      "changed_since_verify": false
+    },
+    {
+      "path": "docs/internship-report/REPORT_EVIDENCE_EN.md",
+      "type": "hand-written",
+      "status": "verified_reuse",
+      "changed_since_verify": false
+    },
+    {
+      "path": "docs/internship-report/REPORT_GAPS_EN.md",
+      "type": "hand-written",
+      "status": "verified_reuse",
+      "changed_since_verify": false
+    },
+    {
+      "path": "docs/internship-report/REPORT_TABLES_EN.md",
+      "type": "hand-written",
+      "status": "verified_reuse",
+      "changed_since_verify": false
+    },
+    {
+      "path": "docs/internship-report/SCREENSHOT_AND_APPENDIX_PLAN_EN.md",
+      "type": "hand-written",
+      "status": "verified_reuse",
+      "changed_since_verify": false
+    },
+    {
+      "path": "docs/ops/runbook.md",
+      "type": "hand-written",
+      "status": "verified",
+      "changed_since_verify": true
+    },
+    {
+      "path": "docs/PROBLEMS.md",
+      "type": "hand-written",
+      "status": "verified",
+      "changed_since_verify": true
+    },
+    {
+      "path": "docs/README.md",
+      "type": "hand-written",
+      "status": "verified",
+      "changed_since_verify": true
+    },
+    {
+      "path": "docs/ROADMAP.md",
+      "type": "hand-written",
+      "status": "verified",
+      "changed_since_verify": true
+    },
+    {
+      "path": "docs/reference/backend-modules.md",
+      "type": "hand-written",
+      "status": "verified",
+      "changed_since_verify": true
+    },
+    {
+      "path": "docs/reference/frontend-api-contract.md",
+      "type": "hand-written",
+      "status": "verified",
+      "changed_since_verify": true
+    },
+    {
+      "path": "docs/reference/frontend-components.md",
+      "type": "hand-written",
+      "status": "verified",
+      "changed_since_verify": true
+    },
+    {
+      "path": "docs/uat/phase-10-golden-path.md",
+      "type": "hand-written",
+      "status": "verified",
+      "changed_since_verify": true
+    },
+    {
+      "path": "docs/uat/phase-10-screenshots/README.md",
+      "type": "hand-written",
+      "status": "verified",
+      "changed_since_verify": true
+    }
   ],
   "gap_queue": [],
-  "created_at": "2026-08-02T12:00:00Z"
+  "created_at": "2026-08-14T00:00:00Z"
 }
