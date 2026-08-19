@@ -1255,3 +1255,10 @@ First-pass verifiers produced false negatives on test-name claims
 (`test_retrieval_tools.py` reported as 4 tests; live is 40 — `async def
 test_*` extraction trap). Re-verified with async-tolerant extraction; fix
 agents verify live before editing and may leave correct claims alone.
+
+## TWENTY-FIRST PASS — live local QA (2026-08-19)
+
+Local stack (docker spoilerless-neo4j + uvicorn 8000 + vite 5173) verified in Chrome: graph, legend, spoiler-guard flow, Settings page all functional; backend `/health` ok, all API calls 200, zero server errors.
+
+### New finding (Phase 11 candidate)
+- **S01E02/S01E03 episode radio labels duplicate the prefix** — renders "S01E02 — S01E02 — Episode 2" / "S01E03 — S01E03 — Episode 3" (S01E01 shows "S01E01 — Dexter" correctly). Cosmetic UI bug; fix in phase 11 (frontend label construction).
