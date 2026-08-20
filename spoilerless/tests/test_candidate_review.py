@@ -51,6 +51,35 @@ def live_client() -> Iterator[TestClient]:
     asyncio.run(_seed_live_database())
     try:
         bootstrap_scratch_series(REVIEW_SCRATCH_SERIES)
+        # Seed fixture nodes for 11-03 in-series validation (like candidate_ingest)
+        async def _seed_fixture_nodes():
+            db = Neo4jDatabase()
+            db.open()
+            try:
+                for cid, label, vfo in [
+                    ("character:dexter", "Dexter", 1),
+                    ("character:debra", "Debra", 1),
+                    ("character:rudy", "Rudy", 2),
+                    ("location:dexter_apartment", "Dexter Apartment", 1),
+                ]:
+                    await db.execute_query(
+                        "MERGE (n {id: $id, series_id: $sid}) SET n.label = $label, n.title = $label, n.visible_from_order = $vfo, n.origin = 'canonical', n :Character",
+                        id=cid, sid=REVIEW_SCRATCH_SERIES, label=label, vfo=vfo,
+                    )
+                    if cid.startswith("location:"):
+                        await db.execute_query("MATCH (n {id: $id}) REMOVE n:Character SET n:Location", id=cid)
+                for ep_id, order in [("episode:dexter:s01e01", 1), ("episode:dexter:s01e02", 2)]:
+                    await db.execute_query(
+                        "MERGE (e:Episode {id: $eid}) SET e.series_id = $sid, e.code = $code, e.title = $title, e.episode_order = $order, e.visible_from_order = $order, e.origin = 'canonical', e.label = $title",
+                        eid=ep_id, sid=REVIEW_SCRATCH_SERIES, code=f"S01E0{order}", title=f"Episode {order}", order=order,
+                    )
+                    await db.execute_query(
+                        "MATCH (e:Episode {id: $eid}), (s:Series {id: $sid}) MERGE (e)-[:PART_OF {id: $pid, series_id: $sid, visible_from_order: $order, origin: 'canonical'}]->(s)",
+                        eid=ep_id, sid=REVIEW_SCRATCH_SERIES, pid=f"{ep_id}:part_of", order=order,
+                    )
+            finally:
+                await db.close()
+        asyncio.run(_seed_fixture_nodes())
         main_module = importlib.import_module("spoilerless.app.main")
         with TestClient(main_module.app) as client:
             yield client
@@ -192,7 +221,7 @@ class TestCandidateApprove:
 
         got = live_client.get(
             f"/api/series/{self.SERIES_ID}/revisions/{revision_id}",
-            params={"visible_until_order": 99},
+            params={"visible_until_order": 3},
         )
         assert got.status_code == 200, f"returned revision id not GET-able: {got.text}"
         assert got.json()["id"] == revision_id

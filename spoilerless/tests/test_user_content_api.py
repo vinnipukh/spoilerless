@@ -168,6 +168,8 @@ def assert_hidden_matches_missing(hidden_response, missing_response) -> None:
 
 
 def test_note_character_lifecycle_and_spoiler_boundary(user_content_client: TestClient) -> None:
+    # After 11-02, notes GETs clamp via shared resolver; set progress to 3 so 3 is visible
+    user_content_client.post("/api/series/series_dexter/progress", json={"visible_until_order": 3})
     base = "/api/series/series_dexter/notes"
     created = user_content_client.post(
         base,
@@ -241,6 +243,7 @@ def test_note_claim_filter_validation_and_canonical_survival(
 
 
 def test_custom_node_crud_all_five_types_and_visibility(user_content_client: TestClient) -> None:
+    user_content_client.post("/api/series/series_dexter/progress", json={"visible_until_order": 3})
     base = "/api/series/series_dexter/custom-nodes"
     ids: list[str] = []
     for node_type in ("Character", "Event", "Location", "Organization", "Object"):

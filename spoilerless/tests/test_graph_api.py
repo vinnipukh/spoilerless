@@ -324,9 +324,10 @@ def test_graph_error_shapes(live_client: TestClient) -> None:
     # Anonymous clamp: boundary 4 request yields boundary-1 content (200).
     assert anon_nonpersisted.status_code == 200
     assert anon_nonpersisted.json()["effective_view_order"] == 1
-    # Authenticated non-persisted order stays fail-closed 422.
-    assert nonpersisted.status_code == 422
-    assert nonpersisted.json()["detail"]["code"] == "INVALID_VISIBLE_UNTIL_ORDER"
+    # After 11-01, authenticated 4 with progress 3 clamps to 3 and succeeds (200) —
+    # the request is clamped via effective_view_order, not rejected.
+    assert nonpersisted.status_code == 200
+    assert nonpersisted.json()["effective_view_order"] == 3
 
 
 def test_graph_database_unavailable_is_sanitized(live_client: TestClient) -> None:

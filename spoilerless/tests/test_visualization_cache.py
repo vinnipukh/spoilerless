@@ -44,11 +44,12 @@ class _FakeRedis:
     """In-memory stand-in for the shared ``redis.asyncio`` client.
 
     Mirrors the real client's byte values (decode_responses=False) and the
-    surface graph_cache uses: get / setex / scan_iter / delete.
+    surface graph_cache uses: get / setex / scan_iter / delete / sismember / scard / sadd / expire.
     """
 
     def __init__(self) -> None:
         self._store: dict[str, bytes] = {}
+        self._sets: dict[str, set[str]] = {}
 
     async def get(self, key: str) -> bytes | None:
         return self._store.get(key)
@@ -65,6 +66,21 @@ class _FakeRedis:
     async def delete(self, *keys: str) -> None:
         for key in keys:
             self._store.pop(key, None)
+
+    async def sismember(self, key: str, member: str) -> bool:
+        return member in self._sets.get(key, set())
+
+    async def scard(self, key: str) -> int:
+        return len(self._sets.get(key, set()))
+
+    async def sadd(self, key: str, member: str) -> int:
+        s = self._sets.setdefault(key, set())
+        added = member not in s
+        s.add(member)
+        return 1 if added else 0
+
+    async def expire(self, key: str, ttl: int) -> bool:
+        return True
 
     async def incr(self, key: str) -> int:
         raw = self._store.get(key, b"0")

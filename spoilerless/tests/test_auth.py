@@ -86,6 +86,7 @@ class FakeGoogleVerifier:
         self._claims: dict[str, Any] = {
             "sub": "google_sub_12345",
             "email": "user@example.com",
+            "email_verified": True,
             "name": "Test User",
             "picture": "https://example.com/avatar.png",
             "aud": "test-client-id.apps.googleusercontent.com",

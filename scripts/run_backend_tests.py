@@ -94,6 +94,7 @@ CHUNKS: dict[str, list[str]] = {
     "candidates": [
         "test_candidate_ingest.py",
         "test_candidate_review.py",
+        "test_security_boundary.py",
     ],
     "auth": [
         "test_auth.py",

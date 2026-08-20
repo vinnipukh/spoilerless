@@ -323,6 +323,8 @@ class TestRevisionSpoilerBoundary:
     def test_hidden_revision_returns_404(
         self, user_content_client: TestClient
     ) -> None:
+        # After 11-02 clamp, need progress 3 to see boundary 3
+        user_content_client.post("/api/series/series_dexter/progress", json={"visible_until_order": 3})
         # Create a custom node visible_from_order=3 (via dexter_s01e03)
         created = user_content_client.post(
             "/api/series/series_dexter/custom-nodes",
