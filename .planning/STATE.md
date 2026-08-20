@@ -1,44 +1,45 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: Production Deployment & Access Hardening
-status: Awaiting next milestone
-stopped_at: Completed 10-02-PLAN.md
-last_updated: "2026-08-14T16:10:42.433Z"
-last_activity: 2026-08-14
-last_activity_desc: Milestone v1.3 completed and archived
+milestone: v1.4
+milestone_name: Security Hardening (audit remediation P0/P1)
+status: Phase 11 complete — awaiting next milestone
+stopped_at: Completed 11-08-PLAN.md
+last_updated: "2026-08-20T15:30:00.000Z"
+last_activity: 2026-08-20
+last_activity_desc: Phase 11 Security Hardening (8/8 plans) verified and shipped
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 37
-  completed_plans: 37
+  total_phases: 4
+  completed_phases: 4
+  total_plans: 45
+  completed_plans: 45
   percent: 100
-current_phase: 10
-current_phase_name: polish-finishing-touches
+current_phase: 11
+current_phase_name: security-hardening-audit-remediation-p0-p1
 ---
 
 # HD Graf Cehennemi — Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-14 after v1.3)
+See: .planning/PROJECT.md (updated 2026-08-20 after v1.4)
 
-**Core value:** Users can safely explore a TV-series knowledge graph — and chat about it — without ever seeing information beyond their selected watch progress; the backend filters before data reaches the frontend, the LLM, or any tool call.
-**Current focus:** Planning next milestone (v1.3 shipped and archived 2026-08-14)
+**Core value:** Users can safely explore a TV-series knowledge graph — and chat about it — without ever seeing information beyond their selected watch progress; the backend filters before data reaches the frontend, the LLM, or any tool call. One shared fail-closed boundary resolver (`resolve_effective_boundary`) is the single enforcement seam.
+**Current focus:** Phase 11 shipped (2026-08-20) — all P0/P1 audit findings closed; awaiting next milestone
 
 ## Current Position
 
-Phase: Milestone v1.3 complete
-Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-08-14 — Milestone v1.3 completed and archived
+Phase: 11 Security Hardening complete (8/8 plans, verification passed)
+Plan: 11-08 (last plan in phase)
+Status: Phase 11 complete — awaiting next milestone
+Last activity: 2026-08-20 — Phase 11 Security Hardening (8/8 plans) verified and shipped
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed (all milestones to date): 43 (v1.0/v1.1: 27, v1.2: 8, v1.3: 8)
-- v1.3: 8 plans completed (08-01..08-08) — phase verified by operator UAT (10/12 passed; CI re-run + admin live check carried to Phase 9 as 09-02/09-03)
+- Total plans completed (all milestones to date): 51 (v1.0/v1.1: 27, v1.2: 8, v1.3: 37 (8+18+11), v1.4: 8 — Phase 11)
+- v1.3: 37 plans completed (08:8, 09:18, 10:11) — all verified (08 VERIFICATION.md, 09 40/42 must_haves, 10 11/11)
+- v1.4: 8 plans completed (11-01..11-08) — security hardening P0/P1, verified 2026-08-20 (8/8 must_haves, 12/12 SEC requirements)
 
 **By Phase:**
 
@@ -46,11 +47,12 @@ Last activity: 2026-08-14 — Milestone v1.3 completed and archived
 |-------|-------|-------|
 | 1–6 (v1.0/v1.1) | 27 | See `.planning/milestones/v1.1-ROADMAP.md` for per-plan durations |
 | 7 (v1.2 Spoiler-Safety Hardening) | 8 | See `.planning/milestones/v1.2-phases/07-spoiler-safety-hardening/` SUMMARY.md files |
-| 8 (v1.3 Production Deployment) | 8 | Phase complete — VERIFICATION.md passed 2026-08-05; 2 items carried to Phase 9 (09-02, 09-03) |
-| 9–10 (v1.3) | 2/18 | Phase 9 in progress — 09-01 rename + 09-02 regression nets done |
-| 09-02 (Phase 9) | 45min | Verifier + progress wire-shape regression nets; #42 fix (a36676a) |
+| 8 (v1.3 Production Deployment) | 8 | Phase complete — VERIFICATION.md passed 2026-08-05 |
+| 9 (v1.3 Feature Expansion) | 18 | Phase complete — VERIFICATION.md passed 2026-08-13 (40/42 must_haves) |
+| 10 (v1.3 Polish) | 11 | Phase complete — VERIFICATION.md passed 2026-08-14 (11/11) |
+| 11 (v1.4 Security Hardening) | 8 | Phase complete — VERIFICATION.md passed 2026-08-20 (8/8 must_haves, 12/12 SEC requirements) |
 
-**Recent Trend:** v1.3 — Phase 8 (Production Deployment & Automated CI/CD) complete and verified 2026-08-05; Phase 9 planning next.
+**Recent Trend:** v1.4 — Phase 11 (Security Hardening P0/P1) complete and verified 2026-08-20; all P0/P1 audit findings closed; awaiting next milestone.
 
 *Updated after each plan completion*
 **Per-Plan Metrics:**
@@ -78,6 +80,13 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - [10-02]: Boundary enforcement centralized in policy.resolve_effective_boundary: one pure D-05 resolver for graph/projection/expansion/path/search/focus/restoration inputs; missing progress fails closed to order 1; the projection service rejects hidden rows before projection (T10-LEAK-02/T10-BOUND-02).
 - [10-02]: Neutral DTO carries projection_version + effective_view_order metadata as the T10-CACHE-02 cache contract; no cache introduced in 10-02.
 - [10-02]: Human edge classes (family/work/knows/precedes/part_of/...) replace raw Neo4j relation names in normal DTOs; unmapped relationship types fail closed (D-14).
+- [11-01/11-02]: Single fail-closed boundary resolver `spoilerless/app/api/boundary.py::resolve_effective_boundary` gates every spoiler-sensitive read (graph, candidates, notes, custom nodes/relationships, revisions, episodes, visualization, expand, path, export); anonymous/no-record →1, non-persisted `visible_until_order` 422, non-owner shaping drops `before/after/user_id`.
+- [11-03]: Ingest hardening — `visible_from_order` server-derived via `derive_visible_from_order`, subject/object/episode existence validated, rate-limited (`content_write_rate_limiter`) + `invalidate_series`, pagination `limit 1..500` with cursor `after_created_at/after_id`.
+- [11-04]: Trusted proxy + fail-closed rate limiting — `render.yaml --proxy-headers --forwarded-allow-ips "<RENDER_PROXY_CIDRS>"` restores per-IP keys, XFF spoof-proof; `RateLimiter` fails closed (503 `rate_limit_unavailable`) when Redis unavailable in production, dev keeps no-op, `request.client` None → `ip:unknown` (BUG-BE-02).
+- [11-05]: SSRF hardening (`ipaddress` block loopback/private/link-local/metadata, decimal/hex, trailing-dot, localhost) on both BYOK and stored `base_url`, gated on `environment==production`; LLM cost caps via global `asyncio.Semaphore(4)` + per-round tool cap 8 (`llm_max_tool_calls_per_round`) + `warn_if_open_signup` in production.
+- [11-06]: Body-size bound (1 MB 413 `payload_too_large` via pure-ASGI middleware for Content-Length + chunked), docs off (`docs_url=None` when `ENVIRONMENT=production`), capped ChangeSet ops at 50, admin-gated `POST /change-sets/{id}/revert` (SEC-AUTH-02), sanitized validation logs (no `input`/`ctx`).
+- [11-07]: CSP/HSTS shell (`frontend/vercel.json` headers + `frontend/index.html` meta, Google allowed), session `Max-Age=session_ttl_seconds`, `email_verified is not True` reject, `TrustedHostMiddleware` from `FRONTEND_ORIGINS`, plus BUG-FE-01 series hydration + BUG-FE-02 bodyless Content-Type cleanup + QUAL-01 verification script portability.
+- [11-08]: Delimiter neutralization (`_neutralize` on context lines + `_neutralize_answer_delimiters` on answers), bounded viz cache `FOCUS_SET_CAP=64` per series, `propose_changeset` ops ≤20, revert `_REVERT_LABEL_ALLOWLIST` + fail-closed ownership (`None` requires admin), extracted `ChangeSetService.propose_via_tool` (QUAL-02).
 
 ### Pending Todos
 
@@ -121,10 +130,10 @@ Items acknowledged and carried forward, not in v1.3 scope:
 
 ## Session Continuity
 
-Last session: 2026-08-13T15:04:23.232Z
-Stopped at: Completed 10-02-PLAN.md
+Last session: 2026-08-20T15:30:00.000Z
+Stopped at: Completed 11-08-PLAN.md (Phase 11 verified)
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Awaiting next milestone definition via /gsd-new-milestone — Phase 11 (v1.4) shipped; no open high-severity audit findings remain

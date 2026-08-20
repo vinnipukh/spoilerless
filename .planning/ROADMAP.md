@@ -13,7 +13,7 @@
 
 **Goal**: Close the P0 (and P1) security findings from the 2026-08-15 adversarial audit (SECURITY_AUDIT.md): make the spoiler boundary fail closed on every read surface, remove the one-request graph-poisoning write, restore per-IP rate limiting behind the Render proxy, make rate limiting fail closed in production, cap LLM cost amplification, block SSRF via LLM provider `base_url`, bound request bodies, hide API docs in production, ship CSP/security headers on the Vercel shell, and stop logging raw submitted values.
 **Depends on**: Phase 10 (shipped); SECURITY_AUDIT.md / SECURITY_TEST_PLAN.md (2026-08-15 audit deliverables)
-**Requirements**: SEC-01 (boundary fail-closed: SEC-BE-001), SEC-02 (anonymous clamp + auth/persist-validate reads: SEC-BE-002, SEC-ADV-003), SEC-03 (ingest hardening: SEC-BE-003, SEC-ADV-001, SEC-ADV-002), SEC-04 (trusted proxy + per-IP limits: SEC-BE-004/SEC-DOS-003), SEC-05 (fail-closed rate limiting: SEC-DOS-001), SEC-06 (LLM cost controls: SEC-DOS-002), SEC-07 (SSRF hardening: SEC-LLM-001/002), SEC-08 (body-size limit: SEC-DOS-004), SEC-09 (docs off in prod: SEC-INF-003), SEC-10 (CSP on Vercel shell: SEC-FE-001), SEC-11 (log sanitization: SEC-LOG-001), SEC-12 (P1: output guard, cache-key redesign, Max-Age, email_verified, TrustedHost, ingest pagination)
+**Requirements**: SEC-01 (boundary fail-closed: SEC-BE-001), SEC-02 (anonymous clamp + auth/persist-validate reads: SEC-BE-002, SEC-ADV-003), SEC-03 (ingest hardening: SEC-BE-003, SEC-ADV-001, SEC-ADV-002), SEC-04 (trusted proxy + per-IP limits: SEC-BE-004/SEC-DOS-003), SEC-05 (fail-closed rate limiting: SEC-DOS-001), SEC-06 (LLM cost controls: SEC-DOS-002), SEC-07 (SSRF hardening: SEC-LLM-001/002), SEC-08 (body-size limit: SEC-DOS-004), SEC-09 (docs off in prod: SEC-INF-003), SEC-10 (CSP on Vercel shell: SEC-FE-001), SEC-11 (log sanitization: SEC-LOG-001), SEC-12 (P1: output guard, cache-key redesign, Max-Age, email_verified, TrustedHost, ingest pagination, revert label allowlist, fail-closed reversion ownership, ChangeSet revert admin gating, frontend series-switch hydration & client header hardening, verification script path portability)
 **Success Criteria** (what must be TRUE):
 
   1. Every spoiler-sensitive read (graph, episodes, candidates, notes, custom-nodes/relationships, revisions, export, visualization, expand, path) resolves the boundary through ONE fail-closed path: anonymous and no-progress-record users get order 1; no client-chosen boundary bypasses it; revisions/candidates responses never expose `before`/`after` snapshots or `user_id` to non-owners.
@@ -26,9 +26,9 @@
 **Plans**: planned in `11-*.md` (see below).
 
 <details>
-<summary>🔒 v1.4 Security Hardening (Phase 11) — IN PROGRESS</summary>
+<summary>✅ v1.4 Security Hardening (Phase 11) — SHIPPED 2026-08-20</summary>
 
-- [ ] Phase 11: Security Hardening — audit remediation (P0/P1) — planned 2026-08-15
+- [x] Phase 11: Security Hardening — audit remediation (P0/P1) — completed 2026-08-20, verified (8/8 plans)
 
 </details>
 
@@ -65,4 +65,4 @@
 Full phase details archived at `.planning/milestones/v1.1-ROADMAP.md`, `.planning/milestones/v1.2-ROADMAP.md`, and `.planning/milestones/v1.3-ROADMAP.md` (with per-version phase directories under `.planning/milestones/v1.3-phases/`).
 
 ---
-*Last updated: 2026-08-14 — v1.3 (Production Deployment & Access Hardening) SHIPPED and archived. All 10 phases across v1.0–v1.3 complete; next milestone to be defined via `/gsd-new-milestone`.*
+*Last updated: 2026-08-20 — v1.4 Security Hardening (Phase 11) SHIPPED. Phase 11 (8/8 plans) audit remediation complete; all P0/P1 findings closed; next milestone to be defined via `/gsd-new-milestone`.*

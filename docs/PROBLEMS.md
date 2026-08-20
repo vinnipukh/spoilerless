@@ -1263,9 +1263,9 @@ Local stack (docker spoilerless-neo4j + uvicorn 8000 + vite 5173) verified in Ch
 ### New finding (Phase 11 candidate)
 - **S01E02/S01E03 episode radio labels duplicate the prefix** — renders "S01E02 — S01E02 — Episode 2" / "S01E03 — S01E03 — Episode 3" (S01E01 shows "S01E01 — Dexter" correctly). Cosmetic UI bug; fix in phase 11 (frontend label construction).
 
-## TWENTY-SECOND PASS — Phase 11 Security Hardening (P0/P1 audit remediation) — 11-01..11-07 (2026-08-20)
+## TWENTY-SECOND PASS — Phase 11 Security Hardening (P0/P1 audit remediation) — 11-01..11-08 (2026-08-20)
 
-Phase 11 closes the 2026-08-15 adversarial audit P0/P1 findings (SECURITY_AUDIT.md). Plans 11-01..11-07 landed; 11-08 deferred. Each finding maps to the closing plan number.
+Phase 11 closes the 2026-08-15 adversarial audit P0/P1 findings (SECURITY_AUDIT.md). Plans 11-01..11-08 landed (8/8, verification passed). Each finding maps to the closing plan number (11-08 completes delimiter/cache/ops-cap/revert allowlist/ownership fail-closed + QUAL-02).
 
 | Finding | Title | Plan |
 |---|---|---|
@@ -1299,3 +1299,4 @@ Phase 11 closes the 2026-08-15 adversarial audit P0/P1 findings (SECURITY_AUDIT.
 | BUG-FE-01 | useWatchProgress series-switch hydration | 11-07 |
 | BUG-FE-02 | apiFetch bodyless Content-Type | 11-07 |
 | QUAL-01 | run_doc_verification dynamic Path + delete superseded scripts | 11-07 |
+| QUAL-02 | Retrieval pipeline changeset executor decoupling (`ChangeSetService.propose_via_tool`) | 11-08 |
