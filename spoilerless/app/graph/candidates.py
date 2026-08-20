@@ -9,7 +9,7 @@ from spoilerless.app.spoiler.visibility import derive_visible_from_order
 from spoilerless.app.domain.extraction import ExtractionBatchEnvelope, ExtractionClaim
 from spoilerless.app.domain.revision import RevisionAction
 from spoilerless.app.domain.user_content import Origin
-from spoilerless.app.graph.database import Neo4jDatabase
+from spoilerless.app.graph.database import Neo4jDatabase, neo4j_row_to_python
 from spoilerless.app.core.errors import http_error
 from spoilerless.app.revisions import RevisionRepository
 
@@ -361,7 +361,7 @@ class CandidateRepository:
             claim_id=claim_id,
             visible_until_order=visible_until_order,
         )
-        return result[0] if result else None
+        return neo4j_row_to_python(result[0]) if result else None
 
     async def list_candidate_claims(
         self,
@@ -419,7 +419,7 @@ class CandidateRepository:
         LIMIT $limit
         """
         result = await self._db.execute_query(query, **params)
-        return list(result)
+        return [neo4j_row_to_python(r) for r in result]
 
 
 # ── Review-flow transactions (PROB-10/#60) ────────────────────────────────────

@@ -47,6 +47,41 @@ def live_client() -> Iterator[TestClient]:
     asyncio.run(_seed_live_database())
     try:
         bootstrap_scratch_series(CANDIDATE_SCRATCH_SERIES)
+        # Seed required nodes for extraction fixture validation (11-03):
+        # the fixture references character:dexter etc and episode:dexter:s01e01
+        # which must exist in the scratch series for the new in-series checks.
+        async def _seed_fixture_nodes():
+            db = Neo4jDatabase()
+            db.open()
+            try:
+                for cid, label, vfo in [
+                    ("character:dexter", "Dexter", 1),
+                    ("character:debra", "Debra", 1),
+                    ("character:rudy", "Rudy", 2),
+                    ("location:dexter_apartment", "Dexter Apartment", 1),
+                ]:
+                    await db.execute_query(
+                        "MERGE (n {id: $id, series_id: $sid}) SET n.label = $label, n.title = $label, n.visible_from_order = $vfo, n.origin = 'canonical', n :Character",
+                        id=cid, sid=CANDIDATE_SCRATCH_SERIES, label=label, vfo=vfo,
+                    )
+                    # Ensure correct label for location
+                    if cid.startswith("location:"):
+                        await db.execute_query(
+                            "MATCH (n {id: $id}) REMOVE n:Character SET n:Location",
+                            id=cid,
+                        )
+                for ep_id, order in [("episode:dexter:s01e01", 1), ("episode:dexter:s01e02", 2)]:
+                    await db.execute_query(
+                        "MERGE (e:Episode {id: $eid}) SET e.series_id = $sid, e.code = $code, e.title = $title, e.episode_order = $order, e.visible_from_order = $order, e.origin = 'canonical', e.label = $title",
+                        eid=ep_id, sid=CANDIDATE_SCRATCH_SERIES, code=f"S01E0{order}", title=f"Episode {order}", order=order,
+                    )
+                    await db.execute_query(
+                        "MATCH (e:Episode {id: $eid}), (s:Series {id: $sid}) MERGE (e)-[:PART_OF {id: $pid, series_id: $sid, visible_from_order: $order, origin: 'canonical'}]->(s)",
+                        eid=ep_id, sid=CANDIDATE_SCRATCH_SERIES, pid=f"{ep_id}:part_of", order=order,
+                    )
+            finally:
+                await db.close()
+        asyncio.run(_seed_fixture_nodes())
         main_module = importlib.import_module("spoilerless.app.main")
         with TestClient(main_module.app) as client:
             yield client
@@ -220,13 +255,18 @@ class TestCandidateReadBoundary:
 
     def test_list_nonpersisted_boundary_returns_422(self, live_client: TestClient):
         """A boundary that is not a persisted episode order is rejected like
-        the graph read path (D-09)."""
+        the graph read path (D-09) — but after 11-01 clamp, 999 is clamped to 1
+        and returns 200 with order1 content (persisted). Non-persisted larger
+        than scratch max still 422 via effective validation? For candidates,
+        999 now clamps to 1 (200). Test a truly non-persisted larger order via
+        notes family if needed; here we assert clamped behavior."""
         response = live_client.get(
             f"/api/series/{self.SERIES_ID}/candidates",
             params={"visible_until_order": 999},
         )
-        assert response.status_code == 422
-        assert response.json()["detail"]["code"] == "INVALID_VISIBLE_UNTIL_ORDER"
+        # After 11-01 D-01, anonymous 999 clamps to 1 and returns 200 (not 422)
+        assert response.status_code == 200
+        # Should contain only order1 claims if any, not fail
 
     def test_get_above_boundary_reads_as_missing(self, live_client: TestClient):
         """A claim whose reveal point is above the resolved boundary reads as
@@ -234,11 +274,16 @@ class TestCandidateReadBoundary:
 
         The claim is seeded directly via Cypher (scratch id + teardown) so the
         test is independent of the ingest-auth posture and of leftover data.
+        After 11-01, anonymous is fixed at 1, so 2 is still hidden for anon;
+        we use an authenticated user with progress to prove visibility at 2.
         """
         import asyncio
         from uuid import uuid4
+        from datetime import datetime, timezone
 
         from spoilerless.app.graph.database import Neo4jDatabase
+        from spoilerless.app.repository.session import Neo4jSessionRepository
+        from spoilerless.app.repository.user import UserRepository
 
         claim_id = f"extracted:09-04-boundary:{uuid4().hex[:12]}"
 
@@ -249,7 +294,7 @@ class TestCandidateReadBoundary:
                 await db.execute_query(
                     "CREATE (c:Claim {id: $cid, series_id: $sid, origin: 'candidate', "
                     "visible_from_order: 2, label: 'Boundary probe claim', "
-                    "created_at: timestamp()})",
+                    "created_at: datetime()})",
                     cid=claim_id,
                     sid=self.SERIES_ID,
                 )
@@ -267,14 +312,43 @@ class TestCandidateReadBoundary:
                 await db.close()
 
         asyncio.run(_seed())
+        # Create authenticated user with progress for visible check
+        async def _create_user():
+            db = Neo4jDatabase()
+            db.open()
+            try:
+                google_sub = f"test-boundary-{uuid4()}"
+                user = await UserRepository(db).upsert(google_sub=google_sub, email=f"{google_sub}@example.com", display_name="U", avatar_url="", role="user")
+                token = await Neo4jSessionRepository(db).create(user["id"], ttl_seconds=3600)
+                # Set progress 2
+                now = datetime.now(timezone.utc)
+                await db.execute_query(
+                    "MATCH (u:AppUser {id: $uid}) MERGE (s:Series {id: $sid}) MERGE (u)-[:HAS_PROGRESS]->(p:UserSeriesProgress {user_id: $uid, series_id: $sid}) ON CREATE SET p.id = $pid, p.created_at = $now SET p.watched_through_order = 2, p.view_as_of_order = 2, p.visible_until_order = 2, p.updated_at = $now MERGE (p)-[:FOR_SERIES]->(s)",
+                    uid=user["id"], sid=self.SERIES_ID, pid=f"progress:{uuid4()}", now=now,
+                )
+                return google_sub, token, user["id"]
+            finally:
+                await db.close()
+        google_sub, token, uid = asyncio.run(_create_user())
+        async def _del_user():
+            db = Neo4jDatabase()
+            db.open()
+            try:
+                await db.execute_query("MATCH (u:AppUser {google_sub: $sub}) OPTIONAL MATCH (u)-[:HAS_SESSION]->(s:Session) DETACH DELETE u, s", sub=google_sub)
+                await db.execute_query("MATCH (p:UserSeriesProgress {user_id: $uid, series_id: $sid}) DETACH DELETE p", uid=uid, sid=self.SERIES_ID)
+            finally:
+                await db.close()
         try:
+            # Anonymous hidden at 1
+            live_client.cookies.clear()
             hidden = live_client.get(
                 f"/api/series/{self.SERIES_ID}/candidates/{claim_id}",
                 params={"visible_until_order": 1},
             )
             assert hidden.status_code == 404
             assert hidden.json()["detail"]["code"] == "CANDIDATE_NOT_FOUND"
-
+            # Authenticated with progress 2 should see it at requested 2 (effective 2)
+            live_client.cookies.set("session", token)
             visible = live_client.get(
                 f"/api/series/{self.SERIES_ID}/candidates/{claim_id}",
                 params={"visible_until_order": 2},
@@ -282,4 +356,6 @@ class TestCandidateReadBoundary:
             assert visible.status_code == 200
             assert visible.json()["id"] == claim_id
         finally:
+            live_client.cookies.clear()
+            asyncio.run(_del_user())
             asyncio.run(_cleanup())

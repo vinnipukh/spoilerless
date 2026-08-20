@@ -44,6 +44,9 @@ def _scratch_boundary_series():
         db = Neo4jDatabase()
         db.open()
         try:
+            # Fix Series/Episode origin/label for GraphNode validation (NODES_QUERY expects label + canonical origin)
+            await db.execute_query("MATCH (s:Series {id: $sid}) SET s.origin = 'canonical', s.label = coalesce(s.label, s.title)", sid=SCRATCH)
+            await db.execute_query("MATCH (e:Episode {series_id: $sid}) SET e.origin = 'canonical', e.label = coalesce(e.label, e.title, e.code)", sid=SCRATCH)
             # Create two candidate claims: order1 visible, order3 hidden
             # Use deterministic ids expected by tests
             for cid, vfo in [
@@ -69,7 +72,7 @@ def _scratch_boundary_series():
                 """
                 MERGE (ch:Character {id: $ch_id})
                 SET ch.series_id = $sid, ch.label = 'LateChar', ch.title = 'LateChar',
-                    ch.visible_from_order = 3, ch.origin = 'test'
+                    ch.visible_from_order = 3, ch.origin = 'canonical'
                 """,
                 ch_id="scratch:boundary:late_char",
                 sid=SCRATCH,
@@ -79,7 +82,7 @@ def _scratch_boundary_series():
                 """
                 MERGE (ch:Character {id: $ch_id})
                 SET ch.series_id = $sid, ch.label = 'MidChar', ch.title = 'MidChar',
-                    ch.visible_from_order = 2, ch.origin = 'test'
+                    ch.visible_from_order = 2, ch.origin = 'canonical'
                 """,
                 ch_id="scratch:boundary:mid_char",
                 sid=SCRATCH,
@@ -102,6 +105,8 @@ def live_client(_scratch_boundary_series) -> Iterator[TestClient]:  # noqa: PT00
         db = Neo4jDatabase()
         db.open()
         try:
+            await db.execute_query("MATCH (s:Series {id: $sid}) SET s.origin = 'canonical', s.label = coalesce(s.label, s.title)", sid=SCRATCH)
+            await db.execute_query("MATCH (e:Episode {series_id: $sid}) SET e.origin = 'canonical', e.label = coalesce(e.label, e.title, e.code)", sid=SCRATCH)
             for cid, vfo in [
                 ("extracted:boundary:order1", 1),
                 ("extracted:boundary:order3", 3),
@@ -124,7 +129,7 @@ def live_client(_scratch_boundary_series) -> Iterator[TestClient]:  # noqa: PT00
                 """
                 MERGE (ch:Character {id: $ch_id})
                 SET ch.series_id = $sid, ch.label = 'LateChar', ch.title = 'LateChar',
-                    ch.visible_from_order = 3, ch.origin = 'test'
+                    ch.visible_from_order = 3, ch.origin = 'canonical'
                 """,
                 ch_id="scratch:boundary:late_char",
                 sid=SCRATCH,
@@ -133,7 +138,7 @@ def live_client(_scratch_boundary_series) -> Iterator[TestClient]:  # noqa: PT00
                 """
                 MERGE (ch:Character {id: $ch_id})
                 SET ch.series_id = $sid, ch.label = 'MidChar', ch.title = 'MidChar',
-                    ch.visible_from_order = 2, ch.origin = 'test'
+                    ch.visible_from_order = 2, ch.origin = 'canonical'
                 """,
                 ch_id="scratch:boundary:mid_char",
                 sid=SCRATCH,
@@ -184,17 +189,26 @@ async def _delete_test_user(google_sub: str) -> None:
 
 def _set_progress(user_id: str, series_id: str, watched: int, view: int) -> None:
     async def _run():
+        from datetime import datetime, timezone
+        from uuid import uuid4
         db = Neo4jDatabase()
         db.open()
         try:
+            now = datetime.now(timezone.utc)
             await db.execute_query(
                 """
                 MATCH (u:AppUser {id: $uid})
+                MERGE (s:Series {id: $sid})
                 MERGE (u)-[:HAS_PROGRESS]->(p:UserSeriesProgress {user_id: $uid, series_id: $sid})
-                SET p.watched_through_order = $watched, p.view_as_of_order = $view
+                ON CREATE SET p.id = $pid, p.created_at = $now
+                SET p.watched_through_order = $watched, p.view_as_of_order = $view,
+                    p.visible_until_order = $watched, p.updated_at = $now
+                MERGE (p)-[:FOR_SERIES]->(s)
                 """,
                 uid=user_id,
                 sid=series_id,
+                pid=f"progress:{uuid4()}",
+                now=now,
                 watched=watched,
                 view=view,
             )
