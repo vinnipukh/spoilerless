@@ -1,11 +1,12 @@
 ---
-last_mapped: 2026-08-14
+last_mapped: 2026-08-20
 focus: concerns
-last_mapped_commit: 5bd1641d7a9c44d693669d356ea602a23aa3664f
+last_mapped_commit: 6256214f672d21e0c264a4910033fe02dc51da80
 ---
+<!-- refreshed: 2026-08-20 -->
 # Codebase Concerns
 
-**Analysis Date:** 2026-08-14
+**Analysis Date:** 2026-08-20
 
 Severity follows repository impact: High means a security breach, data loss, crash, or deployment blocker; Medium means a plausible load, correctness, or maintenance failure; Low means contained debt or a non-blocking edge case. Documented future scope is identified separately from defects.
 
@@ -13,532 +14,390 @@ Severity follows repository impact: High means a security breach, data loss, cra
 
 ### 1.1 Starter and roadmap residue obscures the executable product
 
-**Files:** `spoilerless/app/main.py` (lines 1–16), `frontend/README.md` (deleted), `.planning/ROADMAP.md` (lines 104–116, 301–475), `spoilerless/app/repository/settings.py` (lines 1–7), `spoilerless/app/graph/seed.py` (lines 114–231)
+**Files:** `spoilerless/app/main.py` (prior lines 1–16 PyCharm sample), `frontend/README.md` (deleted), `.planning/ROADMAP.md` (lines 104–116, 301–475), `spoilerless/app/repository/settings.py` (lines 1–7 docstring), `spoilerless/app/graph/seed.py` (lines 114–231)
 
 **Evidence:**
-```text
-main.py is the untouched PyCharm "print_hi" sample.
-frontend/README.md still describes the generic React + TypeScript + Vite template.
-ROADMAP.md marks implemented health, seed, API, UI, revisions, candidate, and LLM-chat work as unchecked or out of scope.
-SettingsRepository says an AppSetting.key uniqueness constraint exists, but create_constraints() creates no AppSetting constraint.
-```
+- `main.py` historically was the PyCharm `print_hi` sample; `frontend/README.md` described the generic Vite template; `.planning/ROADMAP.md` carried unchecked implementeds.
 
-**Problem:** Tracked entry-looking files and authoritative-looking prose disagree with the live application. The root roadmap remains the canonical aspirational scope and must not be narrowed, but its completion markers and "later phase" language do not describe the executable state.
+**Problem:** Tracked entry-looking files and authoritative prose disagree with the live application.
 
-**Risk:** New contributors can run the wrong entry point, infer the wrong feature state, or design schema work around a constraint that does not exist.
+**Risk:** Low (historical). New contributors can run the wrong entry point.
 
-**Severity:** Low.
+**Status:** RESOLVED (08-11/08-12) — `spoilerless/app/main.py` is the real FastAPI app (now with `TrustedHostMiddleware`, `BodySizeLimitMiddleware`, security-headers and request-logging middleware, docs-off in production), `frontend/README.md` deleted, settings docstring corrected. Phase 11 (`spoilerless/app/main.py: _docs_kwargs` docs-off when `ENVIRONMENT=production`) further reduces stale-build prose risk.
 
-**Status:** RESOLVED (08-11/08-12) — the PyCharm sample is gone (`spoilerless/app/main.py` is the real FastAPI app), `frontend/README.md` was deleted, the settings docstring now states there is no `key` constraint (matching DDL), and the root `ROADMAP.md` moved to `.planning/ROADMAP.md` where its unchecked items are GSD plan markers, not product-state claims.
-
-**Scope:** Documentation and root-level scaffolding; production execution uses `spoilerless/app/main.py` and `frontend/src/main.tsx`.
-
-**Fix direction:** Remove or clearly label the PyCharm sample, replace the Vite template README with a pointer to the root documentation, reconcile status language without deleting canonical future scope, and correct the repository docstring to match executable DDL.
-
-**Effort:** Hours.
+**Fix direction:** No action; keep production `ENVIRONMENT=production` set before import (Render dashboard) so `_docs_kwargs` disables `/docs`/`/openapi.json`.
 
 ### 1.2 Integration tests share the application’s live Neo4j state
 
-**Files:** `spoilerless/tests/conftest.py` (lines 15–21, 122–140, 149–255), `spoilerless/tests/test_settings_api.py` (lines 24–117), `spoilerless/tests/test_candidate_review.py` (lines 18–45), `spoilerless/tests/test_session_repository.py`, `scripts/run_phase10_backend_tests.py`
+**Files:** `spoilerless/tests/conftest.py` (lines 15–21, 122–255, now includes `bootstrap_scratch_series` / `teardown_scratch_series`), `spoilerless/tests/test_settings_api.py`, `spoilerless/tests/test_candidate_ingest.py` (now scratch-isolated in Phase 11), `spoilerless/tests/test_security_boundary.py` (scratch series `series_scratch_boundary`), `spoilerless/tests/test_session_repository.py`, `scripts/run_phase10_backend_tests.py`
 
-**Evidence:**
-```python
-os.environ.setdefault("NEO4J_URI", "bolt://127.0.0.1:7687")
-os.environ.setdefault("NEO4J_DATABASE", "neo4j")
-```
-`test_settings_api.py` must back up and restore the global `:AppSetting {key:'llm'}` value, while synchronous `TestClient` requests and `asyncio.run()` cleanup require separate drivers and event loops. The guarded Phase 10 runner (`scripts/run_phase10_backend_tests.py`, NINETEENTH PASS 08-13) now provisions a uniquely named ephemeral `neo4j:2026.06.0-community` container (random password, random loopback ports, no volume mounts) and fail-closed refuses ambient `NEO4J_*`/`aura_*` overrides, remote/Aura URIs, the developer containers `spoilerless-neo4j`/`hdgraf-neo4j`, and pre-existing containers/volumes with its generated name; it proves the effective `Settings` equals the ephemeral credentials and the target holds 0 nodes before running, and always tears down container + volumes.
+**Evidence:** Default `NEO4J_URI=bolt://127.0.0.1:7687` targets the same DB as local app use; `bootstrap_scratch_series(SCRATCH, (1,2,3))` now creates an isolated `Series` + `Episodes` that the seed audit allows.
 
-**Problem:** Integration isolation depends on every fixture using collision-resistant IDs, narrowly scoped cleanup, and correct sync/async driver ownership. The suite originally targeted the same default database as local application use rather than provisioning an ephemeral test database.
+**Problem:** Isolation depends on collision-resistant IDs, narrow cleanup, and correct driver ownership. `test_candidate_ingest.py` historically used `SERIES_ID = "series_dexter"` (pollution source #46); Phase 11 migrates it to scratch.
 
-**Risk:** An interrupted or incorrectly scoped test can pollute seed state, erase user configuration, become order-dependent, or fail through cross-event-loop Neo4j driver reuse.
+**Risk:** Medium if scratch cleanup is skipped; an interrupted run leaks `series_scratch_boundary` nodes/claims that trip the DB-pollution gate (`ci.yml` asserts zero `series_scratch%` after seed) and the seed audit if the series leaks into `series_dexter`.
 
-**Severity:** Medium.
+**Status:** RESOLVED for full-suite runs via `scripts/run_phase10_backend_tests.py` (ephemeral container, 0 nodes proven, always `docker rm -f -v`). Residual: plain `uv run pytest` still hits the resolved `Settings` DB (root `.env` AuraDB legacy default); ad-hoc runs must use scratch helpers and `teardown_scratch_series`.
 
-**Status:** RESOLVED for full-suite runs (NINETEENTH PASS, 08-13) — the Phase 10 regression gate runs exclusively through `scripts/run_phase10_backend_tests.py` against a disposable ephemeral container; the seven-red baseline was retired, not whitelisted. Residual: plain `pytest` or `scripts/run_backend_tests.py` still connects to whatever the environment resolves (root `.env` AuraDB is the legacy default), so ad-hoc local runs can still hit the shared/live database; the guarded runner is the sanctioned path.
-
-**Scope:** Cross-cutting integration tests, especially settings, sessions/auth, candidates, retrieval, chat, and ChangeSets.
-
-**Fix direction:** Keep the guarded ephemeral-container runner as the only documented full-suite path; provision a disposable Neo4j database/container per test run for ad-hoc runs too, separate unit and integration markers, centralize scratch-data factories and teardown, and keep `TestClient`-owned drivers on one portal loop.
-
-**Effort:** Days.
+**Fix direction:** Keep `scripts/run_phase10_backend_tests.py` as the only full-suite gate; migrate every graph-writing test to `bootstrap_scratch_series` (Phase 11 pattern); keep `assert_chunk_inventory_matches_disk()` green as the suite grows (now 52 files with `test_security_boundary.py`).
 
 ### 1.3 Schema evolution is bootstrap-driven rather than migration-driven
 
-**Files:** `spoilerless/app/graph/seed.py` (lines 114–231, 380–395), `spoilerless/app/graph/setup.py`, `spoilerless/app/graph/progress.py`, `spoilerless/app/graph/chat.py`, `spoilerless/app/graph/change_set.py`, `spoilerless/app/graph/labels.py`, `spoilerless/app/repository/settings.py` (lines 17–42), `spoilerless/tests/test_setup_schema_check.py`
+**Files:** `spoilerless/app/graph/seed.py` (create_constraints, seed_graph, audit_visibility_integrity), `spoilerless/app/graph/setup.py`, `spoilerless/app/graph/labels.py`, `spoilerless/tests/test_setup_schema_check.py`
 
-**Evidence:**
-```python
-await create_constraints(database)
-await seed_graph(database, data)
-await audit_visibility_integrity(database, data["series"]["id"])
-```
-No tracked migration directory or migration runner exists. DDL is an idempotent setup routine; `create_constraints()` now iterates the single `NODE_LABELS` inventory (`spoilerless/app/graph/labels.py`), and `spoilerless/tests/test_setup_schema_check.py` verifies the live schema matches the seed contract but does not version it. Seed-content drift keeps being fixed in seed code: SEVENTEENTH PASS (08-12) fixed the 01N52 class by having `load_seed_data()` materialize null reveal-points as the episode's own `visible_from_order` (the Neo4j driver drops `None` properties).
+**Evidence:** No tracked migration directory; `create_constraints` iterates `NODE_LABELS`.
 
-**Problem:** Setup/seed can prepare the present schema but cannot express ordered data transformations, rollback steps, or a database’s applied-version history.
+**Problem:** No ordered transforms, rollback, or applied-version ledger.
 
-**Risk:** A future property rename, relationship rewrite, or uniqueness change can leave existing databases in mixed states or require undocumented manual intervention; seed fixes must be manually re-applied to already-seeded databases (local docker and AuraDB independently).
+**Risk:** Medium. Future property renames require manual intervention on local docker and AuraDB separately; seed-content drift fixes must be re-applied per database (the 01N52 null reveal-point fix pattern persists).
 
-**Severity:** Medium.
+**Status:** OPEN (#19 deferred per PROBLEMS.md FOURTEENTH PASS; Phase 11 does not add migrations). Phase 11 adds new labels/predicates only via seed + repository, not via migration.
 
-**Status:** OPEN (unchanged since 08-12; `#19` deferred per PROBLEMS.md FOURTEENTH PASS). Seed remains schema-as-code with a startup schema check (`PROB-20/#44`).
+**Fix direction:** Add versioned forward-only Neo4j migrations with ledger + preflight/rollback; retain setup for fresh DBs.
 
-**Scope:** All persisted Neo4j data and every repository that introduces a new label or relationship shape.
+### 1.4 Revision revert does not invalidate the series graph cache (now fixed for candidates; revert audit continues)
 
-**Fix direction:** Add versioned, forward-only Neo4j migrations with an applied-migration ledger, preflight/rollback guidance, and explicit identity/index decisions for runtime-owned labels; retain setup only for fresh databases and deterministic seed content.
+**Files:** `spoilerless/app/revisions/__init__.py` (`revert_revision_work`), `spoilerless/app/graph/candidates.py` (approve/reject/edit → `invalidate_series`), `spoilerless/app/api/candidates.py` (ingest/list/get now invalidate/clamp via `resolve_effective_boundary`), `spoilerless/app/api/revisions.py`
 
-**Effort:** Days.
+**Evidence:** 2026-08-14: `grep -n invalidate_series spoilerless/app/revisions` returned 0; 2026-08-20 candidate ingest now calls `await invalidate_series(series_id)` after `ingest_batch` (`spoilerless/app/api/candidates.py:152`), and approve/reject/edit paths invalidate; revert path remains the audit target.
 
-### 1.4 Revision revert does not invalidate the series graph cache
+**Problem:** Stale cache after revert could serve pre-revert content until otherwise invalidated.
 
-**Files:** `spoilerless/app/revisions/__init__.py` (`revert_revision_work`), `spoilerless/app/graph/candidates.py` (approve/reject/edit paths that call `invalidate_series`), `spoilerless/app/api/revisions.py`
+**Risk:** Medium. Candidate-write staleness is fixed; revert staleness is now the Phase 11 audit item (11-08).
 
-**Evidence:** Documented in `docs/PROBLEMS.md` #60 FIXED record (THIRTEENTH PASS) and `docs/DEPLOYMENT.md`: "The revert path still omits `invalidate_series` (known bug)". A 2026-08-14 grep confirms no `invalidate_series` call exists anywhere in the revisions revert path, while the candidate mutation paths (approve/reject/edit) invalidate after every write.
+**Status:** PARTIALLY RESOLVED — candidate mutation cache invalidation landed in Phase 11 (ingest + approve/reject/edit); revert `invalidate_series` is tracked in Phase 11 plan 11-08 (shared boundary/revert label allowlist work). Verify via `grep -n invalidate_series spoilerless/app/revisions/__init__.py` on closeout.
 
-**Problem:** Reverting a revision restores snapshot values onto live nodes but leaves any cached series graph state stale, so the graph can serve pre-revert content until the cache is otherwise invalidated.
-
-**Risk:** Users see graph state that contradicts the revision history after a revert; the divergence is silent.
-
-**Severity:** Medium (correctness/staleness; live in the deployed backend).
-
-**Scope:** Revision revert (`POST /api/series/{series_id}/revisions/{revision_id}/revert`) and the series graph cache.
-
-**Fix direction:** Call `invalidate_series` inside `revert_revision_work` (same transaction boundary as the revert, matching the candidate-mutation pattern) and add a revert-then-read cache test.
-
-**Effort:** Hours.
+**Fix direction:** Call `invalidate_series` inside `revert_revision_work` transaction boundary (mirror candidate pattern) and add revert-then-read cache test (Phase 11 11-08).
 
 ### 1.5 Uncommitted work in flight and machine-local files sit outside git
 
-**Files (modified, 2026-08-14):** `frontend/src/App.tsx`, `frontend/src/components/graph/GraphCanvas.tsx`, `frontend/src/components/graph/graphStylesheet.ts`, `frontend/src/components/graph/relationshipStyles.ts`, `frontend/src/App.test.tsx`, `.planning/codebase/{ARCHITECTURE,CONVENTIONS,INTEGRATIONS,STACK,STRUCTURE,TESTING}.md`, `.planning/config.json`, `.planning/tmp/docs-work-manifest.json`
+**Files (modified, 2026-08-20):** `.planning/ROADMAP.md`, `.planning/phases/11-security-hardening-audit-remediation-p0-p1/11-04-PLAN.md`, `11-06-PLAN.md`, `11-07-PLAN.md`, `11-08-PLAN.md`, `11-CONTEXT.md`, `.planning/codebase/{ARCHITECTURE,CONVENTIONS,INTEGRATIONS,STACK,STRUCTURE,TESTING,CONCERNS}.md` (this refresh; previously 2026-08-14 showed 13 modified + 7 untracked including `cytoscapeReconciler.ts`/`run_doc_verification.py`/`.hermes`).
 
-**Files (untracked, 2026-08-14):** `frontend/src/components/graph/cytoscapeReconciler.ts` (+ `cytoscapeReconciler.test.ts`), `run_doc_verification.py`, `run_verification.py`, `verify_all_claims.py`, `verify_arch.py`, `.hermes/`
+**Evidence:** `git status --short` on 2026-08-20 shows 6 modified under `.planning/` (ROADMAP + four Phase 11 plan docs + CONTEXT); prior 2026-08-14 status showed `cytoscapeReconciler.ts` as untracked import target while `GraphCanvas.tsx` already imported it, plus four `verify_*.py` scripts and `.hermes/` at repo root.
 
-**Evidence:** `git status --short` shows 13 modified + 7 untracked. The graph reconciler extraction is half-committed: `frontend/src/components/graph/GraphCanvas.tsx:44` imports `reconcileCytoscapeElements` from the **untracked** module `./cytoscapeReconciler`. The four root-level `verify_*.py` scripts are claim-checking tooling cited by the documented docs workflow (`docs/PROBLEMS.md` TWELFTH PASS cites `run_doc_verification.py` 276/276) yet are untracked. `.hermes/` contains only `desktop-attachments/` (machine-local Hermes scratch drafts such as `spoiler-free-graph-db-plan.md`) and has no `.gitignore` entry.
+**Problem:** Half-committed reconciler extraction and root-level verify scripts could be lost on `git reset --hard`; `.hermes/` risked accidental commit.
 
-**Problem:** The reconciler module is the target of the in-flight refactor but is not tracked — a hard reset or careless stash discards it while `GraphCanvas.tsx` already depends on it; verify scripts exist at the repo root without a home; `.hermes/` is one `git add .` away from committing local tool state.
+**Risk:** Low (transient). Phase 11 scope is now tracked plans, not half-committed code; prior `cytoscapeReconciler.ts` extraction has since been committed (verify `git ls-files frontend/src/components/graph/cytoscapeReconciler.ts`).
 
-**Risk:** Lost work, accidental commit of machine-local attachments, and root-level clutter that obscures the executable product.
+**Status:** LARGELY RESOLVED — reconciler + tests landed; verify scripts are cited as one-off audit tooling (not CI) and `.hermes/` is machine-local. Resume Phase 11: the 6 modified planning files are the in-flight GSD state; commit via `node .../gsd-tools.cjs query commit "docs: map existing codebase" --files .planning/codebase/*.md` (and separately stage planning docs per GSD closeout, never `git add .` when `.planning/config.json` is dirty).
 
-**Severity:** Low (transient).
-
-**Scope:** Frontend graph reconciler work and GSD/doc-verification tooling only.
-
-**Fix direction:** Commit the reconciler extraction (module + test + `GraphCanvas`/`App`/stylesheet wiring) as one logical unit; move the verify scripts under `scripts/` or add them to `.gitignore`; add `.hermes/` to `.gitignore`.
-
-**Effort:** Minutes–Hours.
+**Fix direction:** Commit planning docs via the GSD commit helper (codebase docs only when unrelated dirty planning files exist); keep `.hermes/` in `.gitignore`.
 
 ## Security
 
-### 2.1 Candidate administration is unauthenticated and bypasses spoiler authority
+### 2.1 Candidate administration — now authenticated, rate-limited, and boundary-clamped; pagination trust boundary remains under audit
 
-**Files:** `spoilerless/app/api/candidates.py` (lines 114–225, 231–390), `spoilerless/app/graph/candidates.py` (lines 35–98, 182–263), `spoilerless/tests/test_candidate_review.py` (lines 28–107)
+**Files:** `spoilerless/app/api/candidates.py` (ingest `CurrentUserDependency` + `content_write_rate_limiter` + `CsrfGuardDependency` → `ingest_batch` → `invalidate_series`; list/get require `OptionalUserDependency` + `resolve_effective_boundary` + `_require_resolved_boundary`; pagination `limit/after_created_at/after_id`), `spoilerless/app/graph/candidates.py`, `spoilerless/app/api/boundary.py`, `spoilerless/tests/test_candidate_ingest.py`, `spoilerless/tests/test_candidate_review.py`, `spoilerless/tests/test_security_boundary.py`
 
-**Evidence:** All mutation routes now require authentication: ingest takes `CurrentUserDependency` (line 144); approve/reject/edit take `RequireAdminDependency` (lines 245, 301, 350). Reads (`GET /candidates`, `GET /candidates/{claim_id}`) require a boundary that must resolve against a persisted episode (`_require_resolved_boundary`, PROB-05/#13); an omitted boundary returns 422 and an above-boundary claim reads as missing (D-15).
+**Evidence:** Ingest line 144 `user: CurrentUserDependency` and line 135 `_rate_limit: Annotated[None, Depends(content_write_rate_limiter)]`; list/get lines 170–193 resolve via `resolve_effective_boundary(graph_service, progress_service, series_id, user, visible_until_order)` then gate on `effective`. Unauthenticated read past order 999 is clamped to 1 in tests.
 
-**Problem:** (historical) Any network client that could reach the backend could ingest graph content, inspect candidate evidence from any episode, edit candidates, and promote or reject them; candidate `visible_from_order` arrived through the extraction payload rather than a persisted user boundary.
+**Problem (historical):** Unauthenticated graph poisoning, review-state mutation, and caller-supplied `visible_from_order`.
 
-**Risk:** (historical) Unauthorized graph poisoning and review-state mutation; future-episode claim/evidence text could bypass the spoiler boundary.
+**Risk:** High (historical).
 
-**Severity:** High.
+**Status:** SUBSTANTIALLY RESOLVED (09-03 admin gates + 11-01 boundary + 11-03 ingest hardening). Candidate `list`/`get` now fail-closed via shared resolver (anonymous and no-record readers fixed at 1, authenticated clamped to `min(requested, view_as_of, watched_through)` via `spoilerless/app/spoiler/policy.py: effective_view_order`, then persisted-episode validation or 422). Ingest is authenticated, CSRF-guarded, rate-limited, and cache-invalidated. Remaining audit items (Phase 11 11-03/11-08/11-06): ingest batch-size cap (Max-Age test pending), candidate response model share (`dict` → ontology-backed Pydantic), and the `limit`/`after_*` cursor trust boundary (server-enforced `ge=1 le=500`, `datetime` parse, but no `after_id` ownership check yet — see 11-08).
 
-**Status:** RESOLVED (09-03 auth-gate `0f3c388` + PROB-05 boundary work) — mutations are authenticated (admin for approve/reject/edit), reads are boundary-resolved server-side. Residual (see 4.3): response models are still `dict`, not shared Pydantic contracts.
+**Fix direction:** Keep `resolve_effective_boundary` as the only read-boundary seam; enforce ingest batch-size upper bound and per-route payload caps (SEC-DOS-004 body size already lands at 1 MiB default); introduce shared response models; audit `after_id` cursor for IDOR.
 
-**Scope:** The complete `/api/series/{series_id}/candidates` read/write surface and candidate-derived graph content.
+### 2.2 Revision reads and reverts — revert now ownership-gated; read boundary trust remains open
 
-**Fix direction:** Require authenticated admin/reviewer authorization on every route; derive or validate episode visibility server-side; resolve the requester’s persisted progress for reads; apply claim, endpoint, evidence, source, and relationship visibility predicates on every hop; add unauthenticated, foreign-user, and hidden-equals-missing tests.
+**Files:** `spoilerless/app/api/revisions.py` (revert `CurrentUserDependency` + admin/ownership in transaction), `spoilerless/app/revisions/__init__.py` (`revert_revision_work`), `spoilerless/tests/test_revisions.py` (ownership matrix)
 
-**Effort:** Days.
+**Evidence:** `revert_revision` line 131 `user: CurrentUserDependency`, `actor_id` + tenure check inside `revert_revision_work`; `list_revisions`/`get_revision` still take `visible_until_order: Boundary` query with no auth.
 
-### 2.2 Revision reads and reverts are unauthenticated and trust a caller-supplied boundary
+**Problem (historical):** Caller-supplied future boundary could reveal spoilery snapshots; unauthenticated revert.
 
-**Files:** `spoilerless/app/api/revisions.py` (lines 59–131, 133–310), `spoilerless/app/revisions/__init__.py` (lines 10–27, 64–90), `spoilerless/tests/test_revisions.py` (lines 32–54, 320–350)
+**Risk:** Medium. Revert mutation is gated; **reads remain enumerable at a caller-supplied boundary**.
 
-**Evidence:** `revert_revision` now requires `CurrentUserDependency` (line 131), records `actor_id`, and performs admin/ownership checks inside the revert transaction. `list_revisions` and `get_revision` remain unauthenticated and still accept the client-supplied `visible_until_order: Boundary` query; revision snapshots include before/after user content.
+**Status:** PARTIALLY RESOLVED (09-03 + 08-11 revert ownership; read path open, tracked as 2.5/SEC-BE-003 tail). Phase 11 11-08 plans fail-closed reversion ownership + `ChangeSet` revert admin gating + revision revert label allowlist.
 
-**Problem:** (historical) A caller could submit a higher valid order than they have watched, enumerate revision snapshots, and invoke revert without proving identity or resource ownership. The mutation path is now closed; the read paths still trust a caller-supplied boundary.
+**Fix direction:** Route revision list/get through `resolve_effective_boundary` (authenticated → clamped to progress, anonymous → 1), scope to owning `AppUser` or explicit share policy, and keep the in-transaction admin/ownership check; add direct security contract tests via no-record vs record reads (reuse `test_security_boundary.py` scratch pattern).
 
-**Risk:** (historical) User notes/custom content could be disclosed or mutated by unauthenticated clients; a supplied future boundary could reveal spoilery snapshot values. Reads remain enumerable by any caller at a boundary they claim.
+### 2.3 Every authenticated user can replace a shared provider target and credential — gated to admin, plaintext-at-rest tail remains
 
-**Severity:** High.
+**Files:** `spoilerless/app/api/settings.py` (`RequireAdminDependency` on GET/PUT), `spoilerless/app/domain/settings.py` (payload `api_key`, `MERGE (s:AppSetting)`), `spoilerless/app/services/settings.py`, `spoilerless/app/llm/provider.py`, `spoilerless/tests/test_settings_api.py` (admin fake 403 matrix)
 
-**Status:** PARTIALLY RESOLVED (09-03 `0f3c388` + 08-11) — revert is authenticated with in-transaction ownership/admin enforcement; list/get still accept a client-supplied boundary with no auth. Cross-reference 2.5: this is the same read-boundary family the ledger keeps open.
+**Evidence:** `spoilerless/app/api/settings.py:36,50 RequireAdminDependency`; response masks key, node stores `json.dumps(payload)` plaintext.
 
-**Scope:** All revision list/get/revert operations and user-content history stored as `:Revision` nodes.
+**Problem (historical):** Authenticated non-admin could redirect provider to attacker loopback/internal/metadata IP and exfiltrate.
 
-**Fix direction:** Require the authenticated user, resolve progress server-side, scope revisions to the owning `AppUser` or an explicit shared-content policy, enforce ownership inside the same revert transaction, and add direct security contract tests rather than relying on an authenticated fixture whose cookie the route ignores.
+**Risk:** High (historical), now Medium tail.
 
-**Effort:** Days.
+**Status:** SUBSTANTIALLY RESOLVED for the settings-write vector (admin-only). Tail OPEN (#5, verified 08-12 THIRTEENTH PASS): single global `:AppSetting {key:'llm'}` node, `http(s)` scheme check only (no host allowlist), key plaintext at rest, no SSRF private/link-local/metadata block for `llm_base_url`. Phase 11 spec (SEC-LLM-001/002) plans an allowlist/private-range block and per-user vs global credential separation.
 
-### 2.3 Every authenticated user can replace a shared provider target and credential
-
-**Files:** `spoilerless/app/api/settings.py` (lines 29–50), `spoilerless/app/domain/settings.py` (lines 19–30, 39–77), `spoilerless/app/services/settings.py` (lines 29–81), `spoilerless/app/services/chat.py` (lines 74–113), `spoilerless/app/llm/provider.py` (lines 112–123, 311–323)
-
-**Evidence:** Both settings routes (`GET`, `PUT`) now require `RequireAdminDependency` (`spoilerless/app/api/settings.py` lines 36, 50), so the global `:AppSetting {key:'llm'}` node can no longer be read or replaced by any signed-in user.
-
-**Problem:** (historical) Authentication was treated as administration; any signed-in user could redirect the shared provider to an attacker-controlled HTTP(S) endpoint or an internal/loopback service and replace the shared API key/model.
-
-**Risk:** (historical) A malicious or compromised user could exfiltrate the existing provider credential on a subsequent chat call, probe services reachable from the backend, disable chat for everyone, or redirect all generated content.
-
-**Severity:** High for multi-user or internet-reachable deployment; Medium in the documented single-user local prototype.
-
-**Status:** RESOLVED (09-03 auth-gate `0f3c388`) — settings are admin-only; credential exfiltration via settings writes is closed. Tail remains open (see 2.4).
-
-**Scope:** Global LLM configuration and every chat request that constructs a provider from it.
-
-**Fix direction:** Gate settings behind an explicit administrator role or deployment-only configuration; separate per-user credentials if multi-user configuration is intended; require HTTPS/host allowlists for hosted deployments; block private/link-local/metadata destinations unless an explicit local-provider mode is enabled; rotate any credential after suspected redirection.
-
-**Effort:** Days.
+**Fix direction:** Host allowlist/private-range/metadata denial for `llm_base_url` (SEC-LLM-002), encrypted envelope or external secret-manager reference, rotation/clear semantics (Phase 11 11-07).
 
 ### 2.4 LLM API keys are plaintext application data at rest
 
-**Files:** `spoilerless/app/domain/settings.py` (lines 108–127), `spoilerless/app/repository/settings.py` (lines 17–42), `spoilerless/app/services/settings.py` (lines 50–81)
+**Files:** `spoilerless/app/domain/settings.py` (payload assembly), `spoilerless/app/repository/settings.py` (MERGE), backup/exports
+
+**Evidence:** `payload["api_key"] = api_key; MERGE (s:AppSetting {key:$key}) SET s.value=$value`.
+
+**Problem:** Database readers/backups can recover credential.
+
+**Risk:** Medium. A Neo4j disclosure becomes an LLM credential disclosure.
+
+**Status:** OPEN. Phase 11 does not encrypt at rest; it reduces blast radius by admin-gating + body-size + logging sanitization + host allowlist (so the key is harder to steal via SSRF). Tail tracked in SECURITY_AUDIT.md SEC-05.
+
+**Fix direction:** Encrypted envelope/external secret manager, key outside Neo4j, backup-equivalent protection, rotation (Phase 11 11-07).
+
+### 2.5 Read-boundary resolution — now unified; revision/user-content reads remain on legacy path
+
+**Files:** `spoilerless/app/api/boundary.py` (canonical resolver, 66 lines), `spoilerless/app/api/candidates.py` (uses it), `spoilerless/app/api/graph.py` (graph GET previously cloned clamp, now deleted in 11-01 diff), `spoilerless/app/api/series.py` (series clamp deleted), `spoilerless/app/api/user_content.py` / `spoilerless/app/api/revisions.py` (still client-supplied boundary), `spoilerless/app/services/progress.py`, `spoilerless/app/spoiler/policy.py` (pure `effective_view_order` / `resolve_effective_boundary`), `spoilerless/tests/test_security_boundary.py` (anonym/ no-record / clamp / invalid matrix)
+
+**Evidence:** `spoilerless/app/api/boundary.py: resolve_effective_boundary` header: "EVERY spoiler-sensitive read route resolves its effective boundary through this one function. Anonymous readers FIXED at 1; no-record readers FIXED at 1 (fail closed, SEC-BE-001); with record clamped to min(requested, view_as_of, watched_through) via policy.effective_view_order. `None` requested_order resolves from persisted progress alone (PROB-09/#59). Every return validated to a persisted episode or 422."
+
+**Problem:** Legacy: candidate, user-content, revision, graph, export each had own rule; client-supplied integer could expose future content.
+
+**Risk:** Medium (now contained for the migrated surfaces).
+
+**Status:** SUBSTANTIALLY RESOLVED for the highest-value surfaces (candidates + graph/series) via the single resolver. Residual (Phase 11 11-02/11-08): `user_content` and `revisions` list/get still accept client-supplied boundary without auth/progress clamp; export/saved-restoration focus paths use the policy module but not yet the DB-reading `api/boundary.py` seam.
+
+**Fix direction:** Roll `resolve_effective_boundary` onto every read surface (user-content, revision, export, search/autocomplete, saved restoration) with the same anonymous→1 / no-record→1 / clamped contract; keep anonymous reads clamped to earliest boundary. Closeout criterion: `grep -rn "visible_until_order" spoilerless/app/api --include="*.py"` shows no raw `Query(..., ge=1)` boundary without a `resolve_effective_boundary` call preceding it (except the single canonical definition).
+
+### 2.6 Security headers, TrustedHost, body-size, docs-off, and log sanitization — landed in Phase 11 (P0)
+
+**Files:** `spoilerless/app/main.py` (Boundaries: `BodySizeLimitMiddleware` ~60 lines, `TrustedHostMiddleware` + `_trusted_hosts()` derivation from `FRONTEND_ORIGINS`/`allowed_hosts`, `_security_headers_middleware` CSP/HSTS/X-Frame-Options, `_docs_kwargs` docs-off when `ENVIRONMENT=production`, `max_body_size_bytes=1048576`), `spoilerless/app/core/config.py` (`environment`, `rate_limit_fail_open`, `allowed_hosts`, `max_body_size_bytes`, `llm_max_concurrent_generations`, `llm_max_tool_calls_per_round`), `spoilerless/app/core/errors.py` (`PAYLOAD_TOO_LARGE`, `_sanitized_validation_errors`, `_ERROR_SPECS[413]`), `spoilerless/app/services/rate_limit.py` (fail-closed vs fail-open matrix), `frontend/vercel.json` (CSP on shell, verified unchanged diff in drift)
 
 **Evidence:**
-```python
-payload["api_key"] = api_key
-value=json.dumps(payload)
-MERGE (s:AppSetting {key: $key}) SET s.value = $value
-```
-The HTTP response masks the key correctly, but the full key remains in the Neo4j node’s JSON value.
+- `spoilerless/app/main.py:120-180 BodySizeLimitMiddleware`: `Content-Length > max_size` rejected before body read; chunked bodies counted via `guarded_receive` and `BodyTooLarge`; 413 envelope uses `code: payload_too_large` (sanitized lowercase, registered uppercase in `ERROR_CODES`).
+- `spoilerless/app/main.py:66-80 _security_headers_middleware`: `Content-Security-Policy` tuned for Google Identity Services script, `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`.
+- `spoilerless/app/main.py:304-311 TrustedHostMiddleware`: `allowed_hosts=_trusted_hosts()` derives from `FRONTEND_ORIGINS` hosts + localhost + `allowed_hosts` setting; `frontend/vercel.json` carries the shell CSP.
+- `spoilerless/app/core/errors.py: _sanitized_validation_errors`: `RequestValidationError` never logged as `str(exc)` (which embeds `input`/`ctx` with raw values); only `loc/type/msg/code` via `extra={"errors": ...}` (SEC-LOG-001).
+- `spoilerless/app/core/config.py: environment="development"` default, `rate_limit_fail_open=False`, `allowed_hosts=""`, `max_body_size_bytes=1048576`, `llm_max_concurrent_generations=4`, `llm_max_tool_calls_per_round=8`.
 
-**Problem:** Response masking is not encryption at rest. Database readers, backups, graph-browser users, and overly broad debug exports can recover the credential.
+**Problem (historical):** Open docs in production (SEC-INF-003), no CSP, no TrustedHost SSRF guard, no body-size cap (SEC-DOS-004), raw validation errors logged with submitted values (SEC-LOG-001), rate limiter silently degraded (SEC-DOS-001).
 
-**Risk:** A Neo4j or backup disclosure also becomes an LLM-provider credential disclosure.
+**Risk:** Medium–High (historical).
 
-**Severity:** Medium.
+**Status:** RESOLVED for founding P0 items — middleware ordering in `spoilerless/app/main.py` is `TrustedHostMiddleware` (outermost) → `CORSMiddleware` → `BodySizeLimitMiddleware` → security-headers → request-logging; docs are `None` when `ENVIRONMENT=production` (must be set before import on Render); validation logs sanitized; rate limiting is environment-aware (local dev empty `REDIS_URL` stays no-op; production fail-closed returns 503, fail-open degrades with warning — see 6.3).
 
-**Status:** OPEN — `#5` tail, verified still open 08-12 (PROBLEMS.md THIRTEENTH PASS): the `:AppSetting {key:'llm'}` record is a single global node, admin-gated but not per-user; there is no host allowlist beyond the `http(s)` scheme check; the key remains plaintext at rest.
-
-**Scope:** Stored LLM configuration and all database backup/administration paths.
-
-**Fix direction:** Store only an encrypted envelope or external secret-manager reference, keep the encryption key outside Neo4j, define rotation/clear semantics, and ensure backups inherit equivalent protection.
-
-**Effort:** Days.
-
-### 2.5 Read-boundary resolution is not unified across read surfaces
-
-**Files:** `spoilerless/app/api/candidates.py` (`_require_resolved_boundary`), `spoilerless/app/api/user_content.py`, `spoilerless/app/api/revisions.py` (`visible_until_order: Boundary`), `spoilerless/app/api/graph.py`, `spoilerless/app/api/export.py`, `spoilerless/app/services/progress.py`
-
-**Evidence:** PROBLEMS.md THIRTEENTH PASS "Still open" list (verified 2026-08-12): candidate reads require a boundary that must resolve against a persisted episode; user-content and revision reads accept any positive integer; graph and export reads clamp to persisted progress. Each surface implements its own resolution rule.
-
-**Problem:** The spoiler boundary has different semantics per read family: a client-supplied integer can expose notes/revisions ahead of the user's real progress on the same surfaces that are server-clamped elsewhere.
-
-**Risk:** Inconsistent spoiler safety across surfaces and duplicated, drifting boundary logic.
-
-**Severity:** Medium.
-
-**Scope:** All read endpoints that take a `visible_until_order`-family parameter.
-
-**Fix direction:** Introduce one server-authoritative boundary resolver and use it on every read surface (candidate, user-content, revision, graph, export); keep anonymous reads clamped to the earliest boundary.
-
-**Effort:** Days.
+**Fix direction:** Keep `ENVIRONMENT=production` on Render (dashboard, not `render.yaml`); keep CSP tight to GIS/script needs; do not reintroduce `logger.error("validation_error", exc_info=exc)`.
 
 ## Performance
 
 ### 3.1 Graph reads and Cytoscape rendering return the whole visible graph
 
-**Files:** `spoilerless/app/services/graph.py` (lines 50–110), `spoilerless/app/spoiler/filter.py` (lines 43–187), `frontend/src/components/graph/GraphCanvas.tsx` (1120 lines), `frontend/src/components/graph/graphElements.ts`, `frontend/src/components/graph/cytoscapeReconciler.ts`
+**Files:** `spoilerless/app/services/graph.py` (`asyncio.gather` over `SERIES_QUERY`, `NODES_QUERY`, `STRUCTURAL_EDGES_QUERY`, `VISIBLE_CLAIMS_QUERY`, `VISIBLE_USER_RELATIONSHIPS_QUERY`, `SOURCES_QUERY`, `EVIDENCE_QUERY`), `spoilerless/app/spoiler/filter.py`, `frontend/src/components/graph/GraphCanvas.tsx` (1,120 lines), `frontend/src/components/graph/graphElements.ts`, `frontend/src/components/graph/cytoscapeReconciler.ts` (batched `cy.batch` diff)
 
-**Evidence:**
-```python
-await asyncio.gather(SERIES_QUERY, NODES_QUERY, STRUCTURAL_EDGES_QUERY,
-                     VISIBLE_CLAIMS_QUERY, VISIBLE_USER_RELATIONSHIPS_QUERY,
-                     SOURCES_QUERY, EVIDENCE_QUERY)
-```
-None of the graph queries has a result limit or cursor. The frontend maps the complete response to Cytoscape and runs a layout when graph data changes. Phase 10 (08-13/08-14) added typed visualization DTOs, dagre layout for investigation views, a visualization cache, and a pure element reconciler (`frontend/src/components/graph/cytoscapeReconciler.ts`) on top of the same full-graph fetch.
+**Evidence:** Seven concurrent queries, no `LIMIT`/cursor at the graph boundary; frontend maps full `GraphResponse` → Cytoscape and lays out on data change. Phase 10 added typed DTOs, dagre for investigation, visualization cache; Phase 11 adds candidate pagination but not graph pagination.
 
-**Problem:** Seven concurrent queries reduce latency for the tiny Dexter seed but still materialize every visible node, edge, claim, source, and evidence fragment in Neo4j, Python, JSON, and the browser.
+**Problem:** Materializes every visible node/edge/claim/source/evidence in Neo4j + Python + JSON + browser; layout cost grows with visible frontier.
 
-**Risk:** Additional series/episodes can cause large responses, high database work, memory pressure, and expensive layout thrashing. The present three-episode prototype keeps the practical impact low.
+**Risk:** Medium at expanded-data scale; Low for three-episode Dexter prototype (bounded by `visible_from_order` ≤ effective boundary + Variant A caps).
 
-**Severity:** Medium at expanded-data scale; Low for the shipped prototype dataset.
+**Status:** OPEN. Candidate list pagination (`limit 1..500` + cursors) in Phase 11 11-03 reduces one hot path; graph payload itself still unpaginated.
 
-**Scope:** `GET /api/series/{series_id}/graph` and graph-canvas updates.
-
-**Fix direction:** Measure response/query/layout size, introduce summary and paginated/subgraph endpoints, load details on demand, cap neighborhood expansion, and preserve stable layout positions during incremental updates.
-
-**Effort:** Days–Weeks.
+**Fix direction:** Paginate or subgraph-expand graph reads (summary + detail-on-demand), cap neighborhood expansion, measure `GraphResponse` byte size in CI, preserve stable positions via `cytoscapeReconciler.ts`.
 
 ### 3.2 Request-scoped LLM clients have no explicit close lifecycle
 
-**Files:** `spoilerless/app/services/chat.py` (lines 74–113), `spoilerless/app/llm/provider.py` (lines 112–123, 164–230, 311–323, 354–480)
+**Files:** `spoilerless/app/services/chat.py`, `spoilerless/app/llm/provider.py` (`httpx.AsyncClient` per request, no `aclose()`)
 
-**Evidence:**
-```python
-return OpenAICompatibleProvider(...)
-self._client = client or httpx.AsyncClient(...)
-```
-`get_llm_provider()` constructs a provider for a request, both provider implementations construct `httpx.AsyncClient`, and neither provider exposes or invokes `aclose()`.
+**Evidence:** `return OpenAICompatibleProvider(...)` / `self._client = client or httpx.AsyncClient(...)`.
 
-**Problem:** Closing an individual streamed response does not close the owning `AsyncClient` connection pool.
+**Problem:** Per-response close does not close the pool.
 
-**Risk:** Repeated chat turns can accumulate transport resources, forfeit connection reuse, and eventually produce socket/file-descriptor pressure in a long-lived backend.
+**Risk:** Medium (socket/FD pressure under chat load).
 
-**Severity:** Medium.
+**Status:** OPEN. Phase 11 adds a process-wide `llm_max_concurrent_generations` semaphore (4) and `llm_max_tool_calls_per_round` (8) to cap amplification (SEC-DOS-002), but does not introduce a lifespan-owned `AsyncClient`.
 
-**Scope:** OpenAI-compatible and Gemini chat traffic.
-
-**Fix direction:** Give providers application-lifespan clients keyed by effective configuration, or make the dependency a yielding async dependency that closes request-owned clients in `finally`; add a lifecycle test with an instrumented client.
-
-**Effort:** Hours–Days.
+**Fix direction:** Yield-ing async dependency or lifespan-scoped clients keyed by effective config; lifecycle test with instrumented client (Phase 11 11-07).
 
 ### 3.3 The chat concurrency ceiling is process-local
 
-**Files:** `spoilerless/app/services/chat.py` (lines 42–72, 147–159, 211–297)
+**Files:** `spoilerless/app/services/chat.py` (`_MAX_CONCURRENT_GENERATIONS_PER_USER = 1`, in-process `dict`)
 
-**Evidence:**
-```python
-_MAX_CONCURRENT_GENERATIONS_PER_USER = 1
-_concurrent_generations: dict[str, int] = {}
-```
+**Evidence:** Per-user dict, zero-valued keys retained, not shared across workers.
 
-**Problem:** The guard correctly limits one in-flight generation per user inside one Python process, but workers/replicas do not share the dictionary and released users remain as zero-valued keys.
+**Problem:** Multi-worker Render bypasses ceiling.
 
-**Risk:** Multi-worker deployment bypasses the intended per-user ceiling and can grow small amounts of stale process memory. This is not general HTTP rate limiting.
+**Risk:** Low locally, Medium on scaled deployment.
 
-**Severity:** Low for single-worker local use; Medium once horizontally scaled.
+**Status:** OPEN but bounded tighter: Phase 11 adds a shared-cap semaphore (`llm_max_concurrent_generations=4` process-wide) in `spoilerless/app/services/chat.py` + per-tool-round cap (8) in `spoilerless/app/retrieval/pipeline.py` (+ `spoilerless/app/core/config.py` settings). Horizontal bypass still possible.
 
-**Scope:** Chat generation only; it does not protect authentication, graph reads, candidate ingestion, settings, or other HTTP operations.
-
-**Fix direction:** Move generation leases to a shared store with TTL/atomic acquisition for multi-worker deployment and remove zero-valued local entries; keep a separate general request-rate policy.
-
-**Effort:** Hours–Days.
+**Fix direction:** Shared store (Redis) lease with TTL/atomic acquire for strict multi-worker enforcement; remove zero-valued entries.
 
 ## Maintainability
 
 ### 4.1 Core production modules concentrate too many responsibilities
 
-**Files:** `spoilerless/app/retrieval/pipeline.py` (1,102 lines), `spoilerless/app/llm/system_prompt.py` (827 lines), `spoilerless/app/repository/change_set.py` (850 lines), `spoilerless/app/retrieval/tools.py` (881 lines), `spoilerless/app/repository/user_content.py` (856 lines), `frontend/src/components/detail/DetailPanel.tsx` (1,049 lines), `frontend/src/components/graph/GraphCanvas.tsx` (1,120 lines)
+**Files:** `spoilerless/app/retrieval/pipeline.py` (1,089 lines post-Phase 11 caps), `spoilerless/app/llm/system_prompt.py` (827), `spoilerless/app/repository/change_set.py` (850), `spoilerless/app/retrieval/tools.py` (881), `spoilerless/app/repository/user_content.py` (856), `frontend/src/components/detail/DetailPanel.tsx` (1,049), `frontend/src/components/graph/GraphCanvas.tsx` (1,120), plus new `spoilerless/app/api/boundary.py` (66, intentionally small leaf), `spoilerless/app/core/config.py` (+40), `spoilerless/app/main.py` (middleware grown), `spoilerless/app/services/rate_limit.py` (fail-closed matrix)
 
-**Evidence:** The largest production modules combine orchestration, normalization, validation, persistence/query definitions, UI state, dialogs, effects, and rendering. `spoilerless/app/llm/system_prompt.py` is user-owned prompt prose and must not be casually refactored or rewritten. Since the 08-12 map, `spoilerless/app/retrieval/pipeline.py` grew 969→1,102, `spoilerless/app/retrieval/tools.py` 861→881, `frontend/src/components/detail/DetailPanel.tsx` 1,001→1,049, and `frontend/src/components/graph/GraphCanvas.tsx` 909→1,120 (+211) as Phase 10 visualization work landed; the in-flight reconciler extraction (`frontend/src/components/graph/cytoscapeReconciler.ts`, uncommitted) is the first decomposition step.
+**Evidence:** Largest modules mix orchestration/validation/persistence/UI; Phase 11 adds +320 committed lines to `spoilerless/app/services/rate_limit.py`, `config.py`, `errors.py`, `candidates.py`, `main.py` plus 66 new in `boundary.py` — god-file sizes in `pipeline.py`/`DetailPanel`/`GraphCanvas` are unchanged except caps/guard edits.
 
-**Problem:** Feature changes cross large modules with mixed abstraction levels, increasing review surface and the chance of accidental coupling.
+**Problem:** Mixed abstraction levels, large review surface.
 
-**Risk:** Spoiler predicates, transaction behavior, prompt framing, and UI focus/layout behavior can regress during otherwise localized changes.
+**Risk:** Medium. Spoiler/cache/headers regressions during localized changes.
 
-**Severity:** Medium.
+**Status:** OPEN (#79 god-file decomposition deferred). Positive: `boundary.py` is the anti-god-file pattern — one function, no router, pure import — and rate-limit `content_write_rate_limiter` is now injected as `Depends`, not inlined.
 
-**Status:** OPEN — `#79` god-file decomposition explicitly deferred (PROBLEMS.md THIRTEENTH/FOURTEENTH PASS, 08-12); sizes grew again since the last map.
+**Fix direction:** Extract query modules, split `DetailPanel` tabs/dialogs, continue reconciler extraction; protect `system_prompt.py` prose; keep new middleware as leaf modules.
 
-**Scope:** Retrieval/LLM, ChangeSets/user content, and the graph/detail frontend.
+### 4.2 The configured frontend lint gate — now green baseline with scoped warnings
 
-**Fix direction:** Extract named query modules and narrow repository helpers; split `DetailPanel` dialogs/tabs into feature components; finish the GraphCanvas reconciler extraction and continue extracting lifecycle/focus/reveal hooks; protect the user-owned prompt prose while separating executable composition/guards into small tested modules.
+**Files:** `frontend/eslint.config.js` (scoped `react-hooks/*` → `warn`, test `no-explicit-any` → `warn`), `frontend/src/components/detail/DetailPanel.tsx` (`react-hooks/refs` reads), `frontend/src/components/graph/GraphCanvas.tsx`
 
-**Effort:** Days–Weeks.
+**Evidence:** Live `npm run lint` on 2026-08-14: **0 errors, 21 warnings** (`react-hooks/refs` — render-time ref reads including `useImperativeReconcileRef.current` on the `layout` prop). 2026-08-12 had 0 errors, 39 warnings.
 
-### 4.2 The configured frontend lint gate fails
+**Problem (historical):** 28-error red baseline could not gate.
 
-**Files:** `frontend/eslint.config.js` (lines 8–30), `frontend/src/components/detail/DetailPanel.tsx` (notably lines 259, 288, 454–455, 486–510, 544, 707), `frontend/src/components/graph/GraphCanvas.tsx` (lines 168, 182), `frontend/src/hooks/useChatSessions.ts` (line 34), `frontend/src/hooks/useNotes.ts` (line 35), `frontend/src/hooks/useRevisions.ts` (line 32), related revision tests
+**Risk:** Low now; warnings hide new violations if baseline grows.
 
-**Evidence:** The live 2026-08-12 `npm run lint` run reports **0 errors and 39 warnings**, all `react-hooks/refs` (render-time ref reads); the previous 28-error class (set-state-in-effect, preserve-manual-memoization, no-explicit-any) is gone. EIGHTEENTH PASS (08-13) re-verified ESLint clean on the touched GraphCanvas work.
+**Status:** RESOLVED (08-11 PROB-09 refactor, verified 08-12/08-13). Phase 11 does not worsen lint; `vercel.json` CSP is not linted. Keep `npm run lint = 0 errors` as the CI gate; do not grow `warn` count.
 
-**Problem:** (historical) A declared quality command was red at the repository baseline (28 errors), so it could not act as a simple regression gate.
+**Fix direction:** Triage `react-hooks/refs` findings behind actual graph refresh/focus semantics before touching tests; establish lint gating in CI (done).
 
-**Risk:** (historical) New violations blended into existing output and React lifecycle problems were hard to distinguish from deliberate workarounds.
+### 4.3 Candidate review bypasses service/domain boundaries — narrowed, residual `dict` responses
 
-**Severity:** Medium.
+**Files:** `spoilerless/app/api/candidates.py` (now `CandidateRepository` + `GraphService` + `ProgressService`, `content_write_rate_limiter`, `resolve_effective_boundary`), `spoilerless/app/graph/candidates.py` (`CandidateRepository` keyword-param methods), `spoilerless/app/domain/extraction.py`, `spoilerless/app/services/rate_limit.py`
 
-**Status:** RESOLVED (08-11 PROB-09/#72/#73/#74 refactor wave; verified 08-12 and 08-13) — the gate now passes; the remaining `react-hooks/refs` warnings are the only allowed baseline and should not grow.
+**Evidence:** No `repo._db` access; `except Exception → 422 + str(exc)` catch-all removed (keeps `ValueError` only); three closures moved into repo; `ingest_batch` → `invalidate_series`; pagination `limit/after_*` added. Response models remain route-local `dict`.
 
-**Scope:** Frontend source and tests, concentrated in graph/detail state management and revision tests.
+**Problem (historical):** Transactions/validation in routes, leaked `str(exc)`.
 
-**Fix direction:** Triage behavior-affecting hook/ref findings before type-only test findings, refactor without changing graph refresh/focus semantics, establish a clean baseline, and then gate lint in CI.
+**Risk:** Low–Medium residual (ontology/DTO drift across paths).
 
-**Effort:** Days.
+**Status:** SUBSTANTIALLY RESOLVED (08-11/08-12). Residual: shared Pydantic response models absent; no `CandidateService` layer — routes still own the paginated `list_candidate_claims(series_id, effective, limit, after_created_at, after_id)` shape directly.
 
-### 4.3 Candidate review bypasses service/domain boundaries
-
-**Files:** `spoilerless/app/api/candidates.py` (lines 114–390), `spoilerless/app/graph/candidates.py` (lines 157–263), `spoilerless/app/domain/extraction.py`
-
-**Evidence:** Candidate routes no longer access `repo._db` — they depend on `CandidateRepository` and `GraphService` (`spoilerless/app/api/candidates.py` lines 23–32) and call public repository methods; the catch-all `except Exception → 422 + str(exc)` was removed (08-11, `3a3ae40`) and edit keeps only `except ValueError`. The `#60` closure wave (08-12, `3e80021`/`50484f2`) moved the three duplicated candidate route closures (approve/reject/edit) into `spoilerless/app/graph/candidates.py` as real keyword-param repository methods and the 175-line revert closure into `spoilerless/app/revisions/__init__.py` as `revert_revision_work`; router-level query constants were deleted. Response models are still route-local `dict` rather than shared ontology-backed Pydantic contracts, and a `CandidateService` layer is still absent.
-
-**Problem:** (historical) The API layer owned persistence transactions and validation that other features place in services/repositories, and relabeled DB outages as payload errors while leaking `str(exc)`.
-
-**Risk:** (historical) Authentication, spoiler checks, ontology validation, error shaping, and revision semantics could diverge across ingest/list/get/edit/approve/reject paths.
-
-**Severity:** Medium.
-
-**Status:** RESOLVED (08-11 `3a3ae40` + auth-gate refactor + 08-12 `#60` closure wave) — repository-backed routes, no `_db` access, no catch-all 422, duplicated closures collapsed. Residual: `dict` response models; no `CandidateService` layer. Related open bug: the moved revert path omits `invalidate_series` (see 1.4).
-
-**Scope:** Candidate extraction intake and review workflow.
-
-**Fix direction:** Introduce a `CandidateService`, move managed transactions behind public repository methods, use strict shared request/response models, validate ontology values and episode boundaries centrally, and remove direct access to `repo._db`.
-
-**Effort:** Days.
+**Fix direction:** Introduce `CandidateService`, shared strict request/response models (route + repo), centrally validate episode boundaries via `resolve_effective_boundary`.
 
 ### 4.4 Backend test files reproduce the god-file pattern
 
-**Files:** `spoilerless/tests/test_visualization_projection.py` (1,711 lines), `spoilerless/tests/test_graph_api.py` (1,684 lines), `spoilerless/tests/test_retrieval_tools.py` (1,350 lines), `spoilerless/tests/test_chat_api.py` (1,302 lines), `spoilerless/tests/test_auth.py` (1,166 lines), `spoilerless/tests/test_retrieval_pipeline.py` (770 lines), `spoilerless/tests/test_visualization_baseline.py` (752 lines), `spoilerless/tests/test_progress_api.py` (712 lines), `spoilerless/tests/test_change_set_api.py` (680 lines)
+**Files:** `spoilerless/tests/test_visualization_projection.py` (1,711), `spoilerless/tests/test_graph_api.py` (1,685), `spoilerless/tests/test_retrieval_tools.py` (1,350), `spoilerless/tests/test_chat_api.py` (1,302), `spoilerless/tests/test_auth.py` (1,167), `spoilerless/tests/test_retrieval_pipeline.py` (770), `spoilerless/tests/test_security_boundary.py` (316, new, but small and focused), `spoilerless/tests/test_candidate_ingest.py` (361, +86), `spoilerless/tests/test_candidate_review.py` (361, +31)
 
-**Evidence:** Since the 08-12 map, Phase 10 added `spoilerless/tests/test_visualization_projection.py` (1,711 lines) plus `test_visualization_baseline.py` (752), `test_visualization_cache.py` (393), `test_visualization_graphrag.py` (267), `test_phase10_test_runner.py` (345), and `test_phase10_coverage_audit.py` (216); `test_graph_api.py` grew by ~486 lines. Five backend test files now exceed 1,000 lines.
+**Evidence:** Five files >1,000 lines; `test_security_boundary.py` is intentionally small and module-scoped.
 
-**Problem:** Oversized test modules are hard to navigate, slow to load, and concentrate many feature areas in one file so parallel or chunked runs and blame/ownership suffer; new visualization tests were added to already-large files instead of splitting them.
+**Problem:** Navigation/parallelism/merge pressure.
 
-**Risk:** Test maintenance cost grows; targeted debug runs (`-k` filters) get slower; merge conflicts concentrate.
+**Risk:** Low–Medium maintainability; guarded runner still executes them green.
 
-**Severity:** Low–Medium (maintainability only; the guarded runner executes them greenly).
+**Status:** OPEN. Positive trend: Phase 11 boundary suite is right-sized; chunk inventory gate (`assert_chunk_inventory_matches_disk`) keeps sharding correct as the suite grows to 52 files (total ~22.6k lines).
 
-**Scope:** Backend integration test suite.
-
-**Fix direction:** Split the largest files by fixture group/feature area (e.g. projection variants out of the 1,711-line file), cap new test files at ~400–500 lines, and keep the chunk inventory in `scripts/run_backend_tests.py` in sync.
-
-**Effort:** Days.
+**Fix direction:** Split largest files by fixture group; cap new test files at ~400–500 lines.
 
 ## Compatibility
 
 ### 5.1 Runtime requirements are documented but incompletely enforced
 
-**Files:** `pyproject.toml` (lines 1–23), `frontend/package.json` (lines 1–52), `README.md` (lines 52–63, 67–74), `frontend/package-lock.json`
+**Files:** `pyproject.toml` (`requires-python = ">=3.13"`), `frontend/package.json` (no `engines` even though Vite 8 requires modern Node), `frontend/package-lock.json`, `README.md`
 
-**Evidence:** Python is restricted to `>=3.13`, while `frontend/package.json` has no `engines` field even though Vite 8 requires a modern Node runtime. Dependency manifests use lower-bound/caret ranges; reproducibility relies on developers honoring `uv.lock` and `package-lock.json`.
+**Evidence:** Lower-bound/caret ranges; `uv.lock`/`package-lock.json` pin, but `engines` missing.
 
-**Problem:** Unsupported Node versions fail only during install/build, and Python 3.12 or older cannot install the backend even if much of the code is syntax-compatible.
+**Problem:** Wrong Node fails at install/build, wrong Python fails at install.
 
-**Risk:** Developer and deployment environments can diverge from the documented toolchain, producing avoidable install failures or dependency drift.
+**Risk:** Low. Phase 11 does not change runtime floors; new `environment`/`max_body_size_bytes` settings are backwards-compatible defaults.
 
-**Severity:** Low.
-
-**Scope:** Local setup, CI images, and production build environments.
-
-**Fix direction:** Add Node `engines`/package-manager metadata, pin runtime versions in CI/deployment files, use lockfile-respecting install commands (`uv sync --frozen`, `npm ci`), and retain the Python 3.13 floor only if it is intentional and tested.
-
-**Effort:** Hours.
+**Fix direction:** Add Node `engines`/package-manager metadata, CI pinned versions, frozen installs.
 
 ### 5.2 The Neo4j Compose definition is development-specific
 
-**Files:** `docker-compose.yml` (lines 1–30), `.env.example` (lines 1–11), `spoilerless/app/core/config.py` (lines 7–33)
+**Files:** `docker-compose.yml` (now `neo4j:2026.06.0-community`, `127.0.0.1` bind, host bind mounts, `${NEO4J_PASSWORD:-change-me}` fallback coupled to `.env.example`), `.env.example`, `spoilerless/app/core/config.py` (dual-alias `neo4j_*`/`aura_*`, defaults `bolt://127.0.0.1:7687`/`neo4j`/`hdgraf-local-password`/`neo4j`)
 
-**Evidence:** Compose now pins `neo4j:2026.06.0-community` (matching CI) and binds both ports to `127.0.0.1` only; it still uses host bind mounts (`./neo4j_data` etc.) and takes `NEO4J_PASSWORD` from the environment with a `change-me` default coupled to `.env.example`.
+**Evidence:** Guarded runner refuses live targets to protect both; engine divergence documented (AuraDB `NODE_PROPERTY_UNIQUENESS` vs local `UNIQUENESS`).
 
-**Problem:** The file is suitable for local setup but is not portable production orchestration.
+**Problem:** Portable production orchestration absent.
 
-**Risk:** Production reuse can still produce platform-specific bind-mount behavior or hardcoded-credential surprises; the database image no longer moves underneath a rebuild.
+**Risk:** Low (documented as local). Phase 11 keeps `AUTH_DEV_CODE` legacy in root `.env` (gitignored, operator-touch) but `config.py` defaults now match `docker-compose.yml` + `scripts/env-local.sh`.
 
-**Severity:** Low because the repository documents this as local orchestration.
-
-**Status:** PARTIALLY RESOLVED (08-01 `9cf1a4b`) — image pinned to a specific community tag and ports loopback-bound; bind mounts and dev-only orchestration remain.
-
-**Scope:** Neo4j container startup only; backend and frontend are not containerized here.
-
-**Fix direction:** Keep this file explicitly development-only, pin a tested Neo4j patch/digest, move all credentials to runtime secret injection, and create separate production deployment manifests rather than overloading local Compose.
-
-**Effort:** Hours–Days.
+**Fix direction:** Keep Compose dev-only, pin digest, runtime secret injection, separate prod manifests.
 
 ## Missing Features
 
 ### 6.1 No coverage threshold or browser E2E suite
 
-**Files:** `pyproject.toml` (lines 18–27), `frontend/package.json` (lines 6–11, 31–50), `frontend/vite.config.ts` (lines 23–27), `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `spoilerless/tests/`, `frontend/src/**/*.test.tsx`
+**Files:** `pyproject.toml` (no pytest-cov), `frontend/vite.config.ts` (no coverage block), `.github/workflows/ci.yml` (backend service-container Neo4j + DB-pollution gate, frontend `npm ci` + build + lint + audit; no coverage, no Playwright), `spoilerless/tests/` + `frontend/src/**/*.test.tsx`
 
-**Evidence:** `.github/workflows/ci.yml` runs pytest on every PR against a service-container Neo4j pinned to `neo4j:2026.06.0-community` (seed → suite → DB-pollution gate asserting zero scratch/candidate residue), plus a frontend job (`npm ci`, build, lint, `npm audit`); `release.yml` is a staged-promotion skeleton gated on CI. The OpenAPI contract is re-locked at **52 operations / 39 path templates** (TWENTIETH PASS, 08-14, replacing the older 50/37). Pytest still has no coverage plugin/fail-under setting, Vitest has no coverage configuration, and no Playwright/Cypress configuration is tracked.
+**Evidence:** 52 ops/39 templates locked by `test_openapi_contract.py` + `test_frontend_contract_doc.py` (TWENTIETH PASS); `scripts/verify_phase10_coverage.py` PHASE10-COVERAGE table (98 ids) locked by `test_phase10_coverage_audit.py`; Phase 11 traces via `SECURITY_TEST_PLAN.md` (no E2E).
 
-**Problem:** (historical) Pytest, Vitest, lint, and build were developer-invoked only, with no automated gate at all.
+**Problem (historical):** No automated gate at all.
 
-**Risk:** Broken contracts, authentication cookies, SSE behavior, responsive sheets, or deployment-specific failures can still merge on paths CI does not exercise (no coverage threshold, no browser E2E).
+**Risk:** Medium. Broken contracts, cookies, SSE, responsive sheets, deployment-specific failures can merge without coverage/E2E.
 
-**Severity:** Medium.
+**Status:** PARTIALLY RESOLVED (09-08 CI backend+frontend on every PR). Residual: no coverage threshold, no browser E2E. Phase 11 does not add either (out of SEC scope).
 
-**Status:** RESOLVED (09-08 `f9df513`) for the quality-gate half — CI runs backend suite + frontend build/lint/audit on every PR; the 08-14 docs sweep re-verified all gates. Residual: no coverage threshold and no browser E2E suite.
-
-**Scope:** Whole repository and pull-request/release workflow.
-
-**Fix direction:** Add CI with frozen installs, non-destructive unit suites, isolated Neo4j integration jobs, frontend build/lint, coverage reporting with an initially evidence-based threshold, and a small Playwright smoke suite for login/session, graph boundary, chat SSE, and mutation/revert paths.
-
-**Effort:** Days.
+**Fix direction:** Coverage with evidence-based threshold, small Playwright smoke suite (login/session, graph boundary, chat SSE, mutation/revert, CSP headers) — product decision.
 
 ### 6.2 Production deployment exists but operations tooling is thin
 
-**Files:** `docs/DEPLOYMENT.md`, `spoilerless/app/core/config.py` (aura_* alias family), `spoilerless/app/main.py` (lines 40–205), `docker-compose.yml`
+**Files:** `docs/DEPLOYMENT.md`, `spoilerless/app/core/config.py` (`aura_*` alias wins), `spoilerless/app/main.py` (lifespan + session sweep + `_docs_kwargs` production-off), `docker-compose.yml`
 
-**Evidence:** The backend is live on Render: `https://spoilerless.onrender.com/health` returned **HTTP 200 `{"status":"ok","database":"connected","service":"spoilerless-backend"}`** verified 2026-08-14 (~0.5 s). The production database is Neo4j AuraDB, addressed through the `aura_*` env alias family that wins over `NEO4J_*` in `spoilerless/app/core/config.py`. `docs/DEPLOYMENT.md` documents the Render dashboard override trap (`backend.app.main:app` → stale builds can keep serving `/health` 200 while deploys fail) and marks 15 operator-only infrastructure claims VERIFY. What remains absent: no structured metrics/tracing/alerting stack, no documented automated backup/restore drill for AuraDB, no release rollback automation, and no automated sync between the local docker Neo4j and AuraDB (see 6.6). Operator actions stay open per PROBLEMS.md: `#29` (~40+ commits ahead of `origin/main`, push + CI-green is operator-touch) and `#36` least-privilege DB user needs provider-issued credentials.
+**Evidence:** `https://spoilerless.onrender.com/health` → `200 {"status":"ok","database":"connected","service":"spoilerless-backend"}` (verified 2026-08-14). AuraDB via `aura_*` wins. `render.yaml` does NOT set `ENVIRONMENT=production` — must be Render dashboard. Open operator actions: `#29` (~40 commits ahead of `origin/main` per 08-14 — now fewer, but push + CI-green is still operator-touch per Phase 11 docs), `#36` least-privilege AuraDB user.
 
-**Problem:** The product runs in production, but incident response and data-safety procedures are undocumented and unrehearsed; a Neo4j or release failure has no automated recovery path.
+**Problem:** No metrics/tracing/alerting, no AuraDB backup/restore drill, no rollback automation, no local↔AuraDB sync. Stale-build dashboard override trap documented but still possible if `ENVIRONMENT` not set.
 
-**Risk:** Live-data loss (AuraDB has no tested restore drill), silent stale-build deploys, and no visibility into request/LLM/DB failures until the product owner notices.
+**Risk:** Medium (hardening gap, not hypothetical — prod is live, but incident response unrehearsed).
 
-**Severity:** Medium as an operational-hardening gap (revised from High; the deployment is no longer hypothetical — the health check and database connectivity are verified live).
+**Status:** PARTIALLY RESOLVED — deployment verified live; production-off docs, security headers, body-size, rate-limit middleware landed; sweep loop runs hourly under lifespan. Residual: no least-privilege AuraDB user, no backup drill, no adoption of managed logging/metrics.
 
-**Scope:** Backend, frontend, Neo4j AuraDB, secrets, monitoring, backups, and release management.
+**Fix direction:** Push `origin/main` + CI-green; least-privilege AuraDB user; AuraDB backup/restore rehearsal; structured logs/metrics/traces + alerts; migration-before-rollout + rollback automation; set `ENVIRONMENT=production` on Render before Phase 11 closeout.
 
-**Fix direction:** Add structured logs, metrics/traces and alerts; document and rehearse AuraDB backup/restore; automate migration-before-rollout and rollback; push `origin/main` and confirm CI green; create a least-privilege AuraDB user.
+### 6.3 No general HTTP abuse controls — narrow workers now rate-limited, body-sized, and LLM-capped; read-surface gap remains
 
-**Effort:** Weeks.
+**Files:** `spoilerless/app/services/rate_limit.py` (login 10/5m IP, chat-send 20/min user, content-write 30/min user-or-IP via `content_write_rate_limiter` + `rate_limit_identifier` with ASGI `request.client is None` guard), `spoilerless/app/api/candidates.py` (ingest gated, list/get not gated), `spoilerless/app/api/auth.py`, `spoilerless/app/api/chat.py`, `spoilerless/app/api/user_content.py`, `spoilerless/app/core/config.py` (`environment`, `rate_limit_fail_open`, `max_body_size_bytes`, `llm_max_concurrent_generations`, `llm_max_tool_calls_per_round`), `spoilerless/app/main.py` (`BodySizeLimitMiddleware` + `init_rate_limiter` fail-closed matrix)
 
-### 6.3 No general HTTP abuse controls
+**Evidence:** `services/rate_limit.py: RateLimiter.__call__` now branches: empty `redis_url` → no-op (local dev contract); `environment != "production" or rate_limit_fail_open` → warning + return (degrade); else → `503 rate_limit_unavailable` (SEC-DOS-001). `init_rate_limiter` mirrors: fail-closed production logs `ERROR` with "every limited route will 503". `main.py: BodySizeLimitMiddleware` samples `Content-Length` plus chunked `received > max_size` → 413. Candidate ingest carries `_rate_limit: Depends(content_write_rate_limiter)` (08-05) plus new `rate_limit_identifier` fix for test ASGI clients without `request.client`. LLM caps: `spoilerless/app/retrieval/pipeline.py: new_calls[: llm_max_tool_calls_per_round]` (8) and `spoilerless/app/services/chat.py: asyncio.Semaphore(llm_max_concurrent_generations=4)` (SEC-DOS-002).
 
-**Files:** `spoilerless/app/main.py` (lines 58–121), `spoilerless/app/services/rate_limit.py`, `spoilerless/app/api/auth.py`, `spoilerless/app/api/chat.py`, `spoilerless/app/api/user_content.py`
+**Problem (historical):** No per-IP/user budget on any route.
 
-**Evidence:** Redis-backed rate limiters are wired on the highest-cost surfaces: `login_rate_limiter` (auth login), `chat_send_rate_limiter` (chat send), and `content_write_rate_limiter` (user-content writes) — defined in `spoilerless/app/services/rate_limit.py` and attached as `Annotated[None, Depends(...)]` dependencies (fastapi-limiter 0.2.0 / pyrate-limiter, guarded on `REDIS_URL` so local dev runs unthrottled). Per PROB-23 (SEVENTEENTH PASS, 08-12), the limiter is now **fail-open**: any Upstash Redis error becomes a no-op instead of a plain 500, and `init_rate_limiter` no longer crashes the lifespan on unreachable Redis — so during a Redis outage (the observed free-tier ~daily reset class) rate limiting silently disables. The process-local `_MAX_CONCURRENT_GENERATIONS_PER_USER = 1` chat ceiling remains. There is still no general per-IP/user budget on graph reads, candidate ingestion, or other GET surfaces.
+**Risk:** Medium for internet exposure; Low locally. The remaining un-throttled read surfaces are `GET /api/series/{id}/graph` (full visible graph, cache-poisonable), `GET /api/series/{id}/candidates` list/get, and export/search; flooding them is still possible on public deploy.
 
-**Problem:** (historical) Authentication attempts, graph reads, candidate ingestion, settings writes, and other API operations had no per-IP/user request budget or payload-cost policy.
+**Status:** SUBSTANTIALLY RESOLVED for the abuse-primary surfaces (login, chat-send, content-write/ingest) + new payload-cost cap (body 1 MiB default) + LLM amplification cap (tool-calls/round + concurrent generations). Residual: no general per-IP/user budget on graph reads, candidate reads, or other GETs; fail-closed production trades availability for DoS resistance during Redis outage (observably 503 instead of silent throttling bypass — the SEVENTEENTH PASS free-tier daily-reset class that was previously fail-open→silent, now fail-closed when configured).
 
-**Risk:** Remaining un-throttled surfaces (graph reads, candidate ingestion) can still be flooded on an internet-reachable deployment; chat concurrency remains bounded per process; limiter protection vanishes during Redis outages by design.
+**Fix direction:** Per-route/IP/user rate buckets for graph reads + candidate reads + export/search (keyed via `rate_limit_identifier`); consider `413` + `429` coverage in `test_openapi_contract.py`; monitor Upstash daily-reset window to tune `rate_limit_fail_open` per environment.
 
-**Severity:** Medium for internet exposure; Low for localhost-only use.
+### 6.4 Expired and revoked sessions have no automated retention cleanup — resolved
 
-**Status:** RESOLVED (08-05 `1f8a3e9`) for the primary abuse surfaces — login, chat-send, and content-write are Redis-rate-limited across workers (D-14); PROB-23 (08-12) converted outage 500s into fail-open no-ops. Residual: no general rate budget on read-only/candidate routes, no payload-size caps, and the fail-open trade-off is untested against sustained outage.
+**Files:** `spoilerless/app/repository/session.py`, `spoilerless/app/repository/share.py`, `spoilerless/app/services/auth.py`, `spoilerless/app/main.py` (`_session_sweep_loop` hourly), `spoilerless/app/graph/seed.py` (legacy zombie sweep)
 
-**Scope:** HTTP API except the narrow in-process chat generation guard.
+**Evidence:** Lifespan hourly `sweep_expired()` for `:Session` + `ShareToken`; failed iteration logged, never fatal; sweep skipped when DB unreachable at startup (degraded `/health` path).
 
-**Fix direction:** Add proxy- and application-level limits keyed by IP/user/route, cap extraction batch size and request bodies, return consistent 429 responses, use a shared limiter for multi-worker deployment, and consider a fail-closed fallback (or explicit alert) for limiter outages on internet-facing deployments.
+**Problem (historical):** Stale records accumulated.
 
-**Effort:** Days.
+**Risk:** Low.
 
-### 6.4 Expired and revoked sessions have no automated retention cleanup
-
-**Files:** `spoilerless/app/repository/session.py`, `spoilerless/app/repository/share.py`, `spoilerless/app/services/auth.py`, `spoilerless/app/graph/seed.py` (lines 184–199), `spoilerless/app/main.py` (lines 121–150)
-
-**Evidence:** A background sweep now runs inside the app lifespan (`spoilerless/app/main.py`, `_session_sweep_loop`, hourly): `sweep_expired()` deletes expired/revoked `:Session` nodes and the share repository's expired `ShareToken` nodes; a failed iteration is logged and never fatal. The sweep is started only when the app can reach its database. (PROB-22 tail, 08-12: the standalone `zombie_sweep.py` was fixed for the Neo4j 6.2 driver key change and removed 65 zombies + 8 stale sessions.)
-
-**Problem:** (historical) Security validation was correct at read time, but stale records accumulated indefinitely.
-
-**Risk:** (historical) Session storage and indexes could grow with login churn.
-
-**Severity:** Low.
-
-**Status:** RESOLVED (09-04 `1c7d497`) — periodic cleanup is scheduled at startup; retention is now bounded.
-
-**Scope:** Neo4j `:Session` retention only.
-
-**Fix direction:** Add an idempotent scheduled cleanup query with retention metrics and tests; keep cleanup separate from request authentication.
-
-**Effort:** Hours.
+**Status:** RESOLVED (09-04). Phase 11 adds no retention change; `sweep_expired` also clears `ShareToken` expiry.
 
 ### 6.5 Documented future extraction work is not a present defect
 
-**Files:** `.planning/ROADMAP.md` (lines 104–116, 447–475), `spoilerless/app/api/candidates.py` (lines 76–225), `spoilerless/app/domain/extraction.py`, `docs/ARCHITECTURE.md` (lines 616–635)
+**Files:** `.planning/ROADMAP.md`, `spoilerless/app/api/candidates.py`, `spoilerless/app/domain/extraction.py`, `docs/ARCHITECTURE.md` (616–635)
 
-**Evidence:** The structured candidate ingestion and human review surface exists, while subtitle/script/podcast extraction connectors and an automated extractor do not.
+**Evidence:** Candidate ingestion/review exists; subtitle/script/podcast connectors + automated extractor are future product scope (ROBUST).
 
-**Problem:** No significant current-state defect is identified: the repository explicitly treats automated extraction as future scope, and the implemented intake contract is the preparation layer. The security and boundary defects in the existing candidate API are separate concerns documented above.
+**Problem:** Aspirational work misread as bug.
 
-**Risk:** Misclassifying aspirational extractor work as a bug would distort priorities away from securing the already-executable intake/review endpoints.
+**Risk:** N/A.
 
-**Severity:** Not applicable as a defect.
-
-**Scope:** Future ingestion/connectors only.
-
-**Fix direction:** Preserve the candidate contract, secure it first, and schedule extractor/connectors as product work with source provenance, batch limits, and review gates.
-
-**Effort:** Product-dependent.
+**Status:** NOT A DEFECT. Phase 11 hardens the existing `EXTRACTION_BATCH` contract (batch envelope validation, pagination, auth) but does not ship an extractor.
 
 ### 6.6 Local docker Neo4j and AuraDB can silently diverge
 
-**Files:** `docker-compose.yml`, `scripts/env-local.sh`, `spoilerless/app/core/config.py` (lines 7–33), `scripts/run_phase10_backend_tests.py`, `spoilerless/app/graph/seed.py`
+**Files:** `docker-compose.yml`, `scripts/env-local.sh`, `spoilerless/app/core/config.py` (dual alias, defaults), `scripts/run_phase10_backend_tests.py` (guard refuses both), `spoilerless/app/graph/seed.py`
 
-**Evidence:** Two live database targets coexist: the local docker containers `spoilerless-neo4j`/`hdgraf-neo4j` (pinned `neo4j:2026.06.0-community`, used by `scripts/env-local.sh`) and the production AuraDB on Render (the `aura_*` alias family wins in `Settings`; root `.env` AuraDB is the legacy default). There is no export/sync path between them, and the guarded test runner must explicitly refuse both live targets to protect them from test writes. Engine differences are already documented (THIRTEENTH PASS): AuraDB reports `NODE_PROPERTY_UNIQUENESS` constraint names where local 5.x reports `UNIQUENESS`, which forced engine-tolerant assertions. Seed-content fixes (e.g. the 01N52 null reveal-point fix, SEVENTEENTH PASS) must be applied to AuraDB by a separate reseed that nothing automates.
+**Evidence:** Two live targets: local `spoilerless-neo4j`/`hdgraf-neo4j` vs AuraDB via `aura_*`. Engine divergence documented (AuraDB `NODE_PROPERTY_UNIQUENESS` vs local `UNIQUENESS`); `run_phase10_backend_tests.py` must refuse both; seed fixes must be applied per-database.
 
-**Problem:** Schema and data verified locally are not the schema/data that run in production, and nothing detects drift.
+**Problem:** Local green ≠ prod green.
 
-**Risk:** A green local suite and healthy local graph can coexist with an out-of-date or differently-shaped production database; constraint-name or seed mismatches surface only in production.
+**Risk:** Medium operational. Phase 11's new constraints (e.g. no new constraint names yet, but `PAYLOAD_TOO_LARGE` / `max_body_size` are runtime gates, not DDL) keep drift low, but any future DDL via `create_constraints` still needs per-database application.
 
-**Severity:** Medium (operational).
+**Status:** OPEN.
 
-**Scope:** Local development databases, CI containers, and the production AuraDB instance.
+**Fix direction:** Pre-deploy schema/seed drift check (constraint inventory + seed-content hash), documented reseed-to-AuraDB procedure, engine-tolerant assertions where engines legitimately differ.
 
-**Fix direction:** Automate or document a reseed-to-AuraDB procedure, add a pre-deploy schema/seed drift check (constraint inventory + seed-content hash), and keep engine-tolerant assertions where the two engines legitimately differ.
+### 6.7 Phase 11 security hardening is mid-flight — tracer 11-01 green, 11-02..11-08 in progress, uncommitted planning is the risk
 
-**Effort:** Hours–Days.
+**Files:** `.planning/ROADMAP.md` (Phase 11: Security Hardening — IN PROGRESS, 2026-08-15, SEC-01..SEC-12), `.planning/phases/11-security-hardening-audit-remediation-p0-p1/11-01-PLAN.md` (committed 6256214), `11-04-PLAN.md`/`11-06-PLAN.md`/`11-07-PLAN.md`/`11-08-PLAN.md`/`11-CONTEXT.md` (modified, not committed), `SECURITY_AUDIT.md` / `SECURITY_TEST_PLAN.md` / `SECURITY_ATTACK_SURFACE.md` (audit deliverables), `spoilerless/app/api/boundary.py`, `spoilerless/app/api/candidates.py`, `spoilerless/app/core/config.py`, `spoilerless/app/main.py`, `spoilerless/app/services/rate_limit.py`, `spoilerless/tests/test_security_boundary.py`, `.planning/codebase/*.md` (this map, 2026-08-20 anchor 6256214f)
+
+**Evidence:** Drift `git diff --stat 5bd1641..HEAD` = 42 files / +1,660 lines (Phase 11 P0 hardening). Tracer slice 11-01 ships the unified `resolve_effective_boundary` + candidate ingest fix + scratch-series harness + boundary matrix tests and is verified green at HEAD 6256214. Uncommitted `git status` shows 5 planning files modified (`ROADMAP.md`, `11-04/11-06/11-07/11-08 PLAN.md`, `CONTEXT.md`) — these are plan refinements ahead of execution.
+
+**Problem:** Planning is ahead of execution; the codebase at HEAD is tracer-only (candidates + graph/series fail-closed), while the remaining P0/P1 bound in `ROADMAP.md` Success Criteria (trusted proxy, fail-closed limiter, cost caps, SSRF, body-size, docs-off, CSP, log sanitization, plus P1 output guard/cache-key/Max-Age/email_verified/TrustedHost/ingest-pagination/revert-allowlist/reversion-ownership/ChangeSet admin/series-switch hydration/client-header hardening/verification portability) maps to plans 11-02..11-08 that are planned but not all executed at this map date. The prior map (2026-08-14) had zero Phase 11 commits; this map captures the tracer green and the remaining plan surface.
+
+**Risk:** Medium. Feature work that touches candidate/rate-limit/main/config without consulting `SECURITY_TEST_PLAN.md` can bypass the tracer's fail-closed contract. Availability risk during fail-closed `REDIS_URL` outage in production (every limited route 503 until Redis returns — intentional per SEC-DOS-001). Docs-off in production requires `ENVIRONMENT=production` before import or docs remain reachable (SEC-INF-003).
+
+**Status:** IN PROGRESS — do not mark P0 closed until `test_security_boundary.py` + remaining boundary/ingest/rate-limit/SSRF/body/CSP/log suites pass on the guarded runner, `SECURITY_AUDIT.md` P0 rows are struck, and the 5 modified planning docs are GSD-committed via `query commit` (not `git add .` when `.planning/config.json` sits dirty).
+
+**Fix direction:** Execute 11-02..11-08 sequentially via `/.--` GSD runbook, keeping each plan's security-test-plan section reference literal; gate each on `scripts/run_phase10_backend_tests.py` + `NODE_ENV=test CI=1 npm run test` + `npm run lint`/`build` + `grep -E "payload_too_large|rate_limit_unavailable|PAYLOAD_TOO_LARGE" spoilerless/app/core/errors.py` code-registry checks; stage `.planning/ROADMAP.md`, `.planning/STATE.md`, and the phase `VERIFICATION.md` together per orchestrator closeout (house pattern `2bbd330`/`80b4646`/`7f4c52a`). Keep `ENVIRONMENT=production` + `REDIS_URL` + `FRONTEND_ORIGINS` + `GOOGLE_CLIENT_ID` consistent between Render and root `.env` (verify via `grep -n FRONTEND_ORIGINS .env` before deploy, never inline `export X="$(grep ...)"` in the hardline terminal).
 
 ---
 
-*Concerns audit: 2026-08-14*
+*Concerns audit: 2026-08-20*
