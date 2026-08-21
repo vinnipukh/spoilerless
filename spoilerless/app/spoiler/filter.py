@@ -42,6 +42,7 @@ def claim_projection(claim_var: str = "claim") -> str:
 
 SERIES_LIST_QUERY = """\
 MATCH (series:Series)
+WHERE EXISTS { MATCH (:Episode)-[:PART_OF]->(series) }
 RETURN series.id AS id,
        series.title AS title,
        series.slug AS slug
