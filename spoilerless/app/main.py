@@ -51,8 +51,8 @@ _DENIED_HEADER_NAMES = {"cookie", "set-cookie", "authorization"}
 _SECURITY_HEADERS = {
     "Content-Security-Policy": (
         "default-src 'self'; script-src 'self' https://accounts.google.com; "
-        "img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; "
-        "font-src 'self'; connect-src 'self' https://accounts.google.com; "
+        "img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://accounts.google.com; "
+        "font-src 'self'; connect-src 'self' https://accounts.google.com https://api.spoilerless.net https://*.onrender.com; "
         "frame-src https://accounts.google.com; object-src 'none'; "
         "base-uri 'self'; form-action 'self'"
     ),
@@ -280,7 +280,7 @@ def _trusted_hosts() -> list[str]:
     try:
         settings = get_settings()
     except Exception:
-        return ["localhost", "127.0.0.1", "api.spoilerless.net", "testserver"]
+        return ["localhost", "127.0.0.1", "api.spoilerless.net", "*.onrender.com", "testserver"]
     if settings.allowed_hosts.strip():
         return [h.strip() for h in settings.allowed_hosts.split(",") if h.strip()]
     hosts: list[str] = []
@@ -290,7 +290,7 @@ def _trusted_hosts() -> list[str]:
             hosts.append(hostname)
             if ":" in origin.split("//", 1)[-1].split("/", 1)[0]:
                 hosts.append(origin.split("//", 1)[1].split("/", 1)[0])
-    hosts += ["localhost", "127.0.0.1", "api.spoilerless.net", "testserver"]
+    hosts += ["localhost", "127.0.0.1", "api.spoilerless.net", "*.onrender.com", "testserver"]
     return hosts
 
 

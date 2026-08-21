@@ -14,3 +14,6 @@ services:
     # (https://render.com/docs/request-ip — Render's published proxy ranges).
     # Local docker dev intentionally runs WITHOUT these flags (no proxy in front).
     startCommand: uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips "34.160.168.0/24,35.190.0.0/17,35.191.0.0/16,209.20.0.0/16,209.23.0.0/16"
+    envVars:
+      - key: ALLOWED_HOSTS
+        value: "spoilerless-api.onrender.com,api.spoilerless.net,localhost,127.0.0.1"

@@ -552,7 +552,7 @@ Every response passes through `_security_headers_middleware` (`spoilerless/app/m
 
 | Header | Value |
 |---|---|
-| `Content-Security-Policy` | `default-src 'self'; script-src 'self' https://accounts.google.com; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://accounts.google.com; frame-src https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self'` |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' https://accounts.google.com; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://accounts.google.com; font-src 'self'; connect-src 'self' https://accounts.google.com https://api.spoilerless.net https://*.onrender.com; frame-src https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self'` |
 | `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` |
 | `X-Content-Type-Options` | `nosniff` |
 | `X-Frame-Options` | `DENY` |

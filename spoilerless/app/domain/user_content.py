@@ -131,8 +131,9 @@ class NoteUpdate(StrictModel):
 class NoteResponse(UserResponseModel):
     id: Identifier
     series_id: Identifier
-    user_id: Identifier = Field(
-        description="The authenticated AppUser id that owns this note (PROB-02/#4).",
+    user_id: Identifier | None = Field(
+        default=None,
+        description="The authenticated AppUser id that owns this note (PROB-02/#4). Null for non-owner reads (D-02).",
         examples=["user:2a1f4c7e"],
     )
     target_type: NoteTargetType
@@ -196,8 +197,9 @@ class CustomNodeUpdate(StrictModel):
 class CustomNodeResponse(UserResponseModel):
     id: Identifier
     series_id: Identifier
-    user_id: Identifier = Field(
-        description="The authenticated AppUser id that owns this custom node (PROB-02/#4).",
+    user_id: Identifier | None = Field(
+        default=None,
+        description="The authenticated AppUser id that owns this custom node (PROB-02/#4). Null for non-owner reads (D-02).",
         examples=["user:2a1f4c7e"],
     )
     type: CustomNodeType
@@ -269,8 +271,9 @@ class CustomRelationshipUpdate(StrictModel):
 class CustomRelationshipResponse(UserResponseModel):
     id: Identifier
     series_id: Identifier
-    user_id: Identifier = Field(
-        description="The authenticated AppUser id that owns this custom relationship (PROB-02/#4).",
+    user_id: Identifier | None = Field(
+        default=None,
+        description="The authenticated AppUser id that owns this custom relationship (PROB-02/#4). Null for non-owner reads (D-02).",
         examples=["user:2a1f4c7e"],
     )
     source: Identifier
