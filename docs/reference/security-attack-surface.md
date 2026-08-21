@@ -1,8 +1,8 @@
-# SECURITY_ATTACK_SURFACE.md — Spoilerless (hdgrafcehennemi)
+# Security Attack Surface — Spoilerless (hdgrafcehennemi)
 
-Living document: every public endpoint, its auth, inputs, downstream services, and security controls. Update whenever routes change. Audit: 2026-08-14/15 (9 specialist subagents + adversarial review). Verified against `spoilerless/app/api/*` at commit 9d50500.
+Living document: every public endpoint, its auth, inputs, downstream services, and security controls. Update whenever routes change. Audit: 2026-08-14/15 (9 specialist subagents + adversarial review). Verified against `spoilerless/app/api/*` at commit 9d50500 and refreshed after Phase 11.
 
-Legend: **P**=public/anonymous · **O**=optional user (anon OK, boundary-clamped) · **U**=any authenticated user · **A**=admin · **T**=token-gated. CSRF = Origin/Referer guard (`CsrfGuardDependency`). Rate = Redis-backed limiter (`services/rate_limit.py`; ALL limiters are no-ops when `REDIS_URL` empty or Redis down — fail-open by design, PROB-23).
+Legend: **P**=public/anonymous · **O**=optional user (anon OK, boundary-clamped) · **U**=any authenticated user · **A**=admin · **T**=token-gated. CSRF = Origin/Referer guard (`CsrfGuardDependency`). Rate = Redis-backed limiter (`services/rate_limit.py`; fail-closed 503 when `ENVIRONMENT=production` and `RATE_LIMIT_FAIL_OPEN=false`, no-op when `REDIS_URL` empty in local dev).
 
 ---
 
@@ -69,23 +69,23 @@ Legend: **P**=public/anonymous · **O**=optional user (anon OK, boundary-clamped
 
 ## 2. Auth summary
 
-- **Login:** Google ID token → `verify_oauth2_token` (signature/audience/issuer/expiry; `email_verified` NOT checked — SEC-BE-007) → `ALLOWED_EMAILS` allowlist (empty default = any verified Google account) → role from `ADMIN_EMAILS` membership.
-- **Session:** 48-byte `secrets.token_urlsafe` token, SHA-256 at rest, HttpOnly+Secure+SameSite=Lax cookie, TTL 7d (no Max-Age set — SEC-BE-010), hourly expired-session sweep.
+- **Login:** Google ID token → `verify_oauth2_token` (signature/audience/issuer/expiry; `email_verified` checked per SEC-BE-007) → `ALLOWED_EMAILS` allowlist (empty default = any verified Google account) → role from `ADMIN_EMAILS` membership.
+- **Session:** 48-byte `secrets.token_urlsafe` token, SHA-256 at rest, HttpOnly+Secure+SameSite=Lax cookie, TTL 7d (Max-Age set per SEC-BE-010), hourly expired-session sweep.
 - **CSRF:** Origin/Referer guard on every state-changing cookie-authenticated route EXCEPT `POST /graph/path` (read-only; inconsistency only).
 - **Admin:** `require_admin` derives role server-side from `ADMIN_EMAILS`; admin surface = settings/llm, candidate approve/reject/edit, change-set confirm.
 
 ## 3. LLM / GraphRAG surface
 
-- **Entry:** POST /chat/.../messages[/stream] (U, 20/60s/user, per-user concurrency slot = 1 in-process).
-- **Provider:** Gemini v1beta REST (`x-goog-api-key`) or OpenAI-compatible; config from admin `:AppSetting{llm}` (key write-only, masked GET) or per-request BYOK `X-LLM-*` headers (user's own key; `base_url` validated http/https+host only — authenticated SSRF primitive, SEC-LLM-001/SEC-BE-005).
+- **Entry:** POST /chat/.../messages[/stream] (U, 20/60s/user, per-user concurrency slot = 1 in-process, process-wide semaphore bound).
+- **Provider:** Gemini v1beta REST (`x-goog-api-key`) or OpenAI-compatible; config from admin `:AppSetting{llm}` (key write-only, masked GET) or per-request BYOK `X-LLM-*` headers (user's own key; `base_url` validated with SSRF IP blocklist).
 - **Agent:** 12-tool allowlist, ALL read-only Neo4j except `propose_changeset` (draft persist, admin-confirmed before apply). NO URL/HTTP/scraper tool — no LLM-driven SSRF.
-- **Spoiler boundary:** server-resolved `min(view, watched)` (progress record; anonymous=order 1) → injected into every Cypher query as `visible_until_order` param + defense-in-depth `_visible_at` filter. Pre-retrieval enforcement (verified strong). **Known gaps:** authenticated users WITHOUT a progress record are NOT clamped on /graph + /episodes (SEC-BE-001); anonymous candidates/revisions/notes reads unclamped (SEC-BE-002, SEC-GR-005/006/007).
-- **Context caps:** max tool rounds 4, context 40 items / 12k chars, tool-result replay 4k chars, output 800 tokens, question 4000 chars, no provider retry, streaming SSE.
+- **Spoiler boundary:** server-resolved `min(view, watched)` (progress record; anonymous=order 1) → injected into every Cypher query as `visible_until_order` param + defense-in-depth `_visible_at` filter. Pre-retrieval enforcement via centralized `resolve_effective_boundary` (api/boundary.py).
+- **Context caps:** max tool rounds 4, context 40 items / 12k chars, tool-result replay 4k chars, output 800 tokens, question 4000 chars, per-round tool cap ≤8, streaming SSE.
 
 ## 4. Data stores & caches
 
-- **Neo4j AuraDB** (`neo4j+s://`): all persistence. Credentials admin-level (SEC-GR-003). All ~55 Cypher queries parameterized; two closed-set f-string interpolations (SEC-BE-011); latent label interpolation in revert path (SEC-GR-014). LLM key plaintext in `:AppSetting{key:'llm'}` (SEC-GR-012/SEC-INF-013).
-- **Upstash Redis** (`rediss://`, REDIS_URL dashboard-only): graph cache `graph:{series}:{boundary}:{user}` TTL 300s; viz cache `viz:{...}:{epoch}:{focus_sig}` (metadata re-validated on read); `graph_revision:{series}` epochs; `hdgraf:rate_limit:*` ZSETs. **Credential committed in README.md + git history (SEC-INF-001 — rotate!).** Key growth unbounded for per-user keys (SEC-DOS-011); viz cache-key explosion via focus_id (SEC-DOS-005).
+- **Neo4j AuraDB** (`neo4j+s://`): all persistence. Credentials admin-level. All ~55 Cypher queries parameterized; closed-set label allowlist on revert path. LLM key plaintext in `:AppSetting{key:'llm'}`.
+- **Upstash Redis** (`rediss://`, REDIS_URL dashboard-only): graph cache `graph:{series}:{boundary}:{user}` TTL 300s; viz cache `viz:{...}:{epoch}:{focus_sig}` (metadata re-validated on read, focus set capped); `graph_revision:{series}` epochs; `hdgraf:rate_limit:*` ZSETs.
 
 ## 5. External network
 
@@ -109,17 +109,14 @@ Legend: **P**=public/anonymous · **O**=optional user (anon OK, boundary-clamped
 - Cache keys carry series+boundary+user+epoch; poisoned viz entries rejected by metadata re-validation.
 - Error envelopes sanitized; request log allowlist; no console.log/telemetry in frontend; no source maps in dist.
 
-## 7. Known gaps (see SECURITY_AUDIT.md for details)
+## 7. Phase 11 Hardening & Grep Markers
 
-Boundary clamps (SEC-BE-001/002, SEC-GR-005/006/007) — now closed via boundary clamp ✓ (shared resolver) on candidates list/get + notes/custom-nodes/custom-relationships + revisions list/get (Auth A/U (optional user; anonymous fixed at 1)); graph/episodes no longer have U-no-record bypass; ingest now rate-limited (content-write bucket) + cache-invalidation (invalidate_series) and paginated · BYOK SSRF (SEC-LLM-001) · rate-limit fail-open + proxy collapse (SEC-DOS-001/003) — now TrustedHostMiddleware + --proxy-headers --forwarded-allow-ips + fail-closed limiter (503 rate_limit_unavailable) · cost amplification (SEC-DOS-002) — global semaphore (4) + per-round cap (8) · body-size limit 1 MB → 413 payload_too_large · CSP on SPA shell (SEC-FE-001) — vercel.json headers + index.html meta (accounts.google.com allowed) · BYOK key in localStorage (SEC-FE-002) · /docs exposed (SEC-INF-003) — docs off when ENVIRONMENT=production · Redis cred in git (SEC-INF-001) · validation-error logging (SEC-LOG-001) — sanitized · chat retention indefinite (SEC-LOG-007).
-
-<!-- Phase 11 markers for grep gates -->
-- candidates GET /api/series/{series_id}/candidates — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
-- candidates GET /api/series/{series_id}/candidates/{claim_id} — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
-- notes GET /api/series/{series_id}/notes — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
-- notes GET /api/series/{series_id}/notes/{note_id} — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
-- custom-nodes GET /api/series/{series_id}/custom-nodes/{node_id} — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
-- custom-relationships GET /api/series/{series_id}/custom-relationships/{id} — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
-- revisions GET /api/series/{series_id}/revisions — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
-- revisions GET /api/series/{series_id}/revisions/{revision_id} — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
+- candidates GET `/api/series/{series_id}/candidates` — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
+- candidates GET `/api/series/{series_id}/candidates/{claim_id}` — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
+- notes GET `/api/series/{series_id}/notes` — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
+- notes GET `/api/series/{series_id}/notes/{note_id}` — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
+- custom-nodes GET `/api/series/{series_id}/custom-nodes/{node_id}` — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
+- custom-relationships GET `/api/series/{series_id}/custom-relationships/{id}` — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
+- revisions GET `/api/series/{series_id}/revisions` — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
+- revisions GET `/api/series/{series_id}/revisions/{revision_id}` — boundary clamp ✓ (shared resolver) — Auth A/U (optional user; anonymous fixed at 1)
 - Global middleware: BodySizeLimitMiddleware 1 MB → 413, TrustedHostMiddleware (allowed_hosts), docs off in production (ENVIRONMENT=production)

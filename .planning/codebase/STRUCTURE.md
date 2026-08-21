@@ -2,7 +2,7 @@
 ---
 last_mapped: 2026-08-20
 focus: arch
-last_mapped_commit: 6256214f672d21e0c264a4910033fe02dc51da80
+last_mapped_commit: 5ad68675e20b4c9b69e9b88335286b5e2f6f04fa
 ---
 
 # Codebase Structure

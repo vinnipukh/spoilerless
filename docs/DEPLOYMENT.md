@@ -35,8 +35,8 @@ state is unknown because no DNS/IaC declaration is tracked.
 
 | File | Platform | Purpose |
 |---|---|---|
-| `render.yaml` | Render | Blueprint service `spoilerless-api`: `uv sync --frozen` → `uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT`, free plan, `autoDeploy: true` |
-| `frontend/vercel.json` | Vercel | SPA catch-all rewrite (`/(.*)` → `/index.html`) for client-side routing. No `/api` proxy — the frontend calls the Render backend directly via `VITE_API_BASE_URL`. |
+| `render.yaml` | Render | Blueprint service `spoilerless-api`: `uv sync --frozen` → `uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips "34.160.168.0/24,35.190.0.0/17,35.191.0.0/16,209.20.0.0/16,209.23.0.0/16"`, free plan, `autoDeploy: true` |
+| `frontend/vercel.json` | Vercel | SPA catch-all rewrite (`/(.*)` → `/index.html`) + Content-Security-Policy/HSTS headers. No `/api` proxy — the frontend calls the Render backend directly via `VITE_API_BASE_URL`. |
 | `.github/workflows/ci.yml` | GitHub Actions | Pull-request gate: backend `pytest` + DB-pollution gate + frontend `build`/`lint`/`audit` (see Build Pipeline) |
 | `.github/workflows/release.yml` | GitHub Actions | Incomplete manual promotion skeleton. Its “CI gate” only prints a message; it does not query check status. The `release` path attempts to push a `release-*` tag, but the workflow declares `contents: read`, so tag push is not currently authorized. |
 
@@ -89,10 +89,12 @@ development (see Local Deployment below).
 gates two features that share one Redis client
 (`spoilerless/app/cache/redis_client.py`):
 
-- **Rate limiting** (`spoilerless/app/services/rate_limit.py`): login,
-  chat-send, and content-write endpoints return `429` in the standard
-  error envelope once per-user/IP thresholds are exceeded. Empty
-  `REDIS_URL` disables all rate limiting — the app boots unthrottled.
+- **Rate limiting** (`spoilerless/app/services/rate_limit.py`): login (10/300s per IP),
+  chat-send (20/60s per user), and content-write (30/60s per user/IP) endpoints return `429` in the standard
+  error envelope once thresholds are exceeded. In production (`ENVIRONMENT=production` and `RATE_LIMIT_FAIL_OPEN=false`),
+  an unavailable Redis instance fails closed and returns `503 RATE_LIMIT_UNAVAILABLE` on rate-limited endpoints.
+  In development (empty `REDIS_URL`), rate limiting safely degrades to a no-op.
+- **Trusted proxy integration**: uvicorn runs with `--proxy-headers --forwarded-allow-ips` in `render.yaml` (specifying Render's published proxy CIDRs), ensuring `request.client.host` represents the true client IP rather than collapsing into the proxy IP.
 - **Graph query response cache** (`spoilerless/app/cache/graph_cache.py`):
   `GET /api/series/{series_id}/graph` reads cache-aside, keyed by
   `(series_id, effective_boundary, user_id)` with a 300s TTL, and

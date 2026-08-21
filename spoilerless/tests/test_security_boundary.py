@@ -1,6 +1,6 @@
 """Security boundary fail-closed regression tests (Phase 11, D-01).
 
-Covers SECURITY_TEST_PLAN §1.1, 1.4, 1.5 for the tracer slice (11-01):
+Covers docs/reference/security-test-plan.md §1.1, 1.4, 1.5 for the tracer slice (11-01):
 anonymous and no-record readers are fixed at order 1, authenticated with
 progress clamps to min(requested, view, watched). Uses a dedicated scratch
 series so no test touches series_dexter.

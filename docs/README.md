@@ -25,6 +25,8 @@
 - [API.md](API.md) — backend HTTP surface (52 ops / 39 templates)
 - [frontend-api-contract.md](reference/frontend-api-contract.md) — backend↔frontend contract (test-locked)
 - [CONFIGURATION.md](CONFIGURATION.md) — env/config reference
+- [security-attack-surface.md](reference/security-attack-surface.md) — living endpoint security, auth, CSRF, and rate-limit matrix
+- [security-test-plan.md](reference/security-test-plan.md) — security regression test suite & verification matrix
 - [backend-modules.md](reference/backend-modules.md) — backend module map (snapshot)
 - [frontend-components.md](reference/frontend-components.md) — frontend component map (snapshot)
 
@@ -34,6 +36,7 @@
 - [spoiler-threat-model.md](architecture/spoiler-threat-model.md) — leak-channel inventory
 - [spoiler-terminology.md](architecture/spoiler-terminology.md) — locked vocabulary
 - [spoiler-deferred-design.md](architecture/spoiler-deferred-design.md) — deferred spoiler features
+- [decision-logs/security-audit-2026-08.md](decision-logs/security-audit-2026-08.md) — 10-subagent adversarial security audit report & finding registry
 
 ### docs/ops/ — operations
 - [DEPLOYMENT.md](DEPLOYMENT.md) — deploy recipes, Render notes

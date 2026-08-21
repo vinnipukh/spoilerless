@@ -205,7 +205,7 @@ Equivalent raw pytest invocations (chunk → files):
 | 4 | `graph` | `test_graph_api.py` `test_citations.py` `test_seed_idempotency.py` | Graph/Neo4j, ~slow |
 | 5 | `change-set` | `test_change_set_api.py` `test_change_set_confirmation.py` `test_change_set_protection.py` `test_change_set_revision.py` `test_revisions.py` | API + repo, ~medium |
 | 6 | `candidates` | `test_candidate_ingest.py` `test_candidate_review.py` | API + live Neo4j, ~medium |
-| 7 | `auth` | `test_auth.py` `test_google_verifier.py` `test_session_repository.py` `test_settings_api.py` | auth + middleware, ~medium |
+| 7 | `auth` | `test_auth.py` `test_google_verifier.py` `test_session_repository.py` `test_settings_api.py` `test_security_boundary.py` | auth + middleware + boundary security, ~medium |
 | 8 | `user-content` | `test_user_content_api.py` `test_user_content_repository.py` | API + repo, ~medium |
 | 9 | `chat-llm` | `test_chat_api.py` `test_chat_persistence.py` `test_retrieval_pipeline.py` `test_retrieval_tools.py` `test_prompt_injection.py` `test_llm_provider.py` | chat/LLM, ~slow |
 | 10 | `contract-ops` | `test_frontend_contract_doc.py` `test_openapi_contract.py` `test_share_api.py` `test_error_handlers.py` `test_rate_limit.py` `test_phase10_coverage_audit.py` | contract/doc, ~medium |

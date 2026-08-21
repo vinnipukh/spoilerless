@@ -6,8 +6,37 @@
 - ✅ **v1.1 MVP** — Phases 1–6 (+ 03.1, 05.1 inserted) (shipped 2026-08-02, supersedes v1.0 — adds Phase 6 GraphRAG chat)
 - ✅ **v1.2 Spoiler-Safety Hardening** — Phase 7 (shipped 2026-08-03)
 - ✅ **v1.3 Production Deployment & Access Hardening** — Phases 8–10 (shipped 2026-08-14)
+- ✅ **v1.4 Security Hardening** — Phase 11 (shipped 2026-08-20)
+- 🟡 **v1.5 Post-Hardening Remediation & Code Quality** — Phase 12 (in progress)
 
 ## Phases
+
+#### Phase 12: Post-Hardening Remediation & Code Quality
+
+**Goal**: Resolve all findings from the 2026-08-20 Thermo-Nuclear Dual Review and reconnaissance: fix the P0 response schema mismatch on privacy-scrubbed reads (`NoteResponse` / `CustomNodeResponse` `user_id` nullability), decompose the monolithic frontend god-components exceeding the 1,000-line maintainability ceiling (`App.tsx`, `GraphCanvas.tsx`, `DetailPanel.tsx`), eliminate render-phase `setState` churn, encapsulate Cytoscape lifecycles, fix frontend UI/UX and API contract bugs (numeric episode ordering in relationship dialog, multi-type note attachments, DTO alignment, PathFinder icons, chat rate limit error differentiation, accessibility scroll/focus), remove premature un-clamped boundary checks in `user_content.py` and `revisions.py`, consolidate candidate ingestion Cypher queries (eliminating 3x query amplification), fix frontend CSP `connect-src` for production backend origins, fix `_trusted_hosts` fallback for Render deployments, bound SSRF DNS resolution to prevent event loop stalls, implement lazy rate limiter reconnect, register uppercase error codes (`RATE_LIMIT_UNAVAILABLE`, `PAYLOAD_TOO_LARGE`), unify design tokens (`graphTokens.ts`), and clean up domain/architectural layering.
+**Depends on**: Phase 11 (shipped)
+**Requirements**: THERMO-P0-01, THERMO-P0-02, THERMO-P0-03, THERMO-P0-04, THERMO-P1-01, THERMO-P1-02, THERMO-P1-03, THERMO-P1-04, THERMO-P1-05, THERMO-P1-06, THERMO-P2-01, THERMO-P2-02, THERMO-P2-03, THERMO-P2-04, THERMO-P2-05, THERMO-P2-06, THERMO-P2-07, THERMO-P3-01..10
+**Success Criteria** (what must be TRUE):
+  1. Anonymous and non-owner reads on `/notes`, `/custom-nodes`, `/custom-relationships` return 200 with `user_id: null` instead of raising 500 Pydantic `ValidationError`.
+  2. Monolithic frontend files (`App.tsx`, `GraphCanvas.tsx`, `DetailPanel.tsx`) are decomposed below 350 lines with zero render-phase state mutations, isolated Cytoscape lifecycle hooks, and separate tab/dialog components.
+  3. `CreateRelationshipDialog` selects the latest episode by numeric `episode_order`; note creation supports all `CustomNodeType` labels without 404/409 errors; TypeScript interfaces in `frontend/src/types` align 100% with backend Pydantic models.
+  4. Anonymous requests passing `visible_until_order=999` across all read routes clamp to episode 1 and return 200 without throwing 422; no route executes un-clamped raw persistence checks before `resolve_effective_boundary`.
+  5. Candidate claim visibility resolution runs in a single consolidated Cypher query per claim, eliminating secondary existence query roundtrips while preserving node existence validation.
+  6. Frontend CSP `connect-src` in `vercel.json` and `index.html` allows connections to `https://api.spoilerless.net` and `https://*.onrender.com`; `_trusted_hosts()` in `main.py` permits Render backend domains (`*.onrender.com`) in fallback mode without 400 Bad Request.
+  7. DNS resolution in SSRF validation is bounded with a timeout preventing asyncio event loop stalls; `RateLimiter` attempts lazy initialization on startup blips; all error codes are registered and uppercase (`RATE_LIMIT_UNAVAILABLE`, `PAYLOAD_TOO_LARGE`).
+  8. Design tokens are centralized in `graphTokens.ts` and `index.css` `@theme`, eliminating hardcoded hex sprawl and standardizing 44px touch targets.
+  9. `ProposeChangesetInput` lives in `domain/change_set.py` with top-level imports; `warn_if_open_signup` lives in `services/auth.py`; `revisions` module has clean imports and single-pass JSON deserialization.
+
+**Plans**:
+- [ ] 12-01-PLAN.md — Privacy & Response Schema Alignment (THERMO-P0-01) [Wave 1]
+- [ ] 12-02-PLAN.md — Boundary Verification Simplification, Invariant Enforcement & Type Hygiene (THERMO-P1-01, THERMO-P3-01, THERMO-P3-04) [Wave 1]
+- [ ] 12-03-PLAN.md — Candidate Ingest Cypher Query Consolidation & Pagination Temporal Coercion (THERMO-P2-03, THERMO-P3-07) [Wave 2]
+- [ ] 12-04-PLAN.md — Production Infrastructure, CSP & TrustedHost Hardening (THERMO-P1-02, THERMO-P2-01) [Wave 1]
+- [ ] 12-05-PLAN.md — Async Event Loop Protection, Rate Limiter Resilience & Error Code Alignment (THERMO-P2-02, THERMO-P2-04, THERMO-P3-03) [Wave 2]
+- [ ] 12-06-PLAN.md — Domain & Architectural Layering Cleanup (THERMO-P3-02, THERMO-P3-05, THERMO-P3-06) [Wave 2]
+- [ ] 12-07-PLAN.md — Frontend Bug Fixes, UI/UX Edge Cases & API Contract Alignment (THERMO-P1-03, THERMO-P1-04, THERMO-P1-05, THERMO-P1-06, THERMO-P3-08, THERMO-P3-09, THERMO-P3-10) [Wave 1]
+- [ ] 12-08-PLAN.md — Frontend Architectural Decomposition & 1,000-Line Ceiling Elimination (THERMO-P0-02, THERMO-P0-03, THERMO-P0-04, THERMO-P2-05, THERMO-P2-07) [Wave 2]
+- [ ] 12-09-PLAN.md — Design System Tokens, Theme Harmonization & UI/UX Polish (THERMO-P2-06) [Wave 2]
 
 #### Phase 11: Security Hardening — audit remediation (P0/P1)
 

@@ -186,6 +186,7 @@ App computes the forward-boundary graph set difference and passes the result int
 | `initialFilterState`, filter mutators, position-cache functions | Filter state and per-series/boundary/mode position caching. |
 | `focusReducer`, `applyFocusToCytoscape` | Internal focus state and Cytoscape class application. |
 | `relationshipStyles.ts` | Edge-family classification and color lookup. |
+| `cytoscapeReconciler.ts` | Topology-aware element scene reconciler (`reconcileCytoscapeElements`) preventing compound parent removal cascade bugs. |
 | `autoZoomHold` | Module-level last-touch and viewport state that survives canvas remounts. |
 
 ### Detail — `frontend/src/components/detail`
@@ -262,7 +263,20 @@ GraphResponse
           └─ layoutOptionsFor(layoutName, prefersReducedMotion, mode, fit)
 ```
 
-`GraphCanvas` defaults to `initialMode="overview"`; full mode renders all already spoiler-filtered elements. fcose is the primary layout, with built-in cose as runtime fallback. Position cache keys include series, visible boundary, and graph mode.
+`GraphCanvas` defaults to `initialMode="overview"`; full mode renders all already spoiler-filtered elements. `GraphCanvas` supports both controlled (`mode` + `onModeChange` props) and uncontrolled (`initialMode`) mode operation. fcose is the primary layout, with built-in cose as runtime fallback. Position cache keys include series, visible boundary, and graph mode.
+
+### Topology-aware scene reconciliation (`cytoscapeReconciler.ts`)
+
+Standard `react-cytoscapejs` updates plan deletions from element IDs and remove old-only elements first. In Cytoscape, removing a compound parent node recursively removes all descendant nodes and connected edges, which destroys shared children that were intended to survive in the target scene.
+
+`reconcileCytoscapeElements(cy, nextDefinitions)` solves this by executing an ordered multi-phase transition inside a single `cy.batch()`:
+1. **Runtime state snapshot:** captures current classes, selection state, and positions (`cy.Position`) for all elements that exist in both current and next scenes.
+2. **Incoming node addition:** adds newly introduced nodes so shared elements can safely reference new targets.
+3. **Reparenting & edge rewiring:** detaches or moves shared nodes (`node.move({ parent: nextParent })`) and rewires shared edges (`edge.move({ source, target })`) *before* stale parent nodes are removed.
+4. **Safe stale topology removal:** removes stale edges and obsolete parent/child nodes without cascading into surviving elements.
+5. **Incoming edge addition:** adds new edges connecting surviving and new nodes.
+6. **Data patching:** updates non-topology attributes via `patchData(element, next)` while preserving layout coordinates.
+7. **Runtime state restoration:** re-applies classes, positions, and selection states so user interactions, active hover, and focus highlights remain uninterrupted.
 
 A fresh Cytoscape instance performs two ordered layout stages. `react-cytoscapejs` starts the stable declarative layout with `fit: false`; the `cy` callback records the live instance and graph, subscribes once to `layoutstop`, and then calls `runLayout(..., forceRelayout=true)`. This second stage is exactly the **Refresh graph** relayout/fit path. The ordering is intentional: starting the forced refresh in a microtask while the declarative layout is still running creates a race in which the startup layout can finish last and restore the diagonal cold-open state. Graph-driven relayout respects a 20-second interaction hold stored in `autoZoomHold`; explicit mode changes and refreshes still re-fit. Incremental updates with active focus/reveal avoid destructive relayout and use Cytoscape framing instead.
 

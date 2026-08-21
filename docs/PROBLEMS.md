@@ -1300,3 +1300,24 @@ Phase 11 closes the 2026-08-15 adversarial audit P0/P1 findings (SECURITY_AUDIT.
 | BUG-FE-02 | apiFetch bodyless Content-Type | 11-07 |
 | QUAL-01 | run_doc_verification dynamic Path + delete superseded scripts | 11-07 |
 | QUAL-02 | Retrieval pipeline changeset executor decoupling (`ChangeSetService.propose_via_tool`) | 11-08 |
+
+## TWENTY-THIRD PASS — Thermo-Nuclear Dual Review & Phase 12 Remediation Planning (2026-08-20)
+
+A zero-assumption dual thermo-nuclear review (`thermo-nuclear-review-subagent` for security/correctness and `thermo-nuclear-code-quality-review-subagent` for structure/quality) was conducted on `origin/main...HEAD`. The audit identified 1 Blocker (P0), 2 High-Priority (P1), 4 Medium-Priority (P2), and 4 Low-Priority (P3) findings in the Phase 11 hardening implementation. All findings are planned and scheduled for resolution in Phase 12 (Milestone v1.5, plans 12-01..12-06).
+
+| Finding | Severity | Description | Target Plan |
+|---|---|---|---|
+| THERMO-P0-01 | P0 Blocker | `NoteResponse`/`CustomNodeResponse` mandatory `user_id` causes Pydantic `ValidationError` (500) when `_shape_note_response` pops `user_id` on anonymous/non-owner reads (D-02 privacy) | 12-01 |
+| THERMO-P1-01 | P1 High | Premature un-clamped `_require_persisted_boundary` calls in `user_content.py` and `revisions.py` subvert D-01 clamp (anonymous 999 422s instead of 200) | 12-02 |
+| THERMO-P1-02 | P1 High | Frontend CSP `connect-src` in `vercel.json`/`index.html` blocks production cross-origin API calls (`api.spoilerless.net`, `*.onrender.com`) | 12-04 |
+| THERMO-P2-01 | P2 Medium | `_trusted_hosts` fallback in `main.py` derives from `FRONTEND_ORIGINS`, rejecting Render backend domains (`*.onrender.com`) with 400 Bad Request | 12-04 |
+| THERMO-P2-02 | P2 Medium | Synchronous `socket.getaddrinfo` in `settings.py` Pydantic validator blocks the asyncio event loop on slow/hostile DNS | 12-05 |
+| THERMO-P2-03 | P2 Medium | Candidate ingest `_resolve_claim_visibility` generates 3x Cypher query roundtrips per claim (150+ queries for 50 claims) | 12-03 |
+| THERMO-P2-04 | P2 Medium | Rate limiter container startup Redis connection blip permanently latches 503 errors without attempting lazy reconnect | 12-05 |
+| THERMO-P3-01 | P3 Low | Redundant `_require_resolved_boundary` query in `candidates.py` after `resolve_effective_boundary` | 12-02 |
+| THERMO-P3-02 | P3 Low | `ProposeChangesetInput` circular import workaround in `services/change_set.py` | 12-06 |
+| THERMO-P3-03 | P3 Low | Lowercase error codes (`rate_limit_unavailable`, `payload_too_large`) violate uppercase convention | 12-05 |
+| THERMO-P3-04 | P3 Low | `boundary.py` lacks parameter type hints and uses bespoke `_error` helper instead of `http_error` | 12-02 |
+| THERMO-P3-05 | P3 Low | Revisions module duplicate enum imports and redundant before-snapshot deserialization | 12-06 |
+| THERMO-P3-06 | P3 Low | `warn_if_open_signup` auth lifecycle helper misplaced in `services/chat.py` | 12-06 |
+

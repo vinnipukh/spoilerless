@@ -1,7 +1,7 @@
 ---
 last_mapped: 2026-08-20
 focus: concerns
-last_mapped_commit: 6256214f672d21e0c264a4910033fe02dc51da80
+last_mapped_commit: 5ad68675e20b4c9b69e9b88335286b5e2f6f04fa
 ---
 <!-- refreshed: 2026-08-20 -->
 # Codebase Concerns
@@ -173,6 +173,28 @@ Severity follows repository impact: High means a security breach, data loss, cra
 **Status:** RESOLVED for founding P0 items — middleware ordering in `spoilerless/app/main.py` is `TrustedHostMiddleware` (outermost) → `CORSMiddleware` → `BodySizeLimitMiddleware` → security-headers → request-logging; docs are `None` when `ENVIRONMENT=production` (must be set before import on Render); validation logs sanitized; rate limiting is environment-aware (local dev empty `REDIS_URL` stays no-op; production fail-closed returns 503, fail-open degrades with warning — see 6.3).
 
 **Fix direction:** Keep `ENVIRONMENT=production` on Render (dashboard, not `render.yaml`); keep CSP tight to GIS/script needs; do not reintroduce `logger.error("validation_error", exc_info=exc)`.
+
+### 2.7 Post-Hardening Thermo-Nuclear Review Findings (Scheduled for Phase 12)
+
+**Files:** `spoilerless/app/domain/user_content.py`, `spoilerless/app/api/user_content.py`, `spoilerless/app/api/revisions.py`, `frontend/vercel.json`, `frontend/index.html`, `spoilerless/app/main.py`, `spoilerless/app/domain/settings.py`, `spoilerless/app/graph/candidates.py`, `spoilerless/app/services/rate_limit.py`, `spoilerless/app/core/errors.py`, `spoilerless/app/services/change_set.py`
+
+**Evidence:** Zero-assumption dual thermo-nuclear review (`thermo-nuclear-review-subagent` and `thermo-nuclear-code-quality-review-subagent`) conducted on 2026-08-20 after Phase 11 completion.
+
+**Identified Issues:**
+1. **THERMO-P0-01 (Blocker):** `NoteResponse`/`CustomNodeResponse`/`CustomRelationshipResponse` have non-optional `user_id`, causing 500 Pydantic `ValidationError` when `_shape_note_response` strips `user_id` on anonymous/non-owner reads (D-02).
+2. **THERMO-P1-01 (High):** Premature raw boundary checks (`_require_persisted_boundary`) in `user_content.py` and `revisions.py` subvert D-01 clamp (anonymous 999 422s instead of clamping to 1 and returning 200).
+3. **THERMO-P1-02 (High):** CSP `connect-src` in `frontend/vercel.json` and `index.html` blocks cross-origin backend API (`api.spoilerless.net`, `*.onrender.com`).
+4. **THERMO-P2-01 (Medium):** `_trusted_hosts()` fallback in `main.py` derives from `FRONTEND_ORIGINS`, rejecting Render backend domains (`*.onrender.com`) with 400 Bad Request.
+5. **THERMO-P2-02 (Medium):** Synchronous `socket.getaddrinfo` in `settings.py` field validator risks event loop stalls on slow/hostile DNS.
+6. **THERMO-P2-03 (Medium):** Candidate ingest `_resolve_claim_visibility` generates 3x Cypher query amplification per claim.
+7. **THERMO-P2-04 (Medium):** Rate limiter container startup Redis connection blip permanently latches 503 errors without attempting lazy reconnect.
+8. **THERMO-P3-01..06 (Low):** Redundant candidate boundary lookup, circular import workaround in `ChangeSetService`, lowercase error codes (`rate_limit_unavailable`, `payload_too_large`), missing boundary type hints, revisions module cleanup, misplaced `warn_if_open_signup`.
+
+**Risk:** High (Blocker 500s on public note reading; CSP blocks production API).
+
+**Status:** PLANNED in Phase 12 (Milestone v1.5, plans `12-01` through `12-06`).
+
+**Fix direction:** Execute Phase 12 plans in two waves: Wave 1 (12-01, 12-02, 12-04) and Wave 2 (12-03, 12-05, 12-06).
 
 ## Performance
 

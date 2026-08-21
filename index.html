@@ -1,33 +1,52 @@
 <!doctype html>
-<html lang="tr">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Spoilerless — spoiler kontrollü, kaynak gösteren ve LLM destekli dizi bilgi grafı." />
-  <meta name="theme-color" content="#090d14" />
-  <meta property="og:title" content="Spoilerless" />
-  <meta property="og:description" content="İzlediğin yere kadar. Kaynağıyla. Graf üzerinde." />
+  <meta name="description" content="Spoilerless — A spoiler-aware, source-grounded television-series knowledge graph application with GraphRAG chat." />
+  <meta name="theme-color" content="#070a0f" />
+  <meta property="og:title" content="Spoilerless — Spoiler-Safe TV Knowledge Graph" />
+  <meta property="og:description" content="Explore television narrative graphs up to your exact watch progress. Source-grounded, editable, and backed by spoiler-safe GraphRAG." />
   <meta property="og:type" content="website" />
-  <title>Spoilerless</title>
+  <meta property="og:url" content="https://vinnipukh.github.io/hdgrafcehennemi/" />
+  <title>Spoilerless — Spoiler-Safe Narrative Knowledge Graph & GraphRAG</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 
   <style>
     :root {
       --bg: #070a0f;
-      --surface: #0e131d;
-      --surface-2: #141b28;
-      --surface-3: #1a2332;
-      --text: #f6f7fb;
-      --muted: #9ba7b8;
-      --line: rgba(255, 255, 255, 0.10);
-      --line-strong: rgba(255, 255, 255, 0.18);
+      --bg-alt: #0a0f18;
+      --surface: #0e1420;
+      --surface-2: #141b2a;
+      --surface-3: #1a2438;
+      --card-bg: rgba(14, 20, 32, 0.75);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-subtle: #64748b;
+      --line: rgba(255, 255, 255, 0.08);
+      --line-strong: rgba(255, 255, 255, 0.16);
+      
       --violet: #8b5cf6;
+      --violet-glow: rgba(139, 92, 246, 0.28);
       --cyan: #22d3ee;
+      --cyan-glow: rgba(34, 211, 238, 0.22);
       --green: #34d399;
+      --green-glow: rgba(52, 211, 153, 0.22);
       --rose: #fb7185;
       --amber: #fbbf24;
-      --max: 1180px;
-      --radius: 24px;
-      --shadow: 0 28px 90px rgba(0,0,0,.38);
+      --fuchsia: #d946ef;
+      --orange: #fb923c;
+      
+      --max: 1200px;
+      --radius-sm: 10px;
+      --radius-md: 16px;
+      --radius-lg: 24px;
+      --radius-xl: 32px;
+      --shadow-lg: 0 24px 80px -12px rgba(0, 0, 0, 0.65);
+      --shadow-glow: 0 0 50px -10px rgba(139, 92, 246, 0.25);
     }
 
     * { box-sizing: border-box; }
@@ -40,47 +59,68 @@
     body {
       margin: 0;
       color: var(--text);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
       background:
-        radial-gradient(circle at 18% -10%, rgba(139, 92, 246, .20), transparent 32rem),
-        radial-gradient(circle at 92% 8%, rgba(34, 211, 238, .12), transparent 28rem),
+        radial-gradient(circle at 15% -5%, rgba(139, 92, 246, 0.18), transparent 35rem),
+        radial-gradient(circle at 85% 10%, rgba(34, 211, 238, 0.12), transparent 30rem),
+        radial-gradient(circle at 50% 60%, rgba(217, 70, 239, 0.06), transparent 40rem),
         var(--bg);
-      line-height: 1.55;
+      line-height: 1.6;
       overflow-x: hidden;
     }
 
     ::selection {
-      background: rgba(34, 211, 238, .28);
-      color: white;
+      background: rgba(34, 211, 238, 0.3);
+      color: #ffffff;
     }
 
     a { color: inherit; text-decoration: none; }
-    button, input { font: inherit; }
+    button, input, select { font: inherit; }
 
     .container {
-      width: min(calc(100% - 36px), var(--max));
+      width: min(calc(100% - 40px), var(--max));
       margin-inline: auto;
     }
 
+    /* Top Banner */
+    .top-banner {
+      background: linear-gradient(90deg, rgba(139, 92, 246, 0.15), rgba(34, 211, 238, 0.15));
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 13px;
+      padding: 8px 16px;
+      text-align: center;
+      color: #cbd5e1;
+    }
+    .top-banner a {
+      color: var(--cyan);
+      font-weight: 600;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .top-banner a:hover { color: #ffffff; }
+
+    /* Sticky Navigation */
     .nav-wrap {
       position: sticky;
       top: 0;
-      z-index: 50;
+      z-index: 100;
       border-bottom: 1px solid transparent;
-      background: rgba(7, 10, 15, .72);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-      transition: border-color .2s ease;
+      background: rgba(7, 10, 15, 0.82);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      transition: border-color 0.2s ease, background 0.2s ease;
     }
-
-    .nav-wrap.scrolled { border-color: var(--line); }
+    .nav-wrap.scrolled {
+      border-color: var(--line);
+      background: rgba(7, 10, 15, 0.94);
+    }
 
     nav {
       min-height: 72px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 24px;
+      gap: 20px;
     }
 
     .brand {
@@ -88,7 +128,8 @@
       align-items: center;
       gap: 12px;
       font-weight: 800;
-      letter-spacing: -.02em;
+      font-size: 20px;
+      letter-spacing: -0.03em;
     }
 
     .brand-mark {
@@ -97,1715 +138,1546 @@
       border-radius: 12px;
       display: grid;
       place-items: center;
-      background:
-        linear-gradient(145deg, rgba(139,92,246,.34), rgba(34,211,238,.14)),
-        var(--surface-2);
-      border: 1px solid rgba(139,92,246,.45);
-      box-shadow: 0 10px 34px rgba(139,92,246,.18);
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(34, 211, 238, 0.2));
+      border: 1px solid rgba(139, 92, 246, 0.5);
+      box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
     }
 
-    .brand-mark svg { width: 24px; height: 24px; }
+    .brand-mark svg { width: 22px; height: 22px; }
 
     .nav-links {
       display: flex;
       align-items: center;
       gap: 24px;
-      color: var(--muted);
+      color: var(--text-muted);
       font-size: 14px;
-      font-weight: 650;
+      font-weight: 600;
+    }
+    .nav-links a {
+      transition: color 0.15s ease;
+    }
+    .nav-links a:hover { color: #ffffff; }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
 
-    .nav-links a:hover { color: white; }
+    /* Language Switcher */
+    .lang-switcher {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px;
+      border-radius: 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--line-strong);
+    }
+    .lang-btn {
+      background: transparent;
+      border: 0;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 5px 10px;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .lang-btn.active {
+      background: var(--violet);
+      color: #ffffff;
+      box-shadow: 0 2px 10px rgba(139, 92, 246, 0.4);
+    }
+    .lang-btn:not(.active):hover {
+      color: #ffffff;
+    }
 
-    .nav-cta,
     .button {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 9px;
-      min-height: 44px;
-      padding: 0 17px;
-      border-radius: 14px;
+      gap: 8px;
+      min-height: 42px;
+      padding: 0 18px;
+      border-radius: 12px;
       border: 1px solid var(--line-strong);
-      background: rgba(255,255,255,.04);
-      color: white;
-      font-weight: 750;
+      background: rgba(255, 255, 255, 0.04);
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 600;
       cursor: pointer;
-      transition: transform .18s ease, border-color .18s ease, background .18s ease;
+      transition: all 0.18s ease;
+      white-space: nowrap;
     }
-
-    .button:hover, .nav-cta:hover {
+    .button:hover {
       transform: translateY(-2px);
-      border-color: rgba(34,211,238,.55);
-      background: rgba(34,211,238,.08);
+      border-color: var(--cyan);
+      background: rgba(34, 211, 238, 0.08);
+      box-shadow: 0 4px 20px rgba(34, 211, 238, 0.15);
     }
-
     .button.primary {
-      border-color: rgba(139,92,246,.65);
-      background: linear-gradient(135deg, rgba(139,92,246,.95), rgba(99,102,241,.88));
-      box-shadow: 0 16px 44px rgba(139,92,246,.24);
+      border-color: rgba(139, 92, 246, 0.7);
+      background: linear-gradient(135deg, #8b5cf6, #6366f1);
+      box-shadow: 0 8px 24px rgba(139, 92, 246, 0.35);
     }
-
     .button.primary:hover {
-      border-color: rgba(255,255,255,.46);
-      background: linear-gradient(135deg, #9468f8, #6b70f4);
+      border-color: rgba(255, 255, 255, 0.5);
+      background: linear-gradient(135deg, #9b72f8, #7175f3);
+      box-shadow: 0 10px 30px rgba(139, 92, 246, 0.5);
+    }
+    .button.sm {
+      min-height: 34px;
+      padding: 0 12px;
+      font-size: 12px;
+      border-radius: 8px;
+    }
+    .button svg { width: 16px; height: 16px; }
+
+    /* Mobile Toggle */
+    .mobile-menu-btn {
+      display: none;
+      background: transparent;
+      border: 1px solid var(--line-strong);
+      color: var(--text);
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
     }
 
-    .button svg, .nav-cta svg { width: 18px; height: 18px; }
+    .mobile-drawer {
+      display: none;
+      padding: 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+    }
+    .mobile-drawer.open { display: flex; flex-direction: column; gap: 12px; }
 
+    /* Hero Section */
     .hero {
-      min-height: calc(100vh - 72px);
+      padding-block: 70px 60px;
       display: grid;
-      grid-template-columns: 1.02fr .98fr;
+      grid-template-columns: 1.1fr 0.9fr;
       align-items: center;
-      gap: 54px;
-      padding-block: 84px 72px;
+      gap: 48px;
     }
 
     .eyebrow {
       display: inline-flex;
       align-items: center;
       gap: 10px;
-      margin-bottom: 24px;
-      padding: 8px 12px;
+      margin-bottom: 20px;
+      padding: 6px 14px;
       border-radius: 999px;
-      color: #d7dffc;
-      background: rgba(139,92,246,.10);
-      border: 1px solid rgba(139,92,246,.26);
+      color: #e2e8f0;
+      background: rgba(139, 92, 246, 0.12);
+      border: 1px solid rgba(139, 92, 246, 0.3);
       font-size: 13px;
-      font-weight: 750;
-      letter-spacing: .06em;
-      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.04em;
     }
-
     .eyebrow-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
       background: var(--green);
-      box-shadow: 0 0 0 5px rgba(52,211,153,.12);
+      box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.2);
     }
 
     h1 {
       margin: 0;
-      max-width: 780px;
-      font-size: clamp(50px, 7vw, 92px);
-      line-height: .98;
-      letter-spacing: -.065em;
+      font-size: clamp(40px, 5.2vw, 68px);
+      line-height: 1.04;
+      letter-spacing: -0.05em;
+      font-weight: 900;
     }
 
     .gradient-text {
-      background: linear-gradient(90deg, #c4b5fd 0%, #67e8f9 58%, #a7f3d0 100%);
+      background: linear-gradient(135deg, #c4b5fd 0%, #67e8f9 50%, #a7f3d0 100%);
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
     }
 
     .hero-copy > p {
-      max-width: 680px;
-      margin: 26px 0 0;
-      color: var(--muted);
-      font-size: clamp(18px, 2vw, 22px);
+      max-width: 620px;
+      margin: 22px 0 0;
+      color: var(--text-muted);
+      font-size: clamp(16px, 1.8vw, 19px);
+      line-height: 1.6;
     }
 
     .hero-actions {
       display: flex;
-      gap: 12px;
+      gap: 14px;
       flex-wrap: wrap;
       margin-top: 32px;
     }
 
-    .hero-note {
+    .hero-pills {
       display: flex;
-      gap: 20px;
+      gap: 16px;
       flex-wrap: wrap;
       margin-top: 28px;
-      color: #c8d1de;
+      color: #cbd5e1;
       font-size: 13px;
-      font-weight: 650;
+      font-weight: 600;
     }
-
-    .hero-note span {
+    .hero-pills span {
       display: inline-flex;
       align-items: center;
       gap: 8px;
     }
-
-    .hero-note i {
+    .hero-pills i {
       width: 8px;
       height: 8px;
       border-radius: 999px;
       background: var(--cyan);
-      box-shadow: 0 0 0 5px rgba(34,211,238,.08);
+      box-shadow: 0 0 8px var(--cyan);
     }
 
-    .app-shell {
+    /* Hero Live Architecture Card */
+    .hero-stat-card {
+      padding: 32px;
+      border-radius: var(--radius-xl);
+      background: linear-gradient(145deg, rgba(14, 20, 32, 0.9), rgba(20, 27, 42, 0.75));
+      border: 1px solid var(--line-strong);
+      box-shadow: var(--shadow-lg), var(--shadow-glow);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
       position: relative;
       overflow: hidden;
-      min-height: 590px;
-      border-radius: 30px;
-      border: 1px solid rgba(255,255,255,.14);
-      background: #0a0f18;
-      box-shadow: var(--shadow);
-      isolation: isolate;
     }
-
-    .app-shell::before {
+    .hero-stat-card::before {
       content: "";
       position: absolute;
-      inset: -40% -35% auto auto;
-      width: 360px;
-      height: 360px;
+      top: -50px;
+      right: -50px;
+      width: 160px;
+      height: 160px;
       border-radius: 50%;
-      background: rgba(139,92,246,.20);
-      filter: blur(80px);
-      z-index: -1;
-    }
-
-    .window-bar {
-      height: 50px;
-      padding: 0 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: #0b111b;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .window-dots { display: flex; gap: 7px; }
-    .window-dots span {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #3c4656;
-    }
-    .window-dots span:first-child { background: var(--rose); }
-    .window-dots span:nth-child(2) { background: var(--amber); }
-    .window-dots span:nth-child(3) { background: var(--green); }
-
-    .window-title {
-      color: #b7c0cc;
-      font-size: 12px;
-      font-weight: 750;
-      letter-spacing: .05em;
-    }
-
-    .demo-toolbar {
-      min-height: 66px;
-      padding: 12px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 14px;
-      border-bottom: 1px solid var(--line);
-      background: rgba(14,19,29,.92);
-    }
-
-    .series-select {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 14px;
-      font-weight: 750;
-    }
-
-    .series-avatar {
-      width: 34px;
-      height: 34px;
-      border-radius: 11px;
-      display: grid;
-      place-items: center;
-      background: rgba(251,113,133,.12);
-      color: #fecdd3;
-      border: 1px solid rgba(251,113,133,.25);
-    }
-
-    .episode-picker {
-      display: flex;
-      gap: 6px;
-      padding: 4px;
-      border-radius: 12px;
-      background: #080c13;
-      border: 1px solid var(--line);
-    }
-
-    .episode-button {
-      border: 0;
-      border-radius: 9px;
-      padding: 7px 10px;
-      color: #8e9aab;
-      background: transparent;
-      font-size: 11px;
-      font-weight: 800;
-      cursor: pointer;
-    }
-
-    .episode-button:hover { color: white; }
-    .episode-button.active {
-      color: white;
-      background: rgba(139,92,246,.30);
-      box-shadow: inset 0 0 0 1px rgba(139,92,246,.42);
-    }
-
-    .app-body {
-      min-height: 472px;
-      display: grid;
-      grid-template-columns: 1fr 210px;
-    }
-
-    .graph-stage {
-      position: relative;
-      min-height: 472px;
-      overflow: hidden;
-      background:
-        linear-gradient(rgba(255,255,255,.026) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,.026) 1px, transparent 1px),
-        radial-gradient(circle at 50% 42%, rgba(34,211,238,.08), transparent 36%);
-      background-size: 28px 28px, 28px 28px, auto;
-    }
-
-    .graph-svg {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-    }
-
-    .edge {
-      stroke: rgba(118, 139, 167, .55);
-      stroke-width: 1.5;
-      transition: opacity .35s ease;
-    }
-
-    .edge.faded { opacity: .10; }
-
-    .edge-label {
-      fill: #8492a7;
-      font-size: 8px;
-      font-weight: 750;
-      letter-spacing: .03em;
-      paint-order: stroke;
-      stroke: #0a0f18;
-      stroke-width: 4px;
-    }
-
-    .node-group {
-      cursor: pointer;
-      transition: opacity .35s ease;
-    }
-
-    .node-group.faded { opacity: 0; pointer-events: none; }
-    .node-group:hover .node-circle { stroke-width: 3; filter: brightness(1.15); }
-
-    .node-circle {
-      fill: #131c29;
-      stroke: #22d3ee;
-      stroke-width: 2;
-      transition: .2s ease;
-      filter: drop-shadow(0 10px 16px rgba(0,0,0,.30));
-    }
-
-    .node-circle.secondary { stroke: #8b5cf6; }
-    .node-circle.event { stroke: #34d399; fill: #10241e; }
-    .node-circle.location { stroke: #fbbf24; fill: #251d0f; }
-
-    .node-text {
-      fill: white;
-      font-size: 9px;
-      font-weight: 800;
-      text-anchor: middle;
+      background: var(--violet-glow);
+      filter: blur(40px);
       pointer-events: none;
     }
 
-    .node-type {
-      fill: #8694a7;
-      font-size: 6px;
-      font-weight: 700;
-      text-anchor: middle;
-      pointer-events: none;
-    }
-
-    .graph-hint {
-      position: absolute;
-      left: 14px;
-      bottom: 14px;
-      padding: 8px 10px;
-      border-radius: 10px;
-      color: #8f9bad;
-      background: rgba(7,10,15,.78);
-      border: 1px solid var(--line);
-      font-size: 10px;
-    }
-
-    .detail-panel {
-      padding: 18px;
-      background: #0c121c;
-      border-left: 1px solid var(--line);
-    }
-
-    .detail-tabs {
+    .stat-header {
       display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
       padding-bottom: 14px;
-      border-bottom: 1px solid var(--line);
     }
-
-    .detail-tab {
-      padding: 5px 9px;
-      border-radius: 8px;
-      color: var(--muted);
-      font-size: 10px;
-      font-weight: 750;
-    }
-
-    .detail-tab.active {
-      color: white;
-      background: rgba(139,92,246,.26);
-      box-shadow: inset 0 0 0 1px rgba(139,92,246,.4);
-    }
-
-    .detail-kicker {
-      color: var(--cyan);
-      font-size: 10px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: .1em;
-    }
-
-    .detail-panel h3 {
-      margin: 7px 0 4px;
-      font-size: 18px;
-      letter-spacing: -.03em;
-    }
-
-    .detail-subtitle {
-      color: var(--muted);
-      font-size: 11px;
-    }
-
-    .detail-block {
-      margin-top: 20px;
-      padding-top: 16px;
-      border-top: 1px solid var(--line);
-    }
-
-    .detail-block strong {
-      display: block;
-      margin-bottom: 8px;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: .08em;
-      color: #8f9bad;
-    }
-
-    .claim-row {
-      margin-top: 8px;
-      padding: 10px;
-      border-radius: 12px;
-      background: rgba(255,255,255,.035);
-      border: 1px solid rgba(255,255,255,.06);
-      font-size: 10px;
-      color: #cbd4e1;
-    }
-
-    .source-link {
+    .stat-header strong {
+      font-size: 15px;
+      font-weight: 700;
+      color: #ffffff;
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       gap: 8px;
-      margin-top: 9px;
-      color: #9fe7f3;
-      font-size: 10px;
     }
-
-    .source-link span:first-child {
-      flex: 0 0 auto;
-      width: 18px;
-      height: 18px;
-      border-radius: 6px;
-      display: grid;
-      place-items: center;
-      background: rgba(34,211,238,.10);
-      border: 1px solid rgba(34,211,238,.18);
-    }
-
-    .detail-status {
+    .stat-live-indicator {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      margin-top: 10px;
-      padding: 5px 8px;
-      border-radius: 999px;
-      color: #b9f6d8;
-      background: rgba(52,211,153,.10);
-      border: 1px solid rgba(52,211,153,.22);
-      font-size: 9px;
-      font-weight: 800;
-    }
-
-    section {
-      padding-block: 108px;
-    }
-
-    .section-head {
-      display: grid;
-      grid-template-columns: .8fr 1.2fr;
-      align-items: end;
-      gap: 40px;
-      margin-bottom: 46px;
-    }
-
-    .section-label {
-      color: var(--cyan);
-      font-size: 13px;
-      font-weight: 800;
-      letter-spacing: .12em;
-      text-transform: uppercase;
-    }
-
-    h2 {
-      margin: 0;
-      font-size: clamp(38px, 5vw, 64px);
-      line-height: 1.02;
-      letter-spacing: -.05em;
-    }
-
-    .section-head p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 19px;
-    }
-
-    .problem-grid,
-    .feature-grid,
-    .tech-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0,1fr));
-      gap: 18px;
-    }
-
-    .card {
-      position: relative;
-      overflow: hidden;
-      min-height: 220px;
-      padding: 26px;
-      border-radius: var(--radius);
-      background:
-        linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.016)),
-        var(--surface);
-      border: 1px solid var(--line);
-    }
-
-    .card::after {
-      content: "";
-      position: absolute;
-      width: 120px;
-      height: 120px;
-      right: -55px;
-      top: -55px;
-      border-radius: 50%;
-      background: rgba(139,92,246,.10);
-      filter: blur(12px);
-    }
-
-    .card-icon {
-      width: 45px;
-      height: 45px;
-      border-radius: 14px;
-      display: grid;
-      place-items: center;
-      margin-bottom: 38px;
-      color: #d8ccff;
-      background: rgba(139,92,246,.10);
-      border: 1px solid rgba(139,92,246,.24);
-    }
-
-    .card-icon.cyan {
-      color: #b9f4fc;
-      background: rgba(34,211,238,.09);
-      border-color: rgba(34,211,238,.23);
-    }
-
-    .card-icon.green {
-      color: #c2f8dd;
-      background: rgba(52,211,153,.09);
-      border-color: rgba(52,211,153,.22);
-    }
-
-    .card-icon svg { width: 22px; height: 22px; }
-
-    .card h3 {
-      margin: 0 0 9px;
-      font-size: 20px;
-      letter-spacing: -.03em;
-    }
-
-    .card p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 15px;
-    }
-
-    .architecture-shell {
-      padding: 30px;
-      border-radius: 30px;
-      border: 1px solid var(--line);
-      background:
-        radial-gradient(circle at 20% 10%, rgba(139,92,246,.10), transparent 25%),
-        radial-gradient(circle at 88% 90%, rgba(34,211,238,.08), transparent 24%),
-        var(--surface);
-    }
-
-    .architecture-row {
-      display: grid;
-      grid-template-columns: 1fr auto 1fr auto 1fr;
-      align-items: stretch;
-      gap: 14px;
-    }
-
-    .arch-box {
-      min-height: 170px;
-      padding: 22px;
-      border-radius: 20px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,.025);
-    }
-
-    .arch-box small {
-      display: block;
-      margin-bottom: 14px;
-      color: var(--cyan);
-      font-size: 10px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: .10em;
-    }
-
-    .arch-box h3 { margin: 0 0 12px; }
-    .arch-box p { margin: 0; color: var(--muted); font-size: 14px; }
-
-    .arch-arrow {
-      display: grid;
-      place-items: center;
-      color: #718096;
-      font-size: 26px;
-    }
-
-    .architecture-footer {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 12px;
-      margin-top: 14px;
-    }
-
-    .mini-box {
-      padding: 14px;
-      border-radius: 14px;
-      background: rgba(255,255,255,.025);
-      border: 1px solid var(--line);
-      color: #cbd5e1;
-      font-size: 12px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
       font-weight: 700;
-      text-align: center;
+      color: var(--green);
+      background: rgba(52, 211, 153, 0.1);
+      border: 1px solid rgba(52, 211, 153, 0.3);
+      padding: 3px 8px;
+      border-radius: 999px;
+    }
+    .stat-live-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
     }
 
-    .spoiler-demo {
+    .stat-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 24px;
-      align-items: stretch;
+      gap: 12px;
     }
-
-    .policy-card {
-      padding: 30px;
-      border-radius: 28px;
-      background: var(--surface);
+    .stat-box {
+      padding: 14px;
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.02);
       border: 1px solid var(--line);
     }
-
-    .policy-rule {
-      display: flex;
-      gap: 15px;
-      padding: 16px 0;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .policy-rule:last-child { border-bottom: 0; }
-
-    .policy-number {
-      flex: 0 0 auto;
-      width: 32px;
-      height: 32px;
-      border-radius: 11px;
-      display: grid;
-      place-items: center;
-      color: #dcd6fe;
-      background: rgba(139,92,246,.12);
-      border: 1px solid rgba(139,92,246,.25);
-      font-size: 12px;
-      font-weight: 850;
-    }
-
-    .policy-rule strong {
+    .stat-box small {
       display: block;
-      margin-bottom: 4px;
-      font-size: 15px;
-    }
-
-    .policy-rule span {
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .code-card {
-      position: relative;
-      overflow: hidden;
-      border-radius: 28px;
-      background: #080c12;
-      border: 1px solid var(--line);
-      box-shadow: var(--shadow);
-    }
-
-    .code-head {
-      min-height: 46px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 16px;
-      color: #8491a3;
-      background: #0b111a;
-      border-bottom: 1px solid var(--line);
+      color: var(--text-subtle);
       font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .stat-box strong {
+      font-size: 18px;
       font-weight: 800;
-    }
-
-    pre {
-      margin: 0;
-      padding: 24px;
-      overflow: auto;
-      color: #cbd5e1;
-      font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
-      font-size: 13px;
-      line-height: 1.7;
-    }
-
-    .code-purple { color: #c4b5fd; }
-    .code-cyan { color: #67e8f9; }
-    .code-green { color: #86efac; }
-    .code-amber { color: #fde68a; }
-
-    .roadmap {
-      position: relative;
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0,1fr));
-      gap: 14px;
-    }
-
-    .roadmap::before {
-      content: "";
-      position: absolute;
-      left: 8%;
-      right: 8%;
-      top: 34px;
-      height: 1px;
-      background: linear-gradient(90deg, var(--green), var(--cyan), var(--violet), #596275);
-      z-index: 0;
-    }
-
-    .phase {
-      position: relative;
-      z-index: 1;
-      padding: 0 7px;
-    }
-
-    .phase-dot {
-      width: 18px;
-      height: 18px;
-      margin: 26px 0 24px;
-      border-radius: 50%;
-      background: var(--surface-3);
-      border: 4px solid var(--bg);
-      box-shadow: 0 0 0 2px #556174;
-    }
-
-    .phase.active .phase-dot {
-      background: var(--green);
-      box-shadow: 0 0 0 2px var(--green), 0 0 24px rgba(52,211,153,.36);
-    }
-
-    .phase.next .phase-dot {
-      background: var(--cyan);
-      box-shadow: 0 0 0 2px var(--cyan), 0 0 24px rgba(34,211,238,.24);
-    }
-
-    .phase h3 { margin: 0 0 7px; font-size: 18px; }
-    .phase p { margin: 0; color: var(--muted); font-size: 13px; }
-    .phase-tag {
-      display: inline-flex;
-      margin-top: 14px;
-      padding: 5px 8px;
-      border-radius: 999px;
-      background: rgba(255,255,255,.04);
-      border: 1px solid var(--line);
-      color: #aab5c4;
-      font-size: 10px;
-      font-weight: 800;
-    }
-
-    .project-box {
-      display: grid;
-      grid-template-columns: 1.1fr .9fr;
-      gap: 24px;
-      padding: 38px;
-      border-radius: 32px;
-      border: 1px solid rgba(139,92,246,.28);
-      background:
-        radial-gradient(circle at 0 0, rgba(139,92,246,.18), transparent 34%),
-        radial-gradient(circle at 100% 100%, rgba(34,211,238,.10), transparent 30%),
-        var(--surface);
-      box-shadow: var(--shadow);
-    }
-
-    .project-box h2 { font-size: clamp(38px, 5vw, 60px); }
-
-    .project-box p {
-      max-width: 690px;
-      color: var(--muted);
-      font-size: 17px;
-    }
-
-    .project-meta {
-      display: grid;
-      gap: 10px;
+      color: #ffffff;
     }
 
     .meta-row {
       display: flex;
       justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      font-size: 13px;
+    }
+    .meta-row:last-child { border-bottom: 0; }
+    .meta-row span { color: var(--text-muted); }
+    .meta-row strong { color: #ffffff; font-weight: 600; }
+
+    /* Sections */
+    section {
+      padding-block: 80px;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 30px;
+      margin-bottom: 48px;
+    }
+    .section-label {
+      display: inline-block;
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .section-head h2 {
+      margin: 0;
+      font-size: clamp(30px, 3.5vw, 44px);
+      letter-spacing: -0.04em;
+      font-weight: 800;
+      line-height: 1.15;
+    }
+    .section-head p {
+      max-width: 480px;
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 16px;
+    }
+
+    /* Cards Grid */
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
       gap: 20px;
-      padding: 15px 16px;
-      border-radius: 14px;
-      background: rgba(255,255,255,.03);
+    }
+
+    .card {
+      padding: 30px;
+      border-radius: var(--radius-lg);
+      background: var(--card-bg);
       border: 1px solid var(--line);
-      font-size: 13px;
+      backdrop-filter: blur(16px);
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(139, 92, 246, 0.4);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4), 0 0 30px rgba(139, 92, 246, 0.15);
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.6), transparent);
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+    .card:hover::before { opacity: 1; }
+
+    .card-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 24px;
+      background: rgba(139, 92, 246, 0.12);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      color: #c4b5fd;
+    }
+    .card-icon.cyan {
+      background: rgba(34, 211, 238, 0.12);
+      border-color: rgba(34, 211, 238, 0.3);
+      color: #67e8f9;
+    }
+    .card-icon.green {
+      background: rgba(52, 211, 153, 0.12);
+      border-color: rgba(52, 211, 153, 0.3);
+      color: #6ee7b7;
+    }
+    .card-icon.fuchsia {
+      background: rgba(217, 70, 239, 0.12);
+      border-color: rgba(217, 70, 239, 0.3);
+      color: #f0abfc;
+    }
+    .card-icon.orange {
+      background: rgba(251, 146, 60, 0.12);
+      border-color: rgba(251, 146, 60, 0.3);
+      color: #fdba74;
+    }
+    .card-icon svg { width: 24px; height: 24px; }
+
+    .card h3 {
+      margin: 0 0 10px;
+      font-size: 20px;
+      letter-spacing: -0.02em;
+      font-weight: 700;
+    }
+    .card p {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1.6;
     }
 
-    .meta-row span:first-child { color: var(--muted); }
-    .meta-row strong { text-align: right; }
+    /* Projections Showcase */
+    .projection-card {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 30px;
+      padding: 32px;
+      border-radius: var(--radius-xl);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .projection-card.reverse {
+      grid-template-columns: 0.9fr 1.1fr;
+    }
+    .projection-card h3 {
+      font-size: 24px;
+      margin: 0 0 12px;
+      letter-spacing: -0.03em;
+    }
+    .projection-card p {
+      color: var(--text-muted);
+      font-size: 15px;
+      margin: 0 0 18px;
+    }
+    .projection-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .projection-tag {
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: #cbd5e1;
+    }
 
+    .code-preview {
+      border-radius: var(--radius-md);
+      background: #05080e;
+      border: 1px solid var(--line-strong);
+      padding: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: #cbd5e1;
+      overflow-x: auto;
+    }
+    .code-head {
+      display: flex;
+      justify-content: space-between;
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--line);
+      color: var(--text-subtle);
+      font-size: 11px;
+    }
+    .c-purple { color: #c084fc; }
+    .c-cyan { color: #67e8f9; }
+    .c-green { color: #86efac; }
+    .c-yellow { color: #fde047; }
+    .c-rose { color: #fda4af; }
+
+    /* Chat Simulation */
+    .chat-shell {
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .chat-msg {
+      display: flex;
+      gap: 12px;
+      font-size: 14px;
+    }
+    .chat-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .chat-avatar.user { background: var(--surface-3); color: #ffffff; }
+    .chat-avatar.bot { background: linear-gradient(135deg, var(--violet), var(--cyan)); color: #ffffff; }
+    .chat-bubble {
+      padding: 12px 16px;
+      border-radius: 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      line-height: 1.5;
+    }
+    .chat-bubble.bot {
+      background: rgba(139, 92, 246, 0.08);
+      border-color: rgba(139, 92, 246, 0.25);
+    }
+    .citation-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(34, 211, 238, 0.12);
+      border: 1px solid rgba(34, 211, 238, 0.3);
+      color: var(--cyan);
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      margin-inline: 2px;
+    }
+
+    /* Architecture Flow */
+    .arch-container {
+      padding: 36px;
+      border-radius: var(--radius-xl);
+      background: var(--surface);
+      border: 1px solid var(--line);
+    }
+    .arch-flow {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr;
+      gap: 12px;
+      align-items: center;
+    }
+    .arch-step {
+      padding: 20px;
+      border-radius: var(--radius-md);
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      text-align: center;
+    }
+    .arch-step small {
+      display: block;
+      color: var(--cyan);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .arch-step h4 { margin: 0 0 6px; font-size: 15px; }
+    .arch-step p { margin: 0; color: var(--text-muted); font-size: 12px; }
+    .arch-arrow { color: var(--text-subtle); font-size: 20px; font-weight: 700; text-align: center; }
+
+    .tech-stack-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 24px;
+      justify-content: center;
+    }
+    .tech-pill {
+      padding: 8px 16px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--line);
+      font-size: 12px;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+
+    /* Roadmap Timeline */
+    .roadmap-list {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    .roadmap-card {
+      padding: 24px;
+      border-radius: var(--radius-lg);
+      background: var(--card-bg);
+      border: 1px solid var(--line);
+      position: relative;
+    }
+    .roadmap-card.done {
+      border-color: rgba(52, 211, 153, 0.4);
+    }
+    .roadmap-card.current {
+      border-color: rgba(34, 211, 238, 0.5);
+      box-shadow: 0 0 30px rgba(34, 211, 238, 0.15);
+    }
+    .roadmap-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .roadmap-card.done .roadmap-badge {
+      background: rgba(52, 211, 153, 0.15);
+      color: var(--green);
+    }
+    .roadmap-card.current .roadmap-badge {
+      background: rgba(34, 211, 238, 0.15);
+      color: var(--cyan);
+    }
+    .roadmap-card h4 { margin: 0 0 8px; font-size: 16px; }
+    .roadmap-card p { margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+
+    /* CTA Box */
+    .cta-box {
+      padding: 48px;
+      border-radius: var(--radius-xl);
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(34, 211, 238, 0.12)), var(--surface);
+      border: 1px solid rgba(139, 92, 246, 0.4);
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      align-items: center;
+      gap: 36px;
+      box-shadow: var(--shadow-lg);
+    }
+    .cta-box h2 {
+      margin: 0 0 12px;
+      font-size: clamp(28px, 3vw, 40px);
+      letter-spacing: -0.04em;
+    }
+    .cta-box p {
+      margin: 0;
+      color: #cbd5e1;
+      font-size: 16px;
+    }
+
+    /* Footer */
     footer {
-      padding: 32px 0 48px;
-      color: #7f8a9a;
+      padding-block: 40px;
+      border-top: 1px solid var(--line);
+      color: var(--text-muted);
       font-size: 13px;
     }
-
     .footer-inner {
       display: flex;
       justify-content: space-between;
-      gap: 20px;
-      padding-top: 24px;
-      border-top: 1px solid var(--line);
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
     }
 
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      z-index: 100;
-      display: none;
-      place-items: center;
-      padding: 20px;
-      background: rgba(2,5,9,.78);
-      backdrop-filter: blur(9px);
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .hero { grid-template-columns: 1fr; }
+      .grid-3 { grid-template-columns: repeat(2, 1fr); }
+      .grid-4 { grid-template-columns: repeat(2, 1fr); }
+      .roadmap-list { grid-template-columns: repeat(2, 1fr); }
+      .projection-card, .projection-card.reverse { grid-template-columns: 1fr; }
+      .arch-flow { grid-template-columns: 1fr; }
+      .arch-arrow { transform: rotate(90deg); padding: 4px; }
+      .cta-box { grid-template-columns: 1fr; }
     }
 
-    .modal-backdrop.open { display: grid; }
-
-    .modal {
-      width: min(100%, 460px);
-      padding: 26px;
-      border-radius: 24px;
-      background: #101722;
-      border: 1px solid var(--line-strong);
-      box-shadow: var(--shadow);
-      animation: modalIn .18s ease;
-    }
-
-    @keyframes modalIn {
-      from { transform: translateY(12px) scale(.98); opacity: 0; }
-      to { transform: translateY(0) scale(1); opacity: 1; }
-    }
-
-    .modal-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 16px;
-      display: grid;
-      place-items: center;
-      color: #ffe2e7;
-      background: rgba(251,113,133,.12);
-      border: 1px solid rgba(251,113,133,.28);
-    }
-
-    .modal h3 { margin: 18px 0 8px; font-size: 24px; }
-    .modal p { margin: 0; color: var(--muted); font-size: 14px; }
-
-    .modal-summary {
-      margin-top: 18px;
-      padding: 14px;
-      border-radius: 14px;
-      background: rgba(255,255,255,.03);
-      border: 1px solid var(--line);
-      font-size: 13px;
-    }
-
-    .modal-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      margin-top: 22px;
-    }
-
-    .mobile-menu-button {
-      display: none;
-      width: 42px;
-      height: 42px;
-      place-items: center;
-      border-radius: 12px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,.03);
-      color: white;
-      cursor: pointer;
-    }
-
-    .mobile-menu {
-      display: none;
-      padding: 0 0 16px;
-    }
-
-    .mobile-menu.open {
-      display: grid;
-      gap: 8px;
-    }
-
-    .mobile-menu a {
-      padding: 12px 4px;
-      color: var(--muted);
-      border-bottom: 1px solid var(--line);
-    }
-
-    @media (max-width: 980px) {
-      .nav-links, .nav-cta { display: none; }
-      .mobile-menu-button { display: grid; }
-
-      .hero {
-        grid-template-columns: 1fr;
-        padding-top: 66px;
-      }
-
-      .hero-copy { text-align: center; }
-      .hero-copy p { margin-inline: auto; }
-      .hero-actions, .hero-note { justify-content: center; }
-
-      .app-shell { max-width: 720px; margin-inline: auto; width: 100%; }
-      .section-head { grid-template-columns: 1fr; align-items: start; }
-      .problem-grid, .feature-grid, .tech-grid { grid-template-columns: 1fr 1fr; }
-      .architecture-row { grid-template-columns: 1fr; }
-      .arch-arrow { transform: rotate(90deg); min-height: 36px; }
-      .architecture-footer { grid-template-columns: 1fr 1fr; }
-      .spoiler-demo { grid-template-columns: 1fr; }
-      .roadmap { grid-template-columns: 1fr 1fr; }
-      .roadmap::before { display: none; }
-      .phase-dot { margin: 0 0 18px; }
-      .project-box { grid-template-columns: 1fr; }
-    }
-
-    @media (max-width: 680px) {
-      .container { width: min(calc(100% - 24px), var(--max)); }
-      section { padding-block: 78px; }
-      .hero { padding-block: 56px 50px; }
-      h1 { font-size: clamp(48px, 16vw, 70px); }
-      .hero-copy > p { font-size: 17px; }
-
-      .app-shell { min-height: auto; border-radius: 22px; }
-      .demo-toolbar { align-items: flex-start; flex-direction: column; }
-      .app-body { grid-template-columns: 1fr; }
-      .detail-panel { border-left: 0; border-top: 1px solid var(--line); }
-      .graph-stage { min-height: 400px; }
-
-      .problem-grid, .feature-grid, .tech-grid,
-      .architecture-footer, .roadmap {
-        grid-template-columns: 1fr;
-      }
-
-      .card { min-height: 0; }
-      .project-box { padding: 25px; }
-      .footer-inner { flex-direction: column; }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      html { scroll-behavior: auto; }
-      *, *::before, *::after {
-        animation-duration: .01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: .01ms !important;
-      }
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .mobile-menu-btn { display: inline-flex; }
+      .grid-3, .grid-2, .grid-4, .roadmap-list { grid-template-columns: 1fr; }
+      .section-head { flex-direction: column; align-items: flex-start; gap: 12px; }
     }
   </style>
 </head>
-
 <body>
-  <header class="nav-wrap" id="navWrap">
+
+  <!-- Top Banner -->
+  <div class="top-banner">
+    <span data-i18n="banner_text">🚀 Spoilerless v1.4 is live in production! Experience the spoiler-safe GraphRAG engine at</span>
+    <a href="https://spoilerless.net" target="_blank" rel="noreferrer">spoilerless.net</a>
+  </div>
+
+  <!-- Sticky Navbar -->
+  <div class="nav-wrap" id="navWrap">
     <div class="container">
-      <nav aria-label="Ana navigasyon">
-        <a class="brand" href="#top" aria-label="Spoilerless ana sayfa">
-          <span class="brand-mark" aria-hidden="true">
+      <nav>
+        <a href="#top" class="brand" aria-label="Spoilerless Home">
+          <div class="brand-mark">
             <svg viewBox="0 0 24 24" fill="none">
-              <circle cx="6" cy="12" r="2.3" stroke="currentColor" stroke-width="1.7"/>
-              <circle cx="17.5" cy="6" r="2.3" stroke="currentColor" stroke-width="1.7"/>
-              <circle cx="18" cy="18" r="2.3" stroke="currentColor" stroke-width="1.7"/>
-              <path d="M8.1 11 15.4 7M8.2 13.2l7.6 3.6M17.7 8.4l.2 7.2" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-          </span>
+          </div>
           <span>Spoilerless</span>
         </a>
 
         <div class="nav-links">
-          <a href="#problem">Problem</a>
-          <a href="#features">Özellikler</a>
-          <a href="#architecture">Mimari</a>
-          <a href="#roadmap">Yol Haritası</a>
+          <a href="#features" data-i18n="nav_features">Features</a>
+          <a href="#projections" data-i18n="nav_projections">Projections</a>
+          <a href="#chat" data-i18n="nav_chat">GraphRAG Chat</a>
+          <a href="#architecture" data-i18n="nav_arch">Architecture</a>
+          <a href="#spoiler" data-i18n="nav_safety">Spoiler Model</a>
+          <a href="#roadmap" data-i18n="nav_roadmap">Roadmap</a>
         </div>
 
-        <a class="nav-cta" href="#project">
-          Projeyi incele
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="m9 18 6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </a>
+        <div class="nav-actions">
+          <div class="lang-switcher" role="group" aria-label="Language selection">
+            <button class="lang-btn" id="langTr" onclick="setLanguage('tr')">TR</button>
+            <button class="lang-btn active" id="langEn" onclick="setLanguage('en')">EN</button>
+          </div>
 
-        <button class="mobile-menu-button" id="mobileMenuButton" aria-label="Menüyü aç" aria-expanded="false">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
-            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </button>
+          <a class="button primary sm" href="https://spoilerless.net" target="_blank" rel="noreferrer">
+            <span data-i18n="btn_launch_app">Launch App</span>
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M7 17L17 7M17 7H7M17 7V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </a>
+
+          <a class="button sm" href="https://github.com/vinnipukh/hdgrafcehennemi" target="_blank" rel="noreferrer" aria-label="GitHub Repository">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;">
+              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+            </svg>
+          </a>
+
+          <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle Navigation">
+            <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
+              <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
       </nav>
-
-      <div class="mobile-menu" id="mobileMenu">
-        <a href="#problem">Problem</a>
-        <a href="#features">Özellikler</a>
-        <a href="#architecture">Mimari</a>
-        <a href="#roadmap">Yol Haritası</a>
-        <a href="#project">Proje Bilgileri</a>
-      </div>
     </div>
-  </header>
+
+    <!-- Mobile Drawer -->
+    <div class="mobile-drawer" id="mobileDrawer">
+      <a href="#features" data-i18n="nav_features" onclick="closeMobile()">Features</a>
+      <a href="#projections" data-i18n="nav_projections" onclick="closeMobile()">Projections</a>
+      <a href="#chat" data-i18n="nav_chat" onclick="closeMobile()">GraphRAG Chat</a>
+      <a href="#architecture" data-i18n="nav_arch" onclick="closeMobile()">Architecture</a>
+      <a href="#spoiler" data-i18n="nav_safety" onclick="closeMobile()">Spoiler Model</a>
+      <a href="#roadmap" data-i18n="nav_roadmap" onclick="closeMobile()">Roadmap</a>
+      <a href="https://spoilerless.net" target="_blank" rel="noreferrer" style="color:var(--cyan);font-weight:700;">Launch spoilerless.net →</a>
+    </div>
+  </div>
 
   <main id="top">
+    <!-- Hero Section -->
     <div class="container">
       <section class="hero">
         <div class="hero-copy">
           <div class="eyebrow">
             <span class="eyebrow-dot"></span>
-            Staj bitirme projesi · v0 prototip tamamlandı
+            <span data-i18n="hero_badge">v1.4 Security Hardened · Live in Production</span>
           </div>
 
           <h1>
-            Dizileri
-            <span class="gradient-text">graf üzerinden</span>
-            hatırla.
+            <span data-i18n="hero_title_1">Explore TV narratives.</span>
+            <br>
+            <span class="gradient-text" data-i18n="hero_title_gradient">Strictly spoiler-safe.</span>
           </h1>
 
-          <p>
-            İzlediğin bölüme kadar olan karakterleri, olayları ve ilişkileri;
-            kaynaklarıyla birlikte keşfet. Grafı kendin düzenle ve yalnızca
-            görebileceğin bilgilerle çalışan bir LLM ile sohbet et.
+          <p data-i18n="hero_desc">
+            An interactive narrative knowledge graph, source-grounded evidence provenance, and spoiler-safe GraphRAG chat — strictly bounded to your exact watch progress at the database query layer.
           </p>
 
           <div class="hero-actions">
-            <a class="button primary" href="#demo">
-              Etkileşimli prototipi gör
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="m9 18 6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <a class="button primary" href="https://spoilerless.net" target="_blank" rel="noreferrer">
+              <span data-i18n="btn_try_live">Open spoilerless.net</span>
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M7 17L17 7M17 7H7M17 7V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </a>
-            <a class="button" href="#architecture">
-              Teknik mimari
+            <a class="button" href="#features">
+              <span data-i18n="btn_explore_features">Explore Features</span>
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M19 9l-7 7-7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </a>
+            <a class="button" href="https://github.com/vinnipukh/hdgrafcehennemi" target="_blank" rel="noreferrer">
+              <span>GitHub</span>
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
             </a>
           </div>
 
-          <div class="hero-note">
-            <span><i></i>Spoiler kontrollü erişim</span>
-            <span><i></i>Kaynak bağlantılı claim sistemi</span>
-            <span><i></i>Kullanıcı tarafından düzenlenebilir graf</span>
-            <span><i></i>Google OAuth ile giriş</span>
-            <span><i></i>Revizyon geçmişi</span>
+          <div class="hero-pills">
+            <span><i></i><span data-i18n="pill_failclosed">Fail-Closed Boundary</span></span>
+            <span><i></i><span data-i18n="pill_graphrag">GraphRAG AI Chat</span></span>
+            <span><i></i><span data-i18n="pill_projections">4 Projection Views</span></span>
+            <span><i></i><span data-i18n="pill_provenance">Evidence Provenance</span></span>
           </div>
         </div>
 
-        <div class="app-shell" id="demo" aria-label="Spoilerless arayüz prototipi">
-          <div class="window-bar">
-            <div class="window-dots" aria-hidden="true"><span></span><span></span><span></span></div>
-            <div class="window-title">spoilerless.app / graph</div>
-            <div style="color:#7f8a9a; font-size:11px; font-weight:700;">Arhan Er · Logout</div>
-          </div>
-
-          <div class="demo-toolbar">
-            <div class="series-select">
-              <span class="series-avatar">D</span>
-              <span>Dexter</span>
-            </div>
-
-            <div class="episode-picker" aria-label="İzleme noktası seçimi">
-              <button class="episode-button active" data-episode="1">S01E01 · Dexter</button>
-              <button class="episode-button" data-episode="2">S01E02 · Crocodile</button>
-              <button class="episode-button" data-episode="3">S01E03 · Popping Cherry</button>
-            </div>
-          </div>
-
-          <div class="app-body">
-            <div class="graph-stage">
-              <svg class="graph-svg" viewBox="0 0 650 472" role="img" aria-label="Gerçek uygulamadan alınan karakter ve olay grafı">
-                <g id="edges-1">
-                  <line class="edge" x1="185" y1="195" x2="335" y2="120"/>
-                  <text class="edge-label" x="255" y="150">FAMILY_OF</text>
-                  <line class="edge" x1="185" y1="195" x2="480" y2="205"/>
-                  <text class="edge-label" x="324" y="194">TRUSTS</text>
-                  <line class="edge" x1="185" y1="80" x2="185" y2="153"/>
-                  <text class="edge-label" x="205" y="118">DISTRUSTS</text>
-                  <line class="edge" x1="480" y1="330" x2="440" y2="205"/>
-                  <text class="edge-label" x="500" y="270">OCCURRED_IN</text>
-                </g>
-
-                <g id="edges-2" class="episode-layer">
-                  <line class="edge" x1="360" y1="302" x2="510" y2="88"/>
-                  <text class="edge-label" x="440" y="190">WORKS_WITH</text>
-                </g>
-
-                <g id="edges-3" class="episode-layer">
-                  <line class="edge" x1="235" y1="378" x2="185" y2="237"/>
-                  <text class="edge-label" x="205" y="310">PART_OF</text>
-                </g>
-
-                <g class="node-group" data-name="Dexter Morgan" data-type="Character" data-episode="1" data-detail="Merkez karakter — canonical origin. Node Type: Character. Gerçek uygulamadaki Overview sekmesinde bu alanlar gösterilir.">
-                  <circle class="node-circle" cx="185" cy="195" r="42"/>
-                  <text class="node-text" x="185" y="191">Dexter</text>
-                  <text class="node-text" x="185" y="202">Morgan</text>
-                  <text class="node-type" x="185" y="217">CHARACTER</text>
-                </g>
-
-                <g class="node-group" data-name="James Doakes" data-type="Character" data-episode="1" data-detail="Dexter'a güvenmeyen dedektif. DISTRUSTS ilişkisiyle bağlanır.">
-                  <circle class="node-circle secondary" cx="185" cy="115" r="34"/>
-                  <text class="node-text" x="185" y="112">James</text>
-                  <text class="node-text" x="185" y="123">Doakes</text>
-                  <text class="node-type" x="185" y="136">CHARACTER</text>
-                </g>
-
-                <g class="node-group" data-name="Debra Morgan" data-type="Character" data-episode="1" data-detail="Dexter'ın kız kardeşi. FAMILY_OF ilişkisiyle bağlanır.">
-                  <circle class="node-circle secondary" cx="335" cy="120" r="36"/>
-                  <text class="node-text" x="335" y="117">Debra</text>
-                  <text class="node-text" x="335" y="128">Morgan</text>
-                  <text class="node-type" x="335" y="142">CHARACTER</text>
-                </g>
-
-                <g class="node-group" data-name="Angel Batista" data-type="Character" data-episode="1" data-detail="Dexter'ın güvendiği meslektaşı. TRUSTS ilişkisiyle bağlanır.">
-                  <circle class="node-circle secondary" cx="480" cy="205" r="36"/>
-                  <text class="node-text" x="480" y="202">Angel</text>
-                  <text class="node-text" x="480" y="213">Batista</text>
-                  <text class="node-type" x="480" y="227">CHARACTER</text>
-                </g>
-
-                <g class="node-group" data-name="Ice-truck case" data-type="Event" data-episode="1" data-detail="Sezon boyunca süren merkezi olay. OCCURRED_IN ile bir mekâna bağlanır.">
-                  <rect class="node-circle event" x="400" y="170" width="80" height="70" rx="20"/>
-                  <text class="node-text" x="440" y="201">Ice-truck</text>
-                  <text class="node-text" x="440" y="212">case</text>
-                  <text class="node-type" x="440" y="226">EVENT</text>
-                </g>
-
-                <g class="node-group" data-name="Miami crime scene" data-type="Location" data-episode="1" data-detail="Olayın gerçekleştiği mekân kaydı.">
-                  <rect class="node-circle location" x="440" y="330" width="90" height="54" rx="18"/>
-                  <text class="node-text" x="485" y="355">Miami crime</text>
-                  <text class="node-type" x="485" y="371">LOCATION</text>
-                </g>
-
-                <g class="node-group episode-layer" data-name="Maria LaGuerta" data-type="Character" data-episode="2" data-detail="Bu node yalnızca S01E02 · Crocodile görünürlüğü açıldığında gösterilir.">
-                  <circle class="node-circle secondary" cx="360" cy="302" r="34"/>
-                  <text class="node-text" x="360" y="299">Maria</text>
-                  <text class="node-text" x="360" y="310">LaGuerta</text>
-                  <text class="node-type" x="360" y="323">CHARACTER</text>
-                </g>
-
-                <g class="node-group episode-layer" data-name="Miami Metro PD" data-type="Organization" data-episode="2" data-detail="Bu node yalnızca S01E02 · Crocodile görünürlüğü açıldığında gösterilir.">
-                  <rect class="node-circle location" x="470" y="70" width="90" height="54" rx="18"/>
-                  <text class="node-text" x="515" y="93">Miami Metro</text>
-                  <text class="node-type" x="515" y="109">ORGANIZATION</text>
-                </g>
-
-                <g class="node-group episode-layer" data-name="Rita Bennett" data-type="Character" data-episode="3" data-detail="Bu node yalnızca S01E03 · Popping Cherry görünürlüğü açıldığında gösterilir.">
-                  <circle class="node-circle secondary" cx="235" cy="378" r="34"/>
-                  <text class="node-text" x="235" y="375">Rita</text>
-                  <text class="node-text" x="235" y="386">Bennett</text>
-                  <text class="node-type" x="235" y="399">CHARACTER</text>
-                </g>
+        <!-- Live Architecture & Platform Status Card -->
+        <div class="hero-stat-card">
+          <div class="stat-header">
+            <strong>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" style="color:var(--cyan);">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                <path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
               </svg>
+              <span data-i18n="card_platform_title">Live Production Environment</span>
+            </strong>
+            <span class="stat-live-indicator">
+              <span class="stat-live-dot"></span>
+              <span>OPERATIONAL</span>
+            </span>
+          </div>
 
-              <div class="graph-hint">Bir node'a tıklayarak kaynak ve claim detayını görüntüle.</div>
+          <div class="stat-grid">
+            <div class="stat-box">
+              <small data-i18n="stat_views">Projections</small>
+              <strong style="color:var(--cyan);">4 Views</strong>
             </div>
+            <div class="stat-box">
+              <small data-i18n="stat_api_ops">OpenAPI Ops</small>
+              <strong style="color:var(--violet);">52 Routes</strong>
+            </div>
+            <div class="stat-box">
+              <small data-i18n="stat_test_suites">Test Suites</small>
+              <strong style="color:var(--green);">44 Passing</strong>
+            </div>
+            <div class="stat-box">
+              <small data-i18n="stat_database">Database</small>
+              <strong style="color:var(--orange);">Neo4j Aura</strong>
+            </div>
+          </div>
 
-            <aside class="detail-panel" aria-live="polite">
-              <div class="detail-tabs" role="tablist" aria-label="Detay sekmeleri">
-                <span class="detail-tab active" role="tab" aria-selected="true">Overview</span>
-                <span class="detail-tab" role="tab" aria-selected="false">Notes</span>
-                <span class="detail-tab" role="tab" aria-selected="false">History</span>
-                <span class="detail-tab" role="tab" aria-selected="false">Claims</span>
-                <span class="detail-tab" role="tab" aria-selected="false">Evidence</span>
-              </div>
-
-              <div class="detail-block" style="margin-top:16px; padding-top:0; border-top:0;">
-                <div class="meta-row"><span>Node Type</span><strong id="detailType">Character</strong></div>
-                <div class="meta-row"><span>Name</span><strong id="detailName">Dexter Morgan</strong></div>
-                <div class="meta-row"><span>Origin</span><strong>canonical</strong></div>
-              </div>
-
-              <a class="source-link" href="#sources" style="margin-top:16px;">
-                <span>🔗</span>
-                <span>Create Relationship</span>
-              </a>
-
-              <div class="detail-block">
-                <strong>Bu sekmelerde ne var?</strong>
-                <div class="claim-row" id="detailText">
-                  Notes: kişisel notların · History: revizyon geçmişi · Claims: kaynaklı iddialar · Evidence: altyazı ve senaryo kanıtları.
-                </div>
-              </div>
-            </aside>
+          <div style="padding-top: 4px;">
+            <div class="meta-row">
+              <span data-i18n="meta_frontend_target">Frontend Host</span>
+              <strong style="font-family:'JetBrains Mono'; font-size:12px;">app.spoilerless.net</strong>
+            </div>
+            <div class="meta-row">
+              <span data-i18n="meta_backend_target">Backend API</span>
+              <strong style="font-family:'JetBrains Mono'; font-size:12px;">api.spoilerless.net</strong>
+            </div>
+            <div class="meta-row">
+              <span data-i18n="meta_seed_scope">Seed Content Scope</span>
+              <strong>Dexter S01E01–S01E03</strong>
+            </div>
+            <div class="meta-row">
+              <span data-i18n="meta_security_model">Boundary Model</span>
+              <strong style="color:var(--green);">Fail-Closed Policy</strong>
+            </div>
           </div>
         </div>
       </section>
     </div>
 
-    <section id="problem">
-      <div class="container">
-        <div class="section-head">
-          <div>
-            <div class="section-label">Problem</div>
-            <h2>Dizi bilgisi var. Bağlamı dağınık.</h2>
-          </div>
-          <p>
-            Geleneksel dizi sayfaları karakterleri, oyuncuları ve bölüm özetlerini listeler;
-            fakat bilginin hangi bölümde öğrenildiğini, neye dayandığını ve ilişkilerin
-            zaman içinde nasıl değiştiğini güvenli biçimde göstermez.
-          </p>
-        </div>
-
-        <div class="problem-grid">
-          <article class="card">
-            <div class="card-icon">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M12 3 4 7v5c0 5 3.4 8 8 9 4.6-1 8-4 8-9V7l-8-4Z" stroke="currentColor" stroke-width="1.8"/>
-                <path d="M9.5 12.2 11 13.7l3.7-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <h3>Spoiler güvenliği</h3>
-            <p>
-              Yalnızca izlenen bölüme kadar olan node, edge, arama sonucu ve LLM bağlamı erişilebilir.
-            </p>
-          </article>
-
-          <article class="card">
-            <div class="card-icon cyan">
-              <svg viewBox="0 0 24 24" fill="none">
-                <circle cx="6" cy="12" r="2" stroke="currentColor" stroke-width="1.8"/>
-                <circle cx="18" cy="6" r="2" stroke="currentColor" stroke-width="1.8"/>
-                <circle cx="18" cy="18" r="2" stroke="currentColor" stroke-width="1.8"/>
-                <path d="m8 11 8-4M8 13l8 4M18 8v8" stroke="currentColor" stroke-width="1.8"/>
-              </svg>
-            </div>
-            <h3>İlişkisel keşif</h3>
-            <p>
-              Karakterler, olaylar, mekânlar ve kaynaklar statik sayfalar yerine etkileşimli bilgi grafında incelenir.
-            </p>
-          </article>
-
-          <article class="card">
-            <div class="card-icon green">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M7 3h8l4 4v14H7V3Z" stroke="currentColor" stroke-width="1.8"/>
-                <path d="M15 3v5h5M10 13h6M10 17h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              </svg>
-            </div>
-            <h3>Kanıt ve kaynak</h3>
-            <p>
-              Her otomatik claim; altyazı zaman damgası, senaryo sayfası veya bağlantılı dış kaynakla açıklanır.
-            </p>
-          </article>
-        </div>
-      </div>
-    </section>
-
+    <!-- Core Features Grid -->
     <section id="features">
       <div class="container">
         <div class="section-head">
           <div>
-            <div class="section-label">Çözüm</div>
-            <h2>İkinci beyin ile bilgi grafının birleşimi.</h2>
+            <div class="section-label" data-i18n="label_core_features">Platform Capabilities</div>
+            <h2 data-i18n="features_heading">A Second Brain for Television Narratives.</h2>
           </div>
-          <p>
-            Sistem yalnızca otomatik bir veri tabanı değildir. Kullanıcı kendi node, ilişki ve
-            notlarını ekleyebilir; otomatik çıkarımları onaylayabilir, düzeltebilir ve geçmiş
-            sürümleri inceleyebilir.
+          <p data-i18n="features_subheading">
+            Spoilerless combines temporal knowledge graph architectures, human-in-the-loop editing, and spoiler-safe GraphRAG into a unified narrative exploration platform.
           </p>
         </div>
 
-        <div class="feature-grid">
+        <div class="grid-3">
           <article class="card">
             <div class="card-icon">
               <svg viewBox="0 0 24 24" fill="none">
-                <path d="M4 5h16v14H4z" stroke="currentColor" stroke-width="1.8"/>
-                <path d="M8 9h8M8 13h5M8 17h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </div>
-            <h3>Önceden tanımlı ontology</h3>
-            <p>Character, Event, Episode, Source ve Claim gibi node tipleri ile kontrollü ilişki sözlüğü.</p>
+            <h3 data-i18n="feat_1_title">Fail-Closed Spoiler Safety</h3>
+            <p data-i18n="feat_1_desc">
+              Data isolation is enforced at the database query layer. Nodes, relationships, search indexes, and LLM context beyond your selected episode never leave the server.
+            </p>
           </article>
 
           <article class="card">
             <div class="card-icon cyan">
               <svg viewBox="0 0 24 24" fill="none">
-                <path d="M8 12h8M12 8v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/>
+                <circle cx="18" cy="5" r="3" stroke="currentColor" stroke-width="2"/>
+                <circle cx="6" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
+                <circle cx="18" cy="19" r="3" stroke="currentColor" stroke-width="2"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" stroke="currentColor" stroke-width="2"/>
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" stroke="currentColor" stroke-width="2"/>
               </svg>
             </div>
-            <h3>Manuel düzenleme</h3>
-            <p>Kullanıcı yeni node, ilişki ve kişisel notlar ekleyebilir; sistem içeriğiyle kullanıcı içeriği ayrı tutulur.</p>
+            <h3 data-i18n="feat_2_title">4 Specialized Projections</h3>
+            <p data-i18n="feat_2_desc">
+              Navigate tailored view modes: Story (Overview + Timeline), Characters (Social Network & Conflict), Evidence (Investigation Chains), and Advanced (Full Graph Explorer).
+            </p>
           </article>
 
           <article class="card">
             <div class="card-icon green">
               <svg viewBox="0 0 24 24" fill="none">
-                <path d="M5 6h14v9H9l-4 4V6Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                <path d="M9 10h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </div>
-            <h3>Graph-RAG sohbeti</h3>
-            <p>LLM yalnızca spoiler filtresinden geçen alt grafı sorgular ve cevaplarında kaynak gösterir.</p>
+            <h3 data-i18n="feat_3_title">Grounded GraphRAG Chat</h3>
+            <p data-i18n="feat_3_desc">
+              Chat with an LLM (Gemini or BYOK OpenAI models) that answers strictly from your spoiler-filtered graph context, quoting verified evidence chips and timestamps.
+            </p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon fuchsia">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h3 data-i18n="feat_4_title">User Notes & Custom Nodes</h3>
+            <p data-i18n="feat_4_desc">
+              Add private notes, custom entities, and custom relationships directly on the graph. User content is visually distinguished from canonical seed facts.
+            </p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon orange">
+              <svg viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                <polyline points="12 6 12 12 16 14" stroke="currentColor" stroke-width="2"/>
+              </svg>
+            </div>
+            <h3 data-i18n="feat_5_title">Revisions & One-Click Revert</h3>
+            <p data-i18n="feat_5_desc">
+              Every edit, note, or relationship is recorded in an immutable revision history. Compare before/after diffs and roll back any modification safely.
+            </p>
           </article>
 
           <article class="card">
             <div class="card-icon">
               <svg viewBox="0 0 24 24" fill="none">
-                <path d="M12 7v5l3 2M21 12a9 9 0 1 1-3-6.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                <path d="M21 4v5h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <polyline points="16 6 12 2 8 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <line x1="12" y1="2" x2="12" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </div>
-            <h3>Version history</h3>
-            <p>Her değişiklik revision kaydı oluşturur; önceki sürümler silinmeden görüntülenebilir veya geri alınabilir.</p>
-          </article>
-
-          <article class="card">
-            <div class="card-icon cyan">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M5 4h14v16H5z" stroke="currentColor" stroke-width="1.8"/>
-                <path d="M8 8h8M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              </svg>
-            </div>
-            <h3>Çoklu kaynak çıkarımı</h3>
-            <p>Altyazı, senaryo PDF'i, bölüm özeti ve ileride podcast transkriptleri ayrı provenance kayıtlarıyla işlenir.</p>
-          </article>
-
-          <article class="card">
-            <div class="card-icon green">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="m8 12 3 3 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/>
-              </svg>
-            </div>
-            <h3>Güvenilirlik katmanı</h3>
-            <p>Kaynak niteliği, kanıt açıklığı ve kaynaklar arası uyuşma; claim durumunu açıklanabilir biçimde etkiler.</p>
+            <h3 data-i18n="feat_6_title">Snapshot Sharing & Export</h3>
+            <p data-i18n="feat_6_desc">
+              Create expiring, read-only token snapshot links to share graph perspectives with friends without spoiling future plot twists. Export graph data to clean Markdown.
+            </p>
           </article>
         </div>
       </div>
     </section>
 
-    <section id="architecture">
+    <!-- 4 Projections Deep Dive -->
+    <section id="projections" style="background: rgba(14, 20, 32, 0.4); border-block: 1px solid var(--line);">
       <div class="container">
         <div class="section-head">
           <div>
-            <div class="section-label">Sistem mimarisi</div>
-            <h2>Kaynaklardan, kanıt tabanlı grafa.</h2>
+            <div class="section-label" data-i18n="label_projections_deep">Projection Views (v1.3)</div>
+            <h2 data-i18n="projections_heading">Task-Specific Graph Projections.</h2>
           </div>
-          <p>
-            Toplama, ayrıştırma, LLM çıkarımı, şema doğrulaması ve spoiler politikası birbirinden
-            ayrılır. Böylece hata kaynağı ölçülebilir ve sistem tekrar üretilebilir kalır.
+          <p data-i18n="projections_subheading">
+            Rather than overwhelming users with a 500-node raw graph, Spoilerless computes purpose-built graph projections tailored to narrative exploration.
           </p>
         </div>
 
-        <div class="architecture-shell">
-          <div class="architecture-row">
-            <div class="arch-box">
-              <small>01 · Kaynaklar</small>
-              <h3>Altyazı ve senaryo</h3>
-              <p>OpenSubtitles, senaryo PDF'leri ve kullanıcı tarafından sağlanan içerikler.</p>
-            </div>
-
-            <div class="arch-arrow">→</div>
-
-            <div class="arch-box">
-              <small>02 · İşleme</small>
-              <h3>Extraction pipeline</h3>
-              <p>Parser, sahne bölütleme, entity normalization, candidate claim üretimi ve evidence alignment.</p>
-            </div>
-
-            <div class="arch-arrow">→</div>
-
-            <div class="arch-box">
-              <small>03 · Uygulama</small>
-              <h3>Graph + LLM arayüzü</h3>
-              <p>Neo4j sorguları, spoiler-aware API, Cytoscape tabanlı graf görünümü ve kaynaklı sohbet.</p>
+        <!-- Projection 1: Story -->
+        <div class="projection-card">
+          <div>
+            <div class="section-label" style="color:var(--violet);">01 · Story Mode</div>
+            <h3 data-i18n="proj_1_title">Episode Overview & Synchronized Timeline</h3>
+            <p data-i18n="proj_1_desc">
+              Displays core characters, major plot events, and locations up to your active episode. Synchronized with a chronological Event Timeline rail at the bottom of the screen.
+            </p>
+            <div class="projection-tags">
+              <span class="projection-tag">View: episode_overview</span>
+              <span class="projection-tag">Variant A Default</span>
+              <span class="projection-tag">Event Timeline Rail</span>
             </div>
           </div>
+          <div class="code-preview">
+            <div class="code-head">
+              <span>GET /api/series/series_dexter/graph/visualization</span>
+              <span>200 OK</span>
+            </div>
+            <pre><span class="c-purple">{</span>
+  <span class="c-cyan">"view_type"</span>: <span class="c-green">"episode_overview"</span>,
+  <span class="c-cyan">"effective_view_order"</span>: <span class="c-yellow">2</span>,
+  <span class="c-cyan">"nodes"</span>: <span class="c-purple">[</span>
+    <span class="c-purple">{</span> <span class="c-cyan">"id"</span>: <span class="c-green">"char:dexter"</span>, <span class="c-cyan">"display_tier"</span>: <span class="c-yellow">1</span> <span class="c-purple">}</span>,
+    <span class="c-purple">{</span> <span class="c-cyan">"id"</span>: <span class="c-green">"event:ice_truck"</span>, <span class="c-cyan">"display_tier"</span>: <span class="c-yellow">1</span> <span class="c-purple">}</span>
+  <span class="c-purple">]</span>
+<span class="c-purple">}</span></pre>
+          </div>
+        </div>
 
-          <div class="architecture-footer">
-            <div class="mini-box">React 19 + TypeScript</div>
-            <div class="mini-box">FastAPI + Pydantic v2</div>
-            <div class="mini-box">Neo4j + Cypher</div>
-            <div class="mini-box">Docker Compose</div>
-            <div class="mini-box">Cytoscape.js</div>
-            <div class="mini-box">Tailwind CSS v4</div>
-            <div class="mini-box">shadcn/ui</div>
-            <div class="mini-box">Google OAuth</div>
+        <!-- Projection 2: Characters -->
+        <div class="projection-card reverse">
+          <div class="code-preview">
+            <div class="code-head">
+              <span>Semantic Expansion / Neighborhood</span>
+              <span>Cypher Safe</span>
+            </div>
+            <pre><span class="c-purple">MATCH</span> (c:Character <span class="c-purple">{</span>id: $node_id<span class="c-purple">}</span>)
+<span class="c-purple">OPTIONAL MATCH</span> (c)-[r:FAMILY_OF|WORKS_WITH|CONFLICTS_WITH]-(target)
+<span class="c-purple">WHERE</span> r.visible_from_order &lt;= $order
+<span class="c-purple">RETURN</span> c, r, target <span class="c-purple">LIMIT</span> <span class="c-yellow">25</span></pre>
+          </div>
+          <div>
+            <div class="section-label" style="color:var(--cyan);">02 · Character Network</div>
+            <h3 data-i18n="proj_2_title">Social Dynamics & Local Expansions</h3>
+            <p data-i18n="proj_2_desc">
+              Focuses on interpersonal bonds, workplace hierarchies, and antagonistic conflicts. Semantic expansion lets users unfold family or colleague clusters without global relayout.
+            </p>
+            <div class="projection-tags">
+              <span class="projection-tag">View: character_network</span>
+              <span class="projection-tag">Semantic Expansion (8-12 elements)</span>
+              <span class="projection-tag">Local Layout Cache</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Projection 3: Evidence -->
+        <div class="projection-card">
+          <div>
+            <div class="section-label" style="color:var(--fuchsia);">03 · Evidence & Investigation</div>
+            <h3 data-i18n="proj_3_title">Clue Chains & Answer Subgraphs</h3>
+            <p data-i18n="proj_3_desc">
+              Inspect claims and their backing evidence snippets extracted from subtitles and script PDFs. When chatting with the assistant, GraphRAG highlights temporary Answer Graphs.
+            </p>
+            <div class="projection-tags">
+              <span class="projection-tag">View: investigation</span>
+              <span class="projection-tag">GraphRAG Answer Graph</span>
+              <span class="projection-tag">Source Provenance</span>
+            </div>
+          </div>
+          <div class="code-preview">
+            <div class="code-head">
+              <span>Evidence Provenance Schema</span>
+              <span>StrictModel</span>
+            </div>
+            <pre><span class="c-purple">class</span> <span class="c-cyan">GraphEvidence</span>(StrictModel):
+    id: Identifier
+    source_type: SourceType = <span class="c-green">"subtitle"</span>
+    locator: str = <span class="c-green">"00:03:12"</span>
+    content_hash: str | None
+    text_snippet: PlainText</pre>
           </div>
         </div>
       </div>
     </section>
 
+    <!-- GraphRAG Chat Deep Dive -->
+    <section id="chat">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <div class="section-label" data-i18n="label_graphrag_chat">GraphRAG Intelligence</div>
+            <h2 data-i18n="chat_heading">AI Chat Over Filtered Graph Subgraphs.</h2>
+          </div>
+          <p data-i18n="chat_subheading">
+            Unlike generic web search or document RAG, our GraphRAG engine executes tool calls against the temporal graph, grounding answers in exact episode evidence.
+          </p>
+        </div>
+
+        <div class="grid-2" style="align-items: center;">
+          <div class="chat-shell">
+            <div class="chat-msg">
+              <div class="chat-avatar user">U</div>
+              <div class="chat-bubble">
+                <span data-i18n="chat_user_q">Why does Sergeant Doakes suspect Dexter in Episode 1?</span>
+              </div>
+            </div>
+
+            <div class="chat-msg">
+              <div class="chat-avatar bot">AI</div>
+              <div class="chat-bubble bot">
+                <p style="margin:0 0 8px;" data-i18n="chat_bot_a1">
+                  In S01E01, Sergeant James Doakes notices that Dexter exhibits an unnerving lack of genuine emotional reaction at brutal murder scenes and views his friendly persona as a calculated disguise.
+                </p>
+                <div style="margin-top: 8px;">
+                  <span class="citation-chip">📍 S01E01 [00:14:22]</span>
+                  <span class="citation-chip">🔗 DISTRUSTS</span>
+                  <span class="citation-chip">📑 Claim #104</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="card" style="margin-bottom: 16px;">
+              <h3 data-i18n="chat_feat_1_t">Bring Your Own Key (BYOK)</h3>
+              <p data-i18n="chat_feat_1_d">
+                Keys remain in your browser `localStorage` and travel via `X-LLM-*` headers. Connect Google Gemini, OpenAI GPT-4o, or self-hosted models without third-party key storage.
+              </p>
+            </div>
+
+            <div class="card">
+              <h3 data-i18n="chat_feat_2_t">Anti-Spoofing & Citation Chips</h3>
+              <p data-i18n="chat_feat_2_d">
+                LLM answers are parsed for citation chips that link directly back to Cytoscape graph nodes, instantly framing related characters on the canvas.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Technical Architecture -->
+    <section id="architecture" style="background: rgba(14, 20, 32, 0.4); border-block: 1px solid var(--line);">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <div class="section-label" data-i18n="label_arch">Architecture & Pipeline</div>
+            <h2 data-i18n="arch_heading">From Raw Scripts to Temporal Graphs.</h2>
+          </div>
+          <p data-i18n="arch_subheading">
+            Decoupled ingestion, fail-closed FastAPI API services, and a resilient Cytoscape.js canvas state machine.
+          </p>
+        </div>
+
+        <div class="arch-container">
+          <div class="arch-flow">
+            <div class="arch-step">
+              <small>01 · Ingestion</small>
+              <h4 data-i18n="arch_step_1_t">Subtitles & Scripts</h4>
+              <p data-i18n="arch_step_1_d">OpenSubtitles, script PDFs, scene chunking & timestamps</p>
+            </div>
+            <div class="arch-arrow">→</div>
+
+            <div class="arch-step">
+              <small>02 · Knowledge Graph</small>
+              <h4 data-i18n="arch_step_2_t">Neo4j Database</h4>
+              <p data-i18n="arch_step_2_d">Temporal entities, canonical claims & evidence provenance</p>
+            </div>
+            <div class="arch-arrow">→</div>
+
+            <div class="arch-step">
+              <small>03 · Service Layer</small>
+              <h4 data-i18n="arch_step_3_t">FastAPI Backend</h4>
+              <p data-i18n="arch_step_3_d">Fail-closed boundary resolver, Redis rate-limiting & projections</p>
+            </div>
+            <div class="arch-arrow">→</div>
+
+            <div class="arch-step">
+              <small>04 · UI Workspace</small>
+              <h4 data-i18n="arch_step_4_t">React 19 Frontend</h4>
+              <p data-i18n="arch_step_4_d">Cytoscape.js canvas, 4 projections & streaming GraphRAG</p>
+            </div>
+          </div>
+
+          <div class="tech-stack-row">
+            <div class="tech-pill">React 19</div>
+            <div class="tech-pill">TypeScript</div>
+            <div class="tech-pill">Vite</div>
+            <div class="tech-pill">Cytoscape.js</div>
+            <div class="tech-pill">FastAPI</div>
+            <div class="tech-pill">Python 3.13</div>
+            <div class="tech-pill">Pydantic v2</div>
+            <div class="tech-pill">Neo4j AuraDB</div>
+            <div class="tech-pill">Upstash Redis</div>
+            <div class="tech-pill">Google OAuth</div>
+            <div class="tech-pill">Vercel & Render</div>
+            <div class="tech-pill">Cloudflare DNS</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Spoiler Safety Model -->
     <section id="spoiler">
       <div class="container">
         <div class="section-head">
           <div>
-            <div class="section-label">Spoiler modeli</div>
-            <h2>Modelden rica etmiyoruz. Veriyi saklıyoruz.</h2>
+            <div class="section-label" data-i18n="label_spoiler_model">Security Boundary</div>
+            <h2 data-i18n="spoiler_heading">Fail-Closed Boundary Defense.</h2>
           </div>
-          <p>
-            Spoiler güvenliği yalnızca prompt seviyesinde uygulanmaz. Kullanıcının görmemesi gereken
-            node, edge ve evidence kayıtları API cevabına ve LLM bağlamına hiç girmez.
+          <p data-i18n="spoiler_subheading">
+            Spoiler safety is not a polite system prompt hint. It is a mathematical database barrier enforced on every read path.
           </p>
         </div>
 
-        <div class="spoiler-demo">
-          <div class="policy-card">
-            <div class="policy-rule">
-              <div class="policy-number">1</div>
-              <div>
-                <strong>Dizi bazlı izleme noktası</strong>
-                <span>Kullanıcı her dizi için izlediği son bölümü ayrı olarak seçer.</span>
-              </div>
-            </div>
-
-            <div class="policy-rule">
-              <div class="policy-number">2</div>
-              <div>
-                <strong>Backend filtreleme</strong>
-                <span>İleri bölüm bilgisi tarayıcıya gönderilmeden önce elenir.</span>
-              </div>
-            </div>
-
-            <div class="policy-rule">
-              <div class="policy-number">3</div>
-              <div>
-                <strong>Sızıntı önleme</strong>
-                <span>Autocomplete, node boyutu, bölüm sayısı ve gizli ilişki metadatası da filtrelenir.</span>
-              </div>
-            </div>
-
-            <div class="policy-rule">
-              <div class="policy-number">4</div>
-              <div>
-                <strong>Açık onay</strong>
-                <span>İlerleme seviyesi yükseltilirken kullanıcıdan spoiler onayı istenir.</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="code-card">
-            <div class="code-head">
-              <span>spoiler_policy.py</span>
-              <span>PROTOTYPE</span>
-            </div>
-            <pre><span class="code-purple">def</span> <span class="code-cyan">visible_subgraph</span>(
-    user_id: <span class="code-green">str</span>,
-    series_id: <span class="code-green">str</span>,
-) -> GraphResponse:
-    progress = progress_store.get(
-        user_id=user_id,
-        series_id=series_id,
-    )
-
-    <span class="code-purple">return</span> graph.query(
-        series_id=series_id,
-        max_visible_order=progress.episode_order,
-        include_future_metadata=<span class="code-amber">False</span>,
-    )</pre>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="sources">
-      <div class="container">
-        <div class="section-head">
-          <div>
-            <div class="section-label">Provenance</div>
-            <h2>Her bilgi, nereden geldiğini bilir.</h2>
-          </div>
-          <p>
-            Claim'ler doğrudan gerçek kabul edilmez. Her iddia kaynak, zaman damgası, sayfa numarası,
-            içerik hash'i, çıkarım yöntemi ve doğrulama durumu ile birlikte saklanır.
-          </p>
-        </div>
-
-        <div class="tech-grid">
-          <article class="card">
-            <div class="card-icon cyan">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M4 7h16v10H4z" stroke="currentColor" stroke-width="1.8"/>
-                <path d="M8 11h8M8 14h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              </svg>
-            </div>
-            <h3>Altyazı kanıtı</h3>
-            <p>Kaynak dosyası, sürüm bilgisi, konuşmacı ve başlangıç–bitiş zaman damgası.</p>
-          </article>
-
-          <article class="card">
-            <div class="card-icon">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M6 3h9l3 3v15H6z" stroke="currentColor" stroke-width="1.8"/>
-                <path d="M15 3v4h4M9 11h6M9 15h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              </svg>
-            </div>
-            <h3>Senaryo kanıtı</h3>
-            <p>PDF bağlantısı, draft türü, sayfa ve sahne numarası ile paragraf hash'i.</p>
-          </article>
-
-          <article class="card">
-            <div class="card-icon green">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M8 12h8M12 8v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/>
-              </svg>
-            </div>
-            <h3>Kullanıcı kanıtı</h3>
-            <p>Kişisel notlar ve düzeltmeler otomatik katmandan ayrılır, ancak ilgili claim'e bağlanabilir.</p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section id="roadmap">
-      <div class="container">
-        <div class="section-head">
-          <div>
-            <div class="section-label">Yol haritası</div>
-            <h2>Dar kapsamlı prototipten ölçeklenebilir sisteme.</h2>
-          </div>
-          <p>
-            İlk doğrulama alanı Dexter Sezon 1'in ilk üç bölümüdür. v0 prototipi ile temel bilgi
-            modeli ve spoiler politikasının uçtan uca çalıştığı kanıtlandı; sıradaki hedef veri
-            toplama ölçeğini otomatik çıkarım hattıyla büyütmek.
-          </p>
-        </div>
-
-        <div class="roadmap">
-          <div class="phase active">
-            <div class="phase-dot"></div>
-            <h3>Temel altyapı</h3>
-            <p>React, FastAPI, Neo4j, Docker ve ilk ontology tanımları.</p>
-            <span class="phase-tag">Tamamlandı</span>
-          </div>
-
-          <div class="phase active">
-            <div class="phase-dot"></div>
-            <h3>Dikey prototip (v0)</h3>
-            <p>Dexter S01E01–E03 seed graph, spoiler filtresi, Google OAuth girişi, kullanıcı notları/custom node'lar ve revizyon geçmişi.</p>
-            <span class="phase-tag">Tamamlandı · 2026-07-30</span>
-          </div>
-
-          <div class="phase next">
-            <div class="phase-dot"></div>
-            <h3>Otomatik çıkarım</h3>
-            <p>Altyazı ve senaryo parser'ları, candidate claim üretimi ve doğrulama.</p>
-            <span class="phase-tag">Sıradaki</span>
-          </div>
-
-          <div class="phase">
-            <div class="phase-dot"></div>
-            <h3>Graph-RAG</h3>
-            <p>Kaynaklı LLM sohbeti, evaluation seti ve kapsam genişletme.</p>
-            <span class="phase-tag">Planlandı</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="project">
-      <div class="container">
-        <div class="project-box">
-          <div>
-            <div class="section-label">Proje özeti</div>
-            <h2>Spoilerless</h2>
-            <p>
-              Zaman bağımlı ilişkileri, kanıt tabanlı claim'leri, kullanıcı notlarını ve spoiler kontrollü
-              Graph-RAG sorgularını tek bir kişisel dizi bilgi sistemi altında birleştiren akademik prototip.
+        <div class="grid-2">
+          <div class="card">
+            <h3 style="color:var(--cyan);" data-i18n="spoiler_rule_1_t">1. Single Shared Resolver</h3>
+            <p data-i18n="spoiler_rule_1_d">
+              Every route (`/graph`, `/notes`, `/revisions`, `/export`, `/visualization`) passes through `resolve_effective_boundary()`. Anonymous visitors and missing records fail closed to Order 1.
             </p>
+            <hr style="border:0; border-top:1px solid var(--line); margin: 16px 0;">
+            <h3 style="color:var(--green);" data-i18n="spoiler_rule_2_t">2. Database-Level Filtering</h3>
+            <p data-i18n="spoiler_rule_2_d">
+              Cypher queries evaluate `WHERE r.visible_from_order <= $order`. Data beyond your watch progress never leaves Neo4j, making browser inspection attacks impossible.
+            </p>
+          </div>
 
-            <div class="hero-actions">
-              <a class="button primary" href="#top">Prototipe dön</a>
-              <!-- GitHub URL'sini kendi repo adresinle değiştir. -->
-              <a class="button" id="githubLink" href="https://github.com/" target="_blank" rel="noreferrer">
-                GitHub deposu
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M8 16 16 8M9 8h7v7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <div class="code-preview">
+            <div class="code-head">
+              <span>spoilerless/app/api/boundary.py</span>
+              <span>PROD ENFORCEMENT</span>
+            </div>
+            <pre><span class="c-purple">async def</span> <span class="c-cyan">resolve_effective_boundary</span>(
+    graph_service, progress_service, series_id, user, requested_order
+) -> int:
+    <span class="c-purple">if not</span> user:
+        <span class="c-purple">return</span> <span class="c-yellow">1</span>  <span class="c-green"># Anonymous fails closed</span>
+
+    watched = <span class="c-purple">await</span> progress_service.get_progress(user.id, series_id)
+    <span class="c-purple">if not</span> watched:
+        <span class="c-purple">return</span> <span class="c-yellow">1</span>  <span class="c-green"># No progress record fails closed</span>
+
+    <span class="c-purple">return</span> min(requested_order, watched.watched_through_order)</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Roadmap -->
+    <section id="roadmap" style="background: rgba(14, 20, 32, 0.4); border-block: 1px solid var(--line);">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <div class="section-label" data-i18n="label_roadmap">Evolution & Versions</div>
+            <h2 data-i18n="roadmap_heading">From Prototype to Hardened Production.</h2>
+          </div>
+          <p data-i18n="roadmap_subheading">
+            A continuous milestone journey from prototype to security-hardened production.
+          </p>
+        </div>
+
+        <div class="roadmap-list">
+          <div class="roadmap-card done">
+            <div class="roadmap-badge">v1.1 · Shipped</div>
+            <h4>MVP & Graph Foundation</h4>
+            <p>Dexter S01E01–E03 seed graph, Cytoscape canvas, user notes, and initial revision tracking.</p>
+          </div>
+
+          <div class="roadmap-card done">
+            <div class="roadmap-badge">v1.2 · Shipped</div>
+            <h4>Spoiler Hardening</h4>
+            <p>Strict `visible_from_order` policy, candidate claim review workflow, and ChangeSet protection.</p>
+          </div>
+
+          <div class="roadmap-card done">
+            <div class="roadmap-badge">v1.3 · Shipped</div>
+            <h4>Production & 4 Views</h4>
+            <p>AuraDB/Upstash deployment, 4 projection views (Story/Characters/Evidence/Advanced), and GraphRAG chat.</p>
+          </div>
+
+          <div class="roadmap-card current">
+            <div class="roadmap-badge">v1.4 / v1.5 · Active</div>
+            <h4>Security & Code Judo</h4>
+            <p>Fail-closed boundary audit, rate limiting, SSRF guard, and frontend modularity refactoring.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Call to Action -->
+    <section id="cta">
+      <div class="container">
+        <div class="cta-box">
+          <div>
+            <h2 data-i18n="cta_heading">Ready to Explore Without Spoilers?</h2>
+            <p data-i18n="cta_desc">
+              Experience the full interactive Dexter knowledge graph, test the GraphRAG AI assistant, or inspect the open-source repository on GitHub.
+            </p>
+            <div class="hero-actions" style="margin-top:24px;">
+              <a class="button primary" href="https://spoilerless.net" target="_blank" rel="noreferrer">
+                <span data-i18n="btn_open_app">Open spoilerless.net</span>
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M7 17L17 7H7M17 7V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </a>
+              <a class="button" href="https://github.com/vinnipukh/hdgrafcehennemi" target="_blank" rel="noreferrer">
+                <span>GitHub Repository</span>
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </a>
             </div>
           </div>
 
-          <div class="project-meta">
-            <div class="meta-row"><span>Durum</span><strong>v0 prototip tamamlandı · 2026-07-30</strong></div>
-            <div class="meta-row"><span>Prototip kapsamı</span><strong>Dexter S01E01–S01E03</strong></div>
-            <div class="meta-row"><span>Graf veritabanı</span><strong>Neo4j</strong></div>
-            <div class="meta-row"><span>Backend</span><strong>FastAPI · Python · 21 endpoint</strong></div>
-            <div class="meta-row"><span>Frontend</span><strong>React 19 · TypeScript · Cytoscape.js</strong></div>
-            <div class="meta-row"><span>Kimlik doğrulama</span><strong>Google OAuth</strong></div>
-            <div class="meta-row"><span>Temel araştırma alanı</span><strong>Temporal Knowledge Graph + Graph-RAG</strong></div>
+          <div style="background:var(--surface-2); border:1px solid var(--line); border-radius:var(--radius-lg); padding:20px; font-size:13px;">
+            <div class="meta-row"><span>Deployment</span><strong>Vercel + Render + AuraDB</strong></div>
+            <div class="meta-row"><span>Production URL</span><strong>spoilerless.net</strong></div>
+            <div class="meta-row"><span>Test Coverage</span><strong>44 Suites · 404 Tests</strong></div>
+            <div class="meta-row"><span>OpenAPI Spec</span><strong>52 Operations</strong></div>
+            <div class="meta-row"><span>License</span><strong>MIT Open Source</strong></div>
           </div>
         </div>
       </div>
     </section>
   </main>
 
+  <!-- Footer -->
   <footer>
     <div class="container footer-inner">
-      <span>© 2026 Spoilerless</span>
-      <span>İzlediğin yere kadar. Kaynağıyla. Graf üzerinde.</span>
+      <div>
+        <strong>Spoilerless</strong> — <span data-i18n="footer_tagline">Grounded narrative knowledge graph with spoiler-safe GraphRAG.</span>
+      </div>
+      <div>
+        <span>© 2026 Arhan Er · <a href="https://github.com/vinnipukh/hdgrafcehennemi" target="_blank" rel="noreferrer" style="text-decoration:underline;">GitHub</a> · <a href="https://spoilerless.net" target="_blank" rel="noreferrer" style="text-decoration:underline;">spoilerless.net</a></span>
+      </div>
     </div>
   </footer>
 
-  <div class="modal-backdrop" id="spoilerModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-    <div class="modal">
-      <div class="modal-icon">
-        <svg viewBox="0 0 24 24" width="25" height="25" fill="none">
-          <path d="M12 4 3 20h18L12 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-          <path d="M12 9v5M12 17h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-        </svg>
-      </div>
-      <h3 id="modalTitle">Spoiler sınırını yükseltmek üzeresin</h3>
-      <p>
-        Yeni bölüm; daha önce görünmeyen karakterleri, olayları ve ilişkileri açabilir.
-      </p>
-      <div class="modal-summary">
-        <strong id="modalEpisode">S01E02</strong> bilgileri görünür hâle getirilecek.
-      </div>
-      <div class="modal-actions">
-        <button class="button" id="cancelEpisode">İptal</button>
-        <button class="button primary" id="confirmEpisode">Eminim, aç</button>
-      </div>
-    </div>
-  </div>
-
+  <!-- Bilingual Dictionary & Logic -->
   <script>
-    const GITHUB_REPOSITORY_URL = "https://github.com/vinnipukh/spoilerless";
-    document.getElementById("githubLink").href = GITHUB_REPOSITORY_URL;
+    const translations = {
+      en: {
+        banner_text: "🚀 Spoilerless v1.4 is live in production! Experience the spoiler-safe GraphRAG engine at",
+        nav_features: "Features",
+        nav_projections: "Projections",
+        nav_chat: "GraphRAG Chat",
+        nav_arch: "Architecture",
+        nav_safety: "Spoiler Model",
+        nav_roadmap: "Roadmap",
+        btn_launch_app: "Launch App",
+        hero_badge: "v1.4 Security Hardened · Live in Production",
+        hero_title_1: "Explore TV narratives.",
+        hero_title_gradient: "Strictly spoiler-safe.",
+        hero_desc: "An interactive narrative knowledge graph, source-grounded evidence provenance, and spoiler-safe GraphRAG chat — strictly bounded to your exact watch progress at the database query layer.",
+        btn_try_live: "Open spoilerless.net",
+        btn_explore_features: "Explore Features",
+        pill_failclosed: "Fail-Closed Boundary",
+        pill_graphrag: "GraphRAG AI Chat",
+        pill_projections: "4 Projection Views",
+        pill_provenance: "Evidence Provenance",
+        card_platform_title: "Live Production Environment",
+        stat_views: "Projections",
+        stat_api_ops: "OpenAPI Ops",
+        stat_test_suites: "Test Suites",
+        stat_database: "Database",
+        meta_frontend_target: "Frontend Host",
+        meta_backend_target: "Backend API",
+        meta_seed_scope: "Seed Content Scope",
+        meta_security_model: "Boundary Model",
+        label_core_features: "Platform Capabilities",
+        features_heading: "A Second Brain for Television Narratives.",
+        features_subheading: "Spoilerless combines temporal knowledge graph architectures, human-in-the-loop editing, and spoiler-safe GraphRAG into a unified narrative exploration platform.",
+        feat_1_title: "Fail-Closed Spoiler Safety",
+        feat_1_desc: "Data isolation is enforced at the database query layer. Nodes, relationships, search indexes, and LLM context beyond your selected episode never leave the server.",
+        feat_2_title: "4 Specialized Projections",
+        feat_2_desc: "Navigate tailored view modes: Story (Overview + Timeline), Characters (Social Network & Conflict), Evidence (Investigation Chains), and Advanced (Full Graph Explorer).",
+        feat_3_title: "Grounded GraphRAG Chat",
+        feat_3_desc: "Chat with an LLM (Gemini or BYOK OpenAI models) that answers strictly from your spoiler-filtered graph context, quoting verified evidence chips and timestamps.",
+        feat_4_title: "User Notes & Custom Nodes",
+        feat_4_desc: "Add private notes, custom entities, and custom relationships directly on the graph. User content is visually distinguished from canonical seed facts.",
+        feat_5_title: "Revisions & One-Click Revert",
+        feat_5_desc: "Every edit, note, or relationship is recorded in an immutable revision history. Compare before/after diffs and roll back any modification safely.",
+        feat_6_title: "Snapshot Sharing & Export",
+        feat_6_desc: "Create expiring, read-only token snapshot links to share graph perspectives with friends without spoiling future plot twists. Export graph data to clean Markdown.",
+        label_projections_deep: "Projection Views (v1.3)",
+        projections_heading: "Task-Specific Graph Projections.",
+        projections_subheading: "Rather than overwhelming users with a 500-node raw graph, Spoilerless computes purpose-built graph projections tailored to narrative exploration.",
+        proj_1_title: "Episode Overview & Synchronized Timeline",
+        proj_1_desc: "Displays core characters, major plot events, and locations up to your active episode. Synchronized with a chronological Event Timeline rail at the bottom of the screen.",
+        proj_2_title: "Social Dynamics & Local Expansions",
+        proj_2_desc: "Focuses on interpersonal bonds, workplace hierarchies, and antagonistic conflicts. Semantic expansion lets users unfold family or colleague clusters without global relayout.",
+        proj_3_title: "Clue Chains & Answer Subgraphs",
+        proj_3_desc: "Inspect claims and their backing evidence snippets extracted from subtitles and script PDFs. When chatting with the assistant, GraphRAG highlights temporary Answer Graphs.",
+        label_graphrag_chat: "GraphRAG Intelligence",
+        chat_heading: "AI Chat Over Filtered Graph Subgraphs.",
+        chat_subheading: "Unlike generic web search or document RAG, our GraphRAG engine executes tool calls against the temporal graph, grounding answers in exact episode evidence.",
+        chat_user_q: "Why does Sergeant Doakes suspect Dexter in Episode 1?",
+        chat_bot_a1: "In S01E01, Sergeant James Doakes notices that Dexter exhibits an unnerving lack of genuine emotional reaction at brutal murder scenes and views his friendly persona as a calculated disguise.",
+        chat_feat_1_t: "Bring Your Own Key (BYOK)",
+        chat_feat_1_d: "Keys remain in your browser localStorage and travel via X-LLM-* headers. Connect Google Gemini, OpenAI GPT-4o, or self-hosted models without third-party key storage.",
+        chat_feat_2_t: "Anti-Spoofing & Citation Chips",
+        chat_feat_2_d: "LLM answers are parsed for citation chips that link directly back to Cytoscape graph nodes, instantly framing related characters on the canvas.",
+        label_arch: "Architecture & Pipeline",
+        arch_heading: "From Raw Scripts to Temporal Graphs.",
+        arch_subheading: "Decoupled ingestion, fail-closed FastAPI API services, and a resilient Cytoscape.js canvas state machine.",
+        arch_step_1_t: "Subtitles & Scripts",
+        arch_step_1_d: "OpenSubtitles, script PDFs, scene chunking & timestamps",
+        arch_step_2_t: "Neo4j Database",
+        arch_step_2_d: "Temporal entities, canonical claims & evidence provenance",
+        arch_step_3_t: "FastAPI Backend",
+        arch_step_3_d: "Fail-closed boundary resolver, Redis rate-limiting & projections",
+        arch_step_4_t: "React 19 Frontend",
+        arch_step_4_d: "Cytoscape.js canvas, 4 projections & streaming GraphRAG",
+        label_spoiler_model: "Security Boundary",
+        spoiler_heading: "Fail-Closed Boundary Defense.",
+        spoiler_subheading: "Spoiler safety is not a polite system prompt hint. It is a mathematical database barrier enforced on every read path.",
+        spoiler_rule_1_t: "1. Single Shared Resolver",
+        spoiler_rule_1_d: "Every route (/graph, /notes, /revisions, /export, /visualization) passes through resolve_effective_boundary(). Anonymous visitors and missing records fail closed to Order 1.",
+        spoiler_rule_2_t: "2. Database-Level Filtering",
+        spoiler_rule_2_d: "Cypher queries evaluate WHERE r.visible_from_order <= $order. Data beyond your watch progress never leaves Neo4j, making browser inspection attacks impossible.",
+        label_roadmap: "Evolution & Versions",
+        roadmap_heading: "From Prototype to Hardened Production.",
+        roadmap_subheading: "A continuous milestone journey from prototype to security-hardened production.",
+        cta_heading: "Ready to Explore Without Spoilers?",
+        cta_desc: "Experience the full interactive Dexter knowledge graph, test the GraphRAG AI assistant, or inspect the open-source repository on GitHub.",
+        btn_open_app: "Open spoilerless.net",
+        footer_tagline: "Grounded narrative knowledge graph with spoiler-safe GraphRAG."
+      },
+      tr: {
+        banner_text: "🚀 Spoilerless v1.4 canlı ortamda yayında! Spoiler korumalı GraphRAG motorunu deneyin:",
+        nav_features: "Özellikler",
+        nav_projections: "Projeksiyonlar",
+        nav_chat: "GraphRAG Sohbet",
+        nav_arch: "Mimari",
+        nav_safety: "Spoiler Modeli",
+        nav_roadmap: "Yol Haritası",
+        btn_launch_app: "Uygulamayı Aç",
+        hero_badge: "v1.4 Güvenlik Sıkılaştırması · Canlı Ortamda Yayında",
+        hero_title_1: "Dizileri bilgi grafıyla keşfet.",
+        hero_title_gradient: "Tamamen spoiler korumalı.",
+        hero_desc: "İzlediğin bölüme kadar olan karakterleri, olayları ve ilişkileri; kaynaklı kanıtlarla keşfet. Grafı düzenle ve yalnızca gördüğün bilgilere erişebilen bir GraphRAG LLM ile sohbet et.",
+        btn_try_live: "spoilerless.net'i Aç",
+        btn_explore_features: "Özellikleri Keşfet",
+        pill_failclosed: "Kayıpsız Spoiler Sınırı",
+        pill_graphrag: "GraphRAG AI Sohbeti",
+        pill_projections: "4 Projeksiyon Görünümü",
+        pill_provenance: "Kanıt & Kaynak Takibi",
+        card_platform_title: "Canlı Üretim Ortamı",
+        stat_views: "Projeksiyonlar",
+        stat_api_ops: "OpenAPI Rotaları",
+        stat_test_suites: "Test Paketleri",
+        stat_database: "Veritabanı",
+        meta_frontend_target: "Frontend Sunucusu",
+        meta_backend_target: "Backend API",
+        meta_seed_scope: "Başlangıç Veri Kapsamı",
+        meta_security_model: "Güvenlik Modeli",
+        label_core_features: "Platform Yetenekleri",
+        features_heading: "Dizi Anlatıları İçin İkinci Bir Beyin.",
+        features_subheading: "Spoilerless; zamansal bilgi grafı mimarilerini, insan katkılı düzenlemeyi ve spoiler korumalı GraphRAG'i birleşik bir anlatı keşif platformunda buluşturur.",
+        feat_1_title: "Fail-Closed Spoiler Güvenliği",
+        feat_1_desc: "Veri izolasyonu veritabanı sorgu katmanında uygulanır. İzlediğin bölümün ötesindeki node'lar, ilişkiler, arama indeksleri ve LLM bağlamı sunucudan asla çıkmaz.",
+        feat_2_title: "4 Özelleştirilmiş Projeksiyon",
+        feat_2_desc: "İhtiyaca özel görünümleri keşfedin: Hikaye (Özet + Zaman Çizelgesi), Karakterler (Sosyal Ağ ve Çatışma), Kanıtlar (Soruşturma Zinciri) ve Gelişmiş (Tam Graf).",
+        feat_3_title: "Kaynak Bağlantılı GraphRAG Sohbeti",
+        feat_3_desc: "Yalnızca spoiler filtrenizden geçen graf bağlamından beslenen, altyazı ve senaryo zaman damgalarını kanıt olarak gösteren LLM asistanıyla sohbet edin.",
+        feat_4_title: "Kullanıcı Notları ve Özel Node'lar",
+        feat_4_desc: "Graf üzerine kişisel notlar, özel varlıklar ve yeni ilişkiler ekleyin. Kullanıcı içerikleri kanonik tohum verilerden görsel olarak ayırt edilir.",
+        feat_5_title: "Revizyon Geçmişi ve Tek Tıkla Geri Alma",
+        feat_5_desc: "Her düzenleme, not veya ilişki geriye dönük revizyon geçmişinde saklanır. Değişiklik öncesi/sonrası farkları inceleyin ve güvenle geri alın.",
+        feat_6_title: "Anlık Görüntü Paylaşımı ve Dışa Aktarma",
+        feat_6_desc: "Graf bakış açınızı arkadaşlarınızla spoiler vermeden paylaşmak için süreli salt okunur linkler oluşturun. Grafı temiz Markdown formatında dışa aktarın.",
+        label_projections_deep: "Projeksiyon Görünümleri (v1.3)",
+        projections_heading: "Göreve Özel Graf Projeksiyonları.",
+        projections_subheading: "Spoilerless, kullanıcıları 500 node'luk karmaşık ham bir grafa boğmak yerine, anlatı keşfine özel optimize edilmiş projeksiyonlar sunar.",
+        proj_1_title: "Bölüm Özeti & Eşzamanlı Zaman Çizelgesi",
+        proj_1_desc: "Aktif bölümünüze kadar olan ana karakterleri, kilit olayları ve mekanları listeler. Ekranın altındaki kronolojik Olay Çizelgesi ile senkronize çalışır.",
+        proj_2_title: "Sosyal Dinamikler & Yerel Genişletmeler",
+        proj_2_desc: "Kişilerarası bağlara, işyeri hiyerarşilerine ve çatışmalara odaklanır. Semantik genişletme ile aile veya iş kümeleri tüm grafı bozmadan açılabilir.",
+        proj_3_title: "İpucu Zincirleri & Yanıt Alt Grafları",
+        proj_3_desc: "Altyazılardan ve senaryo PDF'lerinden çıkarılan iddiaları ve kanıt parçacıklarını inceleyin. Asistanla sohbet ederken geçici Yanıt Grafları aydınlatılır.",
+        label_graphrag_chat: "GraphRAG Zekası",
+        chat_heading: "Filtrelenmiş Alt Graf Üzerinde Yapay Zeka Sohbeti.",
+        chat_subheading: "Genel web aramasının veya düz belge RAG'inin aksine GraphRAG motorumuz zamansal graf üzerinde araç çağrıları yürüterek cevapları kanıtlara dayandırır.",
+        chat_user_q: "Çavuş Doakes, 1. Bölümde Dexter'dan neden şüpheleniyor?",
+        chat_bot_a1: "S01E01'de Çavuş James Doakes, Dexter'ın vahşi cinayet mahallinde gösterdiği duygu eksikliğini ve cana yakın tavırlarının yapay bir maske olduğunu fark eder.",
+        chat_feat_1_t: "Kendi Anahtarını Getir (BYOK)",
+        chat_feat_1_d: "API anahtarlarınız tarayıcınızın localStorage'ında saklanır ve X-LLM-* başlıklarıyla iletilir. Google Gemini veya OpenAI modellerini güvenle bağlayın.",
+        chat_feat_2_t: "Anti-Spoofing & Alıntı Çipleri",
+        chat_feat_2_d: "LLM yanıtları Cytoscape graf node'larına doğrudan bağlanan alıntı çipleri üretir ve tıklanan karakteri anında tuvalde odaklar.",
+        label_arch: "Mimari ve Veri Akışı",
+        arch_heading: "Ham Senaryolardan Zamansal Grafa.",
+        arch_subheading: "Ayrık veri çıkarımı, fail-closed FastAPI servisleri ve dayanıklı Cytoscape.js tuval durum makinesi.",
+        arch_step_1_t: "Altyazı ve Senaryolar",
+        arch_step_1_d: "OpenSubtitles, senaryo PDF'leri, sahne bölütleme ve zaman damgaları",
+        arch_step_2_t: "Neo4j Veritabanı",
+        arch_step_2_d: "Zamansal varlıklar, kanonik iddialar ve kaynak kanıtları",
+        arch_step_3_t: "Servis Katmanı",
+        arch_step_3_d: "Kayıpsız sınır çözümleyici, Redis hız sınırlayıcı ve projeksiyonlar",
+        arch_step_4_t: "Kullanıcı Arayüzü",
+        arch_step_4_d: "Cytoscape.js tuvali, 4 projeksiyon ve akışkan GraphRAG",
+        label_spoiler_model: "Güvenlik Sınırı",
+        spoiler_heading: "Kayıpsız Sınır Savunması.",
+        spoiler_subheading: "Spoiler güvenliği nazik bir prompt ricası değildir. Her okuma yolunda uygulanan matematiksel bir veritabanı bariyeridir.",
+        spoiler_rule_1_t: "1. Tek Paylaşımlı Çözümleyici",
+        spoiler_rule_1_d: "Tüm rotalar (/graph, /notes, /revisions, /export, /visualization) resolve_effective_boundary() fonksiyonundan geçer. Misafirler ve kayıtsızlar Bölüm 1'e kilitlenir.",
+        spoiler_rule_2_t: "2. Veritabanı Düzeyinde Filtreleme",
+        spoiler_rule_2_d: "Cypher sorguları WHERE r.visible_from_order <= $order kuralını çalıştırır. İlerlemeniz dışındaki veriler Neo4j'den asla çıkmaz.",
+        label_roadmap: "Gelişim ve Sürümler",
+        roadmap_heading: "Prototipten Güçlendirilmiş Canlı Üretime.",
+        roadmap_subheading: "Prototipten güvenlik sıkılaştırmalı canlı üretime uzanan kilometre taşı yolculuğu.",
+        cta_heading: "Spoiler Olmadan Keşfetmeye Hazır mısınız?",
+        cta_desc: "Dexter bilgi grafını keşfedin, GraphRAG asistanını deneyin veya GitHub üzerindeki açık kaynaklı repoyu inceleyin.",
+        btn_open_app: "spoilerless.net'i Aç",
+        footer_tagline: "Spoiler korumalı GraphRAG destekli kaynaklı anlatı bilgi grafı."
+      }
+    };
 
-    const navWrap = document.getElementById("navWrap");
-    const mobileMenuButton = document.getElementById("mobileMenuButton");
-    const mobileMenu = document.getElementById("mobileMenu");
+    let currentLang = 'en';
 
-    window.addEventListener("scroll", () => {
-      navWrap.classList.toggle("scrolled", window.scrollY > 8);
-    });
+    function setLanguage(lang) {
+      currentLang = lang;
+      localStorage.setItem('spoilerless_lang', lang);
+      document.documentElement.lang = lang;
 
-    mobileMenuButton.addEventListener("click", () => {
-      const isOpen = mobileMenu.classList.toggle("open");
-      mobileMenuButton.setAttribute("aria-expanded", String(isOpen));
-    });
+      document.getElementById('langEn').classList.toggle('active', lang === 'en');
+      document.getElementById('langTr').classList.toggle('active', lang === 'tr');
 
-    mobileMenu.querySelectorAll("a").forEach(link => {
-      link.addEventListener("click", () => {
-        mobileMenu.classList.remove("open");
-        mobileMenuButton.setAttribute("aria-expanded", "false");
-      });
-    });
-
-    const episodeButtons = [...document.querySelectorAll(".episode-button")];
-    const spoilerModal = document.getElementById("spoilerModal");
-    const modalEpisode = document.getElementById("modalEpisode");
-    const cancelEpisode = document.getElementById("cancelEpisode");
-    const confirmEpisode = document.getElementById("confirmEpisode");
-
-    let activeEpisode = 1;
-    let requestedEpisode = 1;
-
-    function updateGraphVisibility(episode) {
-      document.querySelectorAll(".node-group").forEach(node => {
-        const visible = Number(node.dataset.episode) <= episode;
-        node.classList.toggle("faded", !visible);
-      });
-
-      document.getElementById("edges-2").classList.toggle("faded", episode < 2);
-      document.getElementById("edges-3").classList.toggle("faded", episode < 3);
-
-      episodeButtons.forEach(button => {
-        button.classList.toggle("active", Number(button.dataset.episode) === episode);
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (translations[lang] && translations[lang][key]) {
+          el.textContent = translations[lang][key];
+        }
       });
     }
 
-    episodeButtons.forEach(button => {
-      button.addEventListener("click", () => {
-        requestedEpisode = Number(button.dataset.episode);
+    const navWrap = document.getElementById('navWrap');
+    const mobileDrawer = document.getElementById('mobileDrawer');
+    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
 
-        if (requestedEpisode <= activeEpisode) {
-          activeEpisode = requestedEpisode;
-          updateGraphVisibility(activeEpisode);
-          return;
-        }
-
-        modalEpisode.textContent = `S01E0${requestedEpisode}`;
-        spoilerModal.classList.add("open");
-      });
+    window.addEventListener('scroll', () => {
+      navWrap.classList.toggle('scrolled', window.scrollY > 10);
     });
 
-    cancelEpisode.addEventListener("click", () => {
-      spoilerModal.classList.remove("open");
+    mobileMenuBtn.addEventListener('click', () => {
+      mobileDrawer.classList.toggle('open');
     });
 
-    confirmEpisode.addEventListener("click", () => {
-      activeEpisode = requestedEpisode;
-      updateGraphVisibility(activeEpisode);
-      spoilerModal.classList.remove("open");
-    });
+    function closeMobile() {
+      mobileDrawer.classList.remove('open');
+    }
 
-    spoilerModal.addEventListener("click", event => {
-      if (event.target === spoilerModal) spoilerModal.classList.remove("open");
-    });
-
-    document.addEventListener("keydown", event => {
-      if (event.key === "Escape") spoilerModal.classList.remove("open");
-    });
-
-    const detailType = document.getElementById("detailType");
-    const detailName = document.getElementById("detailName");
-    const detailText = document.getElementById("detailText");
-
-    document.querySelectorAll(".node-group").forEach(node => {
-      node.addEventListener("click", () => {
-        if (node.classList.contains("faded")) return;
-        detailType.textContent = node.dataset.type;
-        detailName.textContent = node.dataset.name;
-        detailText.textContent = node.dataset.detail;
-      });
-    });
-
-    updateGraphVisibility(1);
+    // Initialize Default Language
+    const savedLang = localStorage.getItem('spoilerless_lang') || 'en';
+    setLanguage(savedLang);
   </script>
 </body>
 </html>

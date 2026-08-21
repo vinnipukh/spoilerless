@@ -207,7 +207,11 @@ Backend integration tests are not automatically isolated from the application's 
 
 When a test changes persistent user configuration, preserve and restore the previous value rather than deleting it unconditionally. `test_settings_api.py` demonstrates the required pattern: it backs up the existing `:AppSetting {key: 'llm'}` value, performs the test, then restores that value with a fresh driver and event loop. Scratch fixtures such as those in `test_retrieval_tools.py` create records under a dedicated series ID and delete that series in teardown.
 
-`test_candidate_ingest.py` and `test_candidate_review.py` use a scratch-series pattern. They create dedicated `series_scratch_candidates` / `series_scratch_review` series via `bootstrap_scratch_series()` in `conftest.py`, and `teardown_scratch_series()` runs from `finally` on a fresh driver/event loop. Teardown removes the scratch series, its progress rows, and all `origin='candidate'` nodes. These files no longer write candidate data into `series_dexter`, but their global candidate cleanup is another reason not to run them against a shared or valuable database.
+`test_candidate_ingest.py`, `test_candidate_review.py`, and `test_security_boundary.py` use a scratch-series pattern. They create dedicated `series_scratch_candidates` / `series_scratch_review` / `series_scratch_boundary` series via `bootstrap_scratch_series()` in `conftest.py`, and `teardown_scratch_series()` runs from `finally` on a fresh driver/event loop. Teardown removes the scratch series, its progress rows, and all `origin='candidate'` nodes. These files never write candidate or experimental boundary data into `series_dexter`, preventing database pollution across test runs.
+
+### Security test plan and regression coverage
+
+Security regressions derived from adversarial audits are cataloged in [security-test-plan.md](reference/security-test-plan.md). The 11 regression test categories (spoiler boundary enforcement, candidate ingest trust, rate limiting/availability, LLM/prompt injection containment, SSRF hardening, cache isolation, auth & session, input limits/body size, XSS/rendering, DoS/resource bounds, and deployment/exposure) map directly to test suites under `spoilerless/tests/` and component tests under `frontend/src/`. All new security tests must follow the scratch-series isolation pattern to keep CI gates green.
 
 Treat the default test configuration as a **shared-live-database hazard**, not as an isolated test container:
 

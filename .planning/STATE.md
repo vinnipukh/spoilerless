@@ -1,20 +1,20 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.4
-milestone_name: Security Hardening (audit remediation P0/P1)
-status: Phase 11 complete — awaiting next milestone
-stopped_at: Completed 11-08-PLAN.md
-last_updated: "2026-08-20T15:30:00.000Z"
+milestone: v1.5
+milestone_name: Post-Hardening Remediation & Code Quality
+status: Phase 12 planned — ready for execution
+stopped_at: Planned 12-01..12-09
+last_updated: "2026-08-20T19:00:00.000Z"
 last_activity: 2026-08-20
-last_activity_desc: Phase 11 Security Hardening (8/8 plans) verified and shipped
+last_activity_desc: Phase 12 Post-Hardening Remediation, Frontend Modularity & Code Quality (9 plans) planned from Thermo-Nuclear Dual Review findings
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 4
-  total_plans: 45
+  total_plans: 54
   completed_plans: 45
-  percent: 100
-current_phase: 11
-current_phase_name: security-hardening-audit-remediation-p0-p1
+  percent: 83
+current_phase: 12
+current_phase_name: post-hardening-remediation-and-code-quality
 ---
 
 # HD Graf Cehennemi — Project State
@@ -24,14 +24,14 @@ current_phase_name: security-hardening-audit-remediation-p0-p1
 See: .planning/PROJECT.md (updated 2026-08-20 after v1.4)
 
 **Core value:** Users can safely explore a TV-series knowledge graph — and chat about it — without ever seeing information beyond their selected watch progress; the backend filters before data reaches the frontend, the LLM, or any tool call. One shared fail-closed boundary resolver (`resolve_effective_boundary`) is the single enforcement seam.
-**Current focus:** Phase 11 shipped (2026-08-20) — all P0/P1 audit findings closed; awaiting next milestone
+**Current focus:** Phase 12 Post-Hardening Remediation, Frontend Modularity & Code Quality (9 plans planned) — resolving Thermo-Nuclear dual review and scout reconnaissance findings.
 
 ## Current Position
 
-Phase: 11 Security Hardening complete (8/8 plans, verification passed)
-Plan: 11-08 (last plan in phase)
-Status: Phase 11 complete — awaiting next milestone
-Last activity: 2026-08-20 — Phase 11 Security Hardening (8/8 plans) verified and shipped
+Phase: 12 Post-Hardening Remediation & Code Quality (9 plans)
+Plan: Ready for 12-01
+Status: Ready for execution
+Last activity: 2026-08-20 — Phase 12 Post-Hardening Remediation, Frontend Modularity & Code Quality (9 plans) planned from Thermo-Nuclear Dual Review findings
 
 ## Performance Metrics
 
