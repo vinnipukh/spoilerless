@@ -10,6 +10,7 @@ const dummyGraph: GraphResponse = {
     slug: 'dexter',
   },
   visible_until_order: 1,
+  effective_view_order: 1,
   nodes: [
     {
       id: 'node1',

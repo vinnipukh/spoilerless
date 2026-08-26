@@ -25,6 +25,7 @@ function graphWithNodes(labels: string[]): GraphResponse {
   return {
     series: { id: 'series_x', title: 'X', slug: 'x' },
     visible_until_order: 1,
+    effective_view_order: 1,
     nodes: labels.map((label, i) => ({
       id: `node_${i}`,
       type: 'Character',

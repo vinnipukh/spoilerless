@@ -57,6 +57,7 @@ describe('graphToElements', () => {
       ],
       claims: [],
       visible_until_order: 1,
+      effective_view_order: 1,
       sources: [],
       evidence: [],
     })
@@ -223,6 +224,7 @@ describe('graphToElements', () => {
         ],
         claims: [],
         visible_until_order: 1,
+        effective_view_order: 1,
         sources: [],
         evidence: [],
       })

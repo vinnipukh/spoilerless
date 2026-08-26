@@ -25,6 +25,7 @@ function graph(nodes: GraphNode[], edges: GraphResponse['edges']): GraphResponse
   return {
     series: { id: 's', title: 'S', slug: 's' },
     visible_until_order: 3,
+    effective_view_order: 1,
     nodes,
     edges,
     claims: [],

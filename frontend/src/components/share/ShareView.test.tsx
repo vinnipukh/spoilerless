@@ -20,6 +20,7 @@ import { getShareGraph } from '@/api/share'
 const mockGraphResponse: GraphResponse = {
   series: { id: 'series_dexter', title: 'Dexter', slug: 'dexter' },
   visible_until_order: 3,
+  effective_view_order: 1,
   nodes: [
 
     {
