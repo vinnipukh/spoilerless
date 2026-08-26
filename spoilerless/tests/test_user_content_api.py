@@ -502,6 +502,131 @@ def test_user_content_is_owner_bound_and_cross_owner_mutations_rejected(
     assert live_client.delete(f"{base}/custom-nodes/{obj_id}").status_code == 204
 
 
+def _seed_owner_user_content(client: TestClient, series_id: str) -> dict[str, str]:
+    """Create note + custom node + custom relationship as the current (owner) session.
+
+    All content lives on *series_id* whose single episode persists at
+    ``visible_from_order`` 1, so every reader (anonymous fixed at order 1,
+    authenticated fail-closed at order 1) can read it back. Returns the
+    created ids plus the owner ``user_id`` observed on the create responses.
+    """
+    base = f"/api/series/{series_id}"
+    episode_id = f"{series_id}:episode:1"
+    node = client.post(f"{base}/custom-nodes", json={
+        "node_type": "Character", "label": "privacy probe", "episode_id": episode_id,
+    })
+    assert node.status_code == 201, node.text
+    node_id = node.json()["id"]
+    # Relationships must stay intra-series: relate two user-owned nodes.
+    target_node = client.post(f"{base}/custom-nodes", json={
+        "node_type": "Object", "label": "privacy probe target", "episode_id": episode_id,
+    })
+    assert target_node.status_code == 201, target_node.text
+    relationship = client.post(f"{base}/custom-relationships", json={
+        "source_id": node_id, "target_id": target_node.json()["id"],
+        "predicate": "KNOWS", "episode_id": episode_id,
+    })
+    assert relationship.status_code == 201, relationship.text
+    relationship_id = relationship.json()["id"]
+    note = client.post(f"{base}/notes", json={
+        "target_type": "Character", "target_id": node_id, "content": "privacy probe note",
+    })
+    assert note.status_code == 201, note.text
+    note_id = note.json()["id"]
+    owner_ids = {row.get("user_id") for row in (node.json(), relationship.json(), note.json())}
+    assert len(owner_ids) == 1 and None not in owner_ids, (
+        f"create responses must carry exactly one owner user_id: {owner_ids}"
+    )
+    return {
+        "note_id": note_id,
+        "node_id": node_id,
+        "relationship_id": relationship_id,
+        "owner_id": owner_ids.pop(),
+    }
+
+
+def _read_all_user_content(
+    client: TestClient, series_id: str, seeded: dict[str, str]
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Read the note list, one note, the custom node and the custom relationship."""
+    base = f"/api/series/{series_id}"
+    listed_notes = client.get(f"{base}/notes", params={"visible_until_order": 1})
+    got_note = client.get(f"{base}/notes/{seeded['note_id']}", params={"visible_until_order": 1})
+    got_node = client.get(f"{base}/custom-nodes/{seeded['node_id']}", params={"visible_until_order": 1})
+    got_relationship = client.get(
+        f"{base}/custom-relationships/{seeded['relationship_id']}",
+        params={"visible_until_order": 1},
+    )
+    for response in (listed_notes, got_note, got_node, got_relationship):
+        assert response.status_code == 200, (
+            f"GET {response.request.url} -> {response.status_code}: {response.text}"
+        )
+    return listed_notes.json(), got_note.json(), got_node.json(), got_relationship.json()
+
+
+def test_anonymous_user_content_reads_scrub_user_id(
+    user_content_client: TestClient, second_series: str
+) -> None:
+    """D-02/THERMO-P0-01: anonymous reads shape responses with ``user_id: null``
+    instead of tripping a 500 Pydantic ValidationError on the stripped field."""
+    seeded = _seed_owner_user_content(user_content_client, second_series)
+    user_content_client.cookies.clear()
+    listed, note, node, relationship = _read_all_user_content(
+        user_content_client, second_series, seeded
+    )
+    assert [row["user_id"] for row in listed] == [None]
+    for payload in (note, node, relationship):
+        assert payload["id"] in seeded.values()
+        assert payload["user_id"] is None, payload
+
+
+def test_non_owner_user_content_reads_scrub_user_id(
+    user_content_client: TestClient, second_series: str
+) -> None:
+    """D-02: another regular (non-admin) user never sees the author user_id."""
+    seeded = _seed_owner_user_content(user_content_client, second_series)
+    google_sub_b, _user_b_id, token_b = _create_user_with_session("user")
+    try:
+        user_content_client.cookies.set("session", token_b)
+        listed, note, node, relationship = _read_all_user_content(
+            user_content_client, second_series, seeded
+        )
+        assert [row["user_id"] for row in listed] == [None]
+        for payload in (note, node, relationship):
+            assert payload["user_id"] is None, payload
+    finally:
+        asyncio.run(_delete_test_user(google_sub_b))
+
+
+def test_owner_and_admin_reads_preserve_user_id(
+    user_content_client: TestClient, second_series: str
+) -> None:
+    """Owners and admins keep seeing the author user_id on reads."""
+    seeded = _seed_owner_user_content(user_content_client, second_series)
+    owner_id = seeded["owner_id"]
+
+    # --- Owner read: user_id preserved ---
+    listed, note, node, relationship = _read_all_user_content(
+        user_content_client, second_series, seeded
+    )
+    assert [row["user_id"] for row in listed] == [owner_id]
+    for payload in (note, node, relationship):
+        assert payload["user_id"] == owner_id, payload
+
+    # --- Admin read: user_id preserved ---
+    google_sub_admin, _admin_id, token_admin = _create_user_with_session("admin")
+    try:
+        user_content_client.cookies.set("session", token_admin)
+        listed, note, node, relationship = _read_all_user_content(
+            user_content_client, second_series, seeded
+        )
+        assert [row["user_id"] for row in listed] == [owner_id]
+        for payload in (note, node, relationship):
+            assert payload["user_id"] == owner_id, payload
+    finally:
+        asyncio.run(_delete_test_user(google_sub_admin))
+
+
 @pytest.fixture(scope="module")
 def live_client() -> Iterator[TestClient]:
     _run(_with_database(_seed_and_clean))
