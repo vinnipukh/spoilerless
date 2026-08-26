@@ -94,6 +94,12 @@ Locked findings and decisions from the 2026-08-20 Thermo-Nuclear Dual Review (`t
 - **Plan 12-07 (Wave 1)**: `12-07-PLAN.md` — Frontend Bug Fixes, UI/UX Edge Cases & API Contract Alignment (THERMO-P1-03, THERMO-P1-04, THERMO-P1-05, THERMO-P1-06, THERMO-P3-08, THERMO-P3-09, THERMO-P3-10).
 - **Plan 12-08 (Wave 2)**: `12-08-PLAN.md` — Frontend Architectural Decomposition & 1,000-Line Ceiling Elimination (THERMO-P0-02, THERMO-P0-03, THERMO-P0-04, THERMO-P2-05, THERMO-P2-07).
 - **Plan 12-09 (Wave 2)**: `12-09-PLAN.md` — Design System Tokens, Theme Harmonization & UI/UX Polish (THERMO-P2-06).
+- **Plan 12-10 (Wave 2, dep 02)**: `12-10-PLAN.md` — Boundary Resolution Single Authority — share bypass closure + `require_boundary` extraction (Candidate C2, 12-RESEARCH.md §3.2).
+- **Plan 12-11 (Wave 3, dep 02+06)**: `12-11-PLAN.md` — Revision Module: Named Modules + Domain Exceptions (Candidate C3, 12-RESEARCH.md §3.3).
+- **Plan 12-12 (Wave 3, dep 02+06+11)**: `12-12-PLAN.md` — Graph Read Path as One Deep Module + DI/Constant Centralization (Candidate C1, 12-RESEARCH.md §3.1).
+- **Plan 12-13 (Wave 3, dep 08)**: `12-13-PLAN.md` — Scene State Single Reducer (Candidate C4, 12-RESEARCH.md §3.4).
+- **Plan 12-14 (Wave 3, dep 08+13)**: `12-14-PLAN.md` — Unify Cytoscape Element Adapters (Candidate C5, 12-RESEARCH.md §3.5).
+- **Plan 12-15 (Wave 3, dep 02+12)**: `12-15-PLAN.md` — Structural Cache Invalidation (Candidate C6, 12-RESEARCH.md §3.6).
 
 ---
 
