@@ -48,34 +48,6 @@ ClaimId = Annotated[Identifier, Path(description="Candidate claim identifier.", 
 # --- Shared helpers ---
 
 
-async def _require_resolved_boundary(
-    graph_service: GraphService, series_id: str, visible_until_order: int | None
-) -> None:
-    """PROB-05/#13: a candidate read requires a RESOLVED spoiler boundary.
-
-    An omitted boundary never defaults to everything — the server rejects it
-    with the 422 envelope. A present boundary must identify a persisted
-    episode of the series, mirroring the graph read path (D-09); the
-    visibility filter is then applied by the repository query.
-    """
-    if visible_until_order is None:
-        raise http_error(
-            422,
-            "INVALID_REQUEST",
-            "visible_until_order is required to read candidates — an omitted "
-            "boundary must never default to every visibility level.",
-        )
-    boundary_episode = await graph_service.resolve_boundary(
-        series_id, visible_until_order
-    )
-    if boundary_episode is None:
-        raise http_error(
-            422,
-            "INVALID_VISIBLE_UNTIL_ORDER",
-            "visible_until_order must identify a persisted episode order.",
-        )
-
-
 class EditCandidateRequest(BaseModel):
     """Fields that can be edited on a candidate claim."""
     model_config = ConfigDict(extra="forbid")
@@ -196,7 +168,6 @@ async def list_candidates(
     effective = await resolve_effective_boundary(
         graph_service, progress_service, series_id, user, visible_until_order
     )
-    await _require_resolved_boundary(graph_service, series_id, effective)
     return await repo.list_candidate_claims(
         series_id, effective, limit=limit, after_created_at=after_created_at, after_id=after_id
     )
@@ -242,7 +213,6 @@ async def get_candidate(
     effective = await resolve_effective_boundary(
         graph_service, progress_service, series_id, user, visible_until_order
     )
-    await _require_resolved_boundary(graph_service, series_id, effective)
     claim = await repo.get_candidate_claim(
         series_id, claim_id, visible_until_order=effective
     )

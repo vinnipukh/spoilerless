@@ -87,7 +87,6 @@ async def list_revisions(
         resource_type = None
     if resource_id is not None and resource_id.strip() == "":
         resource_id = None
-    await UserContentRepository(database)._require_persisted_boundary(series_id, visible_until_order)
     effective = await resolve_effective_boundary(
         graph_service, progress_service, series_id, user, visible_until_order
     )
@@ -122,7 +121,6 @@ async def get_revision(
     progress_service: ProgressServiceDependency,
     user: OptionalUserDependency,
 ) -> RevisionResponse:
-    await UserContentRepository(database)._require_persisted_boundary(series_id, visible_until_order)
     effective = await resolve_effective_boundary(
         graph_service, progress_service, series_id, user, visible_until_order
     )

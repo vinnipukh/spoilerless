@@ -91,7 +91,6 @@ async def list_notes(
     target_type: NoteTargetType | None = Query(default=None),
     target_id: str | None = Query(default=None),
 ) -> list[NoteResponse]:
-    await _repository(database)._require_persisted_boundary(series_id, visible_until_order)
     effective = await resolve_effective_boundary(
         graph_service, progress_service, series_id, user, visible_until_order
     )
@@ -114,7 +113,6 @@ async def get_note(
     progress_service: ProgressServiceDependency,
     user: OptionalUserDependency,
 ) -> NoteResponse:
-    await _repository(database)._require_persisted_boundary(series_id, visible_until_order)
     effective = await resolve_effective_boundary(
         graph_service, progress_service, series_id, user, visible_until_order
     )
@@ -180,7 +178,6 @@ async def get_custom_node(
     progress_service: ProgressServiceDependency,
     user: OptionalUserDependency,
 ) -> CustomNodeResponse:
-    await _repository(database)._require_persisted_boundary(series_id, visible_until_order)
     effective = await resolve_effective_boundary(
         graph_service, progress_service, series_id, user, visible_until_order
     )
@@ -246,7 +243,6 @@ async def get_custom_relationship(
     progress_service: ProgressServiceDependency,
     user: OptionalUserDependency,
 ) -> CustomRelationshipResponse:
-    await _repository(database)._require_persisted_boundary(series_id, visible_until_order)
     effective = await resolve_effective_boundary(
         graph_service, progress_service, series_id, user, visible_until_order
     )
