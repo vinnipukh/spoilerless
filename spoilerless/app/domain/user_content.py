@@ -54,7 +54,19 @@ class Origin(StrEnum):
 
 
 class NoteTargetType(StrEnum):
+    """Legal attach-targets for user notes.
+
+    Mirrors the closed ``CustomNodeType`` label set plus ``Claim`` — every
+    value is a real Neo4j node label, so ``NOTE_CREATE_QUERIES``/
+    ``NOTE_LIST_QUERIES`` can interpolate it directly (no request text ever
+    reaches the label slot).
+    """
+
     CHARACTER = "Character"
+    EVENT = "Event"
+    LOCATION = "Location"
+    ORGANIZATION = "Organization"
+    OBJECT = "Object"
     CLAIM = "Claim"
 
 

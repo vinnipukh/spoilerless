@@ -172,43 +172,31 @@ class CustomUpdateCommand:
     is_admin: bool = False
 
 
+# One parameterised template per target type — generated from the closed
+# server-owned ``NoteTargetType`` enum at module load (same pattern as
+# ``CUSTOM_NODE_CREATE_QUERIES`` below), so extending the enum automatically
+# extends note support without touching this map. Only the ``target`` label
+# differs between instances; every other clause is identical.
 NOTE_CREATE_QUERIES: Mapping[NoteTargetType, str] = {
-    NoteTargetType.CHARACTER: """
-        MATCH (series:Series {id: $series_id})
-        MATCH (target:Character {id: $target_id, series_id: $series_id})
+    target_type: f"""\
+        MATCH (series:Series {{id: $series_id}})
+        MATCH (target:{target_type.value} {{id: $target_id, series_id: $series_id}})
         WHERE target.origin IN ['canonical', 'candidate', 'user']
           AND target.visible_from_order IS NOT NULL AND target.visible_from_order >= 1
-        CREATE (note:UserNote {id: $id, series_id: $series_id, user_id: $user_id,
+        CREATE (note:UserNote {{id: $id, series_id: $series_id, user_id: $user_id,
           created_by: $user_id,
           target_type: $target_type, target_id: $target_id, content: $content,
           visible_from_order: target.visible_from_order, origin: 'user',
-          created_at: $created_at, updated_at: $updated_at})
-        CREATE (note)-[:REFERS_TO {id: $id + ':refers_to', series_id: $series_id,
-          visible_from_order: target.visible_from_order, origin: 'user'}]->(target)
+          created_at: $created_at, updated_at: $updated_at}})
+        CREATE (note)-[:REFERS_TO {{id: $id + ':refers_to', series_id: $series_id,
+          visible_from_order: target.visible_from_order, origin: 'user'}}]->(target)
         RETURN note.id AS id, note.series_id AS series_id, note.user_id AS user_id,
           note.target_type AS target_type, note.target_id AS target_id,
           note.content AS content, note.origin AS origin,
           note.visible_from_order AS visible_from_order, note.created_at AS created_at,
           note.updated_at AS updated_at
-    """,
-    NoteTargetType.CLAIM: """
-        MATCH (series:Series {id: $series_id})
-        MATCH (target:Claim {id: $target_id, series_id: $series_id})
-        WHERE target.origin IN ['canonical', 'candidate', 'user']
-          AND target.visible_from_order IS NOT NULL AND target.visible_from_order >= 1
-        CREATE (note:UserNote {id: $id, series_id: $series_id, user_id: $user_id,
-          created_by: $user_id,
-          target_type: $target_type, target_id: $target_id, content: $content,
-          visible_from_order: target.visible_from_order, origin: 'user',
-          created_at: $created_at, updated_at: $updated_at})
-        CREATE (note)-[:REFERS_TO {id: $id + ':refers_to', series_id: $series_id,
-          visible_from_order: target.visible_from_order, origin: 'user'}]->(target)
-        RETURN note.id AS id, note.series_id AS series_id, note.user_id AS user_id,
-          note.target_type AS target_type, note.target_id AS target_id,
-          note.content AS content, note.origin AS origin,
-          note.visible_from_order AS visible_from_order, note.created_at AS created_at,
-          note.updated_at AS updated_at
-    """,
+    """
+    for target_type in NoteTargetType
 }
 
 CUSTOM_NODE_CREATE_QUERIES: Mapping[CustomNodeType, str] = {
