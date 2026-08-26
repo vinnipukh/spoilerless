@@ -142,7 +142,7 @@ cd frontend
 NODE_ENV=test CI=1 npx vitest run
 ```
 
-The current frontend suite is 404 passed across 44 files. Setting `NODE_ENV=test` is important: a shell that retains `NODE_ENV=production` can load React's production behavior and cause misleading failures. Setting `CI=1` additionally forces non-watch mode. The equivalent `npm` spelling of the same command is:
+The current frontend suite is 405 passed across 44 suites. Setting `NODE_ENV=test` is important: a shell that retains `NODE_ENV=production` can load React's production behavior and cause misleading failures. Setting `CI=1` additionally forces non-watch mode. The equivalent `npm` spelling of the same command is:
 
 ```bash
 cd frontend

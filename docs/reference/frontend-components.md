@@ -70,6 +70,7 @@ Most fetch hooks expose discriminated `idle | loading | success | error` state. 
 
 | Hook | Inputs | Important output/behavior |
 |---|---|---|
+| `useSceneState` | optional `Partial<SceneState>` | Single serializable scene state reducer owning active view, filters (`nodeKindFilters`, `edgeClassFilters`), selection, focus, camera, positions, expansions/history, timeline selection, inspector state, and temporary snapshot restoration (`frontend/src/hooks/useSceneState.ts`). |
 | `useSeries` | none | Fetches the series list. |
 | `useEpisodes` | `seriesId`, optional `visibleUntilOrder` | Fetches episode metadata with the current boundary so the server can mask spoiler-sensitive titles. |
 | `useGraph` | `seriesId`, `visibleUntilOrder` | Returns graph state plus `refetch()` and `refresh()`. `refetch()` re-enters loading; `refresh()` keeps the mounted graph visible during an in-place update. |
@@ -132,7 +133,7 @@ App owns external `graphFocus`. Sources include:
 
 `GraphCanvas` resolves those IDs through Cytoscape, adds `.selected-dominant`, fades the remainder, reveals relevant edge labels, and fits the focused collection with 48 px padding. `GraphFocusIndicator` displays the focused count and clears through `onClearFocus`.
 
-Internal tap focus uses `focusReducer`, `initialFocusState`, and `applyFocusToCytoscape` from `frontend/src/components/graph/focusReducer.ts`. New features should reuse the App-level `selectedElement`/`graphFocus` flow rather than adding a second selection store.
+Internal focus state is managed centrally via `useSceneState` (`frontend/src/hooks/useSceneState.ts`). Scene focus accepts only server-safe IDs (`SET_FOCUS`, `CLEAR_FOCUS`). `GraphCanvas` applies `.selected-dominant` and styling classes directly to Cytoscape elements. New features should reuse the App-level `selectedElement`/`graphFocus` flow rather than adding a second selection store.
 
 ### Reveal flows
 
@@ -170,21 +171,20 @@ App computes the forward-boundary graph set difference and passes the result int
 
 | Export/file | Responsibility |
 |---|---|
-| `GraphCanvas` | Cytoscape host and graph interaction coordinator. Owns general `FilterState` internally through `GraphFilterPanel`; its only external filtering prop is `timelineFilterIds`. It also accepts graph data, selection/focus/reveal channels, episodes, read-only mode, sharing, and graph mode. |
+| `GraphCanvas` | Cytoscape host and graph interaction coordinator. Accepts `sceneState` and `dispatch` from `useSceneState`, graph data, selection/focus/reveal channels, episodes, read-only mode, sharing, and graph mode. Converts payload DTOs via `sceneElements.ts`. |
 | `GraphControls` | Reset/refresh, overview/full mode, path mode, export, and optional share controls. |
-| `GraphFilterPanel` | Node-type and edge-family filter controls over `FilterState`. |
+| `GraphFilterPanel` | Node-kind and edge-class filter controls dispatching filter actions (`SET_NODE_KIND_FILTER`, `SET_EDGE_CLASS_FILTER`, `SET_ALL_FILTERS`) to `useSceneState`. |
 | `GraphLegend`, `NodeSwatch` | Node and relationship visual key. |
 | `GraphFocusIndicator` | Count and clear action for externally focused elements. |
 | `GraphLoadingState`, `GraphErrorState`, `GraphEmptyState` | Fetch lifecycle states used by App. |
 | `NodeHoverCard` | Hover details for a graph node. |
 | `NodeSearch`, `NodeSearchSelection` | Payload-local node plus notes/claims search; selection is returned to App. |
 | `PathFinder`, `PathPick` | Two-node path-picking mode using `frontend/src/api/graph.ts`. |
-| `graphToElements` | Converts `GraphResponse` to Cytoscape elements and applies overview projection metadata. |
+| `sceneElements.ts` | Neutral Cytoscape element adapter (`fromGraph`, `fromVisualization`, `clusterFor`) mapping backend payloads to Cytoscape element definitions with explicit clustering policy (`frontend/src/lib/graph/sceneElements.ts`). |
+| `positionCache.ts` | Module-level position cache (`getCachedPositions`, `setCachedPositions`, `__resetPositionCacheForTests`) for preserving node coordinates across layout changes (`frontend/src/lib/graph/positionCache.ts`). |
 | `buildGraphStylesheet` | Cytoscape styling and interaction classes. |
 | `overviewProjection`, `displayTierFor`, `GraphMode` | Curated overview/full graph projection. |
 | `layoutOptionsFor`, `nodeRepulsionFor` | fcose/cose layout configuration. |
-| `initialFilterState`, filter mutators, position-cache functions | Filter state and per-series/boundary/mode position caching. |
-| `focusReducer`, `applyFocusToCytoscape` | Internal focus state and Cytoscape class application. |
 | `relationshipStyles.ts` | Edge-family classification and color lookup. |
 | `cytoscapeReconciler.ts` | Topology-aware element scene reconciler (`reconcileCytoscapeElements`) preventing compound parent removal cascade bugs. |
 | `autoZoomHold` | Module-level last-touch and viewport state that survives canvas remounts. |
@@ -324,6 +324,9 @@ Use `useGraph.refresh()` after an in-place mutation when preserving the mounted 
 | `frontend/src/types/revision.ts` | `RevisionAction`, `RevisionResponse` |
 | `frontend/src/types/settings.ts` | `LLMProvider`, `StoredLLMSettings` |
 | `frontend/src/types/share.ts` | Share-token request/response/item types |
+| `frontend/src/lib/tokens/graphTokens.ts` | `NODE_TYPE_COLORS`, `EDGE_FAMILY_COLORS`, `GRAPH_CANVAS_TOKENS`, `SELECTION_GLOW_TOKENS` centralized visual tokens |
+| `frontend/src/lib/graph/sceneElements.ts` | `fromGraph`, `fromVisualization`, `clusterFor` neutral element converter |
+| `frontend/src/lib/graph/positionCache.ts` | `getCachedPositions`, `setCachedPositions`, `__resetPositionCacheForTests` position cache |
 | `frontend/src/lib/searchIndex.ts` | `searchIndex` and its collection/result/options types |
 | `frontend/src/lib/nodeTypes.ts` | `NODE_TYPES`, `NodeTypeMeta` |
 | `frontend/src/lib/exportMarkdown.ts` | `renderGraphMarkdown`, `exportFilename` |
@@ -366,7 +369,7 @@ npm run build
 - **New workspace view:** extend App's `view` union and conditional body; do not add a router solely for state-driven views. Reserve the existing pathname check pattern for genuinely public URL entry points.
 - **New graph-originated selection:** return `SelectedElement` through `onSelect`; for search/chat-style framing, set `FocusedElementIds` through App.
 - **New mutation:** call `useGraph.refresh()` on success when viewport/layout preservation is required, and provide explicit reveal/focus IDs when the result should be framed.
-- **New graph style/filter/layout behavior:** extend `graphElements.ts`, `graphStylesheet.ts`, `filterState.ts`, `focusReducer.ts`, or `layoutConfig.ts` rather than adding more policy to `GraphCanvas.tsx`.
+- **New graph style/filter/layout behavior:** extend `sceneElements.ts`, `buildGraphStylesheet.ts`, `useSceneState.ts`, `graphTokens.ts`, or `layoutConfig.ts` rather than adding more policy to `GraphCanvas.tsx`.
 - **New payload-local search collection:** extend `SearchCollection`, `SearchResult`, and `searchIndex`; keep `NodeSearch` and `CommandPalette` on the shared index.
 - **New visitor-sensitive action:** make the action callback optional or accept `readOnly`, hide the affordance, and still rely on backend authorization. Verify App actually threads the prop.
 - **New Radix tooltip:** ensure a `TooltipProvider` is in that component's real ancestor tree; providers in sibling components do not apply.

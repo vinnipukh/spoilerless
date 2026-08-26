@@ -138,13 +138,13 @@ See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the full system breakdo
 |---|---|
 | **Backend** | Python 3.13+, FastAPI, Pydantic v2 |
 | **Database** | Neo4j Community via Docker Compose locally; Neo4j Aura-compatible deployment configuration |
-| **Frontend** | React 19, TypeScript, Vite, Tailwind CSS v4 |
+| **Frontend** | React 19, TypeScript, Vite, Tailwind CSS v4 (@theme inline tokens & centralized `graphTokens.ts`) |
 | **Graph visualization** | Cytoscape.js + react-cytoscapejs |
 | **UI components** | shadcn/ui (Radix UI primitives, Lucide icons) |
 | **Python deps** | uv |
 | **Frontend deps** | npm |
 | **Rate limiting / caching** | Redis (Upstash); rate limiting uses a custom FastAPI dependency built on `pyrate-limiter` — optional, disabled when `REDIS_URL` is empty |
-| **Tests** | pytest (backend, live Neo4j) · Vitest + React Testing Library (frontend) |
+| **Tests** | pytest (backend: guarded runner & 11 chunks) · Vitest + React Testing Library (frontend: 405 tests across 44 suites) |
 | **Orchestration** | Docker Compose (Neo4j container) |
 
 ---

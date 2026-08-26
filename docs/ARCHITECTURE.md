@@ -172,7 +172,7 @@ Spoiler Filter    ← parameterized Cypher with built-in visibility gating
 │   │   ├── llm/            # Provider abstraction, system prompts, fallback text
 │   │   ├── repository/     # Neo4j data access (plus in-memory session/share test implementations)
 │   │   ├── retrieval/      # GraphRAG-lite pipeline, ToolSpec tool registry, context-section registry
-│   │   ├── revisions/      # Revision repository/audit-trail implementation
+│   │   ├── revisions/      # Revision repository (repository.py), service (service.py), and audit-trail implementation
 │   │   ├── services/       # Business orchestration and rate-limit dependencies
 │   │   ├── spoiler/        # Visibility queries, policy, and derived-visibility rules
 │   │   └── main.py         # FastAPI assembly, middleware, router registration, lifespan
@@ -223,11 +223,11 @@ frontend/src/
 │   │                    # MessageList/MessageBubble, CitationChip, ChangeSetCard
 │   ├── detail/          # DetailPanel, BacklinksTab, StructuralEdgeCard, RevisionHistoryPanel
 │   ├── episode/          # EpisodeSelector, SeriesSelect, ConfirmAdvanceModal
-│   ├── graph/             # GraphCanvas, graphElements, graphStylesheet,
+│   ├── graph/             # GraphCanvas, buildGraphStylesheet,
 │   │                    # GraphControls, GraphLegend, GraphFocusIndicator, GraphFilterPanel,
 │   │                    # GraphStatus, NodeHoverCard, NodeSearch, PathFinder,
-│   │                    # relationshipStyles, layoutConfig, overviewTiers, filterState,
-│   │                    # autoZoomHold, focusReducer
+│   │                    # relationshipStyles, layoutConfig, overviewTiers,
+│   │                    # autoZoomHold, cytoscapeReconciler
 │   ├── layout/             # AppShell, HeaderNavAction
 │   ├── palette/            # CommandPalette (⌘K)
 │   ├── series/             # SeriesDashboard
@@ -241,7 +241,8 @@ frontend/src/
 │                         # useSceneState (serializable scene state), useHotkey
 ├── lib/                 # searchIndex.ts (zero-dep substring search behind node search,
 │                         #   notes & claims search, and the ⌘K palette), byok.ts,
-│                         #   nodeTypes.ts, exportMarkdown.ts, utils.ts, graph/highlight.ts
+│                         #   nodeTypes.ts, exportMarkdown.ts, utils.ts, tokens/graphTokens.ts,
+│                         #   graph/highlight.ts, graph/sceneElements.ts, graph/positionCache.ts
 ├── providers/            # AuthContext.ts, AuthProvider.tsx, useAuth.ts
 └── types/                # graph.ts, series.ts, revision.ts, settings.ts, share.ts — mirror
                            # spoilerless/app/domain/*.py
@@ -250,7 +251,8 @@ frontend/src/
 #### Key Components
 
 - **`GraphCanvas.tsx`** — wraps `react-cytoscapejs`. `layoutConfig.ts` registers fCoSE and cose-bilkent, selects fCoSE by default, and falls back to built-in `cose` after a runtime layout failure. The canvas supports curated Overview and complete Full projections, cached positions keyed by series/boundary/mode, filters, focus/reveal framing, and an interaction hold that suppresses automatic re-fitting for 20 seconds. On a newly mounted Cytoscape instance, `react-cytoscapejs` first runs the stable declarative startup layout with `fit: false`; the `cy` callback registers a one-shot `layoutstop` listener and only then forces the same relayout/fit path as **Refresh graph**. Waiting for startup to settle prevents two asynchronous layouts from racing and restoring the diagonal cold-open state. The 20-second interaction hold lives at module scope (`autoZoomHold.ts`) because `App` keeps the last-known-good graph mounted across refetches. All highlight paths — search selection, ⌘K jump focus, and the reveal pulse — route through the single `applyHighlight()` in `lib/graph/highlight.ts` (clear stale classes → resolve elements → add classes → optional edge-label reveal, fade, and fit).
-- **`graphElements.ts`** — pure function mapping the backend `GraphResponse` to Cytoscape `ElementDefinition[]`. It performs **no** re-filtering by `visible_from_order` — the backend has already applied the spoiler filter, and the frontend trusts it completely.
+- **`sceneElements.ts`** (`frontend/src/lib/graph/sceneElements.ts`) — neutral Cytoscape element adapter module unifying Cytoscape element conversion logic for both `GraphResponse` (`fromGraph()`) and `VisualizationDTO` (`fromVisualization()`) paths (D-08/D-36). It emits strictly documented data key sets (`NODE_DATA_KEYS`, `GROUP_DATA_KEYS`, `EDGE_DATA_KEYS`) to satisfy threat model T10-LEAK-04. `graphElements.ts` delegates directly to this module for backward compatibility.
+- **`useSceneState.ts`** (`frontend/src/hooks/useSceneState.ts`) — serializable scene state reducer enforcing React ownership of scene state (D-24). Manages active view, filters, selection, server-safe focus (`SceneFocus`), camera snapshot, element positions, expansion records (`ExpansionRecord`, D-21/D-48), timeline selection, Inspector sheet state, and temporary restoration state (`TemporarySnapshot`, Answer Graph D-27). Cytoscape receives only batched element/style diffs.
 - **`graphStylesheet.ts`** — maps node types to shapes (Character → ellipse, Event/Location → round-rectangle, Organization → diamond, Episode → tag, Series → star, UserNote → dashed round-rectangle) and origin to border style (canonical = solid, candidate/user = dashed).
 - **`useWatchProgress.ts`** — maintains separate `watchedThroughOrder` and `viewAsOfOrder` values; the legacy `confirmedOrder` return value aliases the effective current view. Already-watched selections issue an awaited view-only progress update, while selections above the watched boundary create `pendingChange` for confirmation. `sessionStorage` is an optimistic/loading cache reconciled with `GET /progress`; a user interaction wins over a late hydration response. `confirmChange()` awaits `POST /progress`, but deliberately keeps an optimistic local value if that write fails. With `{persist: false}` (visitor mode), all progress changes stay local and no progress API is called.
 - **`AuthProvider.tsx`** — on mount calls `GET /api/auth/me` to restore a cookie session; otherwise it can resolve to `unauthenticated` or the sessionStorage-backed `visitor` state. Visitor mode hides chat and write affordances and keeps episode progress local.
@@ -316,7 +318,7 @@ Two sibling routes reuse the same spoiler-safe machinery. `POST /api/series/{ser
 
 **Location:** `spoilerless/app/services/`
 
-- **`GraphService`** (`graph.py`) — orchestrates the spoiler-safe graph read. `fetch_graph(series_id, visible_until_order, node_labels, user_relationship_types, effective_view_order=None)` runs seven Cypher queries concurrently: series metadata, nodes, structural edges, canonical/candidate claims, user-authored relationships, sources, and evidence. Claims are projected into `GraphEdge`s; node rows also pass through `filter_public_metadata()` before validation so spoiler-sensitive media fields are removed at the effective view boundary.
+- **`GraphService`** (`graph.py`) — business logic for reading and invalidating the spoiler-safe graph. Deep methods include `read_visible_graph(series_id, effective, user_id)` (Redis cache-aside lookup falling back to `fetch_graph`, best-effort swallowing Redis errors), `fetch_graph(series_id, visible_until_order, node_labels, user_relationship_types, effective_view_order=None)` (runs seven Cypher queries concurrently: series metadata, nodes, structural edges, claims, user relationships, sources, evidence; projects claims to edges and applies `filter_public_metadata()` on node rows before validation), `get_series_meta(series_id)` (series metadata lookup), `resolve_boundary(series_id, visible_until_order)` (validates boundary against persisted episode orders), `find_path(...)` (allowlisted pathfinding tool wrapper), and `invalidate_series_cache(series_id)` (deep invalidation facade seam called on every content-mutating write to purge Redis series cache entries).
 - **`SeriesService`** (`series.py`) — lists series, gets one series, and lists episodes. `list_episodes(series_id, effective_view_order=None)` passes episode rows through `mask_episode_metadata()` when a boundary is supplied; the API resolves anonymous order 1 or an authenticated effective progress boundary before returning titles/unlock state. The boundary-free form remains for internal/backward-compatible callers.
 - **`AuthService`** (`auth.py`) — verifies Google ID tokens via an injectable `GoogleTokenVerifier`, upserts users by `google_sub`, and manages session creation/retrieval/revocation. Its constructor requires explicit `session_repo` and `verifier` arguments — there are no silent fallbacks to in-memory or production defaults, so a missing dependency is a loud wiring bug. Valid reads update `last_seen_at` through `SessionRepository.refresh()` but do not extend `expires_at`. Session tokens are SHA-256 hashed via `core/tokens.py` before storage; raw tokens are never persisted.
 - **`ProgressService`** (`progress.py`) — resolves per-user progress from `(:AppUser)-[:HAS_PROGRESS]->(:UserSeriesProgress)-[:FOR_SERIES]->(:Series)`. The persisted model separates `watched_through_order` from `view_as_of_order`; `resolve()` returns `effective_view_order`. `upsert()` accepts keyword-only `watched_through_order`, `view_as_of_order`, and the legacy `visible_until_order` alias, validates both selected orders against the series' persisted episodes, enforces `1 <= view <= watched`, and preserves the watched boundary for view-only changes. Missing records map to `404`; chat creates an order-1 record on first send.
@@ -338,6 +340,7 @@ Two sibling routes reuse the same spoiler-safe machinery. `POST /api/series/{ser
 - **`ShareRepository`** (`repository/share.py`) — a `ShareRepository` protocol with `Neo4jShareRepository` and `InMemoryShareRepository` implementations. Persists share tokens on `(:ShareToken)` nodes linked via `(:AppUser)-[:CREATED_SHARE]->(:ShareToken)`. Stores SHA-256 token hashes (via `core/tokens.py`), series ID, boundary, created_at, and 30-day default `expires_at`. Cleaned up periodically alongside sessions by `sweep_expired()` in `main.py`'s lifespan loop.
 - **`UserContentRepository`** (`repository/user_content.py`) — manages notes, custom nodes, and custom relationships. Notes inherit their target boundary; custom nodes derive it from the selected episode; custom relationships use the maximum of source, target, and episode orders through the shared `spoiler/visibility.py` rule. Creates bind `user_id`/`created_by`; updates/deletes require the owner unless the actor is admin, and legacy rows without an owner fail closed to admin-only. Reads are boundary-filtered but intentionally public, so ownership is a mutation boundary rather than read isolation. Deleting a custom node with dependent content returns `409`.
 - **`ChangeSetRepository`**, **`ChatRepository`**, **`SettingsRepository`** — the corresponding data-access layers for ChangeSets, chat, and settings.
+- **`revisions` package** (`spoilerless/app/revisions/repository.py`, `service.py`) — `revisions/repository.py` contains `RevisionRepository` static methods for logging append-only revisions (`log_revision()`), extracting snapshots (`take_snapshot()`), and JSON serialization helpers. `revisions/service.py` contains the transactional revert business flow `revert_revision_work(tx, command)` and domain exception hierarchy (`RevisionError`, `RevisionNotFound`, `RevisionForbidden`, `RevisionCannotRevertCreate`, `RevisionCannotRevertCanonical`, `RevisionAlreadyExists`, `RevisionInvalidAction`).
 
 A separate operator script, `spoilerless/scripts/zombie_sweep.py`, sweeps orphaned `(:AppUser)` rows and stale `(:Session)` nodes — dry-run-first by default (`python -m spoilerless.scripts.zombie_sweep --dry-run` counts; `--execute` deletes).
 
@@ -511,7 +514,7 @@ Story-sensitive content nodes, content relationships, and claims carry a `visibl
 WHERE entity.visible_from_order <= $visible_until_order
 ```
 
-**Fail-closed design:** graph, export, candidate, progress-write, and share-create boundaries are resolved against persisted episode orders. Progress writes validate `watched_through_order` and `view_as_of_order`, and GraphRAG consumes the computed effective view. User-content and revision read routes are a narrower exception: their `Boundary` alias enforces only a positive integer and their Cypher applies that value directly. Direct reads of hidden resources (for example a future note) return the same `404` as a missing resource. The graph's claim/source/evidence queries gate each matched hop, and the retrieval-tool queries gate every hop as well (see [7.10](#710-spoiler-safety-invariants)).
+**Fail-closed design:** boundary resolution is centralized in `spoilerless/app/api/boundary.py` (`resolve_effective_boundary` and `require_boundary`). Every spoiler-sensitive read/share route resolves its effective boundary through `resolve_effective_boundary` (graph, candidates, notes, custom nodes, custom relationships, revisions, episodes, visualization, expand, path, export, and `create_share_link`). `require_boundary(visible_until_order)` guards explicit parameter requirements (raising 422 if omitted, as in candidate reads). Progress writes validate `watched_through_order` and `view_as_of_order`, and GraphRAG consumes the computed effective view. Direct reads of hidden resources (for example a future note) return the same `404` as a missing resource. The graph's claim/source/evidence queries gate each matched hop, and the retrieval-tool queries gate every hop as well (see [7.10](#710-spoiler-safety-invariants)).
 
 Claims can additionally carry `valid_from_order`/`valid_until_order` for time-bounded facts (e.g. a temporary allegiance):
 
@@ -591,7 +594,7 @@ Every automatic claim requires at least one `EvidenceFragment` (`SUPPORTED_BY`) 
 
 ### 7.7 Revision History
 
-**Location:** `spoilerless/app/revisions/`. `Revision` is an append-only Neo4j `(:Revision)` node model: no revision is ever deleted or mutated in place. Every user-content mutation (note/custom-node/custom-relationship create, update, delete) auto-creates a `Revision` capturing before/after JSON snapshots in the **same Neo4j transaction** as the mutation. Reverting restores the captured state by creating a new `Reverted` revision, so history is never destroyed.
+**Location:** `spoilerless/app/revisions/` (`repository.py`, `service.py`). `Revision` is an append-only Neo4j `(:Revision)` node model: no revision is ever deleted or mutated in place. `revisions/repository.py` exports `RevisionRepository` with static methods for logging append-only revisions (`log_revision()`) and extracting snapshots (`take_snapshot()`). `revisions/service.py` encapsulates the transactional revert business flow `revert_revision_work(tx, command)` and defines the domain exception hierarchy (`RevisionError`, `RevisionNotFound`, `RevisionForbidden`, `RevisionCannotRevertCreate`, `RevisionCannotRevertCanonical`, `RevisionAlreadyExists`, `RevisionInvalidAction`). Domain exceptions are mapped to the uniform error envelope by `spoilerless/app/api/exceptions.py`. Reverting a revision also invalidates the series graph cache via `GraphService.invalidate_series_cache(series_id)`. Every user-content mutation (note/custom-node/custom-relationship create, update, delete) auto-creates a `Revision` capturing before/after JSON snapshots in the **same Neo4j transaction** as the mutation. Reverting restores the captured state by creating a new `Reverted` revision, so history is never destroyed.
 
 | Route | Method | Purpose |
 |---|---|---|

@@ -281,13 +281,18 @@ The response uses `source`, `target`, and `type` rather than the request names `
 
 ### Revisions
 
-All revision operations require `visible_until_order` as a positive query integer. Like note and direct custom-content reads, but unlike graph, candidate-read, progress-update, and share-create routes, revision routes do **not** verify that a positive value matches a persisted Episode order; they apply it directly to revision visibility queries.
+All revision operations resolve their effective boundary through the single fail-closed authority (`resolve_effective_boundary` in `spoilerless/app/api/boundary.py`), validating that the requested boundary identifies a persisted episode order and clamping against user progress when authenticated.
 
 - `GET /revisions` accepts optional `resource_type` and `resource_id` filters and returns newest revisions first.
 - `GET /revisions/{revision_id}` returns a visible `RevisionResponse` or an indistinguishable `404 RESOURCE_NOT_FOUND`.
-- `POST /revisions/{revision_id}/revert` restores an `Updated` user resource from `before`, or recreates a `Deleted` resource. It emits a new `Reverted` revision. The route requires a valid session and is owner-scoped: a known owner that differs from the actor produces `403 FORBIDDEN`, while admins bypass the check. In the current implementation, however, the `Updated` branch checks ownership only when the live resource has a non-null `user_id`, and the `Deleted` branch only when the `before` snapshot has one; a missing legacy owner skips the check and lets a non-admin proceed.
-- Reverting a `Created` revision returns `422 CANNOT_REVERT_CREATE`.
-- Reverting an `Updated` resource whose current origin is canonical or candidate returns `409 CANNOT_REVERT_CANONICAL`. The `Deleted` branch does not check the saved snapshot's origin before recreating it.
+- `POST /revisions/{revision_id}/revert` delegates transaction logic to `revert_revision_work` in `spoilerless/app/revisions/service.py`. It restores an `Updated` user resource from `before`, or recreates a `Deleted` resource, emitting a new `Reverted` revision and triggering deep graph cache invalidation (`GraphService.invalidate_series_cache`). The route requires a valid session (`CurrentUserDependency`) and `CsrfGuardDependency`.
+- Domain exception handling for revert operations is mapped via `spoilerless/app/api/exceptions.py` or caught by the router:
+  - `RevisionNotFound` -> `404 RESOURCE_NOT_FOUND`
+  - `RevisionForbidden` -> `403 FORBIDDEN` (known resource owner differs from acting non-admin user; legacy ownerless resources require admin)
+  - `RevisionCannotRevertCreate` -> `422 CANNOT_REVERT_CREATE`
+  - `RevisionCannotRevertCanonical` -> `409 CANNOT_REVERT_CANONICAL`
+  - `RevisionAlreadyExists` -> `409 RESOURCE_ALREADY_EXISTS`
+  - `RevisionInvalidAction` -> `422 INVALID_ACTION`
 
 A revision contains `id`, `series_id`, `resource_type`, `resource_id`, `action`, nullable `before` and `after` snapshots, actor `user_id`, `created_at`, and `visible_from_order`.
 
@@ -439,7 +444,7 @@ Only confirm requires `RequireAdminDependency` — applying an AI-proposed Chang
 }
 ```
 
-The boundary must be positive and identify a persisted episode order. Since the CR-01 fix (09-REVIEW), the requested order is clamped to the creator's persisted watch progress: no progress record fails closed to order 1, and with a record the effective boundary is `effective_view_order(min(requested, view_as_of_order), watched_through_order)` — a snapshot can never widen the creator's own spoiler-safe window. It generates a `secrets.token_urlsafe(32)` raw token, stores only its SHA-256 hash in a Neo4j `ShareToken`, and returns `201` with `token`, `expires_at`, frontend-relative `url` (`/share/{token}`), `series_id`, `visible_until_order`, and `created_at`. The fixed repository TTL is 2,592,000 seconds (30 days).
+The boundary must be positive and identify a persisted episode order. Boundary clamping is resolved through the single fail-closed boundary authority (`resolve_effective_boundary` in `spoilerless/app/api/boundary.py`): progress lookup, fail-closed fallback to order 1 without a progress record, min/effective_view math, and persisted episode validation (`422 INVALID_VISIBLE_UNTIL_ORDER`). A snapshot can never widen the creator's own spoiler-safe window. It generates a `secrets.token_urlsafe(32)` raw token, stores only its SHA-256 hash in a Neo4j `ShareToken`, and returns `201` with `token`, `expires_at`, frontend-relative `url` (`/share/{token}`), `series_id`, `visible_until_order`, and `created_at`. The fixed repository TTL is 2,592,000 seconds (30 days).
 
 `GET /api/share` requires a session and returns only the caller's active, unexpired tokens, newest first. Each item contains `id`, `token_hash`, `series_id`, `visible_until_order`, `created_at`, and `expires_at`; the raw token is returned only at creation.
 

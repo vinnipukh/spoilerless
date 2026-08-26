@@ -76,6 +76,7 @@ This is the shared dependency-injection boundary:
 - `DatabaseDependency` resolves `request.app.state.neo4j` through `get_database()`.
 - `SessionRepoDependency` and `ShareRepoDependency` resolve the lifespan-owned repositories.
 - `AuthServiceDependency` builds `AuthService(UserRepository(database), session_repo)`.
+- `GraphServiceDependency` and `ProgressServiceDependency` resolve `GraphService` and `ProgressService` instances through `get_graph_service` and `get_progress_service`.
 - `CurrentUserDependency` uses `require_current_user()` and returns `401 AUTH_UNAUTHENTICATED` when the session cookie is absent or invalid.
 - `OptionalUserDependency` uses the same resolution but returns `None`, enabling anonymous read routes while allowing authenticated boundary clamping.
 - `RequireAdminDependency` requires the server-derived `role` to equal `"admin"`.
@@ -129,7 +130,7 @@ Route functions are the public HTTP boundary. Request validation belongs in doma
 | Module / class | Public surface | Responsibility |
 |---|---|---|
 | `services/series.py` — `SeriesService` | `list_series()`, `get_series()`, `list_episodes()` | Executes series queries. When given `effective_view_order`, applies `mask_episode_metadata()` before returning episode data. |
-| `services/graph.py` — `GraphService` | `get_series_meta()`, `resolve_boundary()`, `fetch_graph()` | Validates series/boundary and assembles the complete visible graph. `fetch_graph()` runs seven independent queries with `asyncio.gather`, projects each `GraphClaim` into a `GraphEdge` with id `{claim.id}:edge`, and filters public metadata before model validation. |
+| `services/graph.py` — `GraphService` | `read_visible_graph()`, `fetch_graph()`, `get_series_meta()`, `resolve_boundary()`, `find_path()`, `invalidate_series_cache()` | Business logic for reading and invalidating the spoiler-safe graph. `read_visible_graph()` acts as a Redis cache-aside facade (INFRA-02). `fetch_graph()` runs seven independent queries concurrently with `asyncio.gather()`, projects claims into `{claim.id}:edge` GraphEdges, and applies `filter_public_metadata()` before validation. `invalidate_series_cache()` is the deep invalidation facade seam across all content-mutating write paths. |
 | `services/progress.py` — `ProgressService` | `get()`, `upsert()`, `resolve()` | Migrates legacy rows, validates series and episode orders, preserves watched progress for view-only changes, enforces `1 <= view <= watched`, and returns `effective_view_order`. |
 | `services/auth.py` — `AuthService` | `authenticate()`, `get_current_user()`, `logout()` | Verifies Google claims, applies email allowlist/admin classification, sanitizes avatar URLs, upserts `AppUser`, and creates/reads/revokes sessions. Valid reads update `last_seen_at`, not expiry. |
 | `services/auth.py` — `GoogleTokenVerifier`, `ProductionGoogleVerifier` | `verify()` | Injectable protocol and official `google-auth` implementation. Verification errors and certificate/network transport failures are distinct exception classes. |
@@ -156,7 +157,8 @@ Repositories own persistence shapes and transaction commands. Query-only constan
 | `repository/user_content.py` — `UserContentRepository` | Notes, custom nodes, and custom relationships; dynamic query maps select only ontology-validated labels/types. Creation uses immutable command dataclasses. Updates/deletes are owner-scoped with admin bypass and log revisions in the same transaction. |
 | `graph/candidates.py` — `CandidateRepository` | Candidate ingest/list/get and transaction callbacks for approve/reject/edit. Candidate, source, and evidence ids are deterministically derived during ingest. |
 | `repository/change_set.py` — `ChangeSetRepository` | `get_visible_target()`, `propose()`, `confirm()`, `reject()`, `revert()`. Immutable command dataclasses carry retry-stable ids/timestamps into managed writes. Confirm re-reads current progress and targets and applies all operations plus one revision in a single transaction. |
-| `revisions/__init__.py` — `RevisionRepository` | `log_revision()` writes append-only before/after snapshots inside an existing transaction; `take_snapshot()` extracts the stable resource fields used by user-content, candidate, ChangeSet, and revert paths. |
+| `revisions/repository.py` — `RevisionRepository` | `log_revision()` writes append-only before/after snapshots inside an existing transaction; `take_snapshot()` extracts stable resource fields used by user-content, candidate, ChangeSet, and revert paths; JSON serialization helpers. |
+| `revisions/service.py` — `revert_revision_work()` | Encapsulates transaction revert logic (`revert_revision_work()`), restoring `Updated` resources or re-creating `Deleted` resources in a write transaction. Defines the `RevisionError` domain exception hierarchy (`RevisionNotFound`, `RevisionForbidden`, `RevisionCannotRevertCreate`, `RevisionCannotRevertCanonical`, `RevisionAlreadyExists`, `RevisionInvalidAction`). |
 
 Repository exceptions are part of the internal contract: `UserContentNotFound`, `UserContentValidationError`, `UserContentConflict`, `UserContentForbidden`; `ChatSessionNotFound`; and the ChangeSet not-found/conflict/stale/revert exception family. Catch and translate these at the service or API boundary instead of returning repository details directly.
 

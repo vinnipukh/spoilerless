@@ -536,7 +536,10 @@ resolve: {
 | Icon library | `lucide` |
 | Components path | `@/components` |
 | Utils path | `@/lib/utils` |
-| Hooks path | `@/hooks` |
+### Styling and Theme Tokens (`frontend/src/index.css` & `frontend/src/lib/tokens/graphTokens.ts`)
+
+- **Tailwind CSS v4 theme inline tokens:** `frontend/src/index.css` configures `@theme inline` variables including `--font-heading` (`Space Grotesk Variable`), `--font-sans` (`Inter Variable`), `--color-accent-claim` (`#d946ef`), `--color-accent-evidence` (`#fb923c`), component elevation, radii, and dark-first palette tokens.
+- **Centralized graph tokens:** `frontend/src/lib/tokens/graphTokens.ts` exports `NODE_TYPE_COLORS`, `EDGE_FAMILY_COLORS`, `GRAPH_CANVAS_TOKENS`, and `SELECTION_GLOW_TOKENS` to ensure visual parity between Cytoscape stylesheets, HTML overlays, and detail cards without token drift.
 
 ---
 
