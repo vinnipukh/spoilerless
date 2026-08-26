@@ -10,7 +10,9 @@ from spoilerless.app.api.boundary import require_boundary, resolve_effective_bou
 from spoilerless.app.api.deps import (
     CsrfGuardDependency,
     CurrentUserDependency,
+    GraphServiceDependency,
     OptionalUserDependency,
+    ProgressServiceDependency,
     RequireAdminDependency,
 )
 from spoilerless.app.cache.graph_cache import invalidate_series
@@ -30,17 +32,7 @@ async def get_candidate_repo(db: Neo4jDatabase = Depends(get_database)) -> Candi
     return CandidateRepository(db)
 
 
-async def get_graph_service(db: Neo4jDatabase = Depends(get_database)) -> GraphService:
-    return GraphService(db)
-
-
-async def get_progress_service(db: Neo4jDatabase = Depends(get_database)) -> ProgressService:
-    return ProgressService(db)
-
-
 CandidateRepoDependency = Annotated[CandidateRepository, Depends(get_candidate_repo)]
-GraphServiceDependency = Annotated[GraphService, Depends(get_graph_service)]
-ProgressServiceDependency = Annotated[ProgressService, Depends(get_progress_service)]
 SeriesId = Annotated[Identifier, Path(description="Series identifier.")]
 ClaimId = Annotated[Identifier, Path(description="Candidate claim identifier.", examples=["extracted:a1b2c3d4e5f6g7h8"])]
 

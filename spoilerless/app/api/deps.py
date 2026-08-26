@@ -21,10 +21,25 @@ from spoilerless.app.repository.session import SessionRepository
 from spoilerless.app.repository.share import ShareRepository
 from spoilerless.app.repository.user import UserRepository
 from spoilerless.app.services.auth import AuthService, ProductionGoogleVerifier
+from spoilerless.app.services.graph import GraphService
+from spoilerless.app.services.progress import ProgressService
 
 AUTH_UNAUTHENTICATED = "AUTH_UNAUTHENTICATED"
 
 DatabaseDependency = Annotated[Neo4jDatabase, Depends(get_database)]
+
+
+def get_graph_service(database: DatabaseDependency) -> GraphService:
+    return GraphService(database)
+
+
+def get_progress_service(database: DatabaseDependency) -> ProgressService:
+    return ProgressService(database)
+
+
+GraphServiceDependency = Annotated[GraphService, Depends(get_graph_service)]
+ProgressServiceDependency = Annotated[ProgressService, Depends(get_progress_service)]
+
 
 
 def get_session_repo(request: Request) -> SessionRepository:

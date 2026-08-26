@@ -7,19 +7,24 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from spoilerless.app.api.deps import (
+    DatabaseDependency,
+    GraphServiceDependency,
     OptionalUserDependency,
+    ProgressServiceDependency,
+    get_graph_service,
     get_optional_current_user,
+    get_progress_service,
 )
 from spoilerless.app.cache.graph_cache import (
-    get_cached_graph,
     get_cached_visualization,
-    set_cached_graph,
     set_cached_visualization,
 )
+from spoilerless.app.core.errors import error_responses
 from spoilerless.app.domain.graph import (
+    USER_RELATIONSHIP_TYPES,
+    VISIBLE_NODE_LABELS,
     GraphResponse,
 )
-from spoilerless.app.core.errors import error_responses
 from spoilerless.app.domain.series import SeriesResponse
 from spoilerless.app.domain.user_content import VisibleUntilOrder
 from spoilerless.app.domain.visualization import (
@@ -27,11 +32,11 @@ from spoilerless.app.domain.visualization import (
     EXPANSION_MAX_LIMIT,
     GRAPHRAG_FOCUS_VIEW_TYPE,
     PROJECTION_VERSION,
+    ExpansionKey,
     VisualizationDTO,
+    VisualizationView,
 )
-from spoilerless.app.graph.database import Neo4jDatabase, get_database
-from spoilerless.app.graph.ontology import load_ontology
-from spoilerless.app.retrieval.tools import MAX_PATH_HOPS, find_path
+from spoilerless.app.retrieval.tools import MAX_PATH_HOPS
 from spoilerless.app.services.graph import GraphService
 from spoilerless.app.services.progress import ProgressService
 from spoilerless.app.services.visualization import VisualizationProjectionService
@@ -42,58 +47,9 @@ from spoilerless.app.spoiler.policy import InvalidVisibilityOrder, effective_vie
 _resolve_effective_boundary = resolve_effective_boundary
 
 router = APIRouter(prefix="/api/series", tags=["graph"])
-DatabaseDependency = Annotated[Neo4jDatabase, Depends(get_database)]
-VISIBLE_NODE_LABELS = [
-    "Series",
-    "Episode",
-    "Character",
-    "Event",
-    "Location",
-    "Organization",
-    "Object",
-]
-USER_RELATIONSHIP_TYPES = sorted(load_ontology().user_safe_relationship_types)
-
-# D-29: the exact view vocabulary of the visualization route. ``Literal``
-# keeps the OpenAPI enum and the route's runtime validation in lockstep; the
-# projection service additionally refuses unknown view types (fail closed).
-VisualizationView = Literal[
-    "episode_overview",
-    "character_network",
-    "plot_threads",
-    "investigation",
-    "full",
-    "graphrag_focus",
-]
-
-# D-21: the exact allowlisted expansion-key vocabulary of the expansion
-# route. ``Literal`` keeps the OpenAPI enum and the route's runtime
-# validation in lockstep; the projection service additionally refuses
-# unknown keys (fail closed, T10-BOUND-06).
-ExpansionKey = Literal[
-    "family",
-    "work",
-    "conflict",
-    "episode_events",
-    "clues",
-    "locations",
-    "evidence",
-]
 
 # Stateless projection service; one shared instance per process.
 _visualization_service = VisualizationProjectionService()
-
-
-def get_graph_service(database: DatabaseDependency) -> GraphService:
-    return GraphService(database)
-
-
-def get_progress_service(database: DatabaseDependency) -> ProgressService:
-    return ProgressService(database)
-
-
-GraphServiceDependency = Annotated[GraphService, Depends(get_graph_service)]
-ProgressServiceDependency = Annotated[ProgressService, Depends(get_progress_service)]
 
 
 def _error(status_code: int, code: str, message: str) -> HTTPException:
@@ -124,25 +80,8 @@ async def get_graph(
         service, progress_service, series_id, user, visible_until_order
     )
 
-    # Cache-aside (INFRA-02): check hit before the Neo4j query. The
-    # cache key encodes the effective boundary + user_id, so a boundary
-    # change is always a cache miss with no need to invalidate (T-08-06-02).
     user_id = user["id"] if user is not None else None
-    cached = await get_cached_graph(series_id, effective, user_id)
-    if cached is not None:
-        return GraphResponse.model_validate(cached)
-
-    result = await service.fetch_graph(
-        series_id,
-        effective,
-        node_labels=VISIBLE_NODE_LABELS,
-        user_relationship_types=USER_RELATIONSHIP_TYPES,
-        effective_view_order=effective,
-    )
-
-    # Write-through on miss (best-effort; swallows Redis errors).
-    await set_cached_graph(series_id, effective, user_id, result.model_dump(mode="json"))
-    return result
+    return await service.read_visible_graph(series_id, effective, user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -410,8 +349,7 @@ async def find_shortest_path(
     effective = await _resolve_effective_boundary(
         service, progress_service, series_id, user
     )
-    result = await find_path(
-        service._database,
+    result = await service.find_path(
         source_entity_id=body.source_entity_id,
         target_entity_id=body.target_entity_id,
         max_hops=body.max_hops,

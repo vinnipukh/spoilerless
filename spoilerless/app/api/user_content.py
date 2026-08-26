@@ -5,7 +5,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Query, Response
 
 from spoilerless.app.api.boundary import resolve_effective_boundary
-from spoilerless.app.api.deps import CsrfGuardDependency, CurrentUserDependency, OptionalUserDependency
+from spoilerless.app.api.deps import (
+    CsrfGuardDependency,
+    CurrentUserDependency,
+    DatabaseDependency,
+    GraphServiceDependency,
+    OptionalUserDependency,
+    ProgressServiceDependency,
+)
 from spoilerless.app.core.errors import error_responses
 from spoilerless.app.cache.graph_cache import invalidate_series
 from spoilerless.app.services.graph import GraphService
@@ -24,24 +31,11 @@ from spoilerless.app.repository.user_content import UserContentRepository
 from spoilerless.app.services.rate_limit import content_write_rate_limiter
 
 router = APIRouter(prefix="/api/series", tags=["user-content"])
-DatabaseDependency = Annotated[Neo4jDatabase, Depends(get_database)]
 Boundary = Annotated[int, Query(gt=0, description="Persisted positive spoiler boundary.", examples=[1])]
 
 
 def _repository(database: Neo4jDatabase) -> UserContentRepository:
     return UserContentRepository(database)
-
-
-def get_graph_service(database: Neo4jDatabase = Depends(get_database)) -> GraphService:
-    return GraphService(database)
-
-
-def get_progress_service(database: Neo4jDatabase = Depends(get_database)) -> ProgressService:
-    return ProgressService(database)
-
-
-GraphServiceDependency = Annotated[GraphService, Depends(get_graph_service)]
-ProgressServiceDependency = Annotated[ProgressService, Depends(get_progress_service)]
 
 
 def _owner_id(user: dict | None) -> str | None:

@@ -6,6 +6,19 @@ from pydantic import BaseModel, Field, model_validator
 
 from spoilerless.app.domain.series import SeriesResponse
 from spoilerless.app.domain.user_content import Origin
+from spoilerless.app.graph.ontology import load_ontology
+
+VISIBLE_NODE_LABELS: list[str] = [
+    "Series",
+    "Episode",
+    "Character",
+    "Event",
+    "Location",
+    "Organization",
+    "Object",
+]
+USER_RELATIONSHIP_TYPES: list[str] = sorted(load_ontology().user_safe_relationship_types)
+
 
 
 class GraphNode(BaseModel):

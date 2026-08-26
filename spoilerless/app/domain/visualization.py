@@ -88,6 +88,30 @@ EXPANSION_KEYS: tuple[str, ...] = (
     EXPANSION_KEY_EVIDENCE,
 )
 
+# D-29: the exact view vocabulary of the visualization route. ``Literal``
+# keeps the OpenAPI enum and the route's runtime validation in lockstep.
+VisualizationView = Literal[
+    "episode_overview",
+    "character_network",
+    "plot_threads",
+    "investigation",
+    "full",
+    "graphrag_focus",
+]
+
+# D-21: the exact allowlisted expansion-key vocabulary of the expansion
+# route. ``Literal`` keeps the OpenAPI enum and the route's runtime validation
+# in lockstep.
+ExpansionKey = Literal[
+    "family",
+    "work",
+    "conflict",
+    "episode_events",
+    "clues",
+    "locations",
+    "evidence",
+]
+
 # D-21 bounds: expansions prefer 8-12 additions with a hard max of 25 — no
 # request and no server result may ever exceed it (T10-BOUND-06).
 EXPANSION_DEFAULT_LIMIT = 12

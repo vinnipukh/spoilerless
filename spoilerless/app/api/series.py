@@ -5,7 +5,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 
 from spoilerless.app.api.boundary import resolve_effective_boundary
-from spoilerless.app.api.deps import OptionalUserDependency
+from spoilerless.app.api.deps import (
+    DatabaseDependency,
+    GraphServiceDependency,
+    OptionalUserDependency,
+    ProgressServiceDependency,
+)
 from spoilerless.app.domain.series import EpisodeResponse, SeriesResponse
 from spoilerless.app.domain.user_content import VisibleUntilOrder
 from spoilerless.app.graph.database import Neo4jDatabase, get_database
@@ -15,24 +20,13 @@ from spoilerless.app.services.progress import ProgressService
 from spoilerless.app.services.series import SeriesService
 
 router = APIRouter(prefix="/api/series", tags=["series"])
-DatabaseDependency = Annotated[Neo4jDatabase, Depends(get_database)]
 
 
 def get_series_service(database: DatabaseDependency) -> SeriesService:
     return SeriesService(database)
 
 
-def get_progress_service(database: DatabaseDependency) -> ProgressService:
-    return ProgressService(database)
-
-
-def get_graph_service(database: DatabaseDependency) -> GraphService:
-    return GraphService(database)
-
-
 SeriesServiceDependency = Annotated[SeriesService, Depends(get_series_service)]
-ProgressServiceDependency = Annotated[ProgressService, Depends(get_progress_service)]
-GraphServiceDependency = Annotated[GraphService, Depends(get_graph_service)]
 
 
 @router.get("", response_model=list[SeriesResponse], summary="List series", responses=error_responses(503))

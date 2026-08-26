@@ -33,7 +33,11 @@ from spoilerless.app.cache.graph_cache import (
 )
 from spoilerless.app.core.config import get_settings
 from spoilerless.app.core.errors import install_database_error_handlers
-from spoilerless.app.domain.graph import GraphResponse
+from spoilerless.app.domain.graph import (
+    USER_RELATIONSHIP_TYPES,
+    VISIBLE_NODE_LABELS,
+    GraphResponse,
+)
 from spoilerless.app.domain.visualization import PROJECTION_VERSION, VisualizationDTO
 from spoilerless.app.graph.database import Neo4jDatabase, get_database
 from spoilerless.app.spoiler.policy import filter_public_metadata
@@ -1179,6 +1183,24 @@ class _FakeGraphService:
         if 1 <= visible_until_order <= self._max_episode_order:
             return {"id": f"{series_id}:episode:{visible_until_order}"}
         return None
+
+    async def read_visible_graph(
+        self, series_id: str, effective: int, user_id: str | None
+    ) -> GraphResponse:
+        cached = await get_cached_graph(series_id, effective, user_id)
+        if cached is not None:
+            return GraphResponse.model_validate(cached)
+
+        result = await self.fetch_graph(
+            series_id,
+            effective,
+            node_labels=VISIBLE_NODE_LABELS,
+            user_relationship_types=USER_RELATIONSHIP_TYPES,
+            effective_view_order=effective,
+        )
+
+        await set_cached_graph(series_id, effective, user_id, result.model_dump(mode="json"))
+        return result
 
     async def fetch_graph(
         self,

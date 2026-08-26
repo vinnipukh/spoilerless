@@ -6,17 +6,24 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from spoilerless.app.api.boundary import resolve_effective_boundary
-from spoilerless.app.api.deps import CsrfGuardDependency, CurrentUserDependency, OptionalUserDependency
+from spoilerless.app.api.deps import (
+    CsrfGuardDependency,
+    CurrentUserDependency,
+    DatabaseDependency,
+    GraphServiceDependency,
+    OptionalUserDependency,
+    ProgressServiceDependency,
+)
 from spoilerless.app.core.errors import error_responses, http_error
 from spoilerless.app.domain.revision import RevisionResponse
 from spoilerless.app.graph.database import Neo4jDatabase, get_database
 from spoilerless.app.repository.user_content import UserContentRepository
-from spoilerless.app.revisions import REVISION_GET_QUERY, revert_revision_work
+from spoilerless.app.revisions.repository import REVISION_GET_QUERY
+from spoilerless.app.revisions.service import RevisionInvalidAction, revert_revision_work
 from spoilerless.app.services.graph import GraphService
 from spoilerless.app.services.progress import ProgressService
 
 router = APIRouter(prefix="/api/series", tags=["revisions"])
-DatabaseDependency = Annotated[Neo4jDatabase, Depends(get_database)]
 Boundary = Annotated[
     int, Query(gt=0, description="Persisted positive spoiler boundary.", examples=[1])
 ]
@@ -36,20 +43,9 @@ RETURN revision.id AS id, revision.series_id AS series_id,
 ORDER BY revision.created_at DESC, revision.id ASC
 """
 
+
 def _not_found() -> Exception:
     return http_error(404, "RESOURCE_NOT_FOUND", "Resource not found.")
-
-
-def get_graph_service(database: Neo4jDatabase = Depends(get_database)) -> GraphService:
-    return GraphService(database)
-
-
-def get_progress_service(database: Neo4jDatabase = Depends(get_database)) -> ProgressService:
-    return ProgressService(database)
-
-
-GraphServiceDependency = Annotated[GraphService, Depends(get_graph_service)]
-ProgressServiceDependency = Annotated[ProgressService, Depends(get_progress_service)]
 
 
 def _shape_revision_response(revision: dict, user: dict | None) -> dict:
@@ -171,5 +167,8 @@ async def revert_revision(
         "user_id": actor_id,
         "is_admin": is_admin,
     }
-    result = await database.execute_write(revert_revision_work, command)
+    try:
+        result = await database.execute_write(revert_revision_work, command)
+    except RevisionInvalidAction as exc:
+        raise http_error(422, "INVALID_ACTION", str(exc))
     return RevisionResponse.model_validate(result)

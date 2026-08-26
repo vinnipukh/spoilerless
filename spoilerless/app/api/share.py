@@ -8,17 +8,9 @@ from spoilerless.app.api.boundary import resolve_effective_boundary
 from spoilerless.app.api.deps import (
     CsrfGuardDependency,
     CurrentUserDependency,
-    DatabaseDependency,
-    ShareRepoDependency,
-)
-from spoilerless.app.api.graph import (
-    USER_RELATIONSHIP_TYPES,
-    VISIBLE_NODE_LABELS,
+    GraphServiceDependency,
     ProgressServiceDependency,
-)
-from spoilerless.app.cache.graph_cache import (
-    get_cached_graph,
-    set_cached_graph,
+    ShareRepoDependency,
 )
 from spoilerless.app.core.errors import error_responses, http_error
 from spoilerless.app.domain.graph import GraphResponse
@@ -28,7 +20,6 @@ from spoilerless.app.domain.share import (
     ShareItemResponse,
     ShareTokenRecord,
 )
-from spoilerless.app.services.graph import GraphService
 
 
 logger = logging.getLogger(__name__)
@@ -45,14 +36,12 @@ router = APIRouter(prefix="/api/share", tags=["share"])
 )
 async def create_share_link(
     payload: ShareCreateRequest,
-    database: DatabaseDependency,
+    service: GraphServiceDependency,
     share_repo: ShareRepoDependency,
     progress_service: ProgressServiceDependency,
     user: CurrentUserDependency,
     _csrf: CsrfGuardDependency,
 ) -> ShareCreateResponse:
-    service = GraphService(database)
-
     # CR-01 (09-REVIEW): a share snapshot must never widen the creator's own
     # spoiler-safe window (PROB-04/D-05). The single fail-closed boundary
     # authority owns the whole clamp: progress lookup, min/effective_view
@@ -87,8 +76,8 @@ async def create_share_link(
 )
 async def get_share_graph(
     token: str,
-    database: DatabaseDependency,
     share_repo: ShareRepoDependency,
+    service: GraphServiceDependency,
 ) -> GraphResponse:
     record = await share_repo.get_by_raw_token(token)
     if record is None or not record.is_valid:
@@ -102,7 +91,6 @@ async def get_share_graph(
     effective = record.visible_until_order
     user_id = None
 
-    service = GraphService(database)
     # WR-02 (09-REVIEW): a token whose series was deleted must 404, not 500
     # (IndexError in fetch_graph's series_rows[0]).
     series = await service.get_series_meta(series_id)
@@ -113,23 +101,7 @@ async def get_share_graph(
             "The shared series no longer exists.",
         )
 
-    # NO-SECOND-FILTER (D-09): Reuses exact fetch_graph assembly as api/graph.py
-    cached = await get_cached_graph(series_id, effective, user_id)
-    if cached is not None:
-        return GraphResponse.model_validate(cached)
-
-    result = await service.fetch_graph(
-        series_id,
-        effective,
-        node_labels=VISIBLE_NODE_LABELS,
-        user_relationship_types=USER_RELATIONSHIP_TYPES,
-        effective_view_order=effective,
-    )
-
-    await set_cached_graph(
-        series_id, effective, user_id, result.model_dump(mode="json")
-    )
-    return result
+    return await service.read_visible_graph(series_id, effective, user_id)
 
 
 @router.get(

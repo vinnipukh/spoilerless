@@ -16,6 +16,7 @@ from spoilerless.app.api.deps import (
     CsrfGuardDependency,
     CurrentUserDependency,
     DatabaseDependency,
+    ProgressServiceDependency,
 )
 from spoilerless.app.core.errors import error_responses, http_error
 from spoilerless.app.domain.progress import (
@@ -30,13 +31,6 @@ from spoilerless.app.services.progress import (
 from spoilerless.app.spoiler.policy import InvalidVisibilityOrder
 
 router = APIRouter(prefix="/api/series/{series_id}", tags=["progress"])
-
-
-def get_progress_service(database: DatabaseDependency) -> ProgressService:
-    return ProgressService(database)
-
-
-ProgressServiceDependency = Annotated[ProgressService, Depends(get_progress_service)]
 
 
 @router.get(
