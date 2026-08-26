@@ -314,3 +314,90 @@ def test_candidates_invalid_order_returns_422(live_client: TestClient):
     for bad in [0, -1, "abc"]:
         resp = live_client.get(f"/api/series/{SCRATCH}/candidates", params={"visible_until_order": bad})
         assert resp.status_code == 422, f"bad={bad} got {resp.status_code}"
+
+
+# ---------------------------------------------------------------------------
+# 12-02 (THERMO-P1-01): raw visible_until_order must clamp via
+# resolve_effective_boundary — never 422 on un-clamped persistence checks.
+# ---------------------------------------------------------------------------
+
+
+def _seed_custom_node(node_id: str, visible_from_order: int) -> None:
+    """Seed a user-origin custom Character node in the SCRATCH series."""
+
+    async def _run() -> None:
+        db = Neo4jDatabase()
+        db.open()
+        try:
+            await db.execute_query(
+                """
+                MERGE (n:Character {id: $nid})
+                SET n.series_id = $sid, n.label = $label, n.title = $label,
+                    n.origin = 'user', n.user_id = 'scratch-boundary-owner',
+                    n.visible_from_order = $vfo,
+                    n.episode_id = $eid,
+                    n.created_at = coalesce(n.created_at, datetime()),
+                    n.updated_at = coalesce(n.updated_at, datetime())
+                """,
+                nid=node_id,
+                sid=SCRATCH,
+                label="Scratch clamp node",
+                vfo=visible_from_order,
+                eid=f"{SCRATCH}:episode:{visible_from_order}",
+            )
+        finally:
+            await db.close()
+
+    asyncio.run(_run())
+
+
+def _delete_custom_nodes(*node_ids: str) -> None:
+    async def _run() -> None:
+        db = Neo4jDatabase()
+        db.open()
+        try:
+            await db.execute_query("MATCH (n) WHERE n.id IN $ids DETACH DELETE n", ids=list(node_ids))
+        finally:
+            await db.close()
+
+    asyncio.run(_run())
+
+
+def test_anonymous_notes_clamped_to_order_one(live_client: TestClient):
+    live_client.cookies.clear()
+    resp = live_client.get(f"/api/series/{SCRATCH}/notes", params={"visible_until_order": 999})
+    # Clamped to persisted order 1 => 200 OK, NOT 422 from a raw pre-check.
+    assert resp.status_code == 200, f"Expected 200 clamped to order 1, got {resp.status_code}: {resp.text}"
+
+
+def test_anonymous_revisions_clamped_to_order_one(live_client: TestClient):
+    live_client.cookies.clear()
+    resp = live_client.get(f"/api/series/{SCRATCH}/revisions", params={"visible_until_order": 999})
+    assert resp.status_code == 200, f"Expected 200 clamped to order 1, got {resp.status_code}: {resp.text}"
+
+
+def test_anonymous_custom_node_clamped_to_order_one(live_client: TestClient):
+    node_o1 = "user-node:boundary-clamp-o1"
+    node_o2 = "user-node:boundary-clamp-o2"
+    _seed_custom_node(node_o1, visible_from_order=1)
+    _seed_custom_node(node_o2, visible_from_order=2)
+    try:
+        live_client.cookies.clear()
+        # Order-1 node stays visible at the clamped boundary (999 -> 1).
+        resp = live_client.get(
+            f"/api/series/{SCRATCH}/custom-nodes/{node_o1}", params={"visible_until_order": 999}
+        )
+        assert resp.status_code == 200, (
+            f"Expected 200 clamped to order 1, got {resp.status_code}: {resp.text}"
+        )
+        assert resp.json()["id"] == node_o1
+        # Order-2 node is HIDDEN at clamped order 1 => 404 (never 200, never 422).
+        hidden = live_client.get(
+            f"/api/series/{SCRATCH}/custom-nodes/{node_o2}", params={"visible_until_order": 999}
+        )
+        assert hidden.status_code == 404, (
+            f"Expected 404 at clamped order 1, got {hidden.status_code}: {hidden.text}"
+        )
+        assert hidden.json()["detail"]["code"] == "RESOURCE_NOT_FOUND"
+    finally:
+        _delete_custom_nodes(node_o1, node_o2)
