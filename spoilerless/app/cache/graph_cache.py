@@ -18,6 +18,16 @@ signature dimensions live below.
 Caching is a performance layer, never a hard dependency: an empty
 ``redis_url`` or any Redis error degrades to always querying Neo4j directly
 (T-08-06-02).
+
+Call-site inventory for series cache invalidation:
+All mutation endpoints call GraphService.invalidate_series_cache(series_id):
+- api/candidates.py: ingest_candidates, approve_candidate, reject_candidate, edit_candidate (4 call sites)
+- api/change_set.py: confirm_change_set, revert_change_set (2 call sites)
+- api/user_content.py: create_custom_node, update_custom_node, delete_custom_node, create_custom_relationship, update_custom_relationship, delete_custom_relationship (6 call sites)
+- api/revisions.py: revert_revision (1 call site)
+
+Note: New content mutation paths must invoke GraphService.invalidate_series_cache, not raw cache internals.
+Full impossibility-of-forgetting (a write-coordinator pattern wrapping execute_write) is deliberately out of scope.
 """
 
 from __future__ import annotations

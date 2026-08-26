@@ -148,6 +148,7 @@ async def revert_revision(
     revision_id: str,
     visible_until_order: Boundary,
     database: DatabaseDependency,
+    service: GraphServiceDependency,
     user: CurrentUserDependency,
     _csrf: CsrfGuardDependency,
 ) -> RevisionResponse:
@@ -171,4 +172,6 @@ async def revert_revision(
         result = await database.execute_write(revert_revision_work, command)
     except RevisionInvalidAction as exc:
         raise http_error(422, "INVALID_ACTION", str(exc))
+    # WRITE-FRESHNESS (C6): revert re-creates/restores visible content — the series cache must not serve pre-revert state for up to the 300s TTL.
+    await service.invalidate_series_cache(series_id)
     return RevisionResponse.model_validate(result)

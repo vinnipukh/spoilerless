@@ -5,6 +5,7 @@ from typing import Any
 
 from spoilerless.app.cache.graph_cache import (
     get_cached_graph,
+    invalidate_series,
     set_cached_graph,
 )
 from spoilerless.app.domain.graph import (
@@ -37,6 +38,10 @@ class GraphService:
 
     def __init__(self, database: Neo4jDatabase) -> None:
         self._database = database
+
+    async def invalidate_series_cache(self, series_id: str) -> None:
+        """Deep invalidation seam for every content-mutating write (D-30: epoch bump before key deletes; T-08-06-01 over-invalidation is safe; T-08-06-02 errors swallowed)."""
+        await invalidate_series(series_id)
 
     async def read_visible_graph(
         self, series_id: str, effective: int, user_id: str | None

@@ -407,3 +407,59 @@ async def test_epoch_read_failure_bypasses_cache(monkeypatch: pytest.MonkeyPatch
         await get_cached_visualization("series_dexter", 1, FULL, PROJECTION_VERSION, None)
         is None
     )
+
+
+async def test_invalidate_series_facade_epoch_bump_and_delete(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """C6 facade: invalidate_series_cache increments epoch, deletes graph and viz keys, and orders bump BEFORE deletes (D-30)."""
+    from spoilerless.app.services.graph import GraphService
+
+    fake = _FakeRedis()
+    _enable_cache(monkeypatch, fake)
+
+    ops_log: list[str] = []
+    orig_incr = fake.incr
+    orig_delete = fake.delete
+
+    async def logging_incr(key: str) -> int:
+        ops_log.append(f"incr:{key}")
+        return await orig_incr(key)
+
+    async def logging_delete(*keys: str) -> None:
+        ops_log.append("delete")
+        await orig_delete(*keys)
+
+    fake.incr = logging_incr  # type: ignore[method-assign]
+    fake.delete = logging_delete  # type: ignore[method-assign]
+
+    fake._store["graph:series_dexter:1:anon"] = b"cached"
+    fake._store["viz:series_dexter:1:full:1.0:anon:0:none"] = b"cached"
+
+    service = GraphService(None)  # type: ignore[arg-type]
+    await service.invalidate_series_cache("series_dexter")
+
+    assert fake._store["graph_revision:series_dexter"] == b"1"
+    assert "graph:series_dexter:1:anon" not in fake._store
+    assert "viz:series_dexter:1:full:1.0:anon:0:none" not in fake._store
+    assert ops_log[0] == "incr:graph_revision:series_dexter"
+    assert "delete" in ops_log
+
+
+async def test_invalidate_series_cache_swallows_redis_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """T-08-06-02: facade swallows Redis errors without raising."""
+    from spoilerless.app.services.graph import GraphService
+
+    monkeypatch.setattr(get_settings(), "redis_url", "rediss://fake:6379")
+
+    class _FailingRedis:
+        async def incr(self, _key: str) -> int:
+            raise RuntimeError("Redis connection error during incr")
+
+    monkeypatch.setattr(graph_cache, "get_redis", lambda: _FailingRedis())
+
+    service = GraphService(None)  # type: ignore[arg-type]
+    await service.invalidate_series_cache("series_dexter")
+

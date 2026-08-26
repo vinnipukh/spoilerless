@@ -15,9 +15,7 @@ from spoilerless.app.api.deps import (
     ProgressServiceDependency,
     RequireAdminDependency,
 )
-from spoilerless.app.cache.graph_cache import invalidate_series
 from spoilerless.app.core.errors import error_responses, http_error
-from spoilerless.app.domain.extraction import ExtractionBatchEnvelope
 from spoilerless.app.domain.user_content import Identifier
 from spoilerless.app.graph.candidates import CandidateRepository
 from spoilerless.app.graph.database import Neo4jDatabase, get_database
@@ -96,6 +94,7 @@ async def ingest_candidates(
     envelope: ExtractionBatchEnvelope,
     repo: CandidateRepoDependency,
     user: CurrentUserDependency,
+    service: GraphServiceDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
     _csrf: CsrfGuardDependency,
 ) -> dict:
@@ -114,7 +113,7 @@ async def ingest_candidates(
     # error handlers, not be relabeled as a payload problem with raw
     # str(exc) interpolated into the response.
     result = await repo.ingest_batch(series_id, envelope)
-    await invalidate_series(series_id)
+    await service.invalidate_series_cache(series_id)
     return result
 
 
@@ -218,6 +217,7 @@ async def approve_candidate(
     series_id: SeriesId,
     claim_id: ClaimId,
     repo: CandidateRepoDependency,
+    service: GraphServiceDependency,
     _admin: RequireAdminDependency,
     _csrf: CsrfGuardDependency,
 ) -> dict:
@@ -239,7 +239,7 @@ async def approve_candidate(
         user_id=_admin["id"],
         now=datetime.now(timezone.utc),
     )
-    await invalidate_series(series_id)
+    await service.invalidate_series_cache(series_id)
     return result
 
 
@@ -256,6 +256,7 @@ async def reject_candidate(
     series_id: SeriesId,
     claim_id: ClaimId,
     repo: CandidateRepoDependency,
+    service: GraphServiceDependency,
     _admin: RequireAdminDependency,
     _csrf: CsrfGuardDependency,
 ) -> dict:
@@ -271,7 +272,7 @@ async def reject_candidate(
         user_id=_admin["id"],
         now=datetime.now(timezone.utc),
     )
-    await invalidate_series(series_id)
+    await service.invalidate_series_cache(series_id)
     return result
 
 
@@ -289,6 +290,7 @@ async def edit_candidate(
     claim_id: ClaimId,
     body: EditCandidateRequest,
     repo: CandidateRepoDependency,
+    service: GraphServiceDependency,
     _admin: RequireAdminDependency,
     _csrf: CsrfGuardDependency,
 ) -> dict:
@@ -311,5 +313,5 @@ async def edit_candidate(
         )
     except ValueError as exc:
         raise http_error(422, "INVALID_EXTRACTION_PAYLOAD", str(exc))
-    await invalidate_series(series_id)
+    await service.invalidate_series_cache(series_id)
     return result

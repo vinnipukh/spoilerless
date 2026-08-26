@@ -19,9 +19,9 @@ from spoilerless.app.api.deps import (
     CsrfGuardDependency,
     CurrentUserDependency,
     DatabaseDependency,
+    GraphServiceDependency,
     RequireAdminDependency,
 )
-from spoilerless.app.cache.graph_cache import invalidate_series
 from spoilerless.app.core.errors import error_responses, http_error
 from spoilerless.app.domain.change_set import ChangeSetCreateRequest, ChangeSetResponse
 from spoilerless.app.services.change_set import (
@@ -92,6 +92,7 @@ async def confirm_change_set(
     change_set_id: str,
     user: CurrentUserDependency,
     service: ChangeSetServiceDependency,
+    graph_service: GraphServiceDependency,
     _admin: RequireAdminDependency,
     _csrf: CsrfGuardDependency,
 ) -> ChangeSetResponse:
@@ -113,7 +114,7 @@ async def confirm_change_set(
         result = await service.confirm(user["id"], series_id, change_set_id)
     except ChangeSetConflict:
         _conflict("This ChangeSet has already been resolved and cannot be confirmed again.")
-    await invalidate_series(series_id)
+    await graph_service.invalidate_series_cache(series_id)
     return result
 
 
@@ -159,6 +160,7 @@ async def revert_change_set(
     change_set_id: str,
     user: CurrentUserDependency,
     service: ChangeSetServiceDependency,
+    graph_service: GraphServiceDependency,
     _admin: RequireAdminDependency,
     _csrf: CsrfGuardDependency,
 ) -> ChangeSetResponse:
@@ -186,5 +188,5 @@ async def revert_change_set(
             "A resource this ChangeSet created was modified or removed by a later, "
             "unrelated change; revert was aborted to avoid overwriting it."
         )
-    await invalidate_series(series_id)
+    await graph_service.invalidate_series_cache(series_id)
     return result

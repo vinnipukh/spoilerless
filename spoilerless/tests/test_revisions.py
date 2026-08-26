@@ -6,6 +6,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from spoilerless.tests.test_user_content_api import (
+    _create_user_with_session,
+    _delete_test_user,
+    _run,
     assert_hidden_matches_missing,
     direct_database_snapshot,
     live_client,
@@ -638,3 +641,270 @@ class TestExistingTestsStillPass:
         # pytest will discover and run them separately. This test serves
         # as a marker that they're expected to pass.
         assert True
+
+
+# ---------------------------------------------------------------------------
+# Task 3: Domain exception envelope parity and revert logging
+# ---------------------------------------------------------------------------
+
+
+class TestRevertEnvelopeParityAndSuccess:
+    """Byte-identical envelope parity for all domain exception revert failures and successful revert log."""
+
+    def test_revert_envelope_byte_parity_404_resource_not_found(
+        self, user_content_client: TestClient
+    ) -> None:
+        resp = _revert_revision(user_content_client, "revision:non-existent-id")
+        assert resp.status_code == 404
+        assert resp.json() == {
+            "detail": {
+                "code": "RESOURCE_NOT_FOUND",
+                "message": "Resource not found.",
+            }
+        }
+
+    def test_revert_envelope_byte_parity_422_cannot_revert_create(
+        self, user_content_client: TestClient
+    ) -> None:
+        created = _create_note(user_content_client, "note for create revert test")
+        assert created.status_code == 201
+        revs = _list_revisions(user_content_client).json()
+        create_rev = _find_revision(revs, "Created")
+        assert create_rev is not None
+
+        resp = _revert_revision(user_content_client, create_rev["id"])
+        assert resp.status_code == 422
+        assert resp.json() == {
+            "detail": {
+                "code": "CANNOT_REVERT_CREATE",
+                "message": "Cannot revert a Creation revision.",
+            }
+        }
+
+    def test_revert_envelope_byte_parity_422_invalid_action(
+        self, user_content_client: TestClient
+    ) -> None:
+        direct_database_snapshot(
+            """
+            CREATE (r:Revision {
+                id: 'revision:test-invalid-action-type',
+                series_id: 'series_dexter',
+                resource_type: 'InvalidType',
+                resource_id: 'res-invalid',
+                action: 'Updated',
+                visible_from_order: 1,
+                created_at: '2026-01-01T00:00:00Z'
+            })
+            """
+        )
+        try:
+            resp = _revert_revision(user_content_client, "revision:test-invalid-action-type")
+            assert resp.status_code == 422
+            assert resp.json() == {
+                "detail": {
+                    "code": "INVALID_ACTION",
+                    "message": "Cannot revert revision with an unknown resource type.",
+                }
+            }
+        finally:
+            direct_database_snapshot("MATCH (r:Revision {id: 'revision:test-invalid-action-type'}) DETACH DELETE r")
+
+    def test_revert_envelope_byte_parity_409_cannot_revert_canonical(
+        self, user_content_client: TestClient
+    ) -> None:
+        direct_database_snapshot(
+            """
+            MATCH (c:Character {series_id: 'series_dexter'})
+            WITH c LIMIT 1
+            CREATE (r:Revision {
+                id: 'revision:test-canonical-revert',
+                series_id: 'series_dexter',
+                resource_type: 'Character',
+                resource_id: c.id,
+                action: 'Updated',
+                visible_from_order: 1,
+                created_at: '2026-01-01T00:00:00Z'
+            })
+            """
+        )
+        try:
+            resp = _revert_revision(user_content_client, "revision:test-canonical-revert")
+            assert resp.status_code == 409
+            assert resp.json() == {
+                "detail": {
+                    "code": "CANNOT_REVERT_CANONICAL",
+                    "message": "Cannot revert a canonical or candidate resource.",
+                }
+            }
+        finally:
+            direct_database_snapshot("MATCH (r:Revision {id: 'revision:test-canonical-revert'}) DETACH DELETE r")
+
+    def test_revert_envelope_byte_parity_403_forbidden(
+        self, user_content_client: TestClient, live_client: TestClient
+    ) -> None:
+        created = _create_note(user_content_client, "owner note")
+        assert created.status_code == 201
+        note_id = created.json()["id"]
+
+        updated = user_content_client.patch(
+            f"/api/series/series_dexter/notes/{note_id}",
+            json={"content": "owner note updated"},
+        )
+        assert updated.status_code == 200
+        revs = _list_revisions(user_content_client).json()
+        update_rev = _find_revision(revs, "Updated")
+        assert update_rev is not None
+
+        google_sub, user_b_id, token_b = _create_user_with_session("user")
+        try:
+            live_client.cookies.set("session", token_b)
+            resp = live_client.post(
+                f"/api/series/series_dexter/revisions/{update_rev['id']}/revert",
+                params={"visible_until_order": 1},
+            )
+            assert resp.status_code == 403
+            assert resp.json() == {
+                "detail": {
+                    "code": "FORBIDDEN",
+                    "message": "This resource belongs to another user.",
+                }
+            }
+        finally:
+            from spoilerless.tests.test_user_content_api import _delete_test_user, _run
+            _run(_delete_test_user(google_sub))
+
+    def test_revert_envelope_byte_parity_409_resource_already_exists(
+        self, user_content_client: TestClient
+    ) -> None:
+        created = _create_note(user_content_client, "note to delete and re-create")
+        assert created.status_code == 201
+        note_id = created.json()["id"]
+
+        deleted = user_content_client.delete(f"/api/series/series_dexter/notes/{note_id}")
+        assert deleted.status_code == 204
+
+        revs = _list_revisions(user_content_client).json()
+        deleted_rev = _find_revision(revs, "Deleted")
+        assert deleted_rev is not None
+
+        revert1 = _revert_revision(user_content_client, deleted_rev["id"])
+        assert revert1.status_code == 200
+
+        revert2 = _revert_revision(user_content_client, deleted_rev["id"])
+        assert revert2.status_code == 409
+        assert revert2.json() == {
+            "detail": {
+                "code": "RESOURCE_ALREADY_EXISTS",
+                "message": "This resource has already been re-created.",
+            }
+        }
+
+    def test_revert_success_logs_reverted_revision(
+        self, user_content_client: TestClient
+    ) -> None:
+        created = _create_note(user_content_client, "initial content")
+        assert created.status_code == 201
+        note_id = created.json()["id"]
+
+        updated = user_content_client.patch(
+            f"/api/series/series_dexter/notes/{note_id}",
+            json={"content": "modified content"},
+        )
+        assert updated.status_code == 200
+
+        revs = _list_revisions(user_content_client).json()
+        updated_rev = _find_revision(revs, "Updated")
+        assert updated_rev is not None
+
+        revert_resp = _revert_revision(user_content_client, updated_rev["id"])
+        assert revert_resp.status_code == 200
+        reverted_data = revert_resp.json()
+
+        assert reverted_data["action"] == "Reverted"
+        assert reverted_data["resource_type"] == "UserNote"
+        assert reverted_data["resource_id"] == note_id
+        assert reverted_data["user_id"] is not None
+
+        all_revs = _list_revisions(user_content_client).json()
+        latest_rev = all_revs[0]
+        assert latest_rev["id"] == reverted_data["id"]
+        assert latest_rev["action"] == "Reverted"
+        assert latest_rev["user_id"] == reverted_data["user_id"]
+
+    def test_revert_invalidates_series_cache(
+        self, live_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """C6: POST /revisions/{id}/revert invalidates the series cache after execute_write."""
+        from uuid import uuid4
+
+        from spoilerless.app.services.graph import GraphService
+        from spoilerless.tests.conftest import (
+            bootstrap_scratch_series,
+            teardown_scratch_series,
+        )
+        from spoilerless.tests.test_user_content_api import (
+            _create_user_with_session,
+            _delete_test_user,
+            _run,
+        )
+
+        scratch_id = f"series_scratch_revert_{uuid4().hex[:8]}"
+        bootstrap_scratch_series(scratch_id, (1, 2))
+        google_sub, user_id, token = _create_user_with_session("user")
+
+        invalidated: list[str] = []
+        orig_invalidate = GraphService.invalidate_series_cache
+
+        async def spy_invalidate(self_obj: GraphService, sid: str) -> None:
+            invalidated.append(sid)
+            await orig_invalidate(self_obj, sid)
+
+        monkeypatch.setattr(GraphService, "invalidate_series_cache", spy_invalidate)
+
+        try:
+            live_client.cookies.set("session", token)
+            # Create a custom node on scratch series
+            created = live_client.post(
+                f"/api/series/{scratch_id}/custom-nodes",
+                json={
+                    "node_type": "Character",
+                    "label": "revert cache target",
+                    "episode_id": f"{scratch_id}:episode:1",
+                },
+            )
+            assert created.status_code == 201
+            node_id = created.json()["id"]
+
+            # Update the custom node to create an Updated revision
+            updated = live_client.patch(
+                f"/api/series/{scratch_id}/custom-nodes/{node_id}",
+                json={"label": "revert cache target updated"},
+            )
+            assert updated.status_code == 200
+
+            # Find Updated revision
+            revs = live_client.get(
+                f"/api/series/{scratch_id}/revisions",
+                params={"visible_until_order": 1},
+            ).json()
+            updated_rev = _find_revision(revs, "Updated")
+            assert updated_rev is not None
+
+            # Clear spy invocations from create and update calls
+            invalidated.clear()
+
+            # Revert the revision
+            revert_resp = live_client.post(
+                f"/api/series/{scratch_id}/revisions/{updated_rev['id']}/revert",
+                params={"visible_until_order": 1},
+            )
+            assert revert_resp.status_code == 200
+
+            # Assert invalidation was invoked for scratch_id after revert
+            assert scratch_id in invalidated
+        finally:
+            live_client.cookies.clear()
+            _run(_delete_test_user(google_sub))
+            teardown_scratch_series(scratch_id)
+
+

@@ -14,7 +14,6 @@ from spoilerless.app.api.deps import (
     ProgressServiceDependency,
 )
 from spoilerless.app.core.errors import error_responses
-from spoilerless.app.cache.graph_cache import invalidate_series
 from spoilerless.app.services.graph import GraphService
 from spoilerless.app.services.progress import ProgressService
 from spoilerless.app.domain.user_content import (
@@ -152,12 +151,13 @@ async def delete_note(
              summary="Create a user-owned custom node", responses=error_responses(403, 404, 409, 422, 503))
 async def create_custom_node(
     series_id: str, payload: CustomNodeCreate, database: DatabaseDependency,
+    service: GraphServiceDependency,
     user: CurrentUserDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
     _csrf: CsrfGuardDependency,
 ) -> CustomNodeResponse:
     row = await _repository(database).create_custom_node(series_id, user["id"], payload)
-    await invalidate_series(series_id)
+    await service.invalidate_series_cache(series_id)
     return CustomNodeResponse.model_validate(row)
 
 
@@ -185,6 +185,7 @@ async def get_custom_node(
               summary="Update a custom node label", responses=error_responses(403, 404, 409, 422, 503))
 async def update_custom_node(
     series_id: str, node_id: str, payload: CustomNodeUpdate, database: DatabaseDependency,
+    service: GraphServiceDependency,
     user: CurrentUserDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
     _csrf: CsrfGuardDependency,
@@ -193,7 +194,7 @@ async def update_custom_node(
     row = await _repository(database).update_custom_node(
         series_id, node_id, actor_id, payload, is_admin=is_admin
     )
-    await invalidate_series(series_id)
+    await service.invalidate_series_cache(series_id)
     return CustomNodeResponse.model_validate(row)
 
 
@@ -201,6 +202,7 @@ async def update_custom_node(
                summary="Hard-delete a custom node", responses={**error_responses(403, 404, 409, 422, 503), 204: {"description": "Node deleted."}})
 async def delete_custom_node(
     series_id: str, node_id: str, database: DatabaseDependency,
+    service: GraphServiceDependency,
     user: CurrentUserDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
     _csrf: CsrfGuardDependency,
@@ -209,7 +211,7 @@ async def delete_custom_node(
     await _repository(database).delete_custom_node(
         series_id, node_id, actor_id, is_admin=is_admin
     )
-    await invalidate_series(series_id)
+    await service.invalidate_series_cache(series_id)
     return Response(status_code=204)
 
 
@@ -217,12 +219,13 @@ async def delete_custom_node(
              summary="Create a user-authored relationship", responses=error_responses(403, 404, 409, 422, 503))
 async def create_custom_relationship(
     series_id: str, payload: CustomRelationshipCreate, database: DatabaseDependency,
+    service: GraphServiceDependency,
     user: CurrentUserDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
     _csrf: CsrfGuardDependency,
 ) -> CustomRelationshipResponse:
     row = await _repository(database).create_custom_relationship(series_id, user["id"], payload)
-    await invalidate_series(series_id)
+    await service.invalidate_series_cache(series_id)
     return CustomRelationshipResponse.model_validate(row)
 
 
@@ -249,6 +252,7 @@ async def get_custom_relationship(
               summary="Update a custom relationship predicate", responses=error_responses(403, 404, 409, 422, 503))
 async def update_custom_relationship(
     series_id: str, relationship_id: str, payload: CustomRelationshipUpdate, database: DatabaseDependency,
+    service: GraphServiceDependency,
     user: CurrentUserDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
     _csrf: CsrfGuardDependency,
@@ -257,7 +261,7 @@ async def update_custom_relationship(
     row = await _repository(database).update_custom_relationship(
         series_id, relationship_id, actor_id, payload, is_admin=is_admin
     )
-    await invalidate_series(series_id)
+    await service.invalidate_series_cache(series_id)
     return CustomRelationshipResponse.model_validate(row)
 
 
@@ -265,6 +269,7 @@ async def update_custom_relationship(
                summary="Hard-delete a custom relationship", responses={**error_responses(403, 404, 409, 422, 503), 204: {"description": "Relationship deleted."}})
 async def delete_custom_relationship(
     series_id: str, relationship_id: str, database: DatabaseDependency,
+    service: GraphServiceDependency,
     user: CurrentUserDependency,
     _rate_limit: Annotated[None, Depends(content_write_rate_limiter)],
     _csrf: CsrfGuardDependency,
@@ -273,5 +278,5 @@ async def delete_custom_relationship(
     await _repository(database).delete_custom_relationship(
         series_id, relationship_id, actor_id, is_admin=is_admin
     )
-    await invalidate_series(series_id)
+    await service.invalidate_series_cache(series_id)
     return Response(status_code=204)
