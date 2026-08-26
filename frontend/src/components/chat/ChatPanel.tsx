@@ -39,12 +39,27 @@ function newestFirst<T extends { updated_at: string }>(sessions: T[]): T[] {
 // retrying) vs. "non-retryable" (an opaque/unrecognized error, including the
 // hook's own `unknown_error` catch-all fallback for a non-ApiError
 // exception — retrying identical content is unlikely to help).
-type ChatErrorKind = 'disabled' | 'provider-unavailable' | 'busy' | 'recoverable' | 'non-retryable'
+type ChatErrorKind =
+  | 'disabled'
+  | 'provider-unavailable'
+  | 'busy'
+  | 'rate-limited'
+  | 'recoverable'
+  | 'non-retryable'
 
 function classifyChatError(error: ApiError): ChatErrorKind {
   if (error.code === 'LLM_DISABLED') return 'disabled'
   if (error.code === 'LLM_PROVIDER_UNAVAILABLE') return 'provider-unavailable'
-  if (error.code === 'TOO_MANY_REQUESTS') return 'busy'
+  // THERMO-P3-09: the backend emits code TOO_MANY_REQUESTS for TWO distinct
+  // conditions — the per-user concurrent-generation lock (mid-stream SSE,
+  // message "Too many concurrent requests.") and the shared-Redis rate
+  // limiter (pre-stream 429, message "Too many requests. Please slow
+  // down."). They need different copy: one is a momentary wait, the other a
+  // real quota stop. Distinguish on the message until/unless the codes
+  // themselves diverge.
+  if (error.code === 'TOO_MANY_REQUESTS') {
+    return /concurrent/i.test(error.message) ? 'busy' : 'rate-limited'
+  }
   if (error.code.startsWith('LLM_')) return 'recoverable'
   return 'non-retryable'
 }
@@ -265,6 +280,15 @@ export function ChatPanel({
           <p className="text-xs text-foreground">
             The assistant is still answering your previous question — please
             wait a moment.
+          </p>
+        </div>
+      )}
+
+      {errorKind === 'rate-limited' && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/40 p-3">
+          <p className="text-xs text-foreground">
+            You have exceeded the message rate limit. Please wait a minute
+            before sending another message.
           </p>
         </div>
       )}

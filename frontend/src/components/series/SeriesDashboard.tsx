@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -42,6 +42,13 @@ export function SeriesDashboard({
 }: Props) {
   const [counts, setCounts] = useState<Record<string, number | null>>({})
   const [activeIndex, setActiveIndex] = useState(0)
+  // THERMO-P3-10: keyboard navigation must keep the active card in view —
+  // ref per rendered card, scrolled into view whenever activeIndex changes.
+  const cardRefs = useRef<Array<HTMLDivElement | null>>([])
+
+  useEffect(() => {
+    cardRefs.current[activeIndex]?.scrollIntoView({ block: 'nearest' })
+  }, [activeIndex])
 
   // Lazy, bounded: fetch episode counts for every series once per dialog
   // open. The fetch is kicked off in the effect but the synchronous reset is
@@ -112,6 +119,7 @@ export function SeriesDashboard({
             return (
               <div
                 key={item.id}
+                ref={(el) => { cardRefs.current[index] = el }}
                 className={cn(
                   'flex cursor-pointer flex-col gap-2 rounded-lg bg-card p-4 ring-1 ring-border outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
                   active && 'ring-accent',

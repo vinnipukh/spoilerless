@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Download, X } from 'lucide-react'
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { SpoilerGuard } from '@/components/ui/SpoilerGuard'
@@ -607,10 +607,16 @@ export function DetailPanel({
     if (!seriesId) return
     try {
       await deleteNoteApi(noteId)
+      // THERMO-P3-10: the deleted note row unmounts, dropping focus to
+      // document.body — restore it to the panel container.
+      requestAnimationFrame(() => panelContainerRef.current?.focus())
     } catch {
       // Error handled by hook
     }
   }
+
+  // THERMO-P3-10: focus restoration target for post-delete focus management.
+  const panelContainerRef = useRef<HTMLDivElement | null>(null)
 
   const title =
     selectedNode?.label ??
@@ -665,6 +671,8 @@ export function DetailPanel({
       <SheetContent
         side="left"
         showCloseButton={false}
+        ref={panelContainerRef}
+        tabIndex={-1}
         // Two independent non-modal Radix sheets (left inspector + right chat)
         // must coexist: without this, opening one fires DismissableLayer's
         // focus-outside on the other (Radix Dialog closes a non-modal dialog

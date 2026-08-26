@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type cytoscape from 'cytoscape'
-import { X } from 'lucide-react'
+import { RotateCcw, X } from 'lucide-react'
 import { findPath } from '@/api/graph'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import type { PathResponse } from '@/types/graph'
@@ -165,10 +165,11 @@ export function PathFinder({ cyRef, seriesId, onExit, registerPickHandler }: Pro
           <button
             type="button"
             aria-label="Clear path"
+            title="Clear path selection"
             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={handleClear}
           >
-            <X className="h-4 w-4" />
+            <RotateCcw className="h-4 w-4" />
           </button>
         )}
         <button

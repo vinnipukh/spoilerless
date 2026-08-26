@@ -224,6 +224,8 @@ export function RevisionHistoryPanel({ seriesId, visibleUntilOrder, resourceType
   const [confirmRev, setConfirmRev] = useState<RevisionResponse | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  // THERMO-P3-10: focus restoration target after revert unmounts the row.
+  const panelRef = useRef<HTMLDivElement | null>(null)
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)
@@ -243,6 +245,9 @@ export function RevisionHistoryPanel({ seriesId, visibleUntilOrder, resourceType
       // Delay graph refetch so the toast is visible before the panel
       // re-renders (graph goes through loading → success transition)
       setTimeout(() => onRefetchGraph?.(), 800)
+      // THERMO-P3-10: the reverted row's Revert button unmounts on refetch,
+      // which would drop focus to document.body — restore it to the panel.
+      requestAnimationFrame(() => panelRef.current?.focus())
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to revert revision'
       showToast(msg)
@@ -284,7 +289,7 @@ export function RevisionHistoryPanel({ seriesId, visibleUntilOrder, resourceType
 
   // ── Revision list ──
   return (
-    <div className="flex flex-col gap-2 pt-2">
+    <div className="flex flex-col gap-2 pt-2" ref={panelRef} tabIndex={-1}>
       {toast && (
         <div className="rounded-md bg-muted px-3 py-2 text-xs text-foreground" role="alert">
           {toast}
