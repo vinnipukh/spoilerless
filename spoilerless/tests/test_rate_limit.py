@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi import HTTPException
+from types import SimpleNamespace
 
 from spoilerless.app.services.rate_limit import (
     RateLimiter,
@@ -152,3 +153,114 @@ async def test_init_rate_limiter_degrades_on_redis_failure(
     login_rate_limiter._limiter = None
     await init_rate_limiter()  # must not raise
     assert login_rate_limiter._limiter is None
+
+
+# ── 12-05 (THERMO-P2-04): lazy re-init after a startup Redis outage ──
+
+def _settings(**overrides):
+    defaults = dict(
+        redis_url="redis://localhost:6379/0",
+        environment="production",
+        rate_limit_fail_open=False,
+    )
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
+
+
+async def test_lazy_init_binds_limiter_on_request_after_outage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A limiter unbound at startup must bind on the first request once Redis
+    is back — never latch 503 forever (THERMO-P2-04)."""
+    from spoilerless.app.services import rate_limit as rl
+
+    monkeypatch.setattr(
+        "spoilerless.app.core.config.get_settings", lambda: _settings()
+    )
+
+    class _FakeLimiter:
+        def __init__(self, factory) -> None:
+            self.factory = factory
+
+        async def try_acquire_async(self, key: str, blocking: bool) -> bool:
+            return True
+
+    async def _ok_init(*_args, **_kwargs):
+        return object()
+
+    # Real SingleBucketFactory.__init__ calls schedule_leak(bucket), which
+    # needs a genuine bucket; stub the factory to keep the test loop clean.
+    monkeypatch.setattr(
+        "spoilerless.app.services.rate_limit.get_redis", lambda: object()
+    )
+    monkeypatch.setattr(
+        "spoilerless.app.services.rate_limit.RedisBucket.init", _ok_init
+    )
+    monkeypatch.setattr(
+        "spoilerless.app.services.rate_limit.SingleBucketFactory",
+        lambda bucket: SimpleNamespace(bucket=bucket),
+    )
+    monkeypatch.setattr(
+        "spoilerless.app.services.rate_limit.Limiter", _FakeLimiter
+    )
+
+    limiter = RateLimiter(times=5, seconds=60)
+    limiter._limiter = None
+    await _ORIGINAL_CALL(limiter, _Request(), response=None)  # must not raise
+    assert isinstance(limiter._limiter, _FakeLimiter)
+
+
+async def test_unbound_limiter_production_fail_closed_raises_registered_503(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production + fail-closed + Redis still down: 503 with the registered
+    RATE_LIMIT_UNAVAILABLE code."""
+    from spoilerless.app.services import rate_limit as rl
+
+    monkeypatch.setattr(
+        "spoilerless.app.core.config.get_settings",
+        lambda: _settings(),
+    )
+
+    async def _boom(*_args, **_kwargs):
+        raise RuntimeError("upstash unreachable")
+
+    monkeypatch.setattr(
+        "spoilerless.app.services.rate_limit.RedisBucket.init", _boom
+    )
+
+    limiter = RateLimiter(times=5, seconds=60)
+    limiter._limiter = None
+    with pytest.raises(HTTPException) as exc_info:
+        await _ORIGINAL_CALL(limiter, _Request(), response=None)
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail["code"] == "RATE_LIMIT_UNAVAILABLE"
+
+
+async def test_empty_redis_url_stays_silent_noop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Dev contract unchanged: empty REDIS_URL disables rate limiting silently,
+    even through the new lazy-init path."""
+    from spoilerless.app.services import rate_limit as rl
+
+    monkeypatch.setattr(
+        "spoilerless.app.core.config.get_settings",
+        lambda: _settings(redis_url="", environment="development"),
+    )
+    called = False
+
+    async def _must_not_run(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        return object()
+
+    monkeypatch.setattr(
+        "spoilerless.app.services.rate_limit.RedisBucket.init", _must_not_run
+    )
+
+    limiter = RateLimiter(times=5, seconds=60)
+    limiter._limiter = None
+    await _ORIGINAL_CALL(limiter, _Request(), response=None)  # must not raise
+    assert limiter._limiter is None
+    assert called is False
