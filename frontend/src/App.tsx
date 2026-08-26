@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AuthProvider } from './providers/AuthProvider'
 import { useAuth } from './providers/useAuth'
 import { LoginPage } from './components/auth/LoginPage'
@@ -28,8 +28,9 @@ import { useEpisodes } from './hooks/useEpisodes'
 import { useGraph } from './hooks/useGraph'
 import { useNotes } from './hooks/useNotes'
 import { useWatchProgress } from './hooks/useWatchProgress'
-import { fetchExpansion, fetchVisualization, type ExpansionKey } from './api/graph'
-import type { VisualizationDTO, VisualizationViewType } from './types/graph'
+import { useWorkspaceNavigation } from './hooks/useWorkspaceNavigation'
+import { useWorkspaceScene } from './hooks/useWorkspaceScene'
+import type { ExpansionKey } from './api/graph'
 import { useHotkey } from './hooks/useHotkey'
 import { useSceneState } from './hooks/useSceneState'
 import { AnswerGraph } from './components/graph/AnswerGraph'
@@ -140,28 +141,26 @@ function AuthenticatedApp() {
   // inspector left), which the old single-panel mode toggle made impossible.
   const [chatOpen, setChatOpen] = useState(false)
 
-  // Top-level view switch: the graph workspace, the timeline, or the
-  // settings page (no router in this app — navigation is state-driven,
-  // mirroring the existing auth/series state pattern). Entering settings
-  // unmounts the graph view (including the chat sheet); chat history
-  // survives server-side.
-  const [view, setView] = useState<'graph' | 'timeline' | 'settings'>('graph')
+  // 10-05 (D-16/D-17): tab/mode/view navigation lives in useWorkspaceNavigation
+  // (12-08); the scene/visualization layer (DTO loads, expansions with race
+  // guard, mergedVisualization) lives in useWorkspaceScene.
+  const {
+    view, setView,
+    topTab, setTopTab, storyMode, setStoryMode, characterMode, setCharacterMode,
+    evidenceMode, setEvidenceMode, advancedMode, setAdvancedMode,
+    paletteOpen, setPaletteOpen,
+  } = useWorkspaceNavigation()
   // 08-06: events toggled in the Timeline view filter the graph to the
   // subgraph around them (nodes participating in the selected events).
   const [timelineFilterIds, setTimelineFilterIds] = useState<string[]>([])
-  // 10-05 (D-16/D-17): the active top tab and its nested mode. Defaults to
-  // Story / Episode Overview. The nested modes remember their last value per
-  // tab; switching top tabs never resets Filters (D-47) because the shared
-  // workspace (GraphCanvas + search + Inspector + chat) stays mounted below
-  // the tab strip.
-  const [topTab, setTopTab] = useState<StoryTab>('story')
-  const [graphMode, setGraphMode] = useState<GraphMode>('overview')
-  const [storyMode, setStoryMode] = useState<StoryMode>('episode_overview')
-  const [characterMode, setCharacterMode] = useState<CharacterMode>('character_network')
-  const [evidenceMode, setEvidenceMode] = useState<EvidenceMode>('investigation')
-  const [advancedMode, setAdvancedMode] = useState<AdvancedMode>('full_graph')
+  const [graphMode, setGraphModeInternal] = useState<GraphMode>('overview')
   // FEAT-04 (09-10): series dashboard dialog open state.
   const [dashboardOpen, setDashboardOpen] = useState(false)
+  // 260814-viz: expansion menu open state (Expand {node} popover).
+  const [expandOpen, setExpandOpen] = useState(false)
+  // The effective boundary the backend clamps to; falls back to episode 1
+  // before progress resolves (the backend re-clamps anyway).
+  const confirmedOrder = watchProgress.confirmedOrder ?? 1
   // FEAT-09 (09-12): share dialog open state.
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
 
@@ -176,7 +175,7 @@ function AuthenticatedApp() {
   // 10-07 (D-27/D-41): the serializable scene state owns the temporary
   // Answer Graph lifecycle — OPEN_TEMPORARY snapshots the exact scene,
   // CLOSE_TEMPORARY restores it.
-  const [scene, dispatchScene] = useSceneState()
+  const [sceneState, dispatchScene] = useSceneState()
 
   useEffect(() => {
     if (evidenceMode === 'answer_graph') {
@@ -194,7 +193,7 @@ function AuthenticatedApp() {
   }
 
   function handleGraphModeChange(nextMode: GraphMode) {
-    setGraphMode(nextMode)
+    setGraphModeInternal(nextMode)
     if (nextMode === 'overview') {
       // Overview is the original curated graph, not a narrative workspace.
       // Reset hidden navigation so returning to Full starts from Story.
@@ -204,145 +203,39 @@ function AuthenticatedApp() {
     }
   }
 
-  // 260814-viz: the Phase 10 visualization wiring (audit-gap closure).
-  // activeView maps the four-tab hierarchy to projection view types; the DTO
-  // fetch drives GraphCanvas's `visualization` prop; expansions merge their
-  // delta DTOs into the base scene; Answer Graph swaps in the graphrag_focus
-  // projection while open. All spoiler filtering stays backend-side (D-05).
-  const activeView = useMemo<VisualizationViewType | null>(() => {
-    if (graphMode === 'overview') return null
-    // 260814-viz: Story keeps the legacy scene (user content lives in the
-    // legacy GraphResponse — custom nodes/edges are never part of a
-    // projection DTO); Advanced keeps the legacy full graph for the same
-    // reason. Characters and Evidence render the narrative projections.
-    switch (topTab) {
-      case 'characters':
-        return 'character_network'
-      case 'evidence':
-        return evidenceMode === 'answer_graph' ? 'graphrag_focus' : 'investigation'
-      default:
-        return null
-    }
-  }, [graphMode, topTab, evidenceMode])
+  // 260814-viz: the Phase 10 visualization wiring (audit-gap closure) now
+  // lives in useWorkspaceScene (12-08) — activeView mapping, DTO fetches,
+  // expansion records with the THERMO-P2-07 race guard, mergedVisualization.
+  const scene = useWorkspaceScene({
+    topTab,
+    graphMode,
+    evidenceMode,
+    seriesId: watchProgress.seriesId,
+    confirmedOrder: watchProgress.confirmedOrder ?? 1,
+    graphFocus,
+  })
+  const { activeView, mergedVisualization, expansionRecords } = scene
 
-  // The effective boundary the backend clamps to; falls back to episode 1
-  // before progress resolves (the backend re-clamps anyway).
-  const confirmedOrder = watchProgress.confirmedOrder ?? 1
-
-  const [baseVisualization, setBaseVisualization] = useState<VisualizationDTO | null>(null)
-  const [focusVisualization, setFocusVisualization] = useState<VisualizationDTO | null>(null)
-  const [expansionRecords, setExpansionRecords] = useState<
-    { anchorId: string; key: string; additionIds: string[]; dto: VisualizationDTO }[]
-  >([])
-  const [expandOpen, setExpandOpen] = useState(false)
-
-  useEffect(() => {
-    if (!activeView || activeView === 'graphrag_focus' || !watchProgress.seriesId) return
-    let cancelled = false
-    fetchVisualization(watchProgress.seriesId, activeView, confirmedOrder)
-      .then((dto) => {
-        if (!cancelled) setBaseVisualization(dto)
-      })
-      .catch((error: unknown) => {
-        // Keep the prior scene (and the legacy backbone) on failure — never
-        // blank the canvas; the last non-null DTO is held by GraphCanvas.
-        console.error('visualization fetch failed', error)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [activeView, watchProgress.seriesId, watchProgress.confirmedOrder])
-
-  // Expansions belong to the active scene — reset when the view changes.
-  useEffect(() => {
-    setExpansionRecords([])
-  }, [activeView])
-
-  useEffect(() => {
-    if (evidenceMode !== 'answer_graph' || !graphFocus?.nodeIds.length || !watchProgress.seriesId) {
-      setFocusVisualization(null)
-      return
-    }
-    let cancelled = false
-    fetchVisualization(watchProgress.seriesId, 'graphrag_focus', confirmedOrder, graphFocus.nodeIds)
-      .then((dto) => {
-        if (!cancelled) setFocusVisualization(dto)
-      })
-      .catch((error: unknown) => {
-        console.error('graphrag focus fetch failed', error)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [evidenceMode, graphFocus, watchProgress.seriesId, watchProgress.confirmedOrder])
-
-  const mergedVisualization = useMemo<VisualizationDTO | null>(() => {
-    const base = activeView === 'graphrag_focus' ? focusVisualization : baseVisualization
-    if (!base) return null
-    if (expansionRecords.length === 0) return base
-    const nodes = [...base.nodes]
-    const edges = [...base.edges]
-    const timeline = [...(base.timeline ?? [])]
-    const seenNodes = new Set(nodes.map((n) => n.id))
-    const seenEdges = new Set(edges.map((e) => e.id))
-    const seenTimeline = new Set(timeline.map((t) => t.id))
-    for (const record of expansionRecords) {
-      for (const node of record.dto.nodes) {
-        if (!seenNodes.has(node.id)) {
-          seenNodes.add(node.id)
-          nodes.push(node)
-        }
-      }
-      for (const edge of record.dto.edges) {
-        if (!seenEdges.has(edge.id)) {
-          seenEdges.add(edge.id)
-          edges.push(edge)
-        }
-      }
-      for (const item of record.dto.timeline ?? []) {
-        if (!seenTimeline.has(item.id)) {
-          seenTimeline.add(item.id)
-          timeline.push(item)
-        }
-      }
-    }
-    return { ...base, nodes, edges, timeline }
-  }, [baseVisualization, focusVisualization, expansionRecords, activeView])
-
-  async function handleExpand(key: string) {
-    if (!selectedElement || selectedElement.kind !== 'node' || !watchProgress.seriesId) return
-    try {
-      const dto = await fetchExpansion(
-        watchProgress.seriesId,
-        selectedElement.id,
-        key as ExpansionKey,
-        confirmedOrder,
-      )
-      const record = {
-        anchorId: selectedElement.id,
-        key,
-        additionIds: dto.nodes.map((n) => n.id),
-        dto,
-      }
-      setExpansionRecords((prev) => [...prev, record])
+  function handleExpand(key: string) {
+    if (!selectedElement || selectedElement.kind !== 'node') return
+    const anchorId = selectedElement.id
+    void scene.handleExpand(key, anchorId, () => {
       dispatchScene({
         type: 'ADD_EXPANSION',
-        nodeIds: record.additionIds,
-        record: { anchorId: record.anchorId, key: record.key, additionIds: record.additionIds },
+        nodeIds: [anchorId],
+        record: { anchorId, key, additionIds: [anchorId] },
       })
       setExpandOpen(false)
-    } catch (error: unknown) {
-      console.error('expansion failed', error)
-    }
+    })
   }
 
   function handleUndoExpansion() {
-    setExpansionRecords((prev) => prev.slice(0, -1))
+    scene.undoLastExpansion()
     dispatchScene({ type: 'UNDO_EXPANSION' })
   }
 
   function handleCollapseExpansion(anchorId: string) {
-    setExpansionRecords((prev) => prev.filter((r) => r.anchorId !== anchorId))
+    scene.collapseExpansions(anchorId)
     dispatchScene({ type: 'COLLAPSE_EXPANSION', anchorId })
   }
 
@@ -538,10 +431,6 @@ function AuthenticatedApp() {
     watchProgress.cancelChange()
   }
 
-  // FEAT-08 (09-09): command palette open state — toggled by ⌘K/Ctrl+K (the
-  // App-level hotkey below) or the AppShell topBar Command icon trigger.
-  const [paletteOpen, setPaletteOpen] = useState(false)
-
   // FEAT-01 (09-09): '/' (graph view, no input focused) focuses the
   // NodeSearch input; NodeSearch registers its input element here.
   const searchInputRef = useRef<HTMLInputElement | null>(null)
@@ -723,7 +612,7 @@ function AuthenticatedApp() {
               {evidenceMode === 'answer_graph' && (
                 <div className="mt-2">
                   <AnswerGraph
-                    nodeIds={scene.temporary?.nodeIds ?? []}
+                    nodeIds={sceneState.temporary?.nodeIds ?? []}
                     onClose={handleCloseAnswerGraph}
                   />
                 </div>
