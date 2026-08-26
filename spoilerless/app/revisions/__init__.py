@@ -6,10 +6,8 @@ from typing import Any
 from uuid import uuid4
 
 from spoilerless.app.core.errors import http_error
-from spoilerless.app.domain.change_set import CustomNodeType  # noqa: F401
 from spoilerless.app.domain.revision import RevisionAction
-from spoilerless.app.domain.user_content import CustomNodeType as UserContentCustomNodeType
-from spoilerless.app.domain.user_content import NoteTargetType
+from spoilerless.app.domain.user_content import CustomNodeType, NoteTargetType
 
 REVISION_CREATE_QUERY = """
 CREATE (revision:Revision {
@@ -38,7 +36,6 @@ _REVERT_LABEL_ALLOWLIST: frozenset[str] = frozenset({
     "ChangeSet",
     "EvidenceFragment",
     *(t.value for t in CustomNodeType),
-    *(t.value for t in UserContentCustomNodeType),
     *(t.value for t in NoteTargetType),
 })
 
@@ -197,13 +194,12 @@ async def revert_revision_work(tx: Any, command: dict[str, Any]) -> dict[str, An
     # SEC-GR-014: validate labels before interpolation
     if resource_type not in _REVERT_LABEL_ALLOWLIST:
         raise http_error(422, "INVALID_ACTION", "Cannot revert revision with an unknown resource type.")
-    # target_type lives in before_snapshot for UserNote; validate if present
-    _tmp_before = RevisionRepository._from_json(revision.get("before")) or {}
-    _target_type_tmp = _tmp_before.get("target_type")
-    if _target_type_tmp is not None and _target_type_tmp not in _REVERT_LABEL_ALLOWLIST:
+    # Deserialize the before-snapshot exactly once; target_type lives in it
+    # for UserNote — validate if present (SEC-GR-014).
+    before_snapshot: dict[str, Any] = RevisionRepository._from_json(revision.get("before")) or {}
+    target_type = before_snapshot.get("target_type")
+    if target_type is not None and target_type not in _REVERT_LABEL_ALLOWLIST:
         raise http_error(422, "INVALID_ACTION", "Cannot revert revision with an unknown target type.")
-    before_snapshot_raw: dict[str, Any] | None = RevisionRepository._from_json(revision.get("before"))
-    before_snapshot: dict[str, Any] = before_snapshot_raw or {}
     vfo: int = revision["visible_from_order"]
 
     # 2. Fetch resource (only relevant for UPDATED — DELETED resource is gone)
