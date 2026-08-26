@@ -123,7 +123,7 @@ class BodySizeLimitMiddleware:
     Pure ASGI: a Content-Length header over the cap is rejected before any
     body byte is read; chunked bodies (no Content-Length) are counted as they
     stream and cut off at the cap. The response reuses the sanitized error
-    envelope with a lowercase code (^[a-z][a-z0-9_]*$).
+    envelope with a registered uppercase code (^[A-Z][A-Z0-9_]*$).
     """
 
     def __init__(self, app, max_size: int):
@@ -132,7 +132,7 @@ class BodySizeLimitMiddleware:
 
     async def _reject_413(self, send) -> None:
         body = json.dumps({
-            "detail": {"code": "payload_too_large", "message": "Request body too large."}
+            "detail": {"code": "PAYLOAD_TOO_LARGE", "message": "Request body too large."}
         }).encode()
         await send({
             "type": "http.response.start",

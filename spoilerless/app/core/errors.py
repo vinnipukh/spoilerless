@@ -64,6 +64,9 @@ ERROR_CODES: frozenset[str] = frozenset({
     "LLM_PROVIDER_UNAVAILABLE",
     "LLM_STREAM_FAILED",
     "PAYLOAD_TOO_LARGE",
+    # Rate limiter degrade path (services/rate_limit.py) — 503 when Redis is
+    # unavailable in a fail-closed production deployment.
+    "RATE_LIMIT_UNAVAILABLE",
 })
 
 

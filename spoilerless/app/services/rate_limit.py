@@ -61,21 +61,44 @@ async def rate_limit_callback(
 ) -> None:
     """Reject with 429 using the existing sanitized error envelope.
 
-    Reuses the exact lowercase ``too_many_requests`` code already used at
-    ``spoilerless/app/api/chat.py``'s ``_too_many_requests()`` and
-    ``spoilerless/app/core/errors.py``'s ``_ERROR_SPECS[429]`` — never a new
-    uppercase code (``ErrorDetail.code``'s regex is ``^[a-z][a-z0-9_]*$``).
+    Reuses the registered uppercase ``TOO_MANY_REQUESTS`` code from
+    ``spoilerless/app/core/errors.py``'s ``_ERROR_SPECS[429]`` — never an
+    unregistered code (``ErrorDetail.code``'s regex is
+    ``^[A-Z][A-Z0-9_]*$`` and every emitted code must be in ERROR_CODES).
     """
     raise http_error(429, "TOO_MANY_REQUESTS", "Too many requests. Please slow down.")
+
+
+def _handle_unavailable_redis(settings) -> None:
+    """Shared degrade/fail-closed policy for an unusable Redis (THERMO-P2-04).
+
+    - empty ``redis_url`` (local dev contract): silent no-op — rate limiting
+      is disabled by configuration, not by outage;
+    - non-production or explicit ``rate_limit_fail_open``: warn + allow;
+    - production fail-closed: 503 with the registered uppercase code.
+    """
+    if not settings.redis_url:
+        return
+    if settings.environment != "production" or settings.rate_limit_fail_open:
+        logger.warning(
+            "rate_limit: Redis unavailable — rate limiting disabled for this request"
+        )
+        return
+    raise http_error(
+        503,
+        "RATE_LIMIT_UNAVAILABLE",
+        "Rate limiting is unavailable; try again shortly.",
+    )
 
 
 class RateLimiter:
     """FastAPI dependency enforcing ``times`` requests per ``seconds`` window.
 
     The backing pyrate-limiter ``Limiter`` (Redis-backed, one ZSET per window)
-    is bound by ``init_rate_limiter()`` at startup. While it is ``None`` the
-    dependency is a no-op, implementing the plan's "empty ``redis_url``
-    disables rate limiting rather than crashing startup".
+    is bound by ``init_rate_limiter()`` at startup and lazily re-attempted on
+    each request while it is ``None``, so a Redis outage during container
+    startup does not permanently latch every limited route to 503
+    (THERMO-P2-04): the first request after Redis recovers re-initializes.
     """
 
     def __init__(self, times: int, seconds: int) -> None:
@@ -87,48 +110,48 @@ class RateLimiter:
     def bucket_key(self) -> str:
         return f"hdgraf:rate_limit:{self.times}/{self.seconds}"
 
+    async def _lazy_init(self) -> Limiter | None:
+        """Build the shared Limiter now; ``None`` when Redis is unreachable."""
+        try:
+            redis_client = get_redis()
+            bucket = await RedisBucket.init(
+                rates=[Rate(self.times, Duration.SECOND * self.seconds)],
+                redis=redis_client,
+                bucket_key=self.bucket_key,
+            )
+            self._limiter = Limiter(SingleBucketFactory(bucket))
+            return self._limiter
+        except Exception:
+            return None
+
     async def __call__(self, request: Request, response: Response) -> None:
         limiter = self._limiter
         if limiter is None:
-            # D-05: never a SILENT no-op for login/chat/content-write in
-            # production. Local dev (empty REDIS_URL) keeps the documented
-            # no-op; non-production or explicit fail-open keeps degrade.
+            # Startup init failed or has not run yet (THERMO-P2-04): retry the
+            # bind per-request instead of latching 503 forever. On success the
+            # limiter sticks for all subsequent requests.
             from spoilerless.app.core.config import get_settings
 
             settings = get_settings()
-            if not settings.redis_url:
-                return  # dev contract: empty REDIS_URL = disabled
-            if settings.environment != "production" or settings.rate_limit_fail_open:
-                logger.warning(
-                    "rate_limit: Redis unavailable — rate limiting disabled for this request"
-                )
+            if settings.redis_url:
+                limiter = await self._lazy_init()
+            if limiter is None:
+                _handle_unavailable_redis(settings)
                 return
-            raise http_error(
-                503,
-                "rate_limit_unavailable",
-                "Rate limiting is unavailable; try again shortly.",
-            )
         rate_key = await rate_limit_identifier(request)
         key = f"{rate_key}:{self.bucket_key}"
         try:
             success = await limiter.try_acquire_async(key, blocking=False)
         except Exception:
+            # Mid-window Redis failure: drop back to unbound state so the next
+            # request retries lazy initialization rather than hammering a dead
+            # connection forever.
+            self._limiter = None
             from spoilerless.app.core.config import get_settings
 
             settings = get_settings()
-            if not settings.redis_url:
-                return
-            if settings.environment != "production" or settings.rate_limit_fail_open:
-                logger.warning(
-                    "rate_limit: Redis unavailable — rate limiting disabled for this request",
-                    exc_info=True,
-                )
-                return
-            raise http_error(
-                503,
-                "rate_limit_unavailable",
-                "Rate limiting is unavailable; try again shortly.",
-            )
+            _handle_unavailable_redis(settings)
+            return
         if not success:
             await rate_limit_callback(request, response, pexpire=0)
 
