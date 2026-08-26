@@ -294,7 +294,14 @@ describe('DetailPanel', () => {
     const selected: SelectedElement = { kind: 'node', id: 'char_dexter_morgan', label: 'Dexter Morgan', nodeType: 'Character' }
     renderPanel(<DetailPanel selected={selected} {...defaultProps} />)
 
-    expect(await screen.findByText('canonical')).toBeInTheDocument()
+    // 12-08: claims/evidence resolve synchronously now (no setTimeout gate),
+    // so the Overview origin <dd> is no longer the only "canonical" text on
+    // screen — claim cards in the Claims tab render theirs too. Scope to the
+    // Origin row via its accessible dt label (getByRole('definition') pairs
+    // with the preceding term inside the Overview grid).
+    const originTerm = screen.getByText('Origin')
+    expect(originTerm.nextElementSibling).not.toBeNull()
+    expect(originTerm.nextElementSibling).toHaveTextContent('canonical')
   })
 
   describe('collapsible left inspector Sheet (06-09/06-12)', () => {
