@@ -9,6 +9,7 @@ values (``LLM_API_KEY`` etc.) remain as a bootstrap/default path.
 
 from __future__ import annotations
 
+import concurrent.futures
 import ipaddress
 import socket
 from typing import Any, Literal
@@ -57,6 +58,29 @@ _BLOCKED_NETWORKS = tuple(
 )
 
 
+def _resolve_host_with_timeout(host: str, timeout_sec: float = 1.0) -> list | None:
+    """Resolve ``host`` off-thread, bounded by ``timeout_sec`` (THERMO-P2-02).
+
+    ``socket.getaddrinfo`` is a blocking libc call that can stall for many
+    seconds on a dead resolver; run it in a worker thread and give up after
+    ``timeout_sec``. The executor is NOT used as a context manager: exiting
+    ``with ThreadPoolExecutor(...)`` joins the worker, which would block
+    until a hung resolution finishes anyway. ``shutdown(wait=False)`` abandons
+    the thread instead, so this helper returns within ~``timeout_sec``.
+    """
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(socket.getaddrinfo, host, None)
+        return future.result(timeout=timeout_sec)
+    except Exception:
+        # Unresolvable host (gaierror), timed-out resolution (TimeoutError),
+        # or any other failure → caller treats as blocked (fail closed).
+        return None
+    finally:
+        # Abandon rather than join a possibly-hung getaddrinfo worker.
+        executor.shutdown(wait=False)
+
+
 def _host_is_blocked(hostname: str) -> bool:
     """True when the host is loopback/private/link-local/metadata or unresolvable.
 
@@ -78,10 +102,10 @@ def _host_is_blocked(hostname: str) -> bool:
             addr = None
     if addr is not None:
         return any(addr in net for net in _BLOCKED_NETWORKS)
-    try:
-        infos = socket.getaddrinfo(host, None)
-    except socket.gaierror:
-        return True
+
+    infos = _resolve_host_with_timeout(host, timeout_sec=1.0)
+    if infos is None:
+        return True  # unresolvable / timed out → fail closed
     return any(
         ipaddress.ip_address(info[4][0]) in net
         for info in infos
