@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Post-Hardening Remediation & Code Quality
-status: Phase 12 planned — ready for execution
-stopped_at: Planned 12-01..12-09
-last_updated: "2026-08-20T19:00:00.000Z"
-last_activity: 2026-08-20
-last_activity_desc: Phase 12 Post-Hardening Remediation, Frontend Modularity & Code Quality (9 plans) planned from Thermo-Nuclear Dual Review findings
+status: Phase 12 executed — 15/15 plans complete
+stopped_at: Phase 12 execution complete (12-01..12-15)
+last_updated: "2026-08-26T18:22:00.000Z"
+last_activity: 2026-08-26
+last_activity_desc: Phase 12 execution complete (15 plans executed via wave parallelization)
 progress:
   total_phases: 5
-  completed_phases: 4
-  total_plans: 54
-  completed_plans: 45
-  percent: 83
+  completed_phases: 5
+  total_plans: 60
+  completed_plans: 60
+  percent: 100
 current_phase: 12
 current_phase_name: post-hardening-remediation-and-code-quality
 ---
@@ -24,14 +24,14 @@ current_phase_name: post-hardening-remediation-and-code-quality
 See: .planning/PROJECT.md (updated 2026-08-20 after v1.4)
 
 **Core value:** Users can safely explore a TV-series knowledge graph — and chat about it — without ever seeing information beyond their selected watch progress; the backend filters before data reaches the frontend, the LLM, or any tool call. One shared fail-closed boundary resolver (`resolve_effective_boundary`) is the single enforcement seam.
-**Current focus:** Phase 12 Post-Hardening Remediation, Frontend Modularity & Code Quality (9 plans planned) — resolving Thermo-Nuclear dual review and scout reconnaissance findings.
+**Current focus:** Phase 12 Post-Hardening Remediation, Frontend Modularity & Code Quality — 15/15 plans executed.
 
 ## Current Position
 
-Phase: 12 Post-Hardening Remediation & Code Quality (9 plans)
-Plan: Ready for 12-01
-Status: Ready for execution
-Last activity: 2026-08-20 — Phase 12 Post-Hardening Remediation, Frontend Modularity & Code Quality (9 plans) planned from Thermo-Nuclear Dual Review findings
+Phase: 12 Post-Hardening Remediation & Code Quality (15 plans)
+Plan: Phase 12 execution complete
+Status: Phase 12 executed — ready for phase verification / milestone wrap-up
+Last activity: 2026-08-26 — Phase 12 execution complete (15 plans executed via wave parallelization)
 
 ## Performance Metrics
 
@@ -80,7 +80,7 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - [10-02]: Boundary enforcement centralized in policy.resolve_effective_boundary: one pure D-05 resolver for graph/projection/expansion/path/search/focus/restoration inputs; missing progress fails closed to order 1; the projection service rejects hidden rows before projection (T10-LEAK-02/T10-BOUND-02).
 - [10-02]: Neutral DTO carries projection_version + effective_view_order metadata as the T10-CACHE-02 cache contract; no cache introduced in 10-02.
 - [10-02]: Human edge classes (family/work/knows/precedes/part_of/...) replace raw Neo4j relation names in normal DTOs; unmapped relationship types fail closed (D-14).
-- [11-01/11-02]: Single fail-closed boundary resolver `spoilerless/app/api/boundary.py::resolve_effective_boundary` gates every spoiler-sensitive read (graph, candidates, notes, custom nodes/relationships, revisions, episodes, visualization, expand, path, export); anonymous/no-record →1, non-persisted `visible_until_order` 422, non-owner shaping drops `before/after/user_id`.
+- [11-01/11-02]: Single fail-closed boundary resolver `spoilerless/app/api/boundary.py::resolve_effective_boundary` gates every spoiler-sensitive read (graph, candidates, notes, custom nodes/relationships, revisions, episodes, visualization, expand, path, export, share); anonymous/no-record →1, non-persisted `visible_until_order` 422, non-owner shaping drops `before/after/user_id`.
 - [11-03]: Ingest hardening — `visible_from_order` server-derived via `derive_visible_from_order`, subject/object/episode existence validated, rate-limited (`content_write_rate_limiter`) + `invalidate_series`, pagination `limit 1..500` with cursor `after_created_at/after_id`.
 - [11-04]: Trusted proxy + fail-closed rate limiting — `render.yaml --proxy-headers --forwarded-allow-ips "<RENDER_PROXY_CIDRS>"` restores per-IP keys, XFF spoof-proof; `RateLimiter` fails closed (503 `rate_limit_unavailable`) when Redis unavailable in production, dev keeps no-op, `request.client` None → `ip:unknown` (BUG-BE-02).
 - [11-05]: SSRF hardening (`ipaddress` block loopback/private/link-local/metadata, decimal/hex, trailing-dot, localhost) on both BYOK and stored `base_url`, gated on `environment==production`; LLM cost caps via global `asyncio.Semaphore(4)` + per-round tool cap 8 (`llm_max_tool_calls_per_round`) + `warn_if_open_signup` in production.
