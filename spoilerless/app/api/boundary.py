@@ -12,18 +12,19 @@ policy.effective_view_order. The pure formula lives in spoiler/policy.py
 
 from __future__ import annotations
 
-from fastapi import HTTPException
+from typing import TYPE_CHECKING
 
+from spoilerless.app.core.errors import http_error
 from spoilerless.app.spoiler.policy import effective_view_order
 
-
-def _error(status_code: int, code: str, message: str) -> HTTPException:
-    return HTTPException(status_code=status_code, detail={"code": code, "message": message})
+if TYPE_CHECKING:
+    from spoilerless.app.services.graph import GraphService
+    from spoilerless.app.services.progress import ProgressService
 
 
 async def resolve_effective_boundary(
-    service,
-    progress_service,
+    service: GraphService,
+    progress_service: ProgressService,
     series_id: str,
     user: dict | None,
     requested_order: int | None = None,
@@ -58,7 +59,7 @@ async def resolve_effective_boundary(
             )
     boundary_episode = await service.resolve_boundary(series_id, requested)
     if boundary_episode is None:
-        raise _error(
+        raise http_error(
             422,
             "INVALID_VISIBLE_UNTIL_ORDER",
             f"{boundary_label} must identify a persisted episode order.",
