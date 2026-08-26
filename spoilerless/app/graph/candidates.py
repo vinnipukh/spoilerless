@@ -40,14 +40,19 @@ WHERE episode.episode_order IS NOT NULL AND episode.episode_order >= 1
 OPTIONAL MATCH (subject {id: $subject_id, series_id: $series_id})
 OPTIONAL MATCH (object {id: $object_id, series_id: $series_id})
 RETURN episode.episode_order AS episode_order,
+       subject.id AS subject_id,
        subject.visible_from_order AS subject_vfo,
+       object.id AS object_id,
        object.visible_from_order AS object_vfo
 """
 
 
 async def _resolve_claim_visibility(tx: Any, series_id: str, claim: Any) -> int | None:
     """Return the server-derived visible_from_order, or None when a referenced
-    node does not exist in the series (claim must be skipped, D-03)."""
+    node does not exist in the series (claim must be skipped, D-03).
+
+    Consolidated single Cypher roundtrip (QUAL-03).
+    """
     result = await (await tx.run(
         _VISIBILITY_PREPASS_QUERY,
         episode_id=claim.episode_id,
@@ -61,29 +66,16 @@ async def _resolve_claim_visibility(tx: Any, series_id: str, claim: Any) -> int 
     # Check episode existence: if no episode matched, row will have None episode_order
     if row.get("episode_order") is None:
         return None
-    # Check subject/object existence: OPTIONAL MATCH returns null for missing nodes.
-    # We need to verify nodes exist: run existence check via count or by querying ids.
-    # Use second query for existence: if subject/object ids don't match any node with series_id.
-    # Simplified: treat missing subject/object as non-existent when their visible_from_order lookup returns None AND node id not found.
-    # We check by querying count for subject/object.
-    subject_exists = row.get("subject_vfo") is not None
-    object_exists = row.get("object_vfo") is not None
-    # Need explicit existence check for nodes that may have null visible_from_order (should not exist) but we still need to differentiate missing node vs null vfo.
-    # Do explicit existence checks.
-    subj_check = await (await tx.run(
-        "MATCH (n {id: $id, series_id: $sid}) RETURN n.id AS id", id=claim.subject_id, sid=series_id
-    )).single()
-    obj_check = await (await tx.run(
-        "MATCH (n {id: $id, series_id: $sid}) RETURN n.id AS id", id=claim.object_id, sid=series_id
-    )).single()
-    if subj_check is None or obj_check is None:
+    # Check subject/object existence: OPTIONAL MATCH leaves subject_id/object_id
+    # null when the referenced node is missing from the series — skip the claim.
+    if row.get("subject_id") is None or row.get("object_id") is None:
         return None
     endpoint_vfos = (row.get("subject_vfo"), row.get("object_vfo"))
     return derive_visible_from_order(
         episode_order=row.get("episode_order"),
         current_progress=(
-            max(v for v in endpoint_vfos if v)
-            if any(endpoint_vfos) else None
+            max(v for v in endpoint_vfos if v is not None)
+            if any(v is not None for v in endpoint_vfos) else None
         ),
     )
 
