@@ -231,8 +231,13 @@ def test_note_claim_filter_validation_and_canonical_survival(
         base, params={"visible_until_order": 1, "target_type": "Claim"}
     )
     assert partial.status_code == 422
-    for boundary in (0, -1, "nope", 4):
+    # Malformed boundaries stay 422. A POSITIVE unpersisted order (4 > the
+    # seeded 3 episodes) no longer 422s: since 12-02 (THERMO-P1-01) the raw
+    # persistence pre-check is gone and the single resolver CLAMPS it to the
+    # effective boundary — the list simply succeeds.
+    for boundary in (0, -1, "nope"):
         assert user_content_client.get(base, params={"visible_until_order": boundary}).status_code == 422
+    assert user_content_client.get(base, params={"visible_until_order": 4}).status_code == 200
 
     canonical = user_content_client.get("/api/series/series_dexter/graph", params={"visible_until_order": 1})
     assert canonical.status_code == 200
@@ -370,8 +375,15 @@ def test_custom_content_canonical_isolation_and_hidden_missing_equivalence(
         f"{node_base}/user-node:missing-visibility", params={"visible_until_order": 3}
     )
     assert_hidden_matches_missing(malformed, absent)
-    for boundary in (0, -1, 4, "bad"):
+    # Malformed boundaries stay 422. A positive unpersisted order (4) CLAMPS
+    # through the single resolver since 12-02 (THERMO-P1-01), then resolves
+    # the node lookup — this hidden node answers hidden≡missing 404.
+    for boundary in (0, -1, "bad"):
         assert user_content_client.get(f"{node_base}/user-node:missing", params={"visible_until_order": boundary}).status_code == 422
+    assert (
+        user_content_client.get(f"{node_base}/user-node:missing", params={"visible_until_order": 4}).status_code
+        == 404
+    )
 
 
 def test_custom_routes_return_503_when_database_is_unavailable(
