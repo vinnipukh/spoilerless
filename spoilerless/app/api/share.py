@@ -4,6 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, Request
 
+from spoilerless.app.api.boundary import resolve_effective_boundary
 from spoilerless.app.api.deps import (
     CsrfGuardDependency,
     CurrentUserDependency,
@@ -28,7 +29,6 @@ from spoilerless.app.domain.share import (
     ShareTokenRecord,
 )
 from spoilerless.app.services.graph import GraphService
-from spoilerless.app.spoiler.policy import effective_view_order
 
 
 logger = logging.getLogger(__name__)
@@ -54,32 +54,19 @@ async def create_share_link(
     service = GraphService(database)
 
     # CR-01 (09-REVIEW): a share snapshot must never widen the creator's own
-    # spoiler-safe window (PROB-04/D-05). Clamp the client-chosen boundary to
-    # the creator's persisted progress; no progress record fails closed to 1.
-    requested = payload.visible_until_order
-    progress = await progress_service.get(user["id"], payload.series_id)
-    if progress is None:
-        requested = 1
-    else:
-        requested_view = min(requested, progress.view_as_of_order)
-        requested = effective_view_order(
-            requested_view, progress.watched_through_order
-        )
-
-    boundary_episode = await service.resolve_boundary(
-        payload.series_id, requested
+    # spoiler-safe window (PROB-04/D-05). The single fail-closed boundary
+    # authority owns the whole clamp: progress lookup, min/effective_view
+    # math, fail-closed-to-1 without a record, and the persisted-episode
+    # validation (422 INVALID_VISIBLE_UNTIL_ORDER otherwise). 12-10 closed
+    # the last bypass (Candidate C2) that re-implemented this inline.
+    effective = await resolve_effective_boundary(
+        service, progress_service, payload.series_id, user, payload.visible_until_order
     )
-    if boundary_episode is None:
-        raise http_error(
-            422,
-            "INVALID_VISIBLE_UNTIL_ORDER",
-            "visible_until_order must identify a persisted episode order.",
-        )
 
     raw_token, record = await share_repo.create(
         created_by=user["id"],
         series_id=payload.series_id,
-        visible_until_order=requested,
+        visible_until_order=effective,
     )
 
     return ShareCreateResponse(

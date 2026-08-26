@@ -8,6 +8,11 @@ clamped to min(requested, view_as_of, watched_through) via
 policy.effective_view_order. The pure formula lives in spoiler/policy.py
 (resolve_effective_boundary); this module adds the DB reads (progress record
 + persisted-episode validation) and the 422 envelope.
+
+Gated routes resolved through ``resolve_effective_boundary`` (D-01 set):
+graph, candidates, notes, custom nodes, custom relationships, revisions,
+episodes, visualization, expand, path, export, and share (create_share_link,
+consolidated here in 12-10 — Candidate C2 bypass closed).
 """
 
 from __future__ import annotations
