@@ -53,7 +53,11 @@ from spoilerless.app.llm.fallbacks import (
     DEFAULT_FALLBACKS,
     INSUFFICIENT_EVIDENCE_FALLBACK_EN,
 )
-from spoilerless.app.domain.change_set import ChangeSetCreateRequest, ChangeSetOperation
+from spoilerless.app.domain.change_set import (
+    ChangeSetCreateRequest,
+    ChangeSetOperation,
+    ProposeChangesetInput,
+)
 from spoilerless.app.services.change_set import ChangeSetService
 from spoilerless.app.services.progress import ProgressNotFoundError, ProgressService
 
@@ -350,31 +354,6 @@ class GetUserNotesInput(BaseModel):
 
     entity_or_claim_ids: list[str] = Field(
         description="Visible Character or Claim IDs to fetch the user's own notes for."
-    )
-
-
-class ProposeChangesetInput(BaseModel):
-    """Input schema for the ``propose_changeset`` tool (12th allowlisted tool).
-
-    Mirrors the ChangeSet operation union exactly — the SAME closed
-    operation models the API validates (``domain/change_set.py``) — plus a
-    human-readable summary. No visibility field is accepted: the server
-    derives ``visible_until_order_snapshot`` / ``visible_from_order`` from
-    the current effective view boundary, never from the model (D-13).
-    """
-
-    summary: str = Field(
-        min_length=1,
-        max_length=500,
-        description="Human-readable summary of the proposed graph edit.",
-    )
-    operations: list[ChangeSetOperation] = Field(
-        min_length=1,
-        max_length=20,
-        description=(
-            "The graph operations to propose (create/update/delete node, "
-            "relationship, claim, or note); max 20."
-        ),
     )
 
 

@@ -27,7 +27,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Literal, Union
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from spoilerless.app.domain.user_content import (
     CustomNodeType,
@@ -254,6 +254,31 @@ DIRECT_MUTATION_OPERATION_TYPES = frozenset(
         "delete_claim",
     }
 )
+
+
+class ProposeChangesetInput(BaseModel):
+    """Input schema for the ``propose_changeset`` tool (12th allowlisted tool).
+
+    Mirrors the ChangeSet operation union exactly — the SAME closed
+    operation models the API validates (``domain/change_set.py``) — plus a
+    human-readable summary. No visibility field is accepted: the server
+    derives ``visible_until_order_snapshot`` / ``visible_from_order`` from
+    the current effective view boundary, never from the model (D-13).
+    """
+
+    summary: str = Field(
+        min_length=1,
+        max_length=500,
+        description="Human-readable summary of the proposed graph edit.",
+    )
+    operations: list[ChangeSetOperation] = Field(
+        min_length=1,
+        max_length=20,
+        description=(
+            "The graph operations to propose (create/update/delete node, "
+            "relationship, claim, or note); max 20."
+        ),
+    )
 
 
 class ChangeSetCreateRequest(StrictModel):

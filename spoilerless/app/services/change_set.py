@@ -35,6 +35,7 @@ from spoilerless.app.domain.change_set import (
     ChangeSetOperation,
     ChangeSetResponse,
     CreateNoteOperation,
+    ProposeChangesetInput,
 )
 from spoilerless.app.domain.user_content import NoteTargetType
 from spoilerless.app.graph.database import Neo4jDatabase
@@ -275,9 +276,6 @@ class ChangeSetService:
         boundary. Returns the model-visible dict (either the proposal or
         the error shape) so the pipeline turn can continue.
         """
-        # Import locally to avoid circular import at module load time
-        from spoilerless.app.retrieval.pipeline import ProposeChangesetInput
-
         try:
             parsed = ProposeChangesetInput.model_validate(tool_args)
         except ValidationError:
