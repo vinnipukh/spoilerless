@@ -21,116 +21,26 @@
 // - Deterministic: same DTO in, same elements out (ids and order preserved).
 
 import type { ElementDefinition } from 'cytoscape'
-import { apiUrl } from '../api/client'
 import type {
   VisualizationDTO,
   VisualizationTimelineItem,
 } from '../types/graph'
+import {
+  fromVisualization,
+  EDGE_DATA_KEYS,
+  GROUP_DATA_KEYS,
+  NODE_DATA_KEYS,
+  type ToCytoscapeOptions,
+} from './graph/sceneElements'
 
-// Node-kind vocabulary the existing stylesheet already understands
-// (graphElements.ts uses `nodeType` for the same purpose). Group parents are
-// prefixed so they can never collide with a real node id.
-const GROUP_PARENT_PREFIX = 'group:'
-
-export type ToCytoscapeOptions = {
-  /** Advanced/debug only (D-14): adds a `debugLabel` data key carrying the
-   * technical node kind / edge relation class. Default false — technical
-   * labels never reach the scene outside debug. */
-  debugLabels?: boolean
-}
-
-// Documented data keys emitted per element kind. Exact-shape tests pin these
-// sets; anything extra is a T10-LEAK-04 violation.
-export const NODE_DATA_KEYS = [
-  'id',
-  'label',
-  'nodeType',
-  'displayTier',
-  'order',
-  'origin',
-  'episodeId',
-  'parent',
-  'imageUrl',
-  'debugLabel',
-] as const
-
-export const GROUP_DATA_KEYS = ['id', 'label', 'isCluster', 'groupId', 'debugLabel'] as const
-
-export const EDGE_DATA_KEYS = [
-  'id',
-  'source',
-  'target',
-  'label',
-  'relationClass',
-  'order',
-  'claimId',
-  'origin',
-  'debugLabel',
-] as const
+export type { ToCytoscapeOptions }
+export { NODE_DATA_KEYS, GROUP_DATA_KEYS, EDGE_DATA_KEYS }
 
 export function toCytoscapeElements(
   dto: VisualizationDTO,
   options: ToCytoscapeOptions = {},
 ): ElementDefinition[] {
-  const { debugLabels = false } = options
-
-  // Group parents first (compound parents must precede their children in the
-  // elements array so Cytoscape can resolve `parent`).
-  const groupElements: ElementDefinition[] = dto.groups.map((group) => ({
-    data: {
-      id: `${GROUP_PARENT_PREFIX}${group.id}`,
-      label: group.label,
-      isCluster: true,
-      groupId: group.id,
-      ...(debugLabels ? { debugLabel: group.id } : {}),
-    },
-  }))
-
-  const parentFor = new Map<string, string>()
-  for (const group of dto.groups) {
-    for (const nodeId of group.node_ids) {
-      parentFor.set(nodeId, `${GROUP_PARENT_PREFIX}${group.id}`)
-    }
-  }
-
-  const nodeElements: ElementDefinition[] = dto.nodes.map((node) => {
-    const imageUrl = node.kind === 'Character' ? apiUrl(node.image_url) : null
-    const parent = parentFor.get(node.id)
-    return {
-      data: {
-        id: node.id,
-        label: node.label,
-        nodeType: node.kind,
-        displayTier: node.display_tier,
-        order: node.order,
-        origin: node.origin,
-        episodeId: node.episode_id,
-        ...(parent ? { parent } : {}),
-        ...(imageUrl ? { imageUrl } : {}),
-        ...(debugLabels ? { debugLabel: node.kind } : {}),
-      },
-    }
-  })
-
-  // Every DTO edge passes through — the adapter never filters. `label` is the
-  // backend's human relation class; the stylesheet's label POLICY (never /
-  // on_hover / on_select / on_path / medium_zoom / always, D-14) decides when
-  // it is actually rendered.
-  const edgeElements: ElementDefinition[] = dto.edges.map((edge) => ({
-    data: {
-      id: edge.id,
-      source: edge.source,
-      target: edge.target,
-      label: edge.relation_class,
-      relationClass: edge.relation_class,
-      order: edge.order,
-      claimId: edge.claim_id,
-      origin: edge.origin,
-      ...(debugLabels ? { debugLabel: edge.relation_class } : {}),
-    },
-  }))
-
-  return [...groupElements, ...nodeElements, ...edgeElements]
+  return fromVisualization(dto, options)
 }
 
 export type TimelineEvent = VisualizationTimelineItem

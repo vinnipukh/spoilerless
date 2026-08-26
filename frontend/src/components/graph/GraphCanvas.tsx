@@ -3,8 +3,7 @@ import cytoscape from 'cytoscape'
 import CytoscapeComponent from 'react-cytoscapejs'
 import type { GraphNode, GraphResponse, VisualizationDTO, VisualizationViewType } from '../../types/graph'
 import type { EpisodeResponse } from '../../types/series'
-import { graphToElements } from './graphElements'
-import { toCytoscapeElements } from '../../lib/visualizationAdapter'
+import * as sceneElements from '../../lib/graph/sceneElements'
 import { buildGraphStylesheet } from './graphStylesheet'
 import type { GraphMode } from './overviewTiers'
 import { autoZoomHold } from './autoZoomHold'
@@ -13,29 +12,23 @@ import { NodeHoverCard } from './NodeHoverCard'
 import { GraphLegend } from './GraphLegend'
 import { GraphControls } from './GraphControls'
 import { GraphFilterPanel } from './GraphFilterPanel'
-import {
-  initialFilterState,
-  toggleNodeType,
-  toggleEdgeFamily,
-  setAllFilters,
-  type FilterState,
-} from './filterState'
-import {
-  focusReducer,
-  initialFocusState,
-  applyFocusToCytoscape,
-} from './focusReducer'
 import { GraphFocusIndicator } from './GraphFocusIndicator'
 import { PathFinder, type PathPick } from './PathFinder'
 import { fetchExportMarkdown, downloadMarkdownBlob } from '@/api/export'
 import { renderGraphMarkdown, exportFilename } from '@/lib/exportMarkdown'
 import { NODE_TYPES } from '@/lib/nodeTypes'
-import { applyHighlight } from '@/lib/graph/highlight'
+import { applyHighlight, applyFocusToCytoscape } from '@/lib/graph/highlight'
 import { reconcileCytoscapeElements } from './cytoscapeReconciler'
 // 12-08 (THERMO-P0-03): layout engine + create-node dialog extracted.
 import { runLayout, prefersReducedMotion } from './useCytoscapeLayout'
 import { CreateCustomNodeDialog } from '../dialogs/CreateCustomNodeDialog'
 import { layoutNameForView, layoutOptionsFor } from './layoutConfig'
+import {
+  INITIAL_SCENE_STATE,
+  isFilterEnabled,
+  type SceneAction,
+  type SceneState,
+} from '../../hooks/useSceneState'
 
 // 12-08: AUTO_ZOOM_HOLD_MS + layout engine live in ./useCytoscapeLayout.ts;
 // the 20s interaction hold state itself remains in ./autoZoomHold.ts (module
@@ -115,7 +108,7 @@ type Props = {
   mode?: GraphMode
   onModeChange?: (mode: GraphMode) => void
   // 10-04 (D-08/D-44): neutral VisualizationDTO for the Phase 10 projection
-  // path. When set, the scene renders `toCytoscapeElements(visualization)`
+  // path. When set, the scene renders `sceneElements.fromVisualization(visualization)`
   // through the SAME stable Cytoscape lifecycle (batched element diffs,
   // stored preset positions); the legacy GraphResponse path stays untouched
   // when this prop is absent. Pass `null` while a view is loading to retain
@@ -123,6 +116,8 @@ type Props = {
   // canvas and no instance recreation. The backend already applied the
   // spoiler boundary; this component never filters (D-05).
   visualization?: VisualizationDTO | null
+  scene?: SceneState
+  dispatchScene?: (action: SceneAction) => void
 }
 
 
@@ -153,6 +148,8 @@ export function GraphCanvas({
   mode: controlledMode,
   onModeChange,
   visualization = null,
+  scene = INITIAL_SCENE_STATE,
+  dispatchScene = () => {},
 }: Props) {
 
   const [internalMode, setInternalMode] = useState<GraphMode>(initialMode)
@@ -189,14 +186,13 @@ export function GraphCanvas({
   }
 
   const elements = useMemo(() => {
-    if (activeVisualization) {
-      return toCytoscapeElements(activeVisualization, {
-        // D-14: technical labels (raw kind/relation vocabulary) appear only
-        // in the Advanced/Full debug explorer.
-        debugLabels: activeVisualization.metadata.view_type === 'full',
-      })
-    }
-    return graphToElements(graph, mode)
+    return activeVisualization
+      ? sceneElements.fromVisualization(activeVisualization, {
+          // D-14: technical labels (raw kind/relation vocabulary) appear only
+          // in the Advanced/Full debug explorer.
+          debugLabels: activeVisualization.metadata.view_type === 'full',
+        })
+      : sceneElements.fromGraph(graph, mode)
   }, [activeVisualization, graph, mode])
 
   // Keep react-cytoscapejs's declared element prop stable after mount. Its
@@ -274,15 +270,9 @@ export function GraphCanvas({
   const [localReveal, setLocalReveal] = useState<FocusedElementIds | null>(null)
   // Pending reveal target (external prop wins over the local custom-node one).
   const revealTarget = revealElementIds ?? localReveal
-  // Filter state for node-type and edge-family toggles (PROB-32 / FEAT-11.4)
-  // — node-type list derived from the NODE_TYPES registry (PROB-09 #81).
-  const allNodeTypes = useMemo(() => NODE_TYPES.map((nt) => nt.type), [])
-  const allEdgeFamilies = useMemo(() => ['CHARACTER', 'STRUCTURAL', 'EPISODE', 'USER'], [])
-  const [filterState, setFilterState] = useState<FilterState>(() => initialFilterState(allNodeTypes, allEdgeFamilies))
   // 08-06: previous timeline event filter — tracks entry/exit so stale
   // `.filtered-out` classes are cleared when the filter is removed.
   const prevTimelineFilter = useRef<string[]>([])
-  const [focusState, dispatchFocus] = useReducer(focusReducer, initialFocusState())
   const [pathMode, setPathMode] = useState(false)
   const pathPickHandlerRef = useRef<((pick: PathPick) => void) | null>(null)
   // Mirrors `pathMode` for the cy tap handlers (registered once at mount —
@@ -503,12 +493,20 @@ export function GraphCanvas({
     const cy = cyInstanceRef.current
     if (!cy || typeof cy.nodes !== 'function') return
     const updateFilters = () => {
-      // Node-type toggles (existing FEAT-11.4 behavior).
-      for (const [nodeType, visible] of Object.entries(filterState.nodeTypes)) {
-        const nodes = cy.nodes(`[nodeType="${nodeType}"]`)
+      // Node-kind filters (reads scene.nodeKindFilters with absent key = visible).
+      for (const [nodeKind, visible] of Object.entries(scene.nodeKindFilters)) {
+        const nodes = cy.nodes(`[nodeType="${nodeKind}"]`)
         if (nodes && typeof nodes.removeClass === 'function') {
-          if (visible) nodes.removeClass('filtered-out')
+          if (visible !== false) nodes.removeClass('filtered-out')
           else nodes.addClass('filtered-out')
+        }
+      }
+      // Edge-class filters (reads scene.edgeClassFilters with absent key = visible).
+      for (const [edgeClass, visible] of Object.entries(scene.edgeClassFilters)) {
+        const edges = cy.edges(`[edgeType="${edgeClass}"],[relationClass="${edgeClass}"]`)
+        if (edges && typeof edges.removeClass === 'function') {
+          if (visible !== false) edges.removeClass('filtered-out')
+          else edges.addClass('filtered-out')
         }
       }
       // Timeline event filter (08-06): when events are selected in the
@@ -549,14 +547,15 @@ export function GraphCanvas({
     }
     if (typeof cy.batch === 'function') cy.batch(updateFilters)
     else updateFilters()
-  }, [filterState, timelineFilterIds, graph])
+  }, [scene.nodeKindFilters, scene.edgeClassFilters, timelineFilterIds, graph])
 
+  const focusedNodeId = scene.focus?.nodeIds[0] ?? null
   useEffect(() => {
     const cy = cyInstanceRef.current
-    if (cy && focusState.focusedId != null) {
-      applyFocusToCytoscape(cy, focusState.focusedId)
+    if (cy && focusedNodeId != null) {
+      applyFocusToCytoscape(cy, focusedNodeId)
     }
-  }, [focusState.focusedId])
+  }, [focusedNodeId])
 
   const [hoveredNodeInfo, setHoveredNodeInfo] = useState<{ node: GraphNode; pos: { x: number; y: number } } | null>(null)
 
@@ -654,7 +653,7 @@ export function GraphCanvas({
                 })
                 return
               }
-              dispatchFocus({ type: 'FOCUS_NODE', id: node.id() })
+              dispatchScene({ type: 'SET_FOCUS', nodeIds: [node.id()], edgeIds: [] })
               const neighborhood = node.closedNeighborhood()
               cy.elements().difference(neighborhood).addClass('faded')
               neighborhood.removeClass('faded')
@@ -689,7 +688,7 @@ export function GraphCanvas({
 
             cy.on('tap', (evt) => {
               if (evt.target === cy) {
-                dispatchFocus({ type: 'CLEAR_FOCUS' })
+                dispatchScene({ type: 'CLEAR_FOCUS' })
                 // FEAT-06 (09-11): an empty-canvas tap during path mode
                 // clears the mode entirely (Clear/Esc/empty-tap exits).
                 if (pathModeRef.current) {
@@ -732,10 +731,9 @@ export function GraphCanvas({
           />
         )}
         <GraphFilterPanel
-          filterState={filterState}
-          onToggleNodeType={(type) => setFilterState((prev) => toggleNodeType(prev, type))}
-          onToggleEdgeFamily={(family) => setFilterState((prev) => toggleEdgeFamily(prev, family))}
-          onSetAll={(enabled) => setFilterState((prev) => setAllFilters(prev, enabled))}
+          nodeKindFilters={scene.nodeKindFilters}
+          edgeClassFilters={scene.edgeClassFilters}
+          dispatchScene={dispatchScene}
         />
         <GraphLegend />
         <GraphControls

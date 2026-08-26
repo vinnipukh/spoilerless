@@ -18,6 +18,10 @@ from spoilerless.app.repository.share import (
     InMemoryShareRepository,
     _hash_token,
 )
+from spoilerless.tests.conftest import (
+    bootstrap_scratch_series,
+    teardown_scratch_series,
+)
 
 
 @pytest.mark.asyncio
@@ -297,3 +301,117 @@ def test_share_api_invalid_boundary_and_forbidden_revoke(database: Neo4jDatabase
         forbidden_res = client.delete(f"/api/share/{token}")
         assert forbidden_res.status_code == 403
         assert forbidden_res.json()["detail"]["code"] == "FORBIDDEN"
+
+
+# ── 12-10: clamp/422 behavior through the shared boundary resolver ──────────
+# Scratch-series discipline (PROB-06/22, D-07): a dedicated scratch series
+# with persisted Episode nodes backs every create_share_link call so the
+# resolver's persisted-episode validation runs against real data; teardown
+# deletes everything the tests created. NEVER series_dexter, NEVER the dev
+# user ae8a41b7-db96-40e8-b6c2-2e3c69aedb11. Drift-agnostic asserts only.
+
+SHARE_SCRATCH_SERIES = "series_scratch_share_boundary"
+
+
+def _share_scratch_app(database: Neo4jDatabase) -> tuple[FastAPI, InMemoryShareRepository]:
+    app = FastAPI()
+    repo = InMemoryShareRepository()
+    install_database_error_handlers(app)
+    install_repository_error_handlers(app)
+    app.include_router(share_router)
+    app.dependency_overrides[deps.get_database] = lambda: database
+    app.dependency_overrides[deps.get_share_repo] = lambda: repo
+    return app, repo
+
+
+@pytest.fixture()
+def share_scratch_series() -> Iterator[str]:
+    bootstrap_scratch_series(SHARE_SCRATCH_SERIES, (1, 2))
+    yield SHARE_SCRATCH_SERIES
+    teardown_scratch_series(SHARE_SCRATCH_SERIES)
+
+
+def test_create_share_clamps_to_persisted_progress(
+    database: Neo4jDatabase, share_scratch_series: str
+) -> None:
+    """12-10/E-BND-1: a requested boundary past persisted progress clamps to
+    the creator's effective view — never widened to the requested order."""
+    app, _ = _share_scratch_app(database)
+    actor = {"id": "user:scratch_share_clamp", "role": "user"}
+    app.dependency_overrides[deps.require_current_user] = lambda: actor
+    app.dependency_overrides[graph_api.get_progress_service] = lambda: (
+        _FakeProgressService(
+            type("R", (), {"view_as_of_order": 2, "watched_through_order": 2})()
+        )
+    )
+
+    with TestClient(app) as client:
+        res = client.post(
+            "/api/share",
+            json={
+                "series_id": share_scratch_series,
+                "visible_until_order": 999,
+            },
+        )
+        assert res.status_code == 201, res.text
+        assert res.json()["visible_until_order"] == 2
+
+
+def test_create_share_no_progress_fails_closed_to_one(
+    database: Neo4jDatabase, share_scratch_series: str
+) -> None:
+    """12-10/SEC-BE-001 parity: no progress record fails closed to order 1."""
+    app, _ = _share_scratch_app(database)
+    actor = {"id": "user:scratch_share_noprogress", "role": "user"}
+    app.dependency_overrides[deps.require_current_user] = lambda: actor
+    app.dependency_overrides[graph_api.get_progress_service] = (
+        lambda: _FakeProgressService(None)
+    )
+
+    with TestClient(app) as client:
+        res = client.post(
+            "/api/share",
+            json={
+                "series_id": share_scratch_series,
+                "visible_until_order": 999,
+            },
+        )
+        assert res.status_code == 201, res.text
+        assert res.json()["visible_until_order"] == 1
+
+
+def test_create_share_non_persisted_order_422(
+    database: Neo4jDatabase, share_scratch_series: str
+) -> None:
+    """12-10/E-BND-2: clamp first, then 422 if the CLAMPED order is unpersisted.
+
+    The scratch series persists episodes 1 and 2 only; the actor's progress
+    record points at order 9 (past every persisted episode), so the clamp
+    lands on an unpersisted order and the resolver raises the exact envelope.
+    (A request above persisted progress with view/watched INSIDE the persisted
+    range is clamped to a persisted episode and must stay 201 — that path is
+    pinned by test_create_share_clamps_to_persisted_progress.)
+    """
+    app, _ = _share_scratch_app(database)
+    actor = {"id": "user:scratch_share_unpersisted", "role": "user"}
+    app.dependency_overrides[deps.require_current_user] = lambda: actor
+    app.dependency_overrides[graph_api.get_progress_service] = lambda: (
+        _FakeProgressService(
+            type("R", (), {"view_as_of_order": 9, "watched_through_order": 9})()
+        )
+    )
+
+    with TestClient(app) as client:
+        res = client.post(
+            "/api/share",
+            json={
+                "series_id": share_scratch_series,
+                "visible_until_order": 999,
+            },
+        )
+        assert res.status_code == 422, res.text
+        detail = res.json()["detail"]
+        assert detail["code"] == "INVALID_VISIBLE_UNTIL_ORDER"
+        assert detail["message"] == (
+            "visible_until_order must identify a persisted episode order."
+        )
