@@ -17,6 +17,7 @@
 **Depends on**: Phase 11 (shipped)
 **Requirements**: THERMO-P0-01, THERMO-P0-02, THERMO-P0-03, THERMO-P0-04, THERMO-P1-01, THERMO-P1-02, THERMO-P1-03, THERMO-P1-04, THERMO-P1-05, THERMO-P1-06, THERMO-P2-01, THERMO-P2-02, THERMO-P2-03, THERMO-P2-04, THERMO-P2-05, THERMO-P2-06, THERMO-P2-07, THERMO-P3-01..10
 **Success Criteria** (what must be TRUE):
+
   1. Anonymous and non-owner reads on `/notes`, `/custom-nodes`, `/custom-relationships` return 200 with `user_id: null` instead of raising 500 Pydantic `ValidationError`.
   2. Monolithic frontend files (`App.tsx`, `GraphCanvas.tsx`, `DetailPanel.tsx`) are decomposed below 350 lines with zero render-phase state mutations, isolated Cytoscape lifecycle hooks, and separate tab/dialog components.
   3. `CreateRelationshipDialog` selects the latest episode by numeric `episode_order`; note creation supports all `CustomNodeType` labels without 404/409 errors; TypeScript interfaces in `frontend/src/types` align 100% with backend Pydantic models.
@@ -28,7 +29,8 @@
   9. `ProposeChangesetInput` lives in `domain/change_set.py` with top-level imports; `warn_if_open_signup` lives in `services/auth.py`; `revisions` module has clean imports and single-pass JSON deserialization.
 
 **Plans**:
-- [ ] 12-01-PLAN.md — Privacy & Response Schema Alignment (THERMO-P0-01) [Wave 1]
+
+- [x] 12-01-PLAN.md — Privacy & Response Schema Alignment (THERMO-P0-01) [Wave 1]
 - [ ] 12-02-PLAN.md — Boundary Verification Simplification, Invariant Enforcement & Type Hygiene (THERMO-P1-01, THERMO-P3-01, THERMO-P3-04) [Wave 1]
 - [ ] 12-03-PLAN.md — Candidate Ingest Cypher Query Consolidation & Pagination Temporal Coercion (THERMO-P2-03, THERMO-P3-07) [Wave 2]
 - [ ] 12-04-PLAN.md — Production Infrastructure, CSP & TrustedHost Hardening (THERMO-P1-02, THERMO-P2-01) [Wave 1]
