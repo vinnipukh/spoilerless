@@ -11,7 +11,6 @@ via :func:`install_llm_error_handlers`, never 401/403.
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Annotated, Any, AsyncIterator
 
 from fastapi import Depends, Header
@@ -44,16 +43,6 @@ from spoilerless.app.retrieval.pipeline import RetrievalPipeline
 from spoilerless.app.services.progress import ProgressNotFoundError, ProgressService
 
 
-logger = logging.getLogger(__name__)
-
-
-def warn_if_open_signup(settings) -> None:
-    """Warn at startup when production runs with open signup (D-07)."""
-    if settings.environment == "production" and not settings.allowed_emails.strip():
-        logger.warning(
-            "ALLOWED_EMAILS is empty in production — open signup is enabled "
-            "(operator action required)"
-        )
 
 
 _llm_semaphore: asyncio.Semaphore | None = None

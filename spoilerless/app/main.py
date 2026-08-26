@@ -37,6 +37,7 @@ from spoilerless.app.graph.database import Neo4jDatabase
 from spoilerless.app.llm.provider import install_llm_error_handlers
 from spoilerless.app.repository.session import Neo4jSessionRepository
 from spoilerless.app.repository.share import Neo4jShareRepository
+from spoilerless.app.services.auth import warn_if_open_signup
 from spoilerless.app.services.rate_limit import init_rate_limiter
 
 SERVICE_NAME = "spoilerless-backend"
@@ -179,14 +180,8 @@ class BodySizeLimitMiddleware:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     verify_google_client_id_equality(settings)
-    # D-07: loud warning on prod open signup (helper defined in 11-05)
-    try:
-        from spoilerless.app.services.chat import warn_if_open_signup
-
-        warn_if_open_signup(settings)
-    except Exception:
-        # helper is tested in 11-05; wiring must not crash startup if import fails
-        pass
+    # D-07: loud warning on prod open signup (helper lives in services/auth.py)
+    warn_if_open_signup(settings)
     database = Neo4jDatabase(settings)
     database.open()
     app.state.neo4j = database

@@ -13,6 +13,15 @@ from spoilerless.app.repository.user import UserRepository
 logger = logging.getLogger(__name__)
 
 
+def warn_if_open_signup(settings) -> None:
+    """Warn at startup when production runs with open signup (D-07)."""
+    if settings.environment == "production" and not settings.allowed_emails.strip():
+        logger.warning(
+            "ALLOWED_EMAILS is empty in production — open signup is enabled "
+            "(operator action required)"
+        )
+
+
 class GoogleTokenVerifier(Protocol):
     """Abstraction over Google ID token verification.
 
