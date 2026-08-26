@@ -16,7 +16,11 @@
 //   decides layout policy, D-22/D-24/D-25).
 
 import { useReducer, type Dispatch } from 'react'
-import type { VisualizationViewType } from '../types/graph'
+import type { VisualizationDTO, VisualizationViewType } from '../types/graph'
+
+export function isFilterEnabled(filters: Record<string, boolean>, key: string): boolean {
+  return filters[key] !== false
+}
 
 export type SceneCamera = { zoom: number; pan: { x: number; y: number } }
 
@@ -39,6 +43,7 @@ export type ExpansionRecord = {
   anchorId: string
   key: string
   additionIds: string[]
+  dto?: VisualizationDTO
 }
 
 // Snapshot taken when a temporary scene (Answer Graph) opens, so closing it
@@ -251,7 +256,7 @@ export function sceneReducer(state: SceneState, action: SceneAction): SceneState
       }
 
     case 'CLEAR_EXPANSIONS':
-      return { ...state, expansions: [] }
+      return { ...state, expansions: [], expansionHistory: [] }
 
     case 'SET_TIMELINE_SELECTION':
       return {

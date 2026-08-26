@@ -6,13 +6,13 @@ import { Separator } from '@/components/ui/separator'
 import { NODE_TYPES } from '@/lib/nodeTypes'
 import { NodeSwatch } from './GraphLegend'
 import { EDGE_TYPE_TO_FAMILY, FAMILY_HEX, type EdgeColorFamily } from './relationshipStyles'
-import type { FilterState } from './filterState'
+import type { SceneAction } from '@/hooks/useSceneState'
+import { isFilterEnabled } from '@/hooks/useSceneState'
 
 type Props = {
-  filterState: FilterState
-  onToggleNodeType: (type: string) => void
-  onToggleEdgeFamily: (family: string) => void
-  onSetAll: (enabled: boolean) => void
+  nodeKindFilters: Record<string, boolean>
+  edgeClassFilters: Record<string, boolean>
+  dispatchScene: (action: SceneAction) => void
 }
 
 const EDGE_FAMILIES: { family: EdgeColorFamily; hex: string }[] = (() => {
@@ -56,10 +56,9 @@ function FilterSwitch({
 }
 
 export function GraphFilterPanel({
-  filterState,
-  onToggleNodeType,
-  onToggleEdgeFamily,
-  onSetAll,
+  nodeKindFilters,
+  edgeClassFilters,
+  dispatchScene,
 }: Props) {
   const [open, setOpen] = useState(false)
 
@@ -103,7 +102,7 @@ export function GraphFilterPanel({
               variant="ghost"
               size="sm"
               className="min-h-11 px-2 text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => onSetAll(true)}
+              onClick={() => dispatchScene({ type: 'SET_ALL_FILTERS', visible: true })}
             >
               <CheckCheck className="mr-1 size-3" />
               All
@@ -112,7 +111,7 @@ export function GraphFilterPanel({
               variant="ghost"
               size="sm"
               className="min-h-11 px-2 text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => onSetAll(false)}
+              onClick={() => dispatchScene({ type: 'SET_ALL_FILTERS', visible: false })}
             >
               <X className="mr-1 size-3" />
               None
@@ -126,7 +125,7 @@ export function GraphFilterPanel({
         <div className="flex flex-col">
           <div className="mb-1 text-sm font-medium text-foreground">Node types</div>
           {NODE_TYPES.map((nt) => {
-            const active = filterState.nodeTypes[nt.type] ?? true
+            const active = isFilterEnabled(nodeKindFilters, nt.type)
             return (
               <div
                 key={nt.type}
@@ -139,7 +138,13 @@ export function GraphFilterPanel({
                 <FilterSwitch
                   checked={active}
                   label={`${nt.type} visible`}
-                  onCheckedChange={() => onToggleNodeType(nt.type)}
+                  onCheckedChange={(next) =>
+                    dispatchScene({
+                      type: 'SET_NODE_KIND_FILTER',
+                      kind: nt.type,
+                      visible: next,
+                    })
+                  }
                 />
               </div>
             )
@@ -152,7 +157,7 @@ export function GraphFilterPanel({
         <div className="flex flex-col">
           <div className="mb-1 text-sm font-medium text-foreground">Relationships</div>
           {EDGE_FAMILIES.map((ef) => {
-            const active = filterState.edgeFamilies[ef.family] ?? true
+            const active = isFilterEnabled(edgeClassFilters, ef.family)
             return (
               <div
                 key={ef.family}
@@ -165,7 +170,13 @@ export function GraphFilterPanel({
                 <FilterSwitch
                   checked={active}
                   label={`${ef.family} visible`}
-                  onCheckedChange={() => onToggleEdgeFamily(ef.family)}
+                  onCheckedChange={(next) =>
+                    dispatchScene({
+                      type: 'SET_EDGE_CLASS_FILTER',
+                      edgeClass: ef.family,
+                      visible: next,
+                    })
+                  }
                 />
               </div>
             )

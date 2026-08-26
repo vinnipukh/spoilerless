@@ -11,7 +11,7 @@ from spoilerless.app.domain.revision import RevisionAction
 from spoilerless.app.domain.user_content import Origin
 from spoilerless.app.graph.database import Neo4jDatabase, neo4j_row_to_python
 from spoilerless.app.core.errors import http_error
-from spoilerless.app.revisions import RevisionRepository
+from spoilerless.app.revisions.repository import RevisionRepository
 
 
 def _derive_candidate_id(claim: ExtractionClaim) -> str:

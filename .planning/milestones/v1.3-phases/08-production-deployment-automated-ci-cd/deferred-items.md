@@ -3,6 +3,17 @@
 Out-of-scope discoveries logged per the GSD executor scope boundary (do not fix;
 tracked here for the phase owner).
 
+> **Ledger closed 2026-08-24:** the single deferred item below is RESOLVED
+> (Phase 9, plan 09-08, commit `cc148a5` — scratch-series isolation + teardown
+> fixtures + drift-agnostic seed assertions + CI DB-pollution gate). Nothing
+> open remains in this file.
+
+## Deferred Items
+
+- test_seed_idempotency.py hardcoded seed count vs live-DB candidate-origin residue (+8/+6)
+  status: resolved
+  resolution: "Fixed by Phase 9 plan 09-08 (commit cc148a5): scratch-series isolation, teardown fixtures in test_candidate_ingest.py/test_candidate_review.py, drift-agnostic seed assertions, CI DB-pollution gate (PROB-22/#46). Verified in-tree 2026-08-24: teardown_scratch_series wired in both candidate test modules."
+
 ## 2026-08-04 — test_seed_idempotency.py hardcoded seed count vs live-DB residue
 
 - **Symptom:** `test_seed_is_idempotent_and_complete` asserts

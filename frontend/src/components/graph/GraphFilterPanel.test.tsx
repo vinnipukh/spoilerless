@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import { GraphFilterPanel } from './GraphFilterPanel'
-import { initialFilterState } from './filterState'
 import { NODE_TYPES } from '@/lib/nodeTypes'
 import { EDGE_TYPE_TO_FAMILY } from './relationshipStyles'
 
@@ -11,20 +10,21 @@ const ALL_NODE_TYPES = NODE_TYPES.map((nt) => nt.type)
 const ALL_EDGE_FAMILIES = Array.from(new Set(Object.values(EDGE_TYPE_TO_FAMILY)))
 
 describe('GraphFilterPanel (settings-style, 260813)', () => {
-  function renderPanel() {
-    const filterState = initialFilterState(ALL_NODE_TYPES, ALL_EDGE_FAMILIES)
-    const onToggleNodeType = vi.fn()
-    const onToggleEdgeFamily = vi.fn()
-    const onSetAll = vi.fn()
+  function renderPanel(overrides?: {
+    nodeKindFilters?: Record<string, boolean>
+    edgeClassFilters?: Record<string, boolean>
+  }) {
+    const nodeKindFilters = overrides?.nodeKindFilters ?? Object.fromEntries(ALL_NODE_TYPES.map((t) => [t, true]))
+    const edgeClassFilters = overrides?.edgeClassFilters ?? Object.fromEntries(ALL_EDGE_FAMILIES.map((f) => [f, true]))
+    const dispatchScene = vi.fn()
     render(
       <GraphFilterPanel
-        filterState={filterState}
-        onToggleNodeType={onToggleNodeType}
-        onToggleEdgeFamily={onToggleEdgeFamily}
-        onSetAll={onSetAll}
+        nodeKindFilters={nodeKindFilters}
+        edgeClassFilters={edgeClassFilters}
+        dispatchScene={dispatchScene}
       />,
     )
-    return { filterState, onToggleNodeType, onToggleEdgeFamily, onSetAll }
+    return { nodeKindFilters, edgeClassFilters, dispatchScene }
   }
 
   it('opens to a settings-style panel with a heading and per-type switches', async () => {
@@ -49,50 +49,51 @@ describe('GraphFilterPanel (settings-style, 260813)', () => {
     }
   })
 
-  it('toggling a node-type switch calls the handler with that type', async () => {
+  it('toggling a node-type switch dispatches SET_NODE_KIND_FILTER', async () => {
     const user = userEvent.setup()
-    const { onToggleNodeType } = renderPanel()
+    const { dispatchScene } = renderPanel()
 
     await user.click(screen.getByRole('button', { name: /Filters/i }))
     await user.click(screen.getByRole('switch', { name: `${ALL_NODE_TYPES[0]} visible` }))
 
-    expect(onToggleNodeType).toHaveBeenCalledWith(ALL_NODE_TYPES[0])
+    expect(dispatchScene).toHaveBeenCalledWith({
+      type: 'SET_NODE_KIND_FILTER',
+      kind: ALL_NODE_TYPES[0],
+      visible: false,
+    })
   })
 
-  it('toggling a relationship switch calls the handler with that family', async () => {
+  it('toggling a relationship switch dispatches SET_EDGE_CLASS_FILTER', async () => {
     const user = userEvent.setup()
-    const { onToggleEdgeFamily } = renderPanel()
+    const { dispatchScene } = renderPanel()
 
     await user.click(screen.getByRole('button', { name: /Filters/i }))
     await user.click(screen.getByRole('switch', { name: `${ALL_EDGE_FAMILIES[0]} visible` }))
 
-    expect(onToggleEdgeFamily).toHaveBeenCalledWith(ALL_EDGE_FAMILIES[0])
+    expect(dispatchScene).toHaveBeenCalledWith({
+      type: 'SET_EDGE_CLASS_FILTER',
+      edgeClass: ALL_EDGE_FAMILIES[0],
+      visible: false,
+    })
   })
 
-  it('All and None actions call onSetAll with the right value', async () => {
+  it('All and None actions dispatch SET_ALL_FILTERS', async () => {
     const user = userEvent.setup()
-    const { onSetAll } = renderPanel()
+    const { dispatchScene } = renderPanel()
 
     await user.click(screen.getByRole('button', { name: /Filters/i }))
     await user.click(screen.getByRole('button', { name: 'All' }))
-    expect(onSetAll).toHaveBeenCalledWith(true)
+    expect(dispatchScene).toHaveBeenCalledWith({ type: 'SET_ALL_FILTERS', visible: true })
 
     await user.click(screen.getByRole('button', { name: 'None' }))
-    expect(onSetAll).toHaveBeenCalledWith(false)
+    expect(dispatchScene).toHaveBeenCalledWith({ type: 'SET_ALL_FILTERS', visible: false })
   })
 
   it('reflects a disabled filter as aria-checked false', async () => {
     const user = userEvent.setup()
-    const filterState = initialFilterState(ALL_NODE_TYPES, ALL_EDGE_FAMILIES)
-    filterState.nodeTypes[ALL_NODE_TYPES[0]] = false
-    render(
-      <GraphFilterPanel
-        filterState={filterState}
-        onToggleNodeType={vi.fn()}
-        onToggleEdgeFamily={vi.fn()}
-        onSetAll={vi.fn()}
-      />,
-    )
+    const nodeKindFilters = Object.fromEntries(ALL_NODE_TYPES.map((t) => [t, true]))
+    nodeKindFilters[ALL_NODE_TYPES[0]] = false
+    renderPanel({ nodeKindFilters })
 
     await user.click(screen.getByRole('button', { name: /Filters/i }))
     expect(screen.getByRole('switch', { name: `${ALL_NODE_TYPES[0]} visible` })).toHaveAttribute(

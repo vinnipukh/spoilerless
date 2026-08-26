@@ -53,10 +53,11 @@ blocked: 0
 ## Gaps
 
 - truth: "Creating/editing a note on a node shows Created/Updated revisions in the History tab"
-  status: fixed
+  status: resolved
   reason: "User reported: no history doesn't track those changes"
   severity: major
   test: 1
+  resolution: "Verified fixed in-tree (RevisionHistoryPanel.tsx isRevisionRelatedTo() client-side filter present); UAT test 1 re-passes. Closed 2026-08-24."
   root_cause: "RevisionHistoryPanel fetched revisions filtered by exact resource_type+resource_id match. Note revisions have resource_type=UserNote and resource_id=note.id, not the character node's id, so they never matched when viewing a character's history."
   artifacts:
     - path: "frontend/src/components/detail/RevisionHistoryPanel.tsx"

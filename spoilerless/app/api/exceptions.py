@@ -39,6 +39,13 @@ from spoilerless.app.repository.user_content import (
 from spoilerless.app.services.change_set import ChangeSetValidationError
 from spoilerless.app.services.chat import ConcurrentGenerationLimitExceeded
 from spoilerless.app.services.progress import ProgressNotFoundError
+from spoilerless.app.revisions.service import (
+    RevisionAlreadyExists,
+    RevisionCannotRevertCanonical,
+    RevisionCannotRevertCreate,
+    RevisionForbidden,
+    RevisionNotFound,
+)
 
 # (exception type, status, code, message) — the uniform sentinel mapping.
 _SENTINEL_SPECS: tuple[tuple[type[Exception], int, str, str], ...] = (
@@ -47,17 +54,22 @@ _SENTINEL_SPECS: tuple[tuple[type[Exception], int, str, str], ...] = (
     (ChangeSetSessionNotFound, 404, "RESOURCE_NOT_FOUND", "Resource not found."),
     (ChatSessionNotFound, 404, "RESOURCE_NOT_FOUND", "Resource not found."),
     (ProgressNotFoundError, 404, "RESOURCE_NOT_FOUND", "Resource not found."),
+    (RevisionNotFound, 404, "RESOURCE_NOT_FOUND", "Resource not found."),
     (UserContentValidationError, 422, "INVALID_REQUEST", "Request validation failed."),
     (ChangeSetValidationError, 422, "INVALID_REQUEST", "Request validation failed."),
     (ChangeSetOperationInvalid, 422, "INVALID_REQUEST", "Request validation failed."),
     (ChangeSetRevertUnsupported, 422, "INVALID_REQUEST", "Request validation failed."),
+    (RevisionCannotRevertCreate, 422, "CANNOT_REVERT_CREATE", "Cannot revert a Creation revision."),
     (
         UserContentConflict,
         409,
         "RESOURCE_CONFLICT",
         "The request conflicts with the current resource state.",
     ),
+    (RevisionCannotRevertCanonical, 409, "CANNOT_REVERT_CANONICAL", "Cannot revert a canonical or candidate resource."),
+    (RevisionAlreadyExists, 409, "RESOURCE_ALREADY_EXISTS", "This resource has already been re-created."),
     (UserContentForbidden, 403, "FORBIDDEN", "This resource belongs to another user."),
+    (RevisionForbidden, 403, "FORBIDDEN", "This resource belongs to another user."),
     (
         ChangeSetStale,
         409,

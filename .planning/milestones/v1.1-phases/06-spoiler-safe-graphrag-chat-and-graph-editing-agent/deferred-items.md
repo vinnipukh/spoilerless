@@ -3,6 +3,23 @@
 Out-of-scope discoveries logged per the executor's SCOPE BOUNDARY rule (fix only issues
 directly caused by the current plan's changes; log everything else here instead of fixing it).
 
+> **Ledger closed 2026-08-24:** both items below are RESOLVED by later phases —
+> the test-pollution debt (06-03 + Wave-2) was fixed by Phase 9 plan 09-08
+> (commit `cc148a5`: scratch-series isolation, teardown fixtures in
+> `test_candidate_ingest.py`/`test_candidate_review.py`, drift-agnostic seed
+> assertions, CI DB-pollution gate); the pre-existing lint debt (06-13) was
+> cleared under PROB-08 (09-VERIFICATION: `npm run lint` exit 0; re-confirmed
+> 2026-08-24: 0 errors, 21 warnings). Nothing open remains in this file.
+
+## Deferred Items
+
+- 06-03/Wave-2: test pollution — candidate-origin residue inflating test_seed_idempotency.py exact-count assertions (3 failures, later 5 failed + 7 errors)
+  status: resolved
+  resolution: "Fixed by Phase 9 plan 09-08 (commit cc148a5): scratch-series isolation, teardown_scratch_series fixtures in test_candidate_ingest.py/test_candidate_review.py, drift-agnostic seed assertions, CI DB-pollution gate. Verified in-tree 2026-08-24."
+- 06-13: pre-existing npm lint errors in sibling hooks/tests (react-hooks/refs in useChatSessions/useNotes/useRevisions, no-explicit-any in useRevisions.test.tsx, set-state-in-effect)
+  status: resolved
+  resolution: "Cleared under Phase 9 PROB-08: 09-VERIFICATION confirms `npm run lint` exit 0 and ci.yml gates lint. Re-confirmed live 2026-08-24: 0 errors, 21 warnings (React-Compiler rules scoped to warnings)."
+
 ## 06-03: Pre-existing `test_seed_idempotency.py` failures caused by unrelated test pollution
 
 **Found during:** 06-03 Task 2 full-suite regression run (`cd backend && uv run pytest`).

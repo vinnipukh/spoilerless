@@ -23,6 +23,8 @@ import { SettingsPage } from './components/settings/SettingsPage'
 import { ShareDialog } from './components/share/ShareDialog'
 import { ShareView } from './components/share/ShareView'
 
+import { NODE_TYPES } from './lib/nodeTypes'
+
 import { useSeries } from './hooks/useSeries'
 import { useEpisodes } from './hooks/useEpisodes'
 import { useGraph } from './hooks/useGraph'
@@ -61,6 +63,14 @@ const EXPANSION_KEY_LABELS: Record<ExpansionKey, string> = {
   locations: 'Locations',
   evidence: 'Evidence',
 }
+import { EDGE_TYPE_TO_FAMILY } from './components/graph/relationshipStyles'
+
+const INITIAL_NODE_KIND_FILTERS = Object.fromEntries(
+  NODE_TYPES.map((nt) => [nt.type, true]),
+)
+const INITIAL_EDGE_CLASS_FILTERS = Object.fromEntries(
+  Array.from(new Set(Object.values(EDGE_TYPE_TO_FAMILY))).map((f) => [f, true]),
+)
 
 // 12-08: the inline SVG icon trees moved to components/layout/AppIcons.tsx.
 import { SettingsIcon, CalendarClockIcon, LayoutGridIcon } from './components/layout/AppIcons'
@@ -175,7 +185,10 @@ function AuthenticatedApp() {
   // 10-07 (D-27/D-41): the serializable scene state owns the temporary
   // Answer Graph lifecycle — OPEN_TEMPORARY snapshots the exact scene,
   // CLOSE_TEMPORARY restores it.
-  const [sceneState, dispatchScene] = useSceneState()
+  const [sceneState, dispatchScene] = useSceneState({
+    nodeKindFilters: INITIAL_NODE_KIND_FILTERS,
+    edgeClassFilters: INITIAL_EDGE_CLASS_FILTERS,
+  })
 
   useEffect(() => {
     if (evidenceMode === 'answer_graph') {
@@ -213,6 +226,8 @@ function AuthenticatedApp() {
     seriesId: watchProgress.seriesId,
     confirmedOrder: watchProgress.confirmedOrder ?? 1,
     graphFocus,
+    sceneState,
+    dispatchScene,
   })
   const { activeView, mergedVisualization, expansionRecords } = scene
 
@@ -220,23 +235,16 @@ function AuthenticatedApp() {
     if (!selectedElement || selectedElement.kind !== 'node') return
     const anchorId = selectedElement.id
     void scene.handleExpand(key, anchorId, () => {
-      dispatchScene({
-        type: 'ADD_EXPANSION',
-        nodeIds: [anchorId],
-        record: { anchorId, key, additionIds: [anchorId] },
-      })
       setExpandOpen(false)
     })
   }
 
   function handleUndoExpansion() {
     scene.undoLastExpansion()
-    dispatchScene({ type: 'UNDO_EXPANSION' })
   }
 
   function handleCollapseExpansion(anchorId: string) {
     scene.collapseExpansions(anchorId)
-    dispatchScene({ type: 'COLLAPSE_EXPANSION', anchorId })
   }
 
   function handleClearFocus() {
@@ -703,6 +711,8 @@ function AuthenticatedApp() {
             mode={graphMode}
             onModeChange={handleGraphModeChange}
             visualization={activeView ? mergedVisualization : undefined}
+            scene={sceneState}
+            dispatchScene={dispatchScene}
           />
 
           {/* 260814-viz: semantic expansion — visible in projection views

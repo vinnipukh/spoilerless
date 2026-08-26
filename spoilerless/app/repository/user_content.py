@@ -25,7 +25,7 @@ from spoilerless.app.domain.user_content import (
     CustomRelationshipUpdate,
 )
 from spoilerless.app.graph.database import Neo4jDatabase, run_single
-from spoilerless.app.revisions import RevisionRepository
+from spoilerless.app.revisions.repository import RevisionRepository
 from spoilerless.app.spoiler.visibility import derive_visible_from_order
 
 

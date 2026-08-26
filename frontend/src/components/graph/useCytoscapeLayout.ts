@@ -1,6 +1,6 @@
 import cytoscape from 'cytoscape'
 import type { VisualizationViewType } from '../../types/graph'
-import { getCachedPositions, setCachedPositions } from './filterState'
+import { getCachedPositions, setCachedPositions } from '../../lib/graph/positionCache'
 import { autoZoomHold } from './autoZoomHold'
 import type { GraphMode } from './overviewTiers'
 import { layoutNameForView, layoutOptionsFor } from './layoutConfig'

@@ -73,3 +73,5 @@ async def test_require_admin_403_for_non_admin() -> None:
         await require_admin(user)  # type: ignore[arg-type]
     assert exc_info.value.status_code == 403  # type: ignore[attr-defined]
     assert exc_info.value.detail["code"] == "FORBIDDEN"
+
+

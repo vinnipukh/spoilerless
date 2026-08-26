@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import {
   INITIAL_SCENE_STATE,
+  isFilterEnabled,
   sceneReducer,
   useSceneState,
   type SceneState,
@@ -19,6 +20,12 @@ describe('useSceneState', () => {
     // round-trip (no functions, no cy references, no DOM).
     const revived = JSON.parse(JSON.stringify(result.current[0])) as SceneState
     expect(revived).toEqual(result.current[0])
+  })
+
+  it('isFilterEnabled defaults absent key to true', () => {
+    expect(isFilterEnabled({}, 'Character')).toBe(true)
+    expect(isFilterEnabled({ Character: false }, 'Character')).toBe(false)
+    expect(isFilterEnabled({ Character: true }, 'Character')).toBe(true)
   })
 
   it('SET_VIEW switches the active view', () => {
@@ -50,6 +57,11 @@ describe('useSceneState', () => {
     const { result } = renderHook(() => useSceneState())
     act(() => result.current[1]({ type: 'SET_FOCUS', nodeIds: ['char_dexter_morgan'], edgeIds: ['edge_1'] }))
     expect(result.current[0].focus).toEqual({ nodeIds: ['char_dexter_morgan'], edgeIds: ['edge_1'] })
+
+    // Non-null focus must pass JSON round-trip (serializability contract)
+    const revived = JSON.parse(JSON.stringify(result.current[0])) as SceneState
+    expect(revived.focus).toEqual({ nodeIds: ['char_dexter_morgan'], edgeIds: ['edge_1'] })
+
     act(() => result.current[1]({ type: 'SET_FOCUS', nodeIds: ['bad id!'], edgeIds: [] }))
     expect(result.current[0].focus).toEqual({ nodeIds: ['char_dexter_morgan'], edgeIds: ['edge_1'] })
     act(() => result.current[1]({ type: 'CLEAR_FOCUS' }))

@@ -118,7 +118,7 @@ export function applyHighlight(
  * Single-node focus (search/palette jump path). Fades everything outside
  * the focused node's closed neighborhood — the tap-selection convention —
  * via the custom-complement form of `fadeOthers`. Replaces the old
- * focusReducer.ts implementation (PROB-09/#72).
+ * focusReducer.ts implementation (PROB-09/#72, 12-13).
  */
 export function applyFocusToCytoscape(cy: cytoscape.Core, focusedId: string | null): void {
   if (!cy) return

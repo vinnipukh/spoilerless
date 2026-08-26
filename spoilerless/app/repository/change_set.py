@@ -58,7 +58,7 @@ from spoilerless.app.graph.database import Neo4jDatabase, neo4j_row_to_python, r
 # Single row-normalization definition (PROB-09/#68).
 _normalize = neo4j_row_to_python
 from spoilerless.app.repository.user_content import NOTE_DELETE_QUERY, NOTE_UPDATE_QUERY
-from spoilerless.app.revisions import RevisionRepository
+from spoilerless.app.revisions.repository import RevisionRepository
 from spoilerless.app.spoiler.visibility import derive_visible_from_order
 
 _OPERATION_ADAPTER: TypeAdapter[ChangeSetOperation] = TypeAdapter(ChangeSetOperation)

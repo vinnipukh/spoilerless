@@ -4,7 +4,7 @@ import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { GraphCanvas } from './GraphCanvas'
 import { __resetAutoZoomStateForTests } from './autoZoomHold'
-import { __resetPositionCacheForTests } from './filterState'
+import { __resetPositionCacheForTests } from '../../lib/graph/positionCache'
 import { graphResponseS01E01, graphResponseS01E03 } from '../../test/fixtures/graphResponse'
 import type { VisualizationDTO } from '../../types/graph'
 

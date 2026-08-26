@@ -4,6 +4,7 @@ import type { VisualizationDTO, VisualizationViewType } from '../types/graph'
 import type { GraphResponse } from '../types/graph'
 import type { ExpansionKey } from '../api/graph'
 import { fetchVisualization, fetchExpansion } from '../api/graph'
+import type { SceneState, SceneAction, ExpansionRecord } from './useSceneState'
 
 // 12-08 (THERMO-P0-02): the visualization scene layer extracted from App.tsx.
 // Owns: active view resolution (topTab + evidenceMode -> VisualizationViewType),
@@ -18,16 +19,22 @@ type SceneArgs = {
   seriesId: string | null
   confirmedOrder: number
   graphFocus: FocusedElementIds | null
+  sceneState: SceneState
+  dispatchScene: (action: SceneAction) => void
 }
 
-export type ExpansionRecord = {
-  anchorId: string
-  key: string
-  additionIds: string[]
-  dto: VisualizationDTO
-}
+export type { ExpansionRecord } from './useSceneState'
 
-export function useWorkspaceScene({ topTab, graphMode, evidenceMode, seriesId, confirmedOrder, graphFocus }: SceneArgs) {
+export function useWorkspaceScene({
+  topTab,
+  graphMode,
+  evidenceMode,
+  seriesId,
+  confirmedOrder,
+  graphFocus,
+  sceneState,
+  dispatchScene,
+}: SceneArgs) {
   const activeView = useMemo<VisualizationViewType | null>(() => {
     if (graphMode === 'overview') return null
     // 260814-viz: Story keeps the legacy scene (user content lives in the
@@ -46,7 +53,6 @@ export function useWorkspaceScene({ topTab, graphMode, evidenceMode, seriesId, c
 
   const [baseVisualization, setBaseVisualization] = useState<VisualizationDTO | null>(null)
   const [focusVisualization, setFocusVisualization] = useState<VisualizationDTO | null>(null)
-  const [expansionRecords, setExpansionRecords] = useState<ExpansionRecord[]>([])
 
   useEffect(() => {
     if (!activeView || activeView === 'graphrag_focus' || !seriesId) return
@@ -67,8 +73,8 @@ export function useWorkspaceScene({ topTab, graphMode, evidenceMode, seriesId, c
 
   // Expansions belong to the active scene — reset when the view changes.
   useEffect(() => {
-    setExpansionRecords([])
-  }, [activeView])
+    dispatchScene({ type: 'CLEAR_EXPANSIONS' })
+  }, [activeView, dispatchScene])
 
   useEffect(() => {
     if (evidenceMode !== 'answer_graph' || !graphFocus?.nodeIds.length || !seriesId) {
@@ -91,14 +97,15 @@ export function useWorkspaceScene({ topTab, graphMode, evidenceMode, seriesId, c
   const mergedVisualization = useMemo<VisualizationDTO | null>(() => {
     const base = activeView === 'graphrag_focus' ? focusVisualization : baseVisualization
     if (!base) return null
-    if (expansionRecords.length === 0) return base
+    if (sceneState.expansionHistory.length === 0) return base
     const nodes = [...base.nodes]
     const edges = [...base.edges]
     const timeline = [...(base.timeline ?? [])]
     const seenNodes = new Set(nodes.map((n) => n.id))
     const seenEdges = new Set(edges.map((e) => e.id))
     const seenTimeline = new Set(timeline.map((t) => t.id))
-    for (const record of expansionRecords) {
+    for (const record of sceneState.expansionHistory) {
+      if (!record.dto) continue
       for (const node of record.dto.nodes) {
         if (!seenNodes.has(node.id)) {
           seenNodes.add(node.id)
@@ -119,7 +126,7 @@ export function useWorkspaceScene({ topTab, graphMode, evidenceMode, seriesId, c
       }
     }
     return { ...base, nodes, edges, timeline }
-  }, [baseVisualization, focusVisualization, expansionRecords, activeView])
+  }, [baseVisualization, focusVisualization, sceneState.expansionHistory, activeView])
 
   // THERMO-P2-07 in-flight race guard: an expansion response is only applied
   // when its anchor node is still selected AND the series/boundary it was
@@ -145,7 +152,11 @@ export function useWorkspaceScene({ topTab, graphMode, evidenceMode, seriesId, c
         additionIds: dto.nodes.map((n) => n.id),
         dto,
       }
-      setExpansionRecords((prev) => [...prev, record])
+      dispatchScene({
+        type: 'ADD_EXPANSION',
+        nodeIds: record.additionIds,
+        record,
+      })
       onDone?.()
     } catch (error: unknown) {
       console.error('expansion failed', error)
@@ -153,17 +164,17 @@ export function useWorkspaceScene({ topTab, graphMode, evidenceMode, seriesId, c
   }
 
   function undoLastExpansion() {
-    setExpansionRecords((prev) => prev.slice(0, -1))
+    dispatchScene({ type: 'UNDO_EXPANSION' })
   }
 
   function collapseExpansions(anchorId: string) {
-    setExpansionRecords((prev) => prev.filter((r) => r.anchorId !== anchorId))
+    dispatchScene({ type: 'COLLAPSE_EXPANSION', anchorId })
   }
 
   return {
     activeView,
     mergedVisualization,
-    expansionRecords,
+    expansionRecords: sceneState.expansionHistory,
     handleExpand,
     undoLastExpansion,
     collapseExpansions,

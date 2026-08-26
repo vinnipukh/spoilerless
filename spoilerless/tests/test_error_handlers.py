@@ -319,3 +319,28 @@ class TestRequestLoggingMiddleware:
         # Unsafe: secrets
         assert "sk-secret-12345" not in full_log
         assert "token-abc" not in full_log
+
+
+class TestSentinelRegistryPin:
+    """Pin the exception sentinel registry for uniform exception handling."""
+
+    def test_sentinel_specs_pinned_for_revisions(self) -> None:
+        from spoilerless.app.api.exceptions import _SENTINEL_SPECS
+        from spoilerless.app.revisions.service import (
+            RevisionAlreadyExists,
+            RevisionCannotRevertCanonical,
+            RevisionCannotRevertCreate,
+            RevisionForbidden,
+            RevisionNotFound,
+        )
+
+        expected_entries = [
+            (RevisionNotFound, 404, "RESOURCE_NOT_FOUND", "Resource not found."),
+            (RevisionCannotRevertCreate, 422, "CANNOT_REVERT_CREATE", "Cannot revert a Creation revision."),
+            (RevisionCannotRevertCanonical, 409, "CANNOT_REVERT_CANONICAL", "Cannot revert a canonical or candidate resource."),
+            (RevisionAlreadyExists, 409, "RESOURCE_ALREADY_EXISTS", "This resource has already been re-created."),
+            (RevisionForbidden, 403, "FORBIDDEN", "This resource belongs to another user."),
+        ]
+        for spec in expected_entries:
+            assert spec in _SENTINEL_SPECS, f"Missing sentinel spec in _SENTINEL_SPECS: {spec}"
+
