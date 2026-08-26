@@ -36,7 +36,7 @@
 - [x] 12-04-PLAN.md — Production Infrastructure, CSP & TrustedHost Hardening (THERMO-P1-02, THERMO-P2-01) [Wave 1]
 - [ ] 12-05-PLAN.md — Async Event Loop Protection, Rate Limiter Resilience & Error Code Alignment (THERMO-P2-02, THERMO-P2-04, THERMO-P3-03) [Wave 2]
 - [ ] 12-06-PLAN.md — Domain & Architectural Layering Cleanup (THERMO-P3-02, THERMO-P3-05, THERMO-P3-06) [Wave 2]
-- [ ] 12-07-PLAN.md — Frontend Bug Fixes, UI/UX Edge Cases & API Contract Alignment (THERMO-P1-03, THERMO-P1-04, THERMO-P1-05, THERMO-P1-06, THERMO-P3-08, THERMO-P3-09, THERMO-P3-10) [Wave 1]
+- [x] 12-07-PLAN.md — Frontend Bug Fixes, UI/UX Edge Cases & API Contract Alignment (THERMO-P1-03, THERMO-P1-04, THERMO-P1-05, THERMO-P1-06, THERMO-P3-08, THERMO-P3-09, THERMO-P3-10) [Wave 1]
 - [ ] 12-08-PLAN.md — Frontend Architectural Decomposition & 1,000-Line Ceiling Elimination (THERMO-P0-02, THERMO-P0-03, THERMO-P0-04, THERMO-P2-05, THERMO-P2-07) [Wave 2]
 - [ ] 12-09-PLAN.md — Design System Tokens, Theme Harmonization & UI/UX Polish (THERMO-P2-06) [Wave 2]
 
