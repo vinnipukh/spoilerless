@@ -95,7 +95,7 @@ export function clusterFor(
  * Shared internal enrichment helper that strips undefined values to enforce
  * exact-shape element data dictionaries.
  */
-function enrich(kind: 'node' | 'cluster' | 'edge', raw: Record<string, unknown>): ElementDefinition {
+function enrich(raw: Record<string, unknown>): ElementDefinition {
   const data: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(raw)) {
     if (value !== undefined) {
@@ -147,7 +147,7 @@ export function fromGraph(
         clusters.set(cluster.id, cluster.label)
       }
 
-      return enrich('node', {
+      return enrich({
         id: node.id,
         label: node.label,
         nodeType: node.type,
@@ -161,7 +161,7 @@ export function fromGraph(
 
   const parentElements: ElementDefinition[] = Array.from(clusters.entries()).map(
     ([id, label]) =>
-      enrich('cluster', {
+      enrich({
         id,
         label,
         isCluster: true,
@@ -171,7 +171,7 @@ export function fromGraph(
 
   const edgeElements: ElementDefinition[] = edges.map((edge) => {
     const claim = edge.claim_id ? claimById.get(edge.claim_id) : undefined
-    return enrich('edge', {
+    return enrich({
       id: edge.id,
       source: edge.source,
       target: edge.target,
@@ -197,7 +197,7 @@ export function fromVisualization(
   const { debugLabels = false } = options
 
   const groupElements: ElementDefinition[] = dto.groups.map((group) =>
-    enrich('cluster', {
+    enrich({
       id: `${GROUP_PARENT_PREFIX}${group.id}`,
       label: group.label,
       isCluster: true,
@@ -210,7 +210,7 @@ export function fromVisualization(
     const imageUrl = node.kind === 'Character' ? apiUrl(node.image_url) : null
     const cluster = clusterFor(node, dto.groups)
 
-    return enrich('node', {
+    return enrich({
       id: node.id,
       label: node.label,
       nodeType: node.kind,
@@ -225,7 +225,7 @@ export function fromVisualization(
   })
 
   const edgeElements: ElementDefinition[] = dto.edges.map((edge) =>
-    enrich('edge', {
+    enrich({
       id: edge.id,
       source: edge.source,
       target: edge.target,

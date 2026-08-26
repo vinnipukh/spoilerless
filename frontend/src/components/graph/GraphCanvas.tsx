@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import cytoscape from 'cytoscape'
 import CytoscapeComponent from 'react-cytoscapejs'
 import type { GraphNode, GraphResponse, VisualizationDTO, VisualizationViewType } from '../../types/graph'
@@ -16,7 +16,6 @@ import { GraphFocusIndicator } from './GraphFocusIndicator'
 import { PathFinder, type PathPick } from './PathFinder'
 import { fetchExportMarkdown, downloadMarkdownBlob } from '@/api/export'
 import { renderGraphMarkdown, exportFilename } from '@/lib/exportMarkdown'
-import { NODE_TYPES } from '@/lib/nodeTypes'
 import { applyHighlight, applyFocusToCytoscape } from '@/lib/graph/highlight'
 import { reconcileCytoscapeElements } from './cytoscapeReconciler'
 // 12-08 (THERMO-P0-03): layout engine + create-node dialog extracted.
@@ -25,7 +24,6 @@ import { CreateCustomNodeDialog } from '../dialogs/CreateCustomNodeDialog'
 import { layoutNameForView, layoutOptionsFor } from './layoutConfig'
 import {
   INITIAL_SCENE_STATE,
-  isFilterEnabled,
   type SceneAction,
   type SceneState,
 } from '../../hooks/useSceneState'
