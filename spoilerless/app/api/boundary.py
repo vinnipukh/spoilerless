@@ -27,6 +27,24 @@ if TYPE_CHECKING:
     from spoilerless.app.services.progress import ProgressService
 
 
+def require_boundary(visible_until_order: int | None) -> int:
+    """Guard: an omitted boundary must 422, never default to every level.
+
+    PROB-05/#13: candidate reads require an explicit ``visible_until_order``;
+    a missing value must never widen the read to all visibility levels. The
+    envelope (422 / INVALID_REQUEST / exact message below) is byte-identical
+    to the former per-route inline guards in api/candidates.py.
+    """
+    if visible_until_order is None:
+        raise http_error(
+            422,
+            "INVALID_REQUEST",
+            "visible_until_order is required to read candidates — an omitted "
+            "boundary must never default to every visibility level.",
+        )
+    return visible_until_order
+
+
 async def resolve_effective_boundary(
     service: GraphService,
     progress_service: ProgressService,

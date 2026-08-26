@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Query
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from spoilerless.app.api.boundary import resolve_effective_boundary
+from spoilerless.app.api.boundary import require_boundary, resolve_effective_boundary
 from spoilerless.app.api.deps import (
     CsrfGuardDependency,
     CurrentUserDependency,
@@ -158,13 +158,7 @@ async def list_candidates(
     D-01: the EFFECTIVE boundary replaces the client-chosen order — anonymous
     and record-less callers are fixed at 1.
     """
-    if visible_until_order is None:
-        raise http_error(
-            422,
-            "INVALID_REQUEST",
-            "visible_until_order is required to read candidates — an omitted "
-            "boundary must never default to every visibility level.",
-        )
+    visible_until_order = require_boundary(visible_until_order)
     effective = await resolve_effective_boundary(
         graph_service, progress_service, series_id, user, visible_until_order
     )
@@ -203,13 +197,7 @@ async def get_candidate(
     missing (D-15 — hidden and missing are indistinguishable).
     D-01: effective boundary clamped via shared resolver.
     """
-    if visible_until_order is None:
-        raise http_error(
-            422,
-            "INVALID_REQUEST",
-            "visible_until_order is required to read candidates — an omitted "
-            "boundary must never default to every visibility level.",
-        )
+    visible_until_order = require_boundary(visible_until_order)
     effective = await resolve_effective_boundary(
         graph_service, progress_service, series_id, user, visible_until_order
     )
