@@ -1,13 +1,8 @@
 import { Skeleton } from '@/components/ui/skeleton'
 import { SpoilerGuard } from '@/components/ui/SpoilerGuard'
+import { CLAIM_ACCENT_COLOR } from '@/lib/tokens/graphTokens'
 
-// Reused by CitationChip.tsx (06-09-PLAN.md Task 2) so claim/evidence citation
-// accents are never redefined as a second, drifting hex literal — the exact
-// same visual meaning ("this points at that Claims/Evidence card") applies to
-// a citation chip as it does to these Claims-tab accent bars.
-// 12-08: canonical home moved here from DetailPanel.tsx; DetailPanel keeps a
-// re-export for CitationChip's existing import path.
-export const CLAIM_ACCENT_COLOR = '#D946EF'
+export { CLAIM_ACCENT_COLOR }
 
 type ClaimsTabProps = {
   resolved: boolean

@@ -5,6 +5,8 @@
 // default muted slate. This two-level indirection lets multiple edge types
 // share a single visual family without repeating hex values.
 
+import { DEFAULT_EDGE_HEX, EDGE_FAMILY_COLORS } from '@/lib/tokens/graphTokens'
+
 export type EdgeColorFamily =
   | 'violet'
   | 'slate'
@@ -14,7 +16,7 @@ export type EdgeColorFamily =
   | 'green'
   | 'red'
 
-export const DEFAULT_HEX = 'rgba(148,163,184,0.35)' // --muted-foreground, slate
+export const DEFAULT_HEX = DEFAULT_EDGE_HEX
 
 export const EDGE_TYPE_TO_FAMILY: Record<string, EdgeColorFamily> = {
   FAMILY_OF: 'violet',
@@ -70,15 +72,7 @@ const RELATION_CLASS_TO_FAMILY: Record<string, EdgeColorFamily> = {
   from_source: 'amber',
 }
 
-export const FAMILY_HEX: Record<EdgeColorFamily, string> = {
-  violet: '#A78BFA',
-  slate: DEFAULT_HEX,
-  amber: '#D97706',
-  teal: '#2DD4BF',
-  cyan: '#38BDF8',
-  green: '#34D399',
-  red: '#EF4444',
-}
+export const FAMILY_HEX: Record<EdgeColorFamily, string> = EDGE_FAMILY_COLORS
 
 export function edgeColorFor(edgeType: string | undefined): string {
   const family = edgeType

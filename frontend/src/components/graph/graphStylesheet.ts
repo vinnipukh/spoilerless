@@ -17,6 +17,11 @@
 
 import type { StylesheetJsonBlock } from 'cytoscape'
 import { edgeColorFor } from './relationshipStyles'
+import {
+  NODE_TYPE_COLORS,
+  GRAPH_CANVAS_TOKENS,
+  SELECTION_GLOW_TOKENS,
+} from '@/lib/tokens/graphTokens'
 
 const DEFAULT_NODE_SIZE = 36
 const SERIES_NODE_SIZE = 64
@@ -41,13 +46,13 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
       selector: 'node[isCluster]',
       style: {
         shape: 'round-rectangle',
-        'background-color': '#1E2740',
+        'background-color': GRAPH_CANVAS_TOKENS.elevated,
         'background-opacity': 0,
         'border-width': 1,
-        'border-color': '#334155',
+        'border-color': GRAPH_CANVAS_TOKENS.clusterBorder,
         'border-style': 'dashed',
         events: 'no',
-        color: '#94A3B8',
+        color: GRAPH_CANVAS_TOKENS.mutedForeground,
         'font-size': 10,
         'font-weight': 'bold',
         'text-valign': 'top',
@@ -73,7 +78,7 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
       style: {
         label: 'data(label)',
         'font-size': 10,
-        color: '#FFFFFF',
+        color: GRAPH_CANVAS_TOKENS.nodeLabelText,
         // 10-04 (D-14): medium_zoom label policy — below the zoom where a
         // 10px font would render <7px, node labels disappear entirely
         // (semantic zoom shows icons/short labels only; presentation-only,
@@ -84,14 +89,14 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
         'text-margin-y': 6,
         'text-max-width': '80px',
         'text-wrap': 'ellipsis',
-        'background-color': '#131936', // --muted (idle fill for all node types)
+        'background-color': GRAPH_CANVAS_TOKENS.muted, // --muted (idle fill for all node types)
         width: DEFAULT_NODE_SIZE,
         height: DEFAULT_NODE_SIZE,
         'border-width': 1.5,
         // Dashed is the forward-compatible default border for non-canonical
         // origins (user-content, future candidate/automatic data). Overridden
         // to solid below for origin === 'canonical'.
-        'border-color': 'rgba(255, 255, 255, 0.08)', // --border
+        'border-color': GRAPH_CANVAS_TOKENS.border, // --border
         'border-style': 'dashed',
         'transition-property': 'background-color, border-color, border-width, width, height, opacity, overlay-color, overlay-opacity, overlay-padding',
         'transition-duration': transitionMs,
@@ -100,7 +105,7 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
     // --- Node-type shape/color mapping (03.1-UI-SPEC.md) ---
     {
       selector: 'node[nodeType = "Character"]',
-      style: { shape: 'ellipse', width: 44, height: 44, 'background-color': '#38BDF8' },
+      style: { shape: 'ellipse', width: 44, height: 44, 'background-color': NODE_TYPE_COLORS.Character },
     },
     // Portrait background for Character nodes that carry a self-hosted
     // image_url (graphElements.ts only sets the `imageUrl` data key for
@@ -126,19 +131,19 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
     },
     {
       selector: 'node[nodeType = "Event"]',
-      style: { shape: 'round-rectangle', width: 44, height: 44, 'background-color': '#2DD4BF' },
+      style: { shape: 'round-rectangle', width: 44, height: 44, 'background-color': NODE_TYPE_COLORS.Event },
     },
     {
       selector: 'node[nodeType = "Location"]',
-      style: { shape: 'round-rectangle', width: 44, height: 44, 'background-color': '#60A5FA' },
+      style: { shape: 'round-rectangle', width: 44, height: 44, 'background-color': NODE_TYPE_COLORS.Location },
     },
     {
       selector: 'node[nodeType = "Organization"]',
-      style: { shape: 'diamond', width: 48, height: 48, 'background-color': '#FB7185' },
+      style: { shape: 'diamond', width: 48, height: 48, 'background-color': NODE_TYPE_COLORS.Organization },
     },
     {
       selector: 'node[nodeType = "Episode"]',
-      style: { shape: 'tag', width: 40, height: 40, 'background-color': '#FBBF24' },
+      style: { shape: 'tag', width: 40, height: 40, 'background-color': NODE_TYPE_COLORS.Episode },
     },
     {
       selector: 'node[nodeType = "UserNote"]',
@@ -167,11 +172,11 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
         shape: 'ellipse',
         width: 13,
         height: 13,
-        'background-color': '#64748B', // slate-500: quiet neutral dot
+        'background-color': GRAPH_CANVAS_TOKENS.simpleDot, // quiet neutral dot
         'border-width': 1,
-        'border-color': 'rgba(255, 255, 255, 0.12)',
+        'border-color': GRAPH_CANVAS_TOKENS.borderLight,
         'border-style': 'solid',
-        color: '#94A3B8', // --muted-foreground
+        color: GRAPH_CANVAS_TOKENS.mutedForeground, // --muted-foreground
         'font-size': 9,
         'text-margin-y': 4,
       },
@@ -185,11 +190,11 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
     {
       selector: 'node.selected-dominant',
       style: {
-        'background-color': '#192134', // --card
-        'border-color': '#7C3AED', // --accent
+        'background-color': GRAPH_CANVAS_TOKENS.card, // --card
+        'border-color': GRAPH_CANVAS_TOKENS.accent, // --accent
         'border-width': 3,
-        'overlay-color': '#7C3AED',
-        'overlay-opacity': 0.35,
+        'overlay-color': SELECTION_GLOW_TOKENS.selectedOverlayColor,
+        'overlay-opacity': SELECTION_GLOW_TOKENS.selectedOverlayOpacity,
         'overlay-padding': 8,
       },
     },
@@ -197,8 +202,8 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
     {
       selector: 'node.hovered',
       style: {
-        'overlay-color': '#7C3AED',
-        'overlay-opacity': 0.15,
+        'overlay-color': SELECTION_GLOW_TOKENS.selectedOverlayColor,
+        'overlay-opacity': SELECTION_GLOW_TOKENS.hoverOverlayOpacity,
         'overlay-padding': 6,
       },
     },
@@ -253,7 +258,7 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
         // the dark pill (08-06) at the right size/color.
         label: '',
         'font-size': 9,
-        color: '#E2E8F0',
+        color: GRAPH_CANVAS_TOKENS.edgeDefaultText,
         width: 1.5,
         'line-color': (ele) => edgeColorFor(ele.data('edgeType') ?? ele.data('relationClass')),
         'target-arrow-color': (ele) => edgeColorFor(ele.data('edgeType') ?? ele.data('relationClass')),
@@ -263,7 +268,7 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
         'text-wrap': 'ellipsis',
         // 08-06: dark pill behind every edge label so overlapping labels
         // (dense hubs) stay legible instead of blending into text-on-text.
-        'text-background-color': '#0B1120',
+        'text-background-color': GRAPH_CANVAS_TOKENS.edgeLabelBg,
         'text-background-opacity': 0.85,
         'text-background-padding': '3px',
         'text-background-shape': 'roundrectangle',
@@ -316,8 +321,8 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
     {
       selector: 'node.newly-revealed, edge.newly-revealed',
       style: {
-        'overlay-color': '#7C3AED',
-        'overlay-opacity': 0.45,
+        'overlay-color': SELECTION_GLOW_TOKENS.selectedOverlayColor,
+        'overlay-opacity': SELECTION_GLOW_TOKENS.revealedOverlayOpacity,
         'overlay-padding': 10,
       },
     },
@@ -327,23 +332,23 @@ export function buildGraphStylesheet(prefersReducedMotion: boolean): StylesheetJ
     {
       selector: 'node.path-source, node.path-target',
       style: {
-        'border-color': '#7C3AED',
+        'border-color': GRAPH_CANVAS_TOKENS.accent,
         'border-width': 3,
       },
     },
     {
       selector: 'node.on-path',
       style: {
-        'overlay-color': '#7C3AED',
-        'overlay-opacity': 0.3,
+        'overlay-color': SELECTION_GLOW_TOKENS.selectedOverlayColor,
+        'overlay-opacity': SELECTION_GLOW_TOKENS.pathOverlayOpacity,
       },
     },
     {
       selector: 'edge.on-path',
       style: {
         'width': 3.5,
-        'line-color': '#7C3AED',
-        'target-arrow-color': '#7C3AED',
+        'line-color': GRAPH_CANVAS_TOKENS.accent,
+        'target-arrow-color': GRAPH_CANVAS_TOKENS.accent,
       },
     },
   ]

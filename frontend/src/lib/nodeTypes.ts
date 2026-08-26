@@ -3,6 +3,8 @@
 // GraphLegend.tsx so that file stays components-only
 // (react-refresh/only-export-components).
 
+import { NODE_TYPE_COLORS } from '@/lib/tokens/graphTokens'
+
 export type NodeTypeMeta = {
   type: string
   shape: 'ellipse' | 'round-rect' | 'diamond' | 'tag' | 'star' | 'rect'
@@ -10,14 +12,14 @@ export type NodeTypeMeta = {
 }
 
 export const NODE_TYPES: NodeTypeMeta[] = [
-  { type: 'Character', shape: 'ellipse', color: '#38BDF8' },
-  { type: 'Event', shape: 'round-rect', color: '#2DD4BF' },
-  { type: 'Location', shape: 'round-rect', color: '#60A5FA' },
-  { type: 'Organization', shape: 'diamond', color: '#FB7185' },
-  { type: 'Episode', shape: 'tag', color: '#FBBF24' },
-  { type: 'Series', shape: 'star', color: '#131936' },
-  { type: 'UserNote', shape: 'round-rect', color: '#131936' },
-  { type: 'Object', shape: 'ellipse', color: '#131936' },
+  { type: 'Character', shape: 'ellipse', color: NODE_TYPE_COLORS.Character },
+  { type: 'Event', shape: 'round-rect', color: NODE_TYPE_COLORS.Event },
+  { type: 'Location', shape: 'round-rect', color: NODE_TYPE_COLORS.Location },
+  { type: 'Organization', shape: 'diamond', color: NODE_TYPE_COLORS.Organization },
+  { type: 'Episode', shape: 'tag', color: NODE_TYPE_COLORS.Episode },
+  { type: 'Series', shape: 'star', color: NODE_TYPE_COLORS.Series },
+  { type: 'UserNote', shape: 'round-rect', color: NODE_TYPE_COLORS.UserNote },
+  { type: 'Object', shape: 'ellipse', color: NODE_TYPE_COLORS.Object },
 ]
 
 // The closed set of types the custom-node dialog may create — mirrors the

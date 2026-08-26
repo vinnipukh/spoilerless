@@ -1,7 +1,7 @@
 import { Skeleton } from '@/components/ui/skeleton'
+import { EVIDENCE_ACCENT_COLOR } from '@/lib/tokens/graphTokens'
 
-// Reused by CitationChip.tsx via DetailPanel's re-export — see ClaimsTab.
-export const EVIDENCE_ACCENT_COLOR = '#FB923C'
+export { EVIDENCE_ACCENT_COLOR }
 
 type EvidenceTabProps = {
   resolved: boolean

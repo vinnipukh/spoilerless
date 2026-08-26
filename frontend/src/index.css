@@ -9,6 +9,8 @@
 @theme inline {
     --font-heading: 'Space Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
     --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+    --color-accent-claim: #d946ef;
+    --color-accent-evidence: #fb923c;
     --color-elevated: var(--elevated);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
