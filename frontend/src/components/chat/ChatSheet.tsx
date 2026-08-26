@@ -6,6 +6,7 @@ import type { Citation } from '../../types/chat'
 import type { ChangeSet } from '../../types/changeSet'
 
 import { ErrorBoundary } from '../ErrorBoundary'
+import { ResizableRail } from '../layout/ResizableRail'
 
 type Props = {
   open: boolean
@@ -39,10 +40,10 @@ function initialWidth(): number | null {
 // the chat are visible simultaneously. ChatPanel stays content-only (its own
 // tests render it standalone); this wrapper owns the Sheet chrome only.
 //
-// The panel is resizable: dragging its left edge (the separator handle) pulls
-// the chat wider or narrower, clamped to a sane range. The chosen width
-// persists across sessions via localStorage; double-click the handle to
-// restore the default responsive width.
+// The panel is resizable via the shared ResizableRail primitive (12-08,
+// THERMO-P2-05): dragging its left edge pulls the chat wider or narrower,
+// clamped to a sane range. Width persists across sessions; double-click the
+// handle restores the default responsive width. Arrow keys nudge ±16px.
 export function ChatSheet({
   open,
   onClose,
@@ -55,46 +56,33 @@ export function ChatSheet({
   onChangeSetApplied,
 }: Props) {
   const [width, setWidth] = useState<number | null>(initialWidth)
-  const [dragging, setDragging] = useState(false)
 
-  const onPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId)
-    } catch {
-      // jsdom does not implement pointer capture — drag still works via the
-      // pointer events dispatched directly on the handle.
-    }
-    setDragging(true)
+  const clampWidth = useCallback((nextWidth: number | null) => {
+    if (nextWidth == null) return null
+    const maxWidth = Math.max(MIN_WIDTH, window.innerWidth - MIN_SIDEBAR_SPACE)
+    return Math.min(Math.max(nextWidth, MIN_WIDTH), maxWidth)
   }, [])
 
-  const onPointerMove = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (!dragging) return
-      const maxWidth = Math.max(MIN_WIDTH, window.innerWidth - MIN_SIDEBAR_SPACE)
-      const next = Math.min(Math.max(window.innerWidth - event.clientX, MIN_WIDTH), maxWidth)
-      setWidth(next)
+  const handleResizeFromPointer = useCallback(
+    (_dimension: number | null, point: { x: number; y: number }) => {
+      setWidth(clampWidth(window.innerWidth - point.x))
     },
-    [dragging],
+    [clampWidth],
   )
 
-  const onPointerUp = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      setDragging(false)
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId)
-      }
-      if (width != null) {
+  const persistWidth = useCallback(() => {
+    setWidth((current) => {
+      if (current != null) {
         try {
-          localStorage.setItem(WIDTH_STORAGE_KEY, String(width))
+          localStorage.setItem(WIDTH_STORAGE_KEY, String(current))
         } catch {
           // Storage unavailable (private mode) — resize still works for the
           // session, just doesn't persist.
         }
       }
-    },
-    [width],
-  )
+      return current
+    })
+  }, [])
 
   const resetWidth = useCallback(() => {
     setWidth(null)
@@ -120,27 +108,14 @@ export function ChatSheet({
         )}
         style={width ? { width, maxWidth: width } : undefined}
       >
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize chat panel"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
+        <ResizableRail
+          label="Resize chat panel"
+          orientation="vertical"
+          onResize={handleResizeFromPointer}
+          onResizeEnd={persistWidth}
           onDoubleClick={resetWidth}
-          className={cn(
-            'absolute inset-y-0 -left-2 z-10 hidden w-4 cursor-ew-resize touch-none items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-ring lg:flex',
-            dragging && 'cursor-ew-resize',
-          )}
-        >
-          <span
-            className={cn(
-              'h-10 w-1 rounded-full bg-border/70 transition-colors',
-              dragging ? 'bg-primary' : 'hover:bg-primary/60',
-            )}
-          />
-        </div>
+          className="hidden lg:flex"
+        />
         <SheetHeader>
           <SheetTitle className="truncate">Chat</SheetTitle>
         </SheetHeader>
