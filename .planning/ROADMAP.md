@@ -31,7 +31,7 @@
 **Plans**:
 
 - [x] 12-01-PLAN.md — Privacy & Response Schema Alignment (THERMO-P0-01) [Wave 1]
-- [ ] 12-02-PLAN.md — Boundary Verification Simplification, Invariant Enforcement & Type Hygiene (THERMO-P1-01, THERMO-P3-01, THERMO-P3-04) [Wave 1]
+- [x] 12-02-PLAN.md — Boundary Verification Simplification, Invariant Enforcement & Type Hygiene (THERMO-P1-01, THERMO-P3-01, THERMO-P3-04) [Wave 1]
 - [ ] 12-03-PLAN.md — Candidate Ingest Cypher Query Consolidation & Pagination Temporal Coercion (THERMO-P2-03, THERMO-P3-07) [Wave 2]
 - [ ] 12-04-PLAN.md — Production Infrastructure, CSP & TrustedHost Hardening (THERMO-P1-02, THERMO-P2-01) [Wave 1]
 - [ ] 12-05-PLAN.md — Async Event Loop Protection, Rate Limiter Resilience & Error Code Alignment (THERMO-P2-02, THERMO-P2-04, THERMO-P3-03) [Wave 2]
