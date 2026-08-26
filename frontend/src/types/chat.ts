@@ -34,6 +34,10 @@ export type ChatMessage = {
   content: string
   created_at: string
   visible_until_order_snapshot: number
+  // THERMO-P1-05: backend MessageStatus ('pending' | 'completed' | 'failed',
+  // default 'completed'). Optional so locally-constructed optimistic messages
+  // and cached envelopes predating PROB-13/#35 stay assignable.
+  status?: 'pending' | 'completed' | 'failed'
 }
 
 export type ChatSession = {

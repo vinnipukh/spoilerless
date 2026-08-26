@@ -36,7 +36,9 @@ export type GraphClaim = {
   claim_type: string
   status: string
   confidence_level: string
-  relationship_effect: number
+  // THERMO-P1-05: mirrors backend `str | float | None` — seed claims carry a
+  // float strength, candidate-origin claims the RelationshipEffect string.
+  relationship_effect: string | number | null
   visible_from_order: number
   valid_from_order: number | null
   valid_until_order: number | null
@@ -63,7 +65,9 @@ export type GraphEvidence = {
   source_id: string
   text: string
   locator: string
-  content_hash: string
+  // THERMO-P1-05: optional content hash for dedup — backend allows None and
+  // legacy evidence rows may not carry it at all.
+  content_hash?: string | null
   visible_from_order: number
   origin: string
 }
@@ -71,6 +75,9 @@ export type GraphEvidence = {
 export type GraphResponse = {
   series: SeriesResponse
   visible_until_order: number
+  // THERMO-P1-05: mandatory on the backend Pydantic model (always serialized),
+  // so required here despite being absent from pre-fix responses in flight.
+  effective_view_order: number
   nodes: GraphNode[]
   edges: GraphEdge[]
   claims: GraphClaim[]

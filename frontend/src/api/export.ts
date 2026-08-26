@@ -10,7 +10,7 @@ export async function fetchExportMarkdown(
   const query = new URLSearchParams({ visible_until_order: String(visibleUntilOrder) })
   if (targetId) query.set('target_id', targetId)
 
-  const res = await fetch(`${apiBase}/api/series/${seriesId}/export?${query.toString()}`, {
+  const res = await fetch(`${apiBase}/api/series/${encodeURIComponent(seriesId)}/export?${query.toString()}`, {
     method: 'GET',
     credentials: 'include',
   })

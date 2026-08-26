@@ -5,11 +5,13 @@
 // existing importers keep `types/userContent` as their entry point.
 import type { CustomNodeType } from '../lib/nodeTypes'
 export type { CustomNodeType } from '../lib/nodeTypes'
+import type { NoteTargetType } from './changeSet'
+export type { NoteTargetType } from './changeSet'
 
 export type NoteResponse = {
   id: string
   series_id: string
-  target_type: 'Character' | 'Claim'
+  target_type: NoteTargetType
   target_id: string
   content: string
   origin: string
@@ -19,7 +21,7 @@ export type NoteResponse = {
 }
 
 export type NoteCreate = {
-  target_type: 'Character' | 'Claim'
+  target_type: NoteTargetType
   target_id: string
   content: string
 }

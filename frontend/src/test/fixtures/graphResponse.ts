@@ -10,6 +10,7 @@ import type { GraphResponse } from '../../types/graph'
 export const graphResponseS01E01: GraphResponse = {
   series: { id: 'series_dexter', title: 'Dexter', slug: 'dexter' },
   visible_until_order: 1,
+  effective_view_order: 1,
   nodes: [
     { id: 'series_dexter', type: 'Series', label: 'Dexter', visible_from_order: 1, origin: 'canonical', episode_id: null, image_url: null, image_source_url: null },
     { id: 'dexter_s01e01', type: 'Episode', label: 'S01E01 — Dexter', visible_from_order: 1, origin: 'canonical', episode_id: 'dexter_s01e01', image_url: null, image_source_url: null },
@@ -94,6 +95,7 @@ export const graphResponseS01E01: GraphResponse = {
 export const graphResponseS01E03: GraphResponse = {
   series: { id: 'series_dexter', title: 'Dexter', slug: 'dexter' },
   visible_until_order: 3,
+  effective_view_order: 3,
   nodes: [
     { id: 'series_dexter', type: 'Series', label: 'Dexter', visible_from_order: 1, origin: 'canonical', episode_id: null, image_url: null, image_source_url: null },
     { id: 'dexter_s01e01', type: 'Episode', label: 'S01E01 — Dexter', visible_from_order: 1, origin: 'canonical', episode_id: 'dexter_s01e01', image_url: null, image_source_url: null },

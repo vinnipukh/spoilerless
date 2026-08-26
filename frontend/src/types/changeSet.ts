@@ -23,7 +23,16 @@ export type ClaimType =
 
 export type ConfidenceLevel = 'low' | 'medium' | 'high' | 'verified'
 
-export type NoteTargetType = 'Character' | 'Claim'
+// Mirrors backend NoteTargetType (spoilerless/app/domain/user_content.py):
+// the five custom node labels plus Claim. Extending this union keeps note
+// creation on Location/Event/Organization/Object nodes type-safe end to end.
+export type NoteTargetType =
+  | 'Character'
+  | 'Event'
+  | 'Location'
+  | 'Organization'
+  | 'Object'
+  | 'Claim'
 
 // Only `description` is ever accepted inside an operation's `properties`
 // dict — matches backend `ALLOWED_OPERATION_PROPERTY_KEYS`.
@@ -160,6 +169,10 @@ export type ChangeSet = {
   confirmed_at: string | null
   applied_at: string | null
   revision_id: string | null
+  // THERMO-P1-05: revert-time Revision id (PROB-27, #51) — set when the
+  // ChangeSet is reverted, absent/null otherwise. Optional so locally built
+  // ChangeSet literals (tests/fixtures) pre-dating the field stay assignable.
+  revert_revision_id?: string | null
   idempotency_key: string | null
 }
 

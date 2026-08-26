@@ -24,6 +24,7 @@ import type { SelectedElement } from '../graph/GraphCanvas'
 import type { GraphClaim, GraphEvidence, GraphNode, GraphResponse } from '../../types/graph'
 import { useNotes } from '../../hooks/useNotes'
 import type { CustomRelationshipResponse, NoteResponse } from '../../types/userContent'
+import { CUSTOM_NODE_TYPE_NAMES, type CustomNodeType } from '../../lib/nodeTypes'
 import { createCustomRelationship } from '../../api/userContent'
 import { RevisionHistoryPanel } from './RevisionHistoryPanel'
 import { BacklinksTab } from './BacklinksTab'
@@ -284,7 +285,7 @@ function CreateRelationshipDialog({
   selectedNodeId: string | null
   selectedNodeLabel: string | null
   graphNodes: GraphNode[]
-  episodes: { id: string; code: string; title: string }[]
+  episodes: { id: string; code: string; title: string; episode_order: number }[]
   onSuccess: (rel: CustomRelationshipResponse) => void
 }) {
   const [targetId, setTargetId] = useState('')
@@ -300,8 +301,10 @@ function CreateRelationshipDialog({
   // adjustment — the same "adjust state when a prop/key changes" pattern
   // useGraph.ts uses (react-hooks/set-state-in-effect clean: never a
   // synchronous setState in an effect body).
+  // THERMO-P1-04: compare NUMERIC episode_order — comparing string UUID ids
+  // is alphabetical and picked an arbitrary "highest" episode.
   if (!episodeId && episodes.length > 0) {
-    const highest = episodes.reduce((a, b) => a.id > b.id ? a : b)
+    const highest = episodes.reduce((a, b) => a.episode_order > b.episode_order ? a : b)
     setEpisodeId(highest.id)
   }
 
@@ -515,8 +518,15 @@ export function DetailPanel({
   const evidenceEntries = resolveEvidenceForClaims(relevantClaims, graph)
 
   // Determine the target info for notes
+  // THERMO-P1-03: the backend's NoteTargetType now accepts every custom node
+  // label — map selectedNode.type straight through instead of collapsing
+  // everything non-Claim to 'Character' (which 404'd on Location/Event/etc).
   const noteTargetType = selectedNode
-    ? (selectedNode.type === 'Claim' ? 'Claim' as const : 'Character' as const)
+    ? (selectedNode.type === 'Claim'
+        ? ('Claim' as const)
+        : CUSTOM_NODE_TYPE_NAMES.includes(selectedNode.type as CustomNodeType)
+          ? (selectedNode.type as CustomNodeType)
+          : undefined)
     : activeClaim
       ? 'Claim' as const
       : undefined
@@ -553,7 +563,14 @@ export function DetailPanel({
     try {
       if (selectedNode) {
         await createNoteApi({
-          target_type: selectedNode.type === 'Claim' ? 'Claim' : 'Character',
+          // Guarded cast: noteTargetType above already proved this is one of
+          // the five custom labels (or Claim) — GraphNode.type is plain string.
+          target_type:
+            selectedNode.type === 'Claim'
+              ? 'Claim'
+              : CUSTOM_NODE_TYPE_NAMES.includes(selectedNode.type as CustomNodeType)
+                ? (selectedNode.type as CustomNodeType)
+                : 'Character',
           target_id: selectedNode.id,
           content,
         })
