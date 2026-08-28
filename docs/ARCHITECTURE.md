@@ -417,7 +417,7 @@ After seeding, `spoilerless/app/graph/setup.py` runs `_check_visibility_schema()
 | `hash_token` / `generate_token` | `spoilerless/app/core/tokens.py` | The single token generation + SHA-256 hashing pair used by the session and share repositories |
 | `NODE_LABELS` / `STORY_LABELS` | `spoilerless/app/graph/labels.py` | Server-owned label inventories: the 12 seed labels and the 8 visibility-audited story labels |
 | `ChangeSetService` | `spoilerless/app/services/change_set.py` | The typed, two-stage (propose/confirm) protocol that is the only path through which the graph can be mutated by chat-driven writes |
-| `RevisionRepository.log_revision` | `spoilerless/app/revisions/__init__.py` (used across services and repositories) | Shared pattern for writing an append-only before/after audit record in the same transaction as any content mutation |
+| `RevisionRepository.log_revision` | `spoilerless/app/revisions/repository.py` (used across services and repositories) | Shared pattern for writing an append-only before/after audit record in the same transaction as any content mutation |
 | `ShareRepository` | `spoilerless/app/repository/share.py` | Manages hashed, 30-day snapshot share tokens (`:ShareToken`) for token-gated, unauthenticated graph reads |
 | `require_admin` / `RequireAdminDependency` | `spoilerless/app/api/deps.py` | FastAPI dependency gate requiring `role == "admin"` (derived server-side from `ADMIN_EMAILS` at login); rejects with `403 FORBIDDEN` otherwise |
 | `CsrfGuardDependency` | `spoilerless/app/api/deps.py` | Named alias of `verify_origin`: the Origin/Referer check declared as `_csrf` on every state-changing, cookie-authenticated route (SEC-02); rejects missing or mismatched origins with `403 AUTH_ORIGIN_NOT_ALLOWED` |

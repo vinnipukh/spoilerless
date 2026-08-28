@@ -1,4 +1,4 @@
-# Security Attack Surface — Spoilerless (hdgrafcehennemi)
+# Security Attack Surface — Spoilerless
 
 Living document: every public endpoint, its auth, inputs, downstream services, and security controls. Update whenever routes change. Audit: 2026-08-14/15 (9 specialist subagents + adversarial review). Verified against `spoilerless/app/api/*` at commit 9d50500 and refreshed after Phase 11.
 

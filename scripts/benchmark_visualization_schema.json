@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://hdgrafcehennemi.local/schemas/benchmark_visualization_schema.json",
+  "$id": "https://spoilerless.local/schemas/benchmark_visualization_schema.json",
   "title": "Phase 10-08 deterministic visualization benchmark result",
   "description": "Shape contract for scripts/benchmark_visualization.py output. Validated by the stdlib subset validator inside that script (spoilerless/tests/test_visualization_baseline.py::test_benchmark_* re-uses the same validator). Subset: type/required/properties/items/enum/const/minimum/maximum/minItems/uniqueItems/additionalProperties. Two documented benchmark-specific extension keywords are used: `enum_items` on an array of objects requires every listed value to appear as an item's `label`; `required_sizes` on the `sizes` array requires the four D-32 scale labels exactly (order-independent, no extras). Hard-gate fields are deterministic product bounds; environment-sensitive measurements live ONLY in `observations` entries carrying environment_sensitive=true and a rationale (D-32/A2).",
   "type": "object",

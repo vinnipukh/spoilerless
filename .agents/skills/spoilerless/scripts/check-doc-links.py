@@ -2,7 +2,7 @@
 """Verify markdown link targets and GitHub-style anchor slugs in a doc set.
 
 Usage:  python check-doc-links.py [file ...]
-Default: the hdgrafcehennemi final-state doc set (roots + docs/ tree).
+Default: the spoilerless final-state doc set (roots + docs/ tree).
 Checks that every relative ](...) target file exists and every #anchor slug
 matches a heading in the target file (same-file and cross-file). Prints any
 problems and exits 1; prints "N links checked" and exits 0 when clean.

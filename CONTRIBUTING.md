@@ -1,7 +1,7 @@
 <!-- generated-by: gsd-doc-writer -->
-# Contributing to HD Graf Cehennemi
+# Contributing to Spoilerless
 
-Thank you for contributing to HD Graf Cehennemi (the "Spoilerless" application). This guide describes the repository's current setup, issue-ledger workflow, quality gates, and pull-request expectations. See [Getting Started](docs/GETTING-STARTED.md) for prerequisites and first-run instructions, and [Development](docs/DEVELOPMENT.md), [Testing](docs/TESTING.md), and [Architecture](docs/ARCHITECTURE.md) for deeper implementation guidance, with the [authoritative project specification](docs/architecture/project-spec.md) as reference. The canonical issue ledger is [docs/PROBLEMS.md](docs/PROBLEMS.md) — read it before starting work, and record your work in it (see "Issue Ledger and Contribution Workflow" below).
+Thank you for contributing to Spoilerless. This guide describes the repository's current setup, issue-ledger workflow, quality gates, and pull-request expectations. See [Getting Started](docs/GETTING-STARTED.md) for prerequisites and first-run instructions, and [Development](docs/DEVELOPMENT.md), [Testing](docs/TESTING.md), and [Architecture](docs/ARCHITECTURE.md) for deeper implementation guidance, with the [authoritative project specification](docs/architecture/project-spec.md) as reference. The canonical issue ledger is [docs/PROBLEMS.md](docs/PROBLEMS.md) — read it before starting work, and record your work in it (see "Issue Ledger and Contribution Workflow" below).
 
 ## Code of Conduct
 
@@ -18,7 +18,7 @@ The project tracks problems and fixes in `docs/PROBLEMS.md`, not only in GitHub 
 
 ## Before You Start
 
-- Search existing GitHub issues (https://github.com/vinnipukh/hdgrafcehennemi/issues) and pull requests before opening a duplicate.
+- Search existing GitHub issues (https://github.com/vinnipukh/spoilerless/issues) and pull requests before opening a duplicate.
 - Keep a contribution focused. Discuss large scope changes before implementing them, especially new infrastructure, ingestion pipelines, data-model changes, or changes to spoiler-safety rules.
 - Never commit credentials, `.env` files, database exports, copyrighted scripts/subtitles, or provider API keys.
 - Use a disposable or explicitly test-only Neo4j database for integration tests. The backend suite is not automatically isolated from the database named by your `NEO4J_*` settings; the Phase 10 guarded runner provisions its own ephemeral container (see "Testing and Quality Gates").
@@ -62,8 +62,8 @@ See [Getting Started](docs/GETTING-STARTED.md) for prerequisites and first-run i
 Run backend and repository-wide commands from the repository root:
 
 ```bash
-git clone https://github.com/vinnipukh/hdgrafcehennemi.git
-cd hdgrafcehennemi
+git clone https://github.com/vinnipukh/spoilerless.git
+cd spoilerless
 cp .env.example .env
 uv sync --frozen
 docker compose up -d neo4j
@@ -212,7 +212,7 @@ Open the pull request against `main` and resolve all applicable CI failures befo
 
 ## Reporting Issues
 
-Report bugs and feature requests at https://github.com/vinnipukh/hdgrafcehennemi/issues (no issue templates are committed). Include:
+Report bugs and feature requests at https://github.com/vinnipukh/spoilerless/issues (no issue templates are committed). Include:
 
 - a minimal reproduction, with the exact command or click path;
 - expected and actual behavior;

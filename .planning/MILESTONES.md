@@ -1,8 +1,43 @@
 # Milestones
 
+## v1.5 Post-Hardening Remediation & Code Quality (Shipped: 2026-08-26)
+
+**Phases completed:** 1 phase (Phase 12), 15 plans, 26 tasks
+
+**Key accomplishments:**
+
+- Frontend god-component decomposition: `App.tsx` reduced from ~900 lines to 291 lines; `GraphCanvas.tsx` reduced from ~700 lines to 426 lines; `DetailPanel.tsx` reduced from ~750 lines to 180 lines. Extracted `useWorkspaceScene`, `useWorkspaceNavigation`, `useCytoscapeLayout`, `ResizableRail`, `AppIcons`, tabs (`OverviewTab`, `ClaimsTab`, `EvidenceTab`, `NotesTab`), and dialogs (`CreateCustomNodeDialog`, `CreateRelationshipDialog`).
+- Backend modularity & decomposition: Monolithic `services/visualization.py` (1,173 lines) decomposed into 8-module package `spoilerless/app/services/visualization/`; `revisions/__init__.py` split into `repository.py`, `service.py`, and `__init__.py`; centralized `GraphService` facade for visible graph reads and cache invalidation.
+- Response schema nullability alignment (THERMO-P0-01): `user_id: Optional[str] = None` on `NoteResponse`, `CustomNodeResponse`, `CustomRelationshipResponse` allowing privacy-scrubbed non-owner reads to return 200 without Pydantic validation errors.
+- Boundary enforcement simplification: `require_boundary` dependency in `api/boundary.py`; anonymous requests with `visible_until_order=999` clamp to episode 1 across all routes without premature 422 errors.
+- Candidate ingest Cypher consolidation: Single Cypher roundtrip per claim for subject/object/episode visibility checks, eliminating 3x query amplification.
+- Resilience & Security: SSRF DNS resolution bounded with 1.0s timeout; `RateLimiter` lazy re-initialization on startup Redis outages with registered uppercase error codes (`RATE_LIMIT_UNAVAILABLE`, `PAYLOAD_TOO_LARGE`); production CSP and `TrustedHost` support for `https://api.spoilerless.net` and `https://*.onrender.com`.
+- Design system & UI/UX harmonization: Centralized design tokens in `graphTokens.ts`, 44px touch targets, numeric episode ordering in relationship dialog, note attachment to all custom node types, distinct PathFinder clear icon, chat rate-limit error differentiation.
+
+**Closeout type:** verified_closeout (15/15 plans executed and verified, all THERMO requirements checked)
+
+---
+
+## v1.4 Security Hardening (Shipped: 2026-08-20)
+
+**Phases completed:** 1 phase (Phase 11), 8 plans, 14 tasks
+
+**Key accomplishments:**
+
+- Single fail-closed spoiler boundary resolver: `spoilerless/app/api/boundary.py::resolve_effective_boundary` gating every spoiler-sensitive read surface.
+- Candidate ingest hardening: server-derived visibility, subject/object/episode existence verification, rate limiting, and series cache invalidation.
+- Trusted proxy & fail-closed rate limiting: Render CIDR proxy header forwarding, fail-closed 503 on Redis outage in production.
+- SSRF hardening: blocklist for loopback, private, link-local, and metadata addresses on both BYOK and stored provider URLs.
+- LLM cost controls: process-wide semaphore (4 concurrent generations) + per-round tool-call cap (8) + changeset operation limits.
+- Perimeter hardening: 1 MiB body size limit (413), docs disabled in production, security headers (CSP, HSTS) on Vercel shell, validation log sanitization, delimiter tag neutralization, and bounded visualization cache (`FOCUS_SET_CAP=64`).
+
+**Closeout type:** verified_closeout (8/8 plans verified, all 12 SEC requirements checked)
+
+---
+
 ## v1.3 Production Deployment & Access Hardening (Shipped: 2026-08-14)
 
-**Phases completed:** 3 phases, 37 plans, 58 tasks
+**Phases completed:** 3 phases (Phases 8–10), 37 plans, 58 tasks
 
 **Key accomplishments:**
 
@@ -13,53 +48,24 @@
 - GAP-1 wiring closure (`260814-viz`): frontend fetches `character_network`/`investigation`/`graphrag_focus` projections + Expand menu end-to-end — 400 frontend / 130 backend tests green
 - Closeout gates: 98/98 coverage audit, 11/11 regression chunks, operator golden-path UAT (12/12 scenarios, 1 BYOK-chat row blocked by zero-cost policy)
 
-**Closeout type:** verified_closeout (all 3 phases verified passed, 75/75 requirements checked; GAP-2 requirement checkboxes fixed inline; audit-open items acknowledged — 1 deferred quick task `dexter-s01e01-enrichment`, 4 stale Phase-08 deferred rows marked RESOLVED in `deferred-items.md`)
+**Closeout type:** verified_closeout (all 3 phases verified passed, 75/75 requirements checked)
 
 ---
 
 ## v1.1 MVP (Shipped: 2026-08-02)
 
-**Phases completed:** 8 phases, 35 plans, 47 tasks (supersedes v1.0 below — adds Phase 6: Spoiler-Safe GraphRAG Chat and Graph-Editing Agent)
+**Phases completed:** 8 phases, 35 plans, 47 tasks (supersedes v1.0 — adds Phase 6: Spoiler-Safe GraphRAG Chat and Graph-Editing Agent)
 
 **Key accomplishments:**
 
-- A lifespan-owned async Neo4j backend, ontology-validated deterministic Dexter evidence graph, and fail-closed spoiler-safe API proven across live episode boundaries
-- React/Vite frontend now composes a real product layout (AppShell > SeriesSelect/EpisodeSelector > ConfirmAdvanceModal > GraphCanvas > DetailPanel) driven by a typed API client and a sessionStorage-backed watch-progress hook, replacing the Vite starter entirely and rendering the spoiler-safe graph from the verified Phase 1 backend in Cytoscape.
-- Cytoscape canvas polish (cose-bilkent layout, full node-shape/origin-border stylesheet, tap-driven neighbor highlight/fade — inherited from a pre-existing WIP commit) plus this run's addition: GraphStatus.tsx loading/error/empty overlay states, a useGraph retry path, and a GraphCanvas.test.tsx boundary test proving element counts track the backend exactly at both S01E01 (11 nodes/6 edges) and S01E03 (20 nodes).
-- Full Overview/Claims/Evidence tabbed DetailPanel (D-07) resolving claim/evidence/source data from the already-fetched GraphResponse, plus a distinct tab-less StructuralEdgeCard (D-06) for structural edges, with the branch decision centralized in exactly one place in App.tsx.
-- Closed the remaining Nyquist coverage gaps (useWatchProgress hydration/corruption/no-op edge cases, ConfirmAdvanceModal copy variants), ran a tree-wide grep audit proving the phase's two highest-severity threat mitigations hold across all of frontend/src, and completed the Definition-of-Done conversational UAT against the live backend — finding and fixing a real cose-bilkent layout-thrashing bug and a missing dev-server API proxy along the way.
-- Strict ontology-locked user-content schemas, stable sanitized FastAPI errors, and reusable Wave-0 test infrastructure without registering future CRUD routes
-- Retry-safe managed Neo4j persistence and all 13 locked series-scoped note/custom-content operations with fail-closed visibility and canonical isolation
-- API-owned user relationships now join the existing spoiler-safe graph exactly once as closed GraphEdge records, with preserved canonical provenance, setup isolation, and an executable 18-operation frontend handoff
-- Notes tab, custom node/relationship dialogs, and origin-based visual distinction wired into the existing React + Cytoscape frontend.
-- Complete — this is a planning artifact, not an executable plan
-- Complete — verified via conversational UAT
-- Complete — verified via conversational UAT
-- Complete — verified via conversational UAT
-- Complete — verified via conversational UAT
-- Complete — revision model, persistence layer, and user-content integration
-- Complete — three routes created and wired
-- Complete — 12 integration tests passing
-- Complete — types, API client, hook, tests
-- Complete — History tab integrated into DetailPanel, 11 DetailPanel tests passing
-- 2026-07-30
-- Complete — committed `620aedf`
-- Complete — committed `e528c89`
-- Complete — code merged into candidates.py
-- Complete
-- Complete — RED `87ff5c5`, GREEN `9dd5ffc`, contracts `624851b`, injection tests `b1920dd`
-- Complete — T1 RED `4418d09` / GREEN `5c3bff1`, T2 RED `9e1ba49` / GREEN `0ab6b4d`, T3 RED `7d8e428` / GREEN `c8c11c1`
-- Verified 06-01's progress API already enforced Cypher-level ownership and generic 404s, then fixed a real ProgressNotFoundError-to-raw-500 gap in the chat message endpoints and retrieval pipeline that would have broken RAG-01's fail-closed guarantee for any user who never set watch progress.
-- Verified the RAG-09 Episode-3-then-Episode-1 hide-not-delete regression end-to-end against real Neo4j, added `DELETE /api/series/{series_id}/chat/sessions/{session_id}` with generic ownership 404s, a per-user bounded concurrent-generation counter with disconnect-safe release, and Turkish-language/count-leakage guarantees — plus the mandatory same-commit contract-inventory updates.
-- Typed ChangeSet discriminated-union propose endpoint with server-side ontology/visibility validation and transparent canonical/candidate override-proposal substitution — zero graph-target mutation.
-- Transactional ChangeSet apply — single Neo4j write transaction with full rollback, server-derived origin/creator/visible_from_order, idempotency-key-safe replay, and stale-snapshot rejection when progress has been lowered since propose.
-- Minimal, safe revert for ChangeSet-originated changes — deletes every resource a create-shaped ChangeSet applied, logs a new Reverted Revision without ever editing the original, and conflicts (409) rather than silently overwrites a later, unrelated change.
-- Typed frontend data layer for chat/progress/ChangeSet consumption — apiFetch-routed CRUD clients, a dedicated cancellable SSE streaming client, discriminated-status-union hooks, and a reusable chat fixture module — the foundation 06-09..11's chat/graph-editing UI builds on.
-- DetailPanel's Sheet becomes genuinely collapsible for the first time in this codebase (stateful open + Inspector/Chat mode toggle), with a full streaming chat surface — session picker, message bubbles, citation chips, retry, and disabled-provider/transient-503 banners — mounted as its Chat-mode content.
-- `useWatchProgress` now persists/hydrates through the backend progress endpoint (RAG-01 complete on the frontend); `GraphCanvas` gained its first externally-driven prop (`focusedElementIds`) plus a `GraphFocusIndicator` overlay, wired end-to-end from a chat citation's "Show in graph"/chip-body click through `App.tsx`, including automatic stale-focus clearing on a progress decrease (RAG-17).
-- `ChangeSetCard` is the sole UI-initiated write surface in the phase — propose-time preview with before/after rows, destructive banner, and Confirm/Reject controls wired exclusively to `confirmChangeSet`/`rejectChangeSet`; applying a ChangeSet refreshes the graph incrementally (no destructive relayout, no remount) and reuses 06-10's `focusedElementIds` to focus the newly-created resource; canonical/candidate-edit refusals render an honest Protected badge (RAG-14/RAG-16/RAG-17 frontend half).
-- Full regression green (with documented pre-existing exceptions), all PRD §19 documentation surfaces updated, and the 20-item Manual Acceptance Matrix prepared with automated evidence — awaiting the human live-browser gate before the phase can be called complete (PRD §22).
-- `useChatMessages.ts`'s aborted-stream catch branch now sets `status: 'success'` instead of no-oping, so the Stop button and Thinking/Streaming bubble clear immediately after a user clicks Stop.
+- Async Neo4j backend, ontology-validated deterministic Dexter evidence graph, and fail-closed spoiler-safe API proven across live episode boundaries.
+- React/Vite frontend with AppShell, SeriesSelect, EpisodeSelector, ConfirmAdvanceModal, GraphCanvas, and DetailPanel.
+- Cytoscape canvas polish, Overview/Claims/Evidence tabs, and StructuralEdgeCard.
+- User notes and custom node/relationship creation, distinct from canonical content.
+- Append-only revision history with inspect and revert.
+- Extraction-preparation contracts, candidate review workflow, source-connector interface.
+- Spoiler-safe GraphRAG chat: allowlisted retrieval tools, LLM provider abstraction, citation-validated grounded answers.
+- Typed ChangeSet propose/confirm/revert graph-editing flow with auditable Revision logging.
 
 ---
 
@@ -69,29 +75,8 @@
 
 **Key accomplishments:**
 
-- A lifespan-owned async Neo4j backend, ontology-validated deterministic Dexter evidence graph, and fail-closed spoiler-safe API proven across live episode boundaries
-- React/Vite frontend now composes a real product layout (AppShell > SeriesSelect/EpisodeSelector > ConfirmAdvanceModal > GraphCanvas > DetailPanel) driven by a typed API client and a sessionStorage-backed watch-progress hook, replacing the Vite starter entirely and rendering the spoiler-safe graph from the verified Phase 1 backend in Cytoscape.
-- Cytoscape canvas polish (cose-bilkent layout, full node-shape/origin-border stylesheet, tap-driven neighbor highlight/fade — inherited from a pre-existing WIP commit) plus this run's addition: GraphStatus.tsx loading/error/empty overlay states, a useGraph retry path, and a GraphCanvas.test.tsx boundary test proving element counts track the backend exactly at both S01E01 (11 nodes/6 edges) and S01E03 (20 nodes).
-- Full Overview/Claims/Evidence tabbed DetailPanel (D-07) resolving claim/evidence/source data from the already-fetched GraphResponse, plus a distinct tab-less StructuralEdgeCard (D-06) for structural edges, with the branch decision centralized in exactly one place in App.tsx.
-- Closed the remaining Nyquist coverage gaps (useWatchProgress hydration/corruption/no-op edge cases, ConfirmAdvanceModal copy variants), ran a tree-wide grep audit proving the phase's two highest-severity threat mitigations hold across all of frontend/src, and completed the Definition-of-Done conversational UAT against the live backend — finding and fixing a real cose-bilkent layout-thrashing bug and a missing dev-server API proxy along the way.
-- Strict ontology-locked user-content schemas, stable sanitized FastAPI errors, and reusable Wave-0 test infrastructure without registering future CRUD routes
-- Retry-safe managed Neo4j persistence and all 13 locked series-scoped note/custom-content operations with fail-closed visibility and canonical isolation
-- API-owned user relationships now join the existing spoiler-safe graph exactly once as closed GraphEdge records, with preserved canonical provenance, setup isolation, and an executable 18-operation frontend handoff
-- Notes tab, custom node/relationship dialogs, and origin-based visual distinction wired into the existing React + Cytoscape frontend.
-- Complete — this is a planning artifact, not an executable plan
-- Complete — verified via conversational UAT
-- Complete — verified via conversational UAT
-- Complete — verified via conversational UAT
-- Complete — verified via conversational UAT
-- Complete — revision model, persistence layer, and user-content integration
-- Complete — three routes created and wired
-- Complete — 12 integration tests passing
-- Complete — types, API client, hook, tests
-- Complete — History tab integrated into DetailPanel, 11 DetailPanel tests passing
-- 2026-07-30
-- Complete — committed `620aedf`
-- Complete — committed `e528c89`
-- Complete — code merged into candidates.py
-- Complete
+- Lifespan-owned async Neo4j backend, ontology-validated deterministic Dexter evidence graph, and fail-closed spoiler-safe API.
+- React/Vite frontend layout and Cytoscape graph rendering.
+- User notes, revision history, and extraction-preparation contracts.
 
 ---

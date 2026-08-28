@@ -1,9 +1,9 @@
 ---
-name: hdgrafcehennemi
-description: "Authoritative runbook, pitfalls, and conventions for hdgrafcehennemi (Spoilerless GraphRAG app: FastAPI spoilerless/app, Neo4j, React/Cytoscape)."
+name: spoilerless
+description: "Authoritative runbook, pitfalls, and conventions for spoilerless (FastAPI spoilerless/app, Neo4j, React/Cytoscape)."
 ---
 
-# hdgrafcehennemi — Project Runbook, Conventions & Pitfalls
+# spoilerless — Project Runbook, Conventions & Pitfalls
 
 Spoiler-safe GraphRAG application: FastAPI backend (`spoilerless/app`), Neo4j graph database, React frontend with Cytoscape.js.
 
@@ -88,8 +88,8 @@ Spoiler-safe GraphRAG application: FastAPI backend (`spoilerless/app`), Neo4j gr
   - Verify indexes: `SHOW INDEXES YIELD name` via an async probe.
 - **Frontend Tests**: `cd frontend && NODE_ENV=test CI=1 npm run test`.
   - **ALWAYS** prefix `NODE_ENV=test` (or `CI=1`). If `NODE_ENV=production` is set in the shell, React loads production builds, `React.act` is undefined, and tests fail with empty renders.
-- **Docs Link & Anchor Check**: `python .agents/skills/hdgrafcehennemi/scripts/check-doc-links.py` (checks all 20 canonical doc files and relative anchors).
-- **AuraDB Graph Integrity Audit**: `bash .agents/skills/hdgrafcehennemi/scripts/aura_graph_integrity.sh` (read-only live graph audit).
+- **Docs Link & Anchor Check**: `python .agents/skills/spoilerless/scripts/check-doc-links.py` (checks all 20 canonical doc files and relative anchors).
+- **AuraDB Graph Integrity Audit**: `bash .agents/skills/spoilerless/scripts/aura_graph_integrity.sh` (read-only live graph audit).
 
 ## Canonical Ground Truths & Disambiguation Rules
 
@@ -116,7 +116,7 @@ Treat the graph mode as a workspace-level product state, not only a local canvas
 
 When the user signals quota or context pressure during local UAT/milestone work, switch to medium reasoning immediately, keep checkpoints to concise `done / blocker / left` bullets, and avoid new subagents unless they are required for a user-established workflow. Prefer focused deterministic harnesses and targeted verification before the full gates.
 
-**REBRAND-01 SHIPPED 2026-08-05 (plan 09-01, `a0aa33a`/`b94ac6f`/`2dfc826`):** import root is `spoilerless/` (was `backend/`, git mv, history preserved); tests at `spoilerless/tests/`; SERVICE_NAME `spoilerless-backend`; UI title "Spoilerless". GitHub remote is STILL `vinnipukh/hdgrafcehennemi` (rename NOT executed — clone URLs must use it). Grep gate `git grep -il 'hdgrafcehennemi'` = 0 outside `.planning/`+`docs/PROBLEMS.md` counts PRODUCT refs only — it never literally passes (verified 08-13): README/CONTRIBUTING/DEVELOPMENT/GETTING-STARTED clone-URL + `cd hdgrafcehennemi` hits and DEPLOYMENT.md:491-497 `hdgrafcehennemi-backend` stale-build strings are intentional; do not flag them. DOTS-form `spoilerless.tests.x` imports were swept separately (test_revisions.py).
+**REBRAND-01 SHIPPED 2026-08-05 (plan 09-01, `a0aa33a`/`b94ac6f`/`2dfc826`):** import root is `spoilerless/` (was `backend/`, git mv, history preserved); tests at `spoilerless/tests/`; SERVICE_NAME `spoilerless-backend`; UI title "Spoilerless". GitHub remote is `vinnipukh/spoilerless`. Grep gate `git grep -il 'spoilerless'` = 0 outside `.planning/`+`docs/PROBLEMS.md` counts PRODUCT refs only. DOTS-form `spoilerless.tests.x` imports were swept separately (test_revisions.py).
 
 **OPENAPI INVENTORY 2026-08-14 (v1.3 audit):** live surface = 52 ops / 39 templates, locked green by `test_frontend_contract_doc.py` + `test_openapi_contract.py` (the latter is NOT stale — updated with the 10-03/10-06 routes; its own "51 ops/38 templates" comment is stale). docs/API.md + reference/frontend-api-contract.md correct; docs/README.md:25, DEVELOPMENT.md:147, TESTING.md:188, spoiler-threat-model.md:208 still claim 50/37 and call the contract test stale/red — stale prose, re-run the tests before trusting. Production frontend wiring gap: `fetchVisualization`/`fetchExpansion` have zero callers at HEAD (see `references/v1-3-audit.md`).
 
@@ -563,7 +563,7 @@ research:
 - **Working setup: single credential — the instance admin from the downloaded credentials file** (`NEO4J_URI=neo4j+s://<dbid>.databases.neo4j.io`, `NEO4J_USERNAME=<dbid>`, `NEO4J_DATABASE=<dbid>`). D-16 least-privilege is a documented Free-tier ceiling. First diagnostic for a forbidden admin command: `SHOW CURRENT USER;` (UUID + `console_admin_free_*` = console tool-auth, not the instance credential).
 - Custom `CREATE ROLE`/`GRANT` unsupported on AuraDB Free (Business Critical / VDC / Enterprise only). `spoilerless/app/graph/seed.py` runs `CREATE CONSTRAINT`/`CREATE INDEX` → reseed/migrations with the admin credential; runtime env var never goes into VITE_*/frontend.
 - **neo4j driver 6.x TLS on Windows:** `neo4j+s://` rejects explicit `encrypted=`/`trusted_certificates=` (ConfigurationError); the Windows OS store lacks the SSL.com root Aura's chain presents (`self-signed certificate in certificate chain` buried inside `ServiceUnavailable: Unable to retrieve routing information` — unwrap the ExceptionGroup). Fix committed in `database.py`: normalize `neo4j+s://`→`neo4j://` + `encrypted=True` + `TrustCustomCAs(certifi.where())` (`uv add certifi` as a direct dep). Reseed via venv python, not `uv run` (`.python-version`=3.13 vs venv 3.11). Full detail + vitest serial-run verification + deploy checklist: `references/auradb-free-and-neo4j-tls-08-04.md`.
-- **Ad-hoc AuraDB audit/query scripts** (standalone python, not the app): `AsyncGraphDatabase.driver("neo4j://<dbid>.databases.neo4j.io", auth=(<dbid>, pw), database=<dbid>, encrypted=True, trusted_certificates=TrustCustomCAs(certifi.where()))` — same normalization as `database.py`; passing `ssl_context=` with `neo4j+s://` throws ConfigurationError; `GraphDatabase.driver` returns a sync driver (session is NOT an async CM — `TypeError`). Reusable read-only integrity audit (node/rel counts by label, orphans, dangling REFERS_TO, missing core props, orphaned Revisions) for the "is the graph messed up after a crash?" check: `.agents/skills/hdgrafcehennemi/scripts/aura_graph_integrity.sh`.
+- **Ad-hoc AuraDB audit/query scripts** (standalone python, not the app): `AsyncGraphDatabase.driver("neo4j://<dbid>.databases.neo4j.io", auth=(<dbid>, pw), database=<dbid>, encrypted=True, trusted_certificates=TrustCustomCAs(certifi.where()))` — same normalization as `database.py`; passing `ssl_context=` with `neo4j+s://` throws ConfigurationError; `GraphDatabase.driver` returns a sync driver (session is NOT an async CM — `TypeError`). Reusable read-only integrity audit (node/rel counts by label, orphans, dangling REFERS_TO, missing core props, orphaned Revisions) for the "is the graph messed up after a crash?" check: `.agents/skills/spoilerless/scripts/aura_graph_integrity.sh`.
 
 
 

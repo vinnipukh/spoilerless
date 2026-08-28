@@ -1,4 +1,4 @@
-# SECURITY_TEST_PLAN.md — Spoilerless (hdgrafcehennemi)
+# SECURITY_TEST_PLAN.md — Spoilerless
 
 Regression tests derived from SECURITY_AUDIT.md (2026-08-15 audit). Each test maps to findings; most map to existing test seams (`spoilerless/tests/` uses FastAPI TestClient + FakeLLMProvider; frontend uses Vitest). Priority order = P0 findings first. "CI-ready" = automatable in the existing pytest/vitest pipelines.
 

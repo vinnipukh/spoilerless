@@ -57,7 +57,7 @@ Build settings: Framework Preset **Vite**, Root Directory **`frontend/`**, Build
 
 ### Fresh machine checklist
 
-1. `git clone https://github.com/vinnipukh/hdgrafcehennemi.git`
+1. `git clone https://github.com/vinnipukh/spoilerless.git`
 2. `uv sync` (backend deps) and `cd frontend && npm install`
 3. `cp .env.example .env` → for local development, keep the matching Neo4j defaults, set `VITE_API_BASE_URL=` (empty, so `/api` paths use the Vite proxy), and add Google/allowlist/Redis values only if those features are needed; `VITE_GOOGLE_CLIENT_ID` lives in this same root `.env`. In production, set `VITE_API_BASE_URL` to the full backend origin instead.
 4. Start the local database with `docker compose up -d neo4j`
@@ -160,8 +160,8 @@ See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the full system breakdo
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/vinnipukh/hdgrafcehennemi.git
-cd hdgrafcehennemi
+git clone https://github.com/vinnipukh/spoilerless.git
+cd spoilerless
 cp .env.example .env
 ```
 

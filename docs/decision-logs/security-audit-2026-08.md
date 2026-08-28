@@ -1,4 +1,4 @@
-# SECURITY_AUDIT.md — Spoilerless (hdgrafcehennemi)
+# SECURITY_AUDIT.md — Spoilerless
 
 Adversarial security audit, 2026-08-14/15. Lead: Hermes agent. Ten specialist subagents (S1–S9 + independent adversarial reviewer S10). Method: static analysis + safe local verification only — no destructive actions, no live-DB writes, no prod traffic, no secrets printed. Base commit: 9d50500 (branch main).
 

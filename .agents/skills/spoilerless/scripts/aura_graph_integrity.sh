@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Read-only AuraDB graph integrity audit for hdgrafcehennemi.
+# Read-only AuraDB graph integrity audit for spoilerless.
 # Run after a crash mid-population / sibling agent death to confirm the live
 # graph is structurally intact ("is the graph messed up?" check).
-# Usage: bash .agents/skills/hdgrafcehennemi/scripts/aura_graph_integrity.sh (from repo root)
+# Usage: bash .agents/skills/spoilerless/scripts/aura_graph_integrity.sh (from repo root)
 #
 # Connection facts:
 # - Aura creds live in root .env as `aurausername` / `aurapassword` (or NEO4J_USERNAME / NEO4J_PASSWORD).

@@ -21,14 +21,14 @@ Backend code lives under `spoilerless/app/` (packages `api/`, `domain/`, `graph/
 Clone the upstream repository directly:
 
 ```bash
-git clone https://github.com/vinnipukh/hdgrafcehennemi.git
-cd hdgrafcehennemi
+git clone https://github.com/vinnipukh/spoilerless.git
+cd spoilerless
 ```
 
 If you plan to contribute through a fork, fork the repository on GitHub, clone your fork instead, and optionally retain the upstream repository as a remote:
 
 ```bash
-git remote add upstream https://github.com/vinnipukh/hdgrafcehennemi.git
+git remote add upstream https://github.com/vinnipukh/spoilerless.git
 ```
 
 ### Configure the backend and frontend

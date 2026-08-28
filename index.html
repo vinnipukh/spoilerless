@@ -1,1500 +1,1258 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Spoilerless — A spoiler-aware, source-grounded television-series knowledge graph application with GraphRAG chat." />
-  <meta name="theme-color" content="#070a0f" />
-  <meta property="og:title" content="Spoilerless — Spoiler-Safe TV Knowledge Graph" />
+  <meta name="theme-color" content="#09090b" />
+  <meta property="og:title" content="Spoilerless — Spoiler-Safe TV Knowledge Graph & GraphRAG" />
   <meta property="og:description" content="Explore television narrative graphs up to your exact watch progress. Source-grounded, editable, and backed by spoiler-safe GraphRAG." />
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://vinnipukh.github.io/hdgrafcehennemi/" />
+  <meta property="og:url" content="https://spoilerless.net" />
   <title>Spoilerless — Spoiler-Safe Narrative Knowledge Graph & GraphRAG</title>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <!-- Anti-FOUC theme initialization -->
+  <script>
+    (function () {
+      try {
+        var s = localStorage.getItem('theme');
+        var theme = s === 'light' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {}
+    })();
+  </script>
 
   <style>
-    :root {
-      --bg: #070a0f;
-      --bg-alt: #0a0f18;
-      --surface: #0e1420;
-      --surface-2: #141b2a;
-      --surface-3: #1a2438;
-      --card-bg: rgba(14, 20, 32, 0.75);
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-      --text-subtle: #64748b;
-      --line: rgba(255, 255, 255, 0.08);
-      --line-strong: rgba(255, 255, 255, 0.16);
-      
-      --violet: #8b5cf6;
-      --violet-glow: rgba(139, 92, 246, 0.28);
-      --cyan: #22d3ee;
-      --cyan-glow: rgba(34, 211, 238, 0.22);
-      --green: #34d399;
-      --green-glow: rgba(52, 211, 153, 0.22);
-      --rose: #fb7185;
-      --amber: #fbbf24;
-      --fuchsia: #d946ef;
-      --orange: #fb923c;
-      
-      --max: 1200px;
-      --radius-sm: 10px;
-      --radius-md: 16px;
-      --radius-lg: 24px;
-      --radius-xl: 32px;
-      --shadow-lg: 0 24px 80px -12px rgba(0, 0, 0, 0.65);
-      --shadow-glow: 0 0 50px -10px rgba(139, 92, 246, 0.25);
+    /* ==========================================================================
+       SCANDINAVIAN TACTILE MINIMAL — DESIGN SYSTEM & PHYSICS
+       Zero External Fonts • Zero External Frameworks • Pure Semantic Tokens
+       ========================================================================== */
+
+    :root,
+    html[data-theme="dark"] {
+      /* Dark Theme Palette (Default) */
+      --bg: #09090b;
+      --surface: #121215;
+      --surface-subtle: #18181c;
+      --text: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --text-subtle: #71717a;
+      --border: #27272a;
+      --border-hover: #52525b;
+      --accent: #f4f4f5;
+      --accent-subtle: #18181b;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+      --shadow-md: 0 6px 20px -2px rgba(0, 0, 0, 0.5), 0 2px 8px -2px rgba(0, 0, 0, 0.3);
+      --code-bg: #141418;
+      --code-border: #27272a;
+      --tag-bg: #1c1c21;
+      --tag-text: #a1a1aa;
+      --status-green: #10b981;
+      --status-green-glow: rgba(16, 185, 129, 0.2);
+
+      /* Tactile Spring Physics */
+      --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+      --transition-tactile: transform 0.22s var(--ease-spring), border-color 0.15s ease, box-shadow 0.22s ease, background-color 0.15s ease, color 0.15s ease;
+      --transition-fast: transform 0.05s ease-out, border-color 0.05s ease-out, box-shadow 0.05s ease-out;
+      --measure: 720px;
     }
 
-    * { box-sizing: border-box; }
+    html[data-theme="light"] {
+      /* Light Theme Palette (Opt-in) */
+      --bg: #fafafa;
+      --surface: #ffffff;
+      --surface-subtle: #f4f4f5;
+      --text: #18181b;
+      --text-muted: #71717a;
+      --text-subtle: #a1a1aa;
+      --border: #e4e4e7;
+      --border-hover: #a1a1aa;
+      --accent: #18181b;
+      --accent-subtle: #f4f4f5;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+      --shadow-md: 0 6px 16px -2px rgba(0, 0, 0, 0.06), 0 2px 6px -2px rgba(0, 0, 0, 0.03);
+      --code-bg: #f4f4f5;
+      --code-border: #e4e4e7;
+      --tag-bg: #f4f4f5;
+      --tag-text: #52525b;
+      --status-green: #059669;
+      --status-green-glow: rgba(5, 150, 105, 0.15);
+    }
+
+    /* Reset & Typography */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
     html {
+      font-size: 16px;
+      line-height: 1.7;
+      -webkit-text-size-adjust: 100%;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
       scroll-behavior: smooth;
-      background: var(--bg);
+      background-color: var(--bg);
+      color: var(--text);
     }
 
     body {
-      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
       color: var(--text);
-      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
-      background:
-        radial-gradient(circle at 15% -5%, rgba(139, 92, 246, 0.18), transparent 35rem),
-        radial-gradient(circle at 85% 10%, rgba(34, 211, 238, 0.12), transparent 30rem),
-        radial-gradient(circle at 50% 60%, rgba(217, 70, 239, 0.06), transparent 40rem),
-        var(--bg);
-      line-height: 1.6;
-      overflow-x: hidden;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-tap-highlight-color: transparent;
     }
 
-    ::selection {
-      background: rgba(34, 211, 238, 0.3);
-      color: #ffffff;
+    /* Centered Layout Shell */
+    .site-wrapper {
+      width: 100%;
+      max-width: var(--measure);
+      margin: 0 auto;
+      padding: 3rem 1.25rem 4rem;
+      display: flex;
+      flex-direction: column;
+      flex-grow: 1;
     }
 
-    a { color: inherit; text-decoration: none; }
-    button, input, select { font: inherit; }
-
-    .container {
-      width: min(calc(100% - 40px), var(--max));
-      margin-inline: auto;
+    @media (max-width: 540px) {
+      .site-wrapper {
+        padding: 2rem 1rem 3rem;
+      }
     }
 
-    /* Top Banner */
-    .top-banner {
-      background: linear-gradient(90deg, rgba(139, 92, 246, 0.15), rgba(34, 211, 238, 0.15));
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      font-size: 13px;
-      padding: 8px 16px;
-      text-align: center;
-      color: #cbd5e1;
-    }
-    .top-banner a {
-      color: var(--cyan);
+    /* Headings */
+    h1, h2, h3, h4 {
+      color: var(--text);
       font-weight: 600;
-      text-decoration: underline;
-      text-underline-offset: 3px;
-    }
-    .top-banner a:hover { color: #ffffff; }
-
-    /* Sticky Navigation */
-    .nav-wrap {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      border-bottom: 1px solid transparent;
-      background: rgba(7, 10, 15, 0.82);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      transition: border-color 0.2s ease, background 0.2s ease;
-    }
-    .nav-wrap.scrolled {
-      border-color: var(--line);
-      background: rgba(7, 10, 15, 0.94);
+      letter-spacing: -0.02em;
+      line-height: 1.3;
     }
 
-    nav {
-      min-height: 72px;
+    h1 {
+      font-size: 1.875rem;
+      letter-spacing: -0.03em;
+      line-height: 1.25;
+      margin-bottom: 0.85rem;
+    }
+
+    h2 {
+      font-size: 1.3125rem;
+      letter-spacing: -0.02em;
+      margin-top: 3rem;
+      margin-bottom: 0.6rem;
+    }
+
+    h3 {
+      font-size: 1.0625rem;
+      letter-spacing: -0.015em;
+      margin-bottom: 0.4rem;
+    }
+
+    p {
+      margin-bottom: 1.15rem;
+      color: var(--text-muted);
+      font-size: 0.9375rem;
+      line-height: 1.65;
+    }
+
+    p.lead {
+      font-size: 1.0625rem;
+      line-height: 1.7;
+      color: var(--text);
+      margin-bottom: 1.5rem;
+    }
+
+    .section-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-top: 3rem;
+      margin-bottom: 0.4rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .section-desc {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      margin-bottom: 1.25rem;
+      line-height: 1.6;
+    }
+
+    hr {
+      border: 0;
+      border-top: 1px solid var(--border);
+      margin: 3rem 0;
+    }
+
+    /* Header & Navigation */
+    .site-header {
+      margin-bottom: 2.75rem;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 20px;
+      gap: 1rem;
+      flex-wrap: wrap;
     }
 
     .brand {
       display: inline-flex;
       align-items: center;
-      gap: 12px;
-      font-weight: 800;
-      font-size: 20px;
-      letter-spacing: -0.03em;
+      gap: 0.65rem;
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 1.0625rem;
+      letter-spacing: -0.02em;
     }
 
     .brand-mark {
-      width: 38px;
-      height: 38px;
-      border-radius: 12px;
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
       display: grid;
       place-items: center;
-      background: linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(34, 211, 238, 0.2));
-      border: 1px solid rgba(139, 92, 246, 0.5);
-      box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      box-shadow: var(--shadow-sm);
     }
 
-    .brand-mark svg { width: 22px; height: 22px; }
+    .brand-mark svg {
+      width: 17px;
+      height: 17px;
+    }
 
-    .nav-links {
+    .site-nav {
       display: flex;
       align-items: center;
-      gap: 24px;
-      color: var(--text-muted);
-      font-size: 14px;
-      font-weight: 600;
+      gap: 1rem;
+      flex-wrap: wrap;
     }
-    .nav-links a {
+
+    .site-nav a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
       transition: color 0.15s ease;
     }
-    .nav-links a:hover { color: #ffffff; }
+
+    .site-nav a:hover {
+      color: var(--text);
+    }
 
     .nav-actions {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    /* Language Switcher */
-    .lang-switcher {
       display: inline-flex;
       align-items: center;
-      padding: 3px;
-      border-radius: 12px;
-      background: var(--surface-2);
-      border: 1px solid var(--line-strong);
+      gap: 0.45rem;
     }
+
+    /* Tactile 3-State Micro-Interactions */
+    .tactile-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      padding: 0.45rem 0.85rem;
+      font-size: 0.84375rem;
+      font-weight: 500;
+      line-height: 1.2;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      text-decoration: none;
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+      transition: var(--transition-tactile);
+      will-change: transform;
+      user-select: none;
+      min-height: 36px;
+    }
+
+    .tactile-btn:hover {
+      transform: translateY(-2px);
+      border-color: var(--border-hover);
+      box-shadow: var(--shadow-md);
+      color: var(--text);
+    }
+
+    .tactile-btn:active {
+      transform: translateY(1px) scale(0.97);
+      transition: var(--transition-fast);
+    }
+
+    .tactile-btn-primary {
+      background: var(--text);
+      color: var(--bg);
+      border-color: var(--text);
+      font-weight: 600;
+    }
+
+    .tactile-btn-primary:hover {
+      background: var(--text);
+      color: var(--bg);
+      border-color: var(--text);
+      filter: brightness(1.1);
+    }
+
+    .tactile-btn-sm {
+      padding: 0.3rem 0.6rem;
+      font-size: 0.75rem;
+      min-height: 30px;
+      border-radius: 6px;
+    }
+
+    .tactile-btn-icon {
+      padding: 0.35rem 0.5rem;
+      min-width: 36px;
+      min-height: 36px;
+    }
+
+    .lang-switcher {
+      display: inline-flex;
+      padding: 2px;
+      border-radius: 8px;
+      background: var(--surface-subtle);
+      border: 1px solid var(--border);
+      gap: 2px;
+    }
+
     .lang-btn {
       background: transparent;
       border: 0;
       color: var(--text-muted);
-      font-size: 12px;
-      font-weight: 700;
-      padding: 5px 10px;
-      border-radius: 9px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
       cursor: pointer;
-      transition: all 0.15s ease;
+      transition: var(--transition-tactile);
+      will-change: transform;
     }
+
     .lang-btn.active {
-      background: var(--violet);
-      color: #ffffff;
-      box-shadow: 0 2px 10px rgba(139, 92, 246, 0.4);
-    }
-    .lang-btn:not(.active):hover {
-      color: #ffffff;
-    }
-
-    .button {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      min-height: 42px;
-      padding: 0 18px;
-      border-radius: 12px;
-      border: 1px solid var(--line-strong);
-      background: rgba(255, 255, 255, 0.04);
-      color: #ffffff;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.18s ease;
-      white-space: nowrap;
-    }
-    .button:hover {
-      transform: translateY(-2px);
-      border-color: var(--cyan);
-      background: rgba(34, 211, 238, 0.08);
-      box-shadow: 0 4px 20px rgba(34, 211, 238, 0.15);
-    }
-    .button.primary {
-      border-color: rgba(139, 92, 246, 0.7);
-      background: linear-gradient(135deg, #8b5cf6, #6366f1);
-      box-shadow: 0 8px 24px rgba(139, 92, 246, 0.35);
-    }
-    .button.primary:hover {
-      border-color: rgba(255, 255, 255, 0.5);
-      background: linear-gradient(135deg, #9b72f8, #7175f3);
-      box-shadow: 0 10px 30px rgba(139, 92, 246, 0.5);
-    }
-    .button.sm {
-      min-height: 34px;
-      padding: 0 12px;
-      font-size: 12px;
-      border-radius: 8px;
-    }
-    .button svg { width: 16px; height: 16px; }
-
-    /* Mobile Toggle */
-    .mobile-menu-btn {
-      display: none;
-      background: transparent;
-      border: 1px solid var(--line-strong);
-      color: var(--text);
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-    }
-
-    .mobile-drawer {
-      display: none;
-      padding: 16px;
       background: var(--surface);
-      border-bottom: 1px solid var(--line);
-    }
-    .mobile-drawer.open { display: flex; flex-direction: column; gap: 12px; }
-
-    /* Hero Section */
-    .hero {
-      padding-block: 70px 60px;
-      display: grid;
-      grid-template-columns: 1.1fr 0.9fr;
-      align-items: center;
-      gap: 48px;
+      color: var(--text);
+      box-shadow: var(--shadow-sm);
     }
 
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 20px;
-      padding: 6px 14px;
-      border-radius: 999px;
-      color: #e2e8f0;
-      background: rgba(139, 92, 246, 0.12);
-      border: 1px solid rgba(139, 92, 246, 0.3);
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-    }
-    .eyebrow-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--green);
-      box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.2);
+    .lang-btn:hover:not(.active) {
+      color: var(--text);
     }
 
-    h1 {
-      margin: 0;
-      font-size: clamp(40px, 5.2vw, 68px);
-      line-height: 1.04;
-      letter-spacing: -0.05em;
-      font-weight: 900;
+    .lang-btn:active {
+      transform: translateY(1px) scale(0.97);
+      transition: var(--transition-fast);
     }
 
-    .gradient-text {
-      background: linear-gradient(135deg, #c4b5fd 0%, #67e8f9 50%, #a7f3d0 100%);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-    }
-
-    .hero-copy > p {
-      max-width: 620px;
-      margin: 22px 0 0;
-      color: var(--text-muted);
-      font-size: clamp(16px, 1.8vw, 19px);
-      line-height: 1.6;
-    }
-
-    .hero-actions {
-      display: flex;
-      gap: 14px;
-      flex-wrap: wrap;
-      margin-top: 32px;
-    }
-
-    .hero-pills {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-      margin-top: 28px;
-      color: #cbd5e1;
-      font-size: 13px;
-      font-weight: 600;
-    }
-    .hero-pills span {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .hero-pills i {
-      width: 8px;
-      height: 8px;
-      border-radius: 999px;
-      background: var(--cyan);
-      box-shadow: 0 0 8px var(--cyan);
-    }
-
-    /* Hero Live Architecture Card */
-    .hero-stat-card {
-      padding: 32px;
-      border-radius: var(--radius-xl);
-      background: linear-gradient(145deg, rgba(14, 20, 32, 0.9), rgba(20, 27, 42, 0.75));
-      border: 1px solid var(--line-strong);
-      box-shadow: var(--shadow-lg), var(--shadow-glow);
+    /* Tactile Card */
+    .tactile-card {
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      justify-content: space-between;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      text-decoration: none;
+      color: inherit;
+      box-shadow: var(--shadow-sm);
+      transition: var(--transition-tactile);
+      will-change: transform;
       position: relative;
-      overflow: hidden;
-    }
-    .hero-stat-card::before {
-      content: "";
-      position: absolute;
-      top: -50px;
-      right: -50px;
-      width: 160px;
-      height: 160px;
-      border-radius: 50%;
-      background: var(--violet-glow);
-      filter: blur(40px);
-      pointer-events: none;
     }
 
-    .stat-header {
+    .tactile-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--border-hover);
+      box-shadow: var(--shadow-md);
+      color: inherit;
+    }
+
+    .tactile-card:active {
+      transform: translateY(1px) scale(0.97);
+      transition: var(--transition-fast);
+    }
+
+    .tactile-card-header {
       display: flex;
+      align-items: flex-start;
       justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid var(--line);
-      padding-bottom: 14px;
+      gap: 0.5rem;
+      margin-bottom: 0.4rem;
     }
-    .stat-header strong {
-      font-size: 15px;
-      font-weight: 700;
-      color: #ffffff;
+
+    .tactile-card-title {
+      font-size: 0.9375rem;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.01em;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 0.35rem;
     }
-    .stat-live-indicator {
+
+    .tactile-card-arrow {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+      transition: transform 0.2s var(--ease-spring), color 0.15s ease;
+    }
+
+    .tactile-card:hover .tactile-card-arrow {
+      color: var(--text);
+      transform: translate(2px, -2px);
+    }
+
+    .tactile-card-desc {
+      font-size: 0.84375rem;
+      line-height: 1.55;
+      color: var(--text-muted);
+      margin-bottom: 0.85rem;
+    }
+
+    .tactile-card-footer {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-top: auto;
+    }
+
+    /* Grids */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+    }
+
+    @media (min-width: 520px) {
+      .grid-2 {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .grid-4 {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    /* Status Pill */
+    .status-badge {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 700;
-      color: var(--green);
-      background: rgba(52, 211, 153, 0.1);
-      border: 1px solid rgba(52, 211, 153, 0.3);
-      padding: 3px 8px;
-      border-radius: 999px;
+      gap: 0.45rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      padding: 0.25rem 0.65rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      margin-bottom: 1.25rem;
+      box-shadow: var(--shadow-sm);
     }
-    .stat-live-dot {
+
+    .status-dot {
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: var(--green);
-      box-shadow: 0 0 6px var(--green);
+      background-color: var(--status-green);
+      box-shadow: 0 0 0 2px var(--status-green-glow);
     }
 
-    .stat-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-    .stat-box {
-      padding: 14px;
-      border-radius: var(--radius-md);
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid var(--line);
-    }
-    .stat-box small {
-      display: block;
-      color: var(--text-subtle);
-      font-size: 11px;
-      font-weight: 600;
-      margin-bottom: 4px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .stat-box strong {
-      font-size: 18px;
-      font-weight: 800;
-      color: #ffffff;
-    }
-
-    .meta-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-      font-size: 13px;
-    }
-    .meta-row:last-child { border-bottom: 0; }
-    .meta-row span { color: var(--text-muted); }
-    .meta-row strong { color: #ffffff; font-weight: 600; }
-
-    /* Sections */
-    section {
-      padding-block: 80px;
-    }
-
-    .section-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      gap: 30px;
-      margin-bottom: 48px;
-    }
-    .section-label {
+    /* Tags */
+    .tag {
       display: inline-block;
-      color: var(--cyan);
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      margin-bottom: 8px;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .section-head h2 {
-      margin: 0;
-      font-size: clamp(30px, 3.5vw, 44px);
-      letter-spacing: -0.04em;
-      font-weight: 800;
-      line-height: 1.15;
-    }
-    .section-head p {
-      max-width: 480px;
-      margin: 0;
-      color: var(--text-muted);
-      font-size: 16px;
+      font-size: 0.6875rem;
+      font-weight: 500;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      background: var(--tag-bg);
+      color: var(--tag-text);
+      border: 1px solid var(--border);
+      letter-spacing: 0.02em;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     }
 
-    /* Cards Grid */
-    .grid-3 {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 24px;
-    }
-    .grid-2 {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 24px;
-    }
-    .grid-4 {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 20px;
-    }
-
-    .card {
-      padding: 30px;
-      border-radius: var(--radius-lg);
-      background: var(--card-bg);
-      border: 1px solid var(--line);
-      backdrop-filter: blur(16px);
-      transition: all 0.25s ease;
-      position: relative;
-      overflow: hidden;
-    }
-    .card:hover {
-      transform: translateY(-4px);
-      border-color: rgba(139, 92, 246, 0.4);
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4), 0 0 30px rgba(139, 92, 246, 0.15);
-    }
-    .card::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.6), transparent);
-      opacity: 0;
-      transition: opacity 0.25s ease;
-    }
-    .card:hover::before { opacity: 1; }
-
-    .card-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 14px;
-      display: grid;
-      place-items: center;
-      margin-bottom: 24px;
-      background: rgba(139, 92, 246, 0.12);
-      border: 1px solid rgba(139, 92, 246, 0.3);
-      color: #c4b5fd;
-    }
-    .card-icon.cyan {
-      background: rgba(34, 211, 238, 0.12);
-      border-color: rgba(34, 211, 238, 0.3);
-      color: #67e8f9;
-    }
-    .card-icon.green {
-      background: rgba(52, 211, 153, 0.12);
-      border-color: rgba(52, 211, 153, 0.3);
-      color: #6ee7b7;
-    }
-    .card-icon.fuchsia {
-      background: rgba(217, 70, 239, 0.12);
-      border-color: rgba(217, 70, 239, 0.3);
-      color: #f0abfc;
-    }
-    .card-icon.orange {
-      background: rgba(251, 146, 60, 0.12);
-      border-color: rgba(251, 146, 60, 0.3);
-      color: #fdba74;
-    }
-    .card-icon svg { width: 24px; height: 24px; }
-
-    .card h3 {
-      margin: 0 0 10px;
-      font-size: 20px;
-      letter-spacing: -0.02em;
-      font-weight: 700;
-    }
-    .card p {
-      margin: 0;
-      color: var(--text-muted);
-      font-size: 14px;
-      line-height: 1.6;
-    }
-
-    /* Projections Showcase */
-    .projection-card {
-      display: grid;
-      grid-template-columns: 1.1fr 0.9fr;
-      gap: 30px;
-      padding: 32px;
-      border-radius: var(--radius-xl);
-      background: var(--surface);
-      border: 1px solid var(--line);
-      align-items: center;
-      margin-bottom: 24px;
-    }
-    .projection-card.reverse {
-      grid-template-columns: 0.9fr 1.1fr;
-    }
-    .projection-card h3 {
-      font-size: 24px;
-      margin: 0 0 12px;
-      letter-spacing: -0.03em;
-    }
-    .projection-card p {
-      color: var(--text-muted);
-      font-size: 15px;
-      margin: 0 0 18px;
-    }
-    .projection-tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-    .projection-tag {
-      padding: 4px 10px;
-      border-radius: 6px;
-      background: var(--surface-2);
-      border: 1px solid var(--line);
-      font-size: 11px;
-      font-family: 'JetBrains Mono', monospace;
-      color: #cbd5e1;
-    }
-
-    .code-preview {
-      border-radius: var(--radius-md);
-      background: #05080e;
-      border: 1px solid var(--line-strong);
-      padding: 16px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
-      color: #cbd5e1;
-      overflow-x: auto;
-    }
-    .code-head {
-      display: flex;
-      justify-content: space-between;
-      padding-bottom: 8px;
-      margin-bottom: 12px;
-      border-bottom: 1px solid var(--line);
-      color: var(--text-subtle);
-      font-size: 11px;
-    }
-    .c-purple { color: #c084fc; }
-    .c-cyan { color: #67e8f9; }
-    .c-green { color: #86efac; }
-    .c-yellow { color: #fde047; }
-    .c-rose { color: #fda4af; }
-
-    /* Chat Simulation */
-    .chat-shell {
-      border-radius: var(--radius-lg);
-      background: var(--surface);
-      border: 1px solid var(--line);
-      padding: 24px;
+    /* Post / Timeline Rows */
+    .posts-list {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 0.35rem;
     }
-    .chat-msg {
+
+    .post-row {
       display: flex;
-      gap: 12px;
-      font-size: 14px;
-    }
-    .chat-avatar {
-      width: 32px;
-      height: 32px;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.75rem 0.85rem;
+      margin-inline: -0.85rem;
       border-radius: 8px;
-      display: grid;
-      place-items: center;
-      font-weight: 700;
-      font-size: 12px;
+      border: 1px solid transparent;
+      text-decoration: none;
+      color: inherit;
+      transition: var(--transition-tactile);
+      will-change: transform;
+    }
+
+    .post-row:hover {
+      background: var(--surface);
+      border-color: var(--border);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .post-row:active {
+      transform: translateY(1px) scale(0.985);
+      transition: var(--transition-fast);
+    }
+
+    .post-row-title {
+      font-size: 0.90625rem;
+      font-weight: 500;
+      color: var(--text);
+      line-height: 1.45;
+    }
+
+    .post-row-date {
+      font-size: 0.78125rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+      font-family: ui-monospace, "SF Mono", monospace;
       flex-shrink: 0;
     }
-    .chat-avatar.user { background: var(--surface-3); color: #ffffff; }
-    .chat-avatar.bot { background: linear-gradient(135deg, var(--violet), var(--cyan)); color: #ffffff; }
-    .chat-bubble {
-      padding: 12px 16px;
+
+    /* Hero Action Row */
+    .hero-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      margin-top: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    /* Code Block & Terminal View */
+    .code-block {
+      background: var(--code-bg);
+      border: 1px solid var(--code-border);
+      border-radius: 10px;
+      padding: 1rem 1.15rem;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      overflow-x: auto;
+      box-shadow: var(--shadow-sm);
+      margin: 0.85rem 0 1.25rem;
+      color: var(--text);
+    }
+
+    .code-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 0.5rem;
+      margin-bottom: 0.65rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.6875rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    /* Stat Box Inside Card */
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+      box-shadow: var(--shadow-sm);
+      transition: var(--transition-tactile);
+      will-change: transform;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--border-hover);
+      box-shadow: var(--shadow-md);
+    }
+
+    .stat-label {
+      font-size: 0.6875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      font-family: ui-monospace, "SF Mono", monospace;
+      margin-bottom: 0.25rem;
+    }
+
+    .stat-value {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* Prose link with underline animation */
+    .prose-link {
+      color: var(--text);
+      text-decoration: underline;
+      text-decoration-color: var(--border-hover);
+      text-underline-offset: 3.5px;
+      transition: text-decoration-color 0.15s ease, color 0.15s ease;
+    }
+
+    .prose-link:hover {
+      text-decoration-color: var(--text);
+    }
+
+    /* Mock Chat Interactive Box */
+    .chat-container {
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: 12px;
-      background: var(--surface-2);
-      border: 1px solid var(--line);
-      line-height: 1.5;
+      padding: 1.25rem;
+      margin: 1rem 0 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      box-shadow: var(--shadow-sm);
     }
+
+    .chat-bubble {
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.84375rem;
+      line-height: 1.55;
+      border: 1px solid var(--border);
+      background: var(--surface-subtle);
+    }
+
     .chat-bubble.bot {
-      background: rgba(139, 92, 246, 0.08);
-      border-color: rgba(139, 92, 246, 0.25);
+      background: var(--accent-subtle);
+      border-color: var(--border-hover);
     }
-    .citation-chip {
+
+    .citation-tag {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
-      padding: 2px 8px;
-      border-radius: 6px;
-      background: rgba(34, 211, 238, 0.12);
-      border: 1px solid rgba(34, 211, 238, 0.3);
-      color: var(--cyan);
-      font-size: 11px;
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 600;
-      margin-inline: 2px;
-    }
-
-    /* Architecture Flow */
-    .arch-container {
-      padding: 36px;
-      border-radius: var(--radius-xl);
+      gap: 0.25rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
       background: var(--surface);
-      border: 1px solid var(--line);
-    }
-    .arch-flow {
-      display: grid;
-      grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr;
-      gap: 12px;
-      align-items: center;
-    }
-    .arch-step {
-      padding: 20px;
-      border-radius: var(--radius-md);
-      background: var(--surface-2);
-      border: 1px solid var(--line);
-      text-align: center;
-    }
-    .arch-step small {
-      display: block;
-      color: var(--cyan);
-      font-size: 10px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      margin-bottom: 6px;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .arch-step h4 { margin: 0 0 6px; font-size: 15px; }
-    .arch-step p { margin: 0; color: var(--text-muted); font-size: 12px; }
-    .arch-arrow { color: var(--text-subtle); font-size: 20px; font-weight: 700; text-align: center; }
-
-    .tech-stack-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 24px;
-      justify-content: center;
-    }
-    .tech-pill {
-      padding: 8px 16px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid var(--line);
-      font-size: 12px;
-      font-weight: 600;
-      color: #cbd5e1;
-    }
-
-    /* Roadmap Timeline */
-    .roadmap-list {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-    }
-    .roadmap-card {
-      padding: 24px;
-      border-radius: var(--radius-lg);
-      background: var(--card-bg);
-      border: 1px solid var(--line);
-      position: relative;
-    }
-    .roadmap-card.done {
-      border-color: rgba(52, 211, 153, 0.4);
-    }
-    .roadmap-card.current {
-      border-color: rgba(34, 211, 238, 0.5);
-      box-shadow: 0 0 30px rgba(34, 211, 238, 0.15);
-    }
-    .roadmap-badge {
-      display: inline-block;
-      padding: 3px 8px;
-      border-radius: 6px;
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 12px;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .roadmap-card.done .roadmap-badge {
-      background: rgba(52, 211, 153, 0.15);
-      color: var(--green);
-    }
-    .roadmap-card.current .roadmap-badge {
-      background: rgba(34, 211, 238, 0.15);
-      color: var(--cyan);
-    }
-    .roadmap-card h4 { margin: 0 0 8px; font-size: 16px; }
-    .roadmap-card p { margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.5; }
-
-    /* CTA Box */
-    .cta-box {
-      padding: 48px;
-      border-radius: var(--radius-xl);
-      background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(34, 211, 238, 0.12)), var(--surface);
-      border: 1px solid rgba(139, 92, 246, 0.4);
-      display: grid;
-      grid-template-columns: 1.2fr 0.8fr;
-      align-items: center;
-      gap: 36px;
-      box-shadow: var(--shadow-lg);
-    }
-    .cta-box h2 {
-      margin: 0 0 12px;
-      font-size: clamp(28px, 3vw, 40px);
-      letter-spacing: -0.04em;
-    }
-    .cta-box p {
-      margin: 0;
-      color: #cbd5e1;
-      font-size: 16px;
+      border: 1px solid var(--border);
+      font-size: 0.6875rem;
+      font-family: ui-monospace, "SF Mono", monospace;
+      color: var(--text);
+      margin-top: 0.4rem;
+      margin-right: 0.3rem;
     }
 
     /* Footer */
-    footer {
-      padding-block: 40px;
-      border-top: 1px solid var(--line);
-      color: var(--text-muted);
-      font-size: 13px;
-    }
-    .footer-inner {
+    .site-footer {
+      margin-top: auto;
+      padding-top: 3rem;
+      border-top: 1px solid var(--border);
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
       flex-wrap: wrap;
-      gap: 16px;
     }
 
-    /* Responsive */
-    @media (max-width: 1024px) {
-      .hero { grid-template-columns: 1fr; }
-      .grid-3 { grid-template-columns: repeat(2, 1fr); }
-      .grid-4 { grid-template-columns: repeat(2, 1fr); }
-      .roadmap-list { grid-template-columns: repeat(2, 1fr); }
-      .projection-card, .projection-card.reverse { grid-template-columns: 1fr; }
-      .arch-flow { grid-template-columns: 1fr; }
-      .arch-arrow { transform: rotate(90deg); padding: 4px; }
-      .cta-box { grid-template-columns: 1fr; }
+    .site-footer a {
+      color: var(--text-muted);
+      text-decoration: underline;
+      text-decoration-color: var(--border);
+      text-underline-offset: 3px;
+      transition: color 0.15s ease, text-decoration-color 0.15s ease;
     }
 
-    @media (max-width: 768px) {
-      .nav-links { display: none; }
-      .mobile-menu-btn { display: inline-flex; }
-      .grid-3, .grid-2, .grid-4, .roadmap-list { grid-template-columns: 1fr; }
-      .section-head { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .site-footer a:hover {
+      color: var(--text);
+      text-decoration-color: var(--text);
+    }
+
+    /* Focus Visible & Reduced Motion */
+    :focus-visible {
+      outline: 2px solid var(--text);
+      outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+        transform: none !important;
+      }
     }
   </style>
 </head>
 <body>
 
-  <!-- Top Banner -->
-  <div class="top-banner">
-    <span data-i18n="banner_text">🚀 Spoilerless v1.4 is live in production! Experience the spoiler-safe GraphRAG engine at</span>
-    <a href="https://spoilerless.net" target="_blank" rel="noreferrer">spoilerless.net</a>
-  </div>
+  <div class="site-wrapper">
+    <!-- Header -->
+    <header class="site-header">
+      <a href="#top" class="brand" aria-label="Spoilerless Home">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <span>Spoilerless</span>
+      </a>
 
-  <!-- Sticky Navbar -->
-  <div class="nav-wrap" id="navWrap">
-    <div class="container">
-      <nav>
-        <a href="#top" class="brand" aria-label="Spoilerless Home">
-          <div class="brand-mark">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <span>Spoilerless</span>
+      <nav class="site-nav">
+        <a href="#features" data-i18n="nav_features">Features</a>
+        <a href="#projections" data-i18n="nav_projections">Projections</a>
+        <a href="#graphrag" data-i18n="nav_chat">GraphRAG</a>
+        <a href="#security" data-i18n="nav_safety">Security</a>
+        <a href="#roadmap" data-i18n="nav_roadmap">Roadmap</a>
+      </nav>
+
+      <div class="nav-actions">
+        <!-- Language Switcher -->
+        <div class="lang-switcher" role="group" aria-label="Language selector">
+          <button class="lang-btn" id="langTr" onclick="setLanguage('tr')" aria-label="Türkçe">TR</button>
+          <button class="lang-btn active" id="langEn" onclick="setLanguage('en')" aria-label="English">EN</button>
+        </div>
+
+        <!-- Theme Toggle -->
+        <button class="tactile-btn tactile-btn-icon" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme">
+          <svg id="themeIcon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <!-- Sun icon for dark mode (action: switch to light) -->
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+
+        <!-- GitHub -->
+        <a class="tactile-btn tactile-btn-icon" href="https://github.com/vinnipukh/spoilerless" target="_blank" rel="noreferrer" aria-label="GitHub repository">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
         </a>
 
-        <div class="nav-links">
-          <a href="#features" data-i18n="nav_features">Features</a>
-          <a href="#projections" data-i18n="nav_projections">Projections</a>
-          <a href="#chat" data-i18n="nav_chat">GraphRAG Chat</a>
-          <a href="#architecture" data-i18n="nav_arch">Architecture</a>
-          <a href="#spoiler" data-i18n="nav_safety">Spoiler Model</a>
-          <a href="#roadmap" data-i18n="nav_roadmap">Roadmap</a>
-        </div>
+        <!-- Launch App -->
+        <a class="tactile-btn tactile-btn-primary tactile-btn-sm" href="https://spoilerless.net" target="_blank" rel="noreferrer">
+          <span data-i18n="btn_launch_app">Launch App</span>
+          <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+    </header>
 
-        <div class="nav-actions">
-          <div class="lang-switcher" role="group" aria-label="Language selection">
-            <button class="lang-btn" id="langTr" onclick="setLanguage('tr')">TR</button>
-            <button class="lang-btn active" id="langEn" onclick="setLanguage('en')">EN</button>
-          </div>
+    <main id="top">
+      <!-- Live Status Pill -->
+      <div class="status-badge">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span data-i18n="hero_badge">v1.4 Security Hardened · Live in Production</span>
+      </div>
 
-          <a class="button primary sm" href="https://spoilerless.net" target="_blank" rel="noreferrer">
-            <span data-i18n="btn_launch_app">Launch App</span>
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M7 17L17 7M17 7H7M17 7V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+      <!-- Hero Section -->
+      <section>
+        <h1 data-i18n="hero_title">Explore TV narratives. Strictly spoiler-safe.</h1>
+        <p class="lead" data-i18n="hero_desc">
+          An interactive narrative knowledge graph, source-grounded evidence provenance, and spoiler-safe GraphRAG chat — strictly bounded to your exact watch progress at the database query layer.
+        </p>
+
+        <div class="hero-actions">
+          <a class="tactile-btn tactile-btn-primary" href="https://spoilerless.net" target="_blank" rel="noreferrer">
+            <span data-i18n="btn_try_live">Open spoilerless.net</span>
+            <span aria-hidden="true">↗</span>
           </a>
-
-          <a class="button sm" href="https://github.com/vinnipukh/hdgrafcehennemi" target="_blank" rel="noreferrer" aria-label="GitHub Repository">
-            <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;">
-              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-            </svg>
+          <a class="tactile-btn" href="#features">
+            <span data-i18n="btn_explore_features">Explore Features</span>
+            <span aria-hidden="true">↓</span>
           </a>
-
-          <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle Navigation">
-            <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
-              <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-          </button>
+          <a class="tactile-btn" href="https://github.com/vinnipukh/spoilerless" target="_blank" rel="noreferrer">
+            <span>GitHub</span>
+            <span aria-hidden="true">↗</span>
+          </a>
         </div>
-      </nav>
-    </div>
+      </section>
 
-    <!-- Mobile Drawer -->
-    <div class="mobile-drawer" id="mobileDrawer">
-      <a href="#features" data-i18n="nav_features" onclick="closeMobile()">Features</a>
-      <a href="#projections" data-i18n="nav_projections" onclick="closeMobile()">Projections</a>
-      <a href="#chat" data-i18n="nav_chat" onclick="closeMobile()">GraphRAG Chat</a>
-      <a href="#architecture" data-i18n="nav_arch" onclick="closeMobile()">Architecture</a>
-      <a href="#spoiler" data-i18n="nav_safety" onclick="closeMobile()">Spoiler Model</a>
-      <a href="#roadmap" data-i18n="nav_roadmap" onclick="closeMobile()">Roadmap</a>
-      <a href="https://spoilerless.net" target="_blank" rel="noreferrer" style="color:var(--cyan);font-weight:700;">Launch spoilerless.net →</a>
-    </div>
-  </div>
-
-  <main id="top">
-    <!-- Hero Section -->
-    <div class="container">
-      <section class="hero">
-        <div class="hero-copy">
-          <div class="eyebrow">
-            <span class="eyebrow-dot"></span>
-            <span data-i18n="hero_badge">v1.4 Security Hardened · Live in Production</span>
+      <!-- Live Environment Stats -->
+      <section style="margin-top: 1rem;">
+        <div class="grid-4">
+          <div class="stat-card">
+            <div class="stat-label" data-i18n="stat_views">Projections</div>
+            <div class="stat-value">4 Views</div>
           </div>
-
-          <h1>
-            <span data-i18n="hero_title_1">Explore TV narratives.</span>
-            <br>
-            <span class="gradient-text" data-i18n="hero_title_gradient">Strictly spoiler-safe.</span>
-          </h1>
-
-          <p data-i18n="hero_desc">
-            An interactive narrative knowledge graph, source-grounded evidence provenance, and spoiler-safe GraphRAG chat — strictly bounded to your exact watch progress at the database query layer.
-          </p>
-
-          <div class="hero-actions">
-            <a class="button primary" href="https://spoilerless.net" target="_blank" rel="noreferrer">
-              <span data-i18n="btn_try_live">Open spoilerless.net</span>
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M7 17L17 7M17 7H7M17 7V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </a>
-            <a class="button" href="#features">
-              <span data-i18n="btn_explore_features">Explore Features</span>
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M19 9l-7 7-7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </a>
-            <a class="button" href="https://github.com/vinnipukh/hdgrafcehennemi" target="_blank" rel="noreferrer">
-              <span>GitHub</span>
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </a>
+          <div class="stat-card">
+            <div class="stat-label" data-i18n="stat_api_ops">OpenAPI Ops</div>
+            <div class="stat-value">52 Routes</div>
           </div>
-
-          <div class="hero-pills">
-            <span><i></i><span data-i18n="pill_failclosed">Fail-Closed Boundary</span></span>
-            <span><i></i><span data-i18n="pill_graphrag">GraphRAG AI Chat</span></span>
-            <span><i></i><span data-i18n="pill_projections">4 Projection Views</span></span>
-            <span><i></i><span data-i18n="pill_provenance">Evidence Provenance</span></span>
+          <div class="stat-card">
+            <div class="stat-label" data-i18n="stat_test_suites">Test Suites</div>
+            <div class="stat-value">44 Passing</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label" data-i18n="stat_database">Database</div>
+            <div class="stat-value">Neo4j Aura</div>
           </div>
         </div>
+      </section>
 
-        <!-- Live Architecture & Platform Status Card -->
-        <div class="hero-stat-card">
-          <div class="stat-header">
-            <strong>
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" style="color:var(--cyan);">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-                <path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-              <span data-i18n="card_platform_title">Live Production Environment</span>
-            </strong>
-            <span class="stat-live-indicator">
-              <span class="stat-live-dot"></span>
-              <span>OPERATIONAL</span>
-            </span>
-          </div>
+      <!-- Core Features Grid -->
+      <section id="features">
+        <div class="section-label" data-i18n="label_core_features">Platform Capabilities</div>
+        <h2 data-i18n="features_heading">A Second Brain for Television Narratives</h2>
+        <p class="section-desc" data-i18n="features_subheading">
+          Spoilerless combines temporal knowledge graph architectures, human-in-the-loop editing, and spoiler-safe GraphRAG into a unified narrative exploration platform.
+        </p>
 
-          <div class="stat-grid">
-            <div class="stat-box">
-              <small data-i18n="stat_views">Projections</small>
-              <strong style="color:var(--cyan);">4 Views</strong>
+        <div class="grid-2">
+          <!-- Feat 1 -->
+          <div class="tactile-card">
+            <div>
+              <div class="tactile-card-header">
+                <span class="tactile-card-title" data-i18n="feat_1_title">Fail-Closed Spoiler Safety</span>
+              </div>
+              <p class="tactile-card-desc" data-i18n="feat_1_desc">
+                Data isolation is enforced at the database query layer. Nodes, relationships, search indexes, and LLM context beyond your selected episode never leave the server.
+              </p>
             </div>
-            <div class="stat-box">
-              <small data-i18n="stat_api_ops">OpenAPI Ops</small>
-              <strong style="color:var(--violet);">52 Routes</strong>
-            </div>
-            <div class="stat-box">
-              <small data-i18n="stat_test_suites">Test Suites</small>
-              <strong style="color:var(--green);">44 Passing</strong>
-            </div>
-            <div class="stat-box">
-              <small data-i18n="stat_database">Database</small>
-              <strong style="color:var(--orange);">Neo4j Aura</strong>
+            <div class="tactile-card-footer">
+              <span class="tag">visible_from_order</span>
+              <span class="tag">fail-closed</span>
             </div>
           </div>
 
-          <div style="padding-top: 4px;">
-            <div class="meta-row">
-              <span data-i18n="meta_frontend_target">Frontend Host</span>
-              <strong style="font-family:'JetBrains Mono'; font-size:12px;">app.spoilerless.net</strong>
+          <!-- Feat 2 -->
+          <div class="tactile-card">
+            <div>
+              <div class="tactile-card-header">
+                <span class="tactile-card-title" data-i18n="feat_2_title">4 Specialized Projections</span>
+              </div>
+              <p class="tactile-card-desc" data-i18n="feat_2_desc">
+                Navigate tailored view modes: Story (Overview + Timeline), Characters (Social Network & Conflict), Evidence (Investigation Chains), and Advanced (Full Graph Explorer).
+              </p>
             </div>
-            <div class="meta-row">
-              <span data-i18n="meta_backend_target">Backend API</span>
-              <strong style="font-family:'JetBrains Mono'; font-size:12px;">api.spoilerless.net</strong>
+            <div class="tactile-card-footer">
+              <span class="tag">cytoscape</span>
+              <span class="tag">4 views</span>
             </div>
-            <div class="meta-row">
-              <span data-i18n="meta_seed_scope">Seed Content Scope</span>
-              <strong>Dexter S01E01–S01E03</strong>
+          </div>
+
+          <!-- Feat 3 -->
+          <div class="tactile-card">
+            <div>
+              <div class="tactile-card-header">
+                <span class="tactile-card-title" data-i18n="feat_3_title">Grounded GraphRAG Chat</span>
+              </div>
+              <p class="tactile-card-desc" data-i18n="feat_3_desc">
+                Chat with an LLM (Gemini or BYOK OpenAI models) that answers strictly from your spoiler-filtered graph context, quoting verified evidence chips and timestamps.
+              </p>
             </div>
-            <div class="meta-row">
-              <span data-i18n="meta_security_model">Boundary Model</span>
-              <strong style="color:var(--green);">Fail-Closed Policy</strong>
+            <div class="tactile-card-footer">
+              <span class="tag">graphrag</span>
+              <span class="tag">byok</span>
+            </div>
+          </div>
+
+          <!-- Feat 4 -->
+          <div class="tactile-card">
+            <div>
+              <div class="tactile-card-header">
+                <span class="tactile-card-title" data-i18n="feat_4_title">User Notes & Custom Nodes</span>
+              </div>
+              <p class="tactile-card-desc" data-i18n="feat_4_desc">
+                Add private notes, custom entities, and custom relationships directly on the graph. User content is visually distinguished from canonical seed facts.
+              </p>
+            </div>
+            <div class="tactile-card-footer">
+              <span class="tag">notes</span>
+              <span class="tag">custom-nodes</span>
+            </div>
+          </div>
+
+          <!-- Feat 5 -->
+          <div class="tactile-card">
+            <div>
+              <div class="tactile-card-header">
+                <span class="tactile-card-title" data-i18n="feat_5_title">Revisions & One-Click Revert</span>
+              </div>
+              <p class="tactile-card-desc" data-i18n="feat_5_desc">
+                Every edit, note, or relationship is recorded in an immutable revision history. Compare before/after diffs and roll back any modification safely.
+              </p>
+            </div>
+            <div class="tactile-card-footer">
+              <span class="tag">revisions</span>
+              <span class="tag">diff-revert</span>
+            </div>
+          </div>
+
+          <!-- Feat 6 -->
+          <div class="tactile-card">
+            <div>
+              <div class="tactile-card-header">
+                <span class="tactile-card-title" data-i18n="feat_6_title">Snapshot Sharing & Export</span>
+              </div>
+              <p class="tactile-card-desc" data-i18n="feat_6_desc">
+                Create expiring, read-only token snapshot links to share graph perspectives with friends without spoiling future plot twists. Export graph data to clean Markdown.
+              </p>
+            </div>
+            <div class="tactile-card-footer">
+              <span class="tag">share-tokens</span>
+              <span class="tag">export-md</span>
             </div>
           </div>
         </div>
       </section>
-    </div>
 
-    <!-- Core Features Grid -->
-    <section id="features">
-      <div class="container">
-        <div class="section-head">
-          <div>
-            <div class="section-label" data-i18n="label_core_features">Platform Capabilities</div>
-            <h2 data-i18n="features_heading">A Second Brain for Television Narratives.</h2>
-          </div>
-          <p data-i18n="features_subheading">
-            Spoilerless combines temporal knowledge graph architectures, human-in-the-loop editing, and spoiler-safe GraphRAG into a unified narrative exploration platform.
-          </p>
-        </div>
-
-        <div class="grid-3">
-          <article class="card">
-            <div class="card-icon">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <h3 data-i18n="feat_1_title">Fail-Closed Spoiler Safety</h3>
-            <p data-i18n="feat_1_desc">
-              Data isolation is enforced at the database query layer. Nodes, relationships, search indexes, and LLM context beyond your selected episode never leave the server.
-            </p>
-          </article>
-
-          <article class="card">
-            <div class="card-icon cyan">
-              <svg viewBox="0 0 24 24" fill="none">
-                <circle cx="18" cy="5" r="3" stroke="currentColor" stroke-width="2"/>
-                <circle cx="6" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
-                <circle cx="18" cy="19" r="3" stroke="currentColor" stroke-width="2"/>
-                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" stroke="currentColor" stroke-width="2"/>
-                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" stroke="currentColor" stroke-width="2"/>
-              </svg>
-            </div>
-            <h3 data-i18n="feat_2_title">4 Specialized Projections</h3>
-            <p data-i18n="feat_2_desc">
-              Navigate tailored view modes: Story (Overview + Timeline), Characters (Social Network & Conflict), Evidence (Investigation Chains), and Advanced (Full Graph Explorer).
-            </p>
-          </article>
-
-          <article class="card">
-            <div class="card-icon green">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <h3 data-i18n="feat_3_title">Grounded GraphRAG Chat</h3>
-            <p data-i18n="feat_3_desc">
-              Chat with an LLM (Gemini or BYOK OpenAI models) that answers strictly from your spoiler-filtered graph context, quoting verified evidence chips and timestamps.
-            </p>
-          </article>
-
-          <article class="card">
-            <div class="card-icon fuchsia">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <h3 data-i18n="feat_4_title">User Notes & Custom Nodes</h3>
-            <p data-i18n="feat_4_desc">
-              Add private notes, custom entities, and custom relationships directly on the graph. User content is visually distinguished from canonical seed facts.
-            </p>
-          </article>
-
-          <article class="card">
-            <div class="card-icon orange">
-              <svg viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-                <polyline points="12 6 12 12 16 14" stroke="currentColor" stroke-width="2"/>
-              </svg>
-            </div>
-            <h3 data-i18n="feat_5_title">Revisions & One-Click Revert</h3>
-            <p data-i18n="feat_5_desc">
-              Every edit, note, or relationship is recorded in an immutable revision history. Compare before/after diffs and roll back any modification safely.
-            </p>
-          </article>
-
-          <article class="card">
-            <div class="card-icon">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <polyline points="16 6 12 2 8 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <line x1="12" y1="2" x2="12" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <h3 data-i18n="feat_6_title">Snapshot Sharing & Export</h3>
-            <p data-i18n="feat_6_desc">
-              Create expiring, read-only token snapshot links to share graph perspectives with friends without spoiling future plot twists. Export graph data to clean Markdown.
-            </p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <!-- 4 Projections Deep Dive -->
-    <section id="projections" style="background: rgba(14, 20, 32, 0.4); border-block: 1px solid var(--line);">
-      <div class="container">
-        <div class="section-head">
-          <div>
-            <div class="section-label" data-i18n="label_projections_deep">Projection Views (v1.3)</div>
-            <h2 data-i18n="projections_heading">Task-Specific Graph Projections.</h2>
-          </div>
-          <p data-i18n="projections_subheading">
-            Rather than overwhelming users with a 500-node raw graph, Spoilerless computes purpose-built graph projections tailored to narrative exploration.
-          </p>
-        </div>
+      <!-- 4 Projections Deep Dive -->
+      <section id="projections">
+        <div class="section-label" data-i18n="label_projections_deep">Projection Views</div>
+        <h2 data-i18n="projections_heading">Task-Specific Graph Projections</h2>
+        <p class="section-desc" data-i18n="projections_subheading">
+          Rather than overwhelming users with a 500-node raw graph, Spoilerless computes purpose-built graph projections tailored to narrative exploration.
+        </p>
 
         <!-- Projection 1: Story -->
-        <div class="projection-card">
-          <div>
-            <div class="section-label" style="color:var(--violet);">01 · Story Mode</div>
-            <h3 data-i18n="proj_1_title">Episode Overview & Synchronized Timeline</h3>
-            <p data-i18n="proj_1_desc">
-              Displays core characters, major plot events, and locations up to your active episode. Synchronized with a chronological Event Timeline rail at the bottom of the screen.
-            </p>
-            <div class="projection-tags">
-              <span class="projection-tag">View: episode_overview</span>
-              <span class="projection-tag">Variant A Default</span>
-              <span class="projection-tag">Event Timeline Rail</span>
-            </div>
+        <div class="tactile-card" style="margin-bottom: 0.75rem;">
+          <div class="tactile-card-header">
+            <h3 data-i18n="proj_1_title">01 · Story Mode: Episode Overview & Timeline</h3>
           </div>
-          <div class="code-preview">
-            <div class="code-head">
+          <p class="tactile-card-desc" data-i18n="proj_1_desc">
+            Displays core characters, major plot events, and locations up to your active episode. Synchronized with a chronological Event Timeline rail at the bottom of the screen.
+          </p>
+          <div class="code-block">
+            <div class="code-header">
               <span>GET /api/series/series_dexter/graph/visualization</span>
-              <span>200 OK</span>
+              <span>view_type: episode_overview</span>
             </div>
-            <pre><span class="c-purple">{</span>
-  <span class="c-cyan">"view_type"</span>: <span class="c-green">"episode_overview"</span>,
-  <span class="c-cyan">"effective_view_order"</span>: <span class="c-yellow">2</span>,
-  <span class="c-cyan">"nodes"</span>: <span class="c-purple">[</span>
-    <span class="c-purple">{</span> <span class="c-cyan">"id"</span>: <span class="c-green">"char:dexter"</span>, <span class="c-cyan">"display_tier"</span>: <span class="c-yellow">1</span> <span class="c-purple">}</span>,
-    <span class="c-purple">{</span> <span class="c-cyan">"id"</span>: <span class="c-green">"event:ice_truck"</span>, <span class="c-cyan">"display_tier"</span>: <span class="c-yellow">1</span> <span class="c-purple">}</span>
-  <span class="c-purple">]</span>
-<span class="c-purple">}</span></pre>
+            <code>{ "view_type": "episode_overview", "effective_view_order": 2, "nodes": [{"id": "char:dexter", "display_tier": 1}, {"id": "event:ice_truck", "display_tier": 1}] }</code>
+          </div>
+          <div class="tactile-card-footer">
+            <span class="tag">view: episode_overview</span>
+            <span class="tag">timeline-rail</span>
           </div>
         </div>
 
         <!-- Projection 2: Characters -->
-        <div class="projection-card reverse">
-          <div class="code-preview">
-            <div class="code-head">
-              <span>Semantic Expansion / Neighborhood</span>
-              <span>Cypher Safe</span>
-            </div>
-            <pre><span class="c-purple">MATCH</span> (c:Character <span class="c-purple">{</span>id: $node_id<span class="c-purple">}</span>)
-<span class="c-purple">OPTIONAL MATCH</span> (c)-[r:FAMILY_OF|WORKS_WITH|CONFLICTS_WITH]-(target)
-<span class="c-purple">WHERE</span> r.visible_from_order &lt;= $order
-<span class="c-purple">RETURN</span> c, r, target <span class="c-purple">LIMIT</span> <span class="c-yellow">25</span></pre>
+        <div class="tactile-card" style="margin-bottom: 0.75rem;">
+          <div class="tactile-card-header">
+            <h3 data-i18n="proj_2_title">02 · Character Network: Social Dynamics & Expansions</h3>
           </div>
-          <div>
-            <div class="section-label" style="color:var(--cyan);">02 · Character Network</div>
-            <h3 data-i18n="proj_2_title">Social Dynamics & Local Expansions</h3>
-            <p data-i18n="proj_2_desc">
-              Focuses on interpersonal bonds, workplace hierarchies, and antagonistic conflicts. Semantic expansion lets users unfold family or colleague clusters without global relayout.
-            </p>
-            <div class="projection-tags">
-              <span class="projection-tag">View: character_network</span>
-              <span class="projection-tag">Semantic Expansion (8-12 elements)</span>
-              <span class="projection-tag">Local Layout Cache</span>
+          <p class="tactile-card-desc" data-i18n="proj_2_desc">
+            Focuses on interpersonal bonds, workplace hierarchies, and antagonistic conflicts. Semantic expansion lets users unfold family or colleague clusters without global relayout.
+          </p>
+          <div class="code-block">
+            <div class="code-header">
+              <span>Cypher Expansion Query</span>
+              <span>Safe Boundary Filter</span>
             </div>
+            <code>MATCH (c:Character {id: $node_id}) OPTIONAL MATCH (c)-[r:FAMILY_OF|WORKS_WITH|CONFLICTS_WITH]-(target) WHERE r.visible_from_order &lt;= $order RETURN c, r, target LIMIT 25</code>
+          </div>
+          <div class="tactile-card-footer">
+            <span class="tag">view: character_network</span>
+            <span class="tag">semantic-expansion</span>
           </div>
         </div>
 
         <!-- Projection 3: Evidence -->
-        <div class="projection-card">
-          <div>
-            <div class="section-label" style="color:var(--fuchsia);">03 · Evidence & Investigation</div>
-            <h3 data-i18n="proj_3_title">Clue Chains & Answer Subgraphs</h3>
-            <p data-i18n="proj_3_desc">
-              Inspect claims and their backing evidence snippets extracted from subtitles and script PDFs. When chatting with the assistant, GraphRAG highlights temporary Answer Graphs.
+        <div class="tactile-card">
+          <div class="tactile-card-header">
+            <h3 data-i18n="proj_3_title">03 · Evidence & Investigation: Clue Chains</h3>
+          </div>
+          <p class="tactile-card-desc" data-i18n="proj_3_desc">
+            Inspect claims and their backing evidence snippets extracted from subtitles and script PDFs. When chatting with the assistant, GraphRAG highlights temporary Answer Graphs.
+          </p>
+          <div class="code-block">
+            <div class="code-header">
+              <span>Evidence Provenance Model</span>
+              <span>Pydantic v2 Schema</span>
+            </div>
+            <code>class GraphEvidence(StrictModel): id: Identifier; source_type: str = "subtitle"; locator: str = "00:03:12"; text_snippet: PlainText</code>
+          </div>
+          <div class="tactile-card-footer">
+            <span class="tag">view: investigation</span>
+            <span class="tag">answer-subgraphs</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- GraphRAG Chat Deep Dive -->
+      <section id="graphrag">
+        <div class="section-label" data-i18n="label_graphrag_chat">GraphRAG Intelligence</div>
+        <h2 data-i18n="chat_heading">AI Chat Over Filtered Graph Subgraphs</h2>
+        <p class="section-desc" data-i18n="chat_subheading">
+          Unlike generic web search or document RAG, our GraphRAG engine executes tool calls against the temporal graph, grounding answers in exact episode evidence.
+        </p>
+
+        <!-- Simulated Chat -->
+        <div class="chat-container">
+          <div class="chat-bubble">
+            <strong data-i18n="chat_user_label">Viewer (Watch Progress: S01E01):</strong>
+            <p style="margin: 0.35rem 0 0; color: var(--text);" data-i18n="chat_user_q">
+              Why does Sergeant Doakes suspect Dexter in Episode 1?
             </p>
-            <div class="projection-tags">
-              <span class="projection-tag">View: investigation</span>
-              <span class="projection-tag">GraphRAG Answer Graph</span>
-              <span class="projection-tag">Source Provenance</span>
-            </div>
-          </div>
-          <div class="code-preview">
-            <div class="code-head">
-              <span>Evidence Provenance Schema</span>
-              <span>StrictModel</span>
-            </div>
-            <pre><span class="c-purple">class</span> <span class="c-cyan">GraphEvidence</span>(StrictModel):
-    id: Identifier
-    source_type: SourceType = <span class="c-green">"subtitle"</span>
-    locator: str = <span class="c-green">"00:03:12"</span>
-    content_hash: str | None
-    text_snippet: PlainText</pre>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- GraphRAG Chat Deep Dive -->
-    <section id="chat">
-      <div class="container">
-        <div class="section-head">
-          <div>
-            <div class="section-label" data-i18n="label_graphrag_chat">GraphRAG Intelligence</div>
-            <h2 data-i18n="chat_heading">AI Chat Over Filtered Graph Subgraphs.</h2>
-          </div>
-          <p data-i18n="chat_subheading">
-            Unlike generic web search or document RAG, our GraphRAG engine executes tool calls against the temporal graph, grounding answers in exact episode evidence.
-          </p>
-        </div>
-
-        <div class="grid-2" style="align-items: center;">
-          <div class="chat-shell">
-            <div class="chat-msg">
-              <div class="chat-avatar user">U</div>
-              <div class="chat-bubble">
-                <span data-i18n="chat_user_q">Why does Sergeant Doakes suspect Dexter in Episode 1?</span>
-              </div>
-            </div>
-
-            <div class="chat-msg">
-              <div class="chat-avatar bot">AI</div>
-              <div class="chat-bubble bot">
-                <p style="margin:0 0 8px;" data-i18n="chat_bot_a1">
-                  In S01E01, Sergeant James Doakes notices that Dexter exhibits an unnerving lack of genuine emotional reaction at brutal murder scenes and views his friendly persona as a calculated disguise.
-                </p>
-                <div style="margin-top: 8px;">
-                  <span class="citation-chip">📍 S01E01 [00:14:22]</span>
-                  <span class="citation-chip">🔗 DISTRUSTS</span>
-                  <span class="citation-chip">📑 Claim #104</span>
-                </div>
-              </div>
-            </div>
           </div>
 
-          <div>
-            <div class="card" style="margin-bottom: 16px;">
-              <h3 data-i18n="chat_feat_1_t">Bring Your Own Key (BYOK)</h3>
-              <p data-i18n="chat_feat_1_d">
-                Keys remain in your browser `localStorage` and travel via `X-LLM-*` headers. Connect Google Gemini, OpenAI GPT-4o, or self-hosted models without third-party key storage.
-              </p>
-            </div>
-
-            <div class="card">
-              <h3 data-i18n="chat_feat_2_t">Anti-Spoofing & Citation Chips</h3>
-              <p data-i18n="chat_feat_2_d">
-                LLM answers are parsed for citation chips that link directly back to Cytoscape graph nodes, instantly framing related characters on the canvas.
-              </p>
+          <div class="chat-bubble bot">
+            <strong data-i18n="chat_bot_label">Spoilerless Assistant (GraphRAG):</strong>
+            <p style="margin: 0.35rem 0 0.5rem; color: var(--text);" data-i18n="chat_bot_a1">
+              In S01E01, Sergeant James Doakes notices that Dexter exhibits an unnerving lack of genuine emotional reaction at brutal murder scenes and views his friendly persona as a calculated disguise.
+            </p>
+            <div>
+              <span class="citation-tag"># S01E01 [00:14:22]</span>
+              <span class="citation-tag">rel: DISTRUSTS</span>
+              <span class="citation-tag">claim: #104</span>
             </div>
           </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Technical Architecture -->
-    <section id="architecture" style="background: rgba(14, 20, 32, 0.4); border-block: 1px solid var(--line);">
-      <div class="container">
-        <div class="section-head">
-          <div>
-            <div class="section-label" data-i18n="label_arch">Architecture & Pipeline</div>
-            <h2 data-i18n="arch_heading">From Raw Scripts to Temporal Graphs.</h2>
-          </div>
-          <p data-i18n="arch_subheading">
-            Decoupled ingestion, fail-closed FastAPI API services, and a resilient Cytoscape.js canvas state machine.
-          </p>
-        </div>
-
-        <div class="arch-container">
-          <div class="arch-flow">
-            <div class="arch-step">
-              <small>01 · Ingestion</small>
-              <h4 data-i18n="arch_step_1_t">Subtitles & Scripts</h4>
-              <p data-i18n="arch_step_1_d">OpenSubtitles, script PDFs, scene chunking & timestamps</p>
-            </div>
-            <div class="arch-arrow">→</div>
-
-            <div class="arch-step">
-              <small>02 · Knowledge Graph</small>
-              <h4 data-i18n="arch_step_2_t">Neo4j Database</h4>
-              <p data-i18n="arch_step_2_d">Temporal entities, canonical claims & evidence provenance</p>
-            </div>
-            <div class="arch-arrow">→</div>
-
-            <div class="arch-step">
-              <small>03 · Service Layer</small>
-              <h4 data-i18n="arch_step_3_t">FastAPI Backend</h4>
-              <p data-i18n="arch_step_3_d">Fail-closed boundary resolver, Redis rate-limiting & projections</p>
-            </div>
-            <div class="arch-arrow">→</div>
-
-            <div class="arch-step">
-              <small>04 · UI Workspace</small>
-              <h4 data-i18n="arch_step_4_t">React 19 Frontend</h4>
-              <p data-i18n="arch_step_4_d">Cytoscape.js canvas, 4 projections & streaming GraphRAG</p>
-            </div>
-          </div>
-
-          <div class="tech-stack-row">
-            <div class="tech-pill">React 19</div>
-            <div class="tech-pill">TypeScript</div>
-            <div class="tech-pill">Vite</div>
-            <div class="tech-pill">Cytoscape.js</div>
-            <div class="tech-pill">FastAPI</div>
-            <div class="tech-pill">Python 3.13</div>
-            <div class="tech-pill">Pydantic v2</div>
-            <div class="tech-pill">Neo4j AuraDB</div>
-            <div class="tech-pill">Upstash Redis</div>
-            <div class="tech-pill">Google OAuth</div>
-            <div class="tech-pill">Vercel & Render</div>
-            <div class="tech-pill">Cloudflare DNS</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Spoiler Safety Model -->
-    <section id="spoiler">
-      <div class="container">
-        <div class="section-head">
-          <div>
-            <div class="section-label" data-i18n="label_spoiler_model">Security Boundary</div>
-            <h2 data-i18n="spoiler_heading">Fail-Closed Boundary Defense.</h2>
-          </div>
-          <p data-i18n="spoiler_subheading">
-            Spoiler safety is not a polite system prompt hint. It is a mathematical database barrier enforced on every read path.
-          </p>
         </div>
 
         <div class="grid-2">
-          <div class="card">
-            <h3 style="color:var(--cyan);" data-i18n="spoiler_rule_1_t">1. Single Shared Resolver</h3>
-            <p data-i18n="spoiler_rule_1_d">
-              Every route (`/graph`, `/notes`, `/revisions`, `/export`, `/visualization`) passes through `resolve_effective_boundary()`. Anonymous visitors and missing records fail closed to Order 1.
+          <div class="tactile-card">
+            <div class="tactile-card-header">
+              <span class="tactile-card-title" data-i18n="chat_feat_1_t">Bring Your Own Key (BYOK)</span>
+            </div>
+            <p class="tactile-card-desc" data-i18n="chat_feat_1_d">
+              Keys remain in your browser localStorage and travel via X-LLM-* headers. Connect Google Gemini, OpenAI GPT-4o, or self-hosted models without third-party key storage.
             </p>
-            <hr style="border:0; border-top:1px solid var(--line); margin: 16px 0;">
-            <h3 style="color:var(--green);" data-i18n="spoiler_rule_2_t">2. Database-Level Filtering</h3>
-            <p data-i18n="spoiler_rule_2_d">
-              Cypher queries evaluate `WHERE r.visible_from_order <= $order`. Data beyond your watch progress never leaves Neo4j, making browser inspection attacks impossible.
-            </p>
+            <div class="tactile-card-footer">
+              <span class="tag">x-llm-headers</span>
+              <span class="tag">zero-server-storage</span>
+            </div>
           </div>
 
-          <div class="code-preview">
-            <div class="code-head">
-              <span>spoilerless/app/api/boundary.py</span>
-              <span>PROD ENFORCEMENT</span>
+          <div class="tactile-card">
+            <div class="tactile-card-header">
+              <span class="tactile-card-title" data-i18n="chat_feat_2_t">Anti-Spoofing Citation Chips</span>
             </div>
-            <pre><span class="c-purple">async def</span> <span class="c-cyan">resolve_effective_boundary</span>(
-    graph_service, progress_service, series_id, user, requested_order
-) -> int:
-    <span class="c-purple">if not</span> user:
-        <span class="c-purple">return</span> <span class="c-yellow">1</span>  <span class="c-green"># Anonymous fails closed</span>
-
-    watched = <span class="c-purple">await</span> progress_service.get_progress(user.id, series_id)
-    <span class="c-purple">if not</span> watched:
-        <span class="c-purple">return</span> <span class="c-yellow">1</span>  <span class="c-green"># No progress record fails closed</span>
-
-    <span class="c-purple">return</span> min(requested_order, watched.watched_through_order)</pre>
+            <p class="tactile-card-desc" data-i18n="chat_feat_2_d">
+              LLM answers are parsed for citation chips that link directly back to Cytoscape graph nodes, instantly framing related characters on the canvas.
+            </p>
+            <div class="tactile-card-footer">
+              <span class="tag">node-framing</span>
+              <span class="tag">answer-graphs</span>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- Roadmap -->
-    <section id="roadmap" style="background: rgba(14, 20, 32, 0.4); border-block: 1px solid var(--line);">
-      <div class="container">
-        <div class="section-head">
-          <div>
-            <div class="section-label" data-i18n="label_roadmap">Evolution & Versions</div>
-            <h2 data-i18n="roadmap_heading">From Prototype to Hardened Production.</h2>
+      <!-- Security & Boundary Model -->
+      <section id="security">
+        <div class="section-label" data-i18n="label_spoiler_model">Security Boundary</div>
+        <h2 data-i18n="spoiler_heading">Fail-Closed Boundary Defense</h2>
+        <p class="section-desc" data-i18n="spoiler_subheading">
+          Spoiler safety is not a polite system prompt hint. It is a mathematical database barrier enforced on every read path.
+        </p>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span>spoilerless/app/api/boundary.py</span>
+            <span>PROD ENFORCEMENT</span>
           </div>
-          <p data-i18n="roadmap_subheading">
-            A continuous milestone journey from prototype to security-hardened production.
+          <code>async def resolve_effective_boundary(graph_service, progress_service, series_id, user, requested_order) -&gt; int:
+    if not user:
+        return 1  # Anonymous fails closed to Episode 1
+    watched = await progress_service.get_progress(user.id, series_id)
+    if not watched:
+        return 1  # Unwatched series fails closed
+    return min(requested_order, watched.watched_through_order)</code>
+        </div>
+
+        <div class="grid-2">
+          <div class="tactile-card">
+            <div class="tactile-card-header">
+              <span class="tactile-card-title" data-i18n="spoiler_rule_1_t">1. Single Shared Resolver</span>
+            </div>
+            <p class="tactile-card-desc" data-i18n="spoiler_rule_1_d">
+              Every route (/graph, /notes, /revisions, /export, /visualization) passes through resolve_effective_boundary(). Anonymous visitors and missing records fail closed to Order 1.
+            </p>
+          </div>
+
+          <div class="tactile-card">
+            <div class="tactile-card-header">
+              <span class="tactile-card-title" data-i18n="spoiler_rule_2_t">2. Database-Level Filtering</span>
+            </div>
+            <p class="tactile-card-desc" data-i18n="spoiler_rule_2_d">
+              Cypher queries evaluate WHERE r.visible_from_order &lt;= $order. Data beyond your watch progress never leaves Neo4j, making browser inspection attacks impossible.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Architecture Pipeline -->
+      <section id="architecture">
+        <div class="section-label" data-i18n="label_arch">Architecture & Pipeline</div>
+        <h2 data-i18n="arch_heading">From Raw Scripts to Temporal Graphs</h2>
+        <p class="section-desc" data-i18n="arch_subheading">
+          Decoupled ingestion, fail-closed FastAPI API services, and a resilient Cytoscape.js canvas state machine.
+        </p>
+
+        <div class="posts-list" style="margin-bottom: 1.25rem;">
+          <div class="post-row">
+            <div>
+              <div class="post-row-title" data-i18n="arch_step_1_t">01 · Ingestion Pipeline</div>
+              <p style="margin: 0; font-size: 0.8125rem;" data-i18n="arch_step_1_d">OpenSubtitles, script PDFs, scene chunking & timestamp extraction.</p>
+            </div>
+            <span class="post-row-date">Ingest</span>
+          </div>
+
+          <div class="post-row">
+            <div>
+              <div class="post-row-title" data-i18n="arch_step_2_t">02 · Temporal Knowledge Graph</div>
+              <p style="margin: 0; font-size: 0.8125rem;" data-i18n="arch_step_2_d">Neo4j database storing temporal entities, claims, and evidence fragments.</p>
+            </div>
+            <span class="post-row-date">Neo4j</span>
+          </div>
+
+          <div class="post-row">
+            <div>
+              <div class="post-row-title" data-i18n="arch_step_3_t">03 · Service & Protection Layer</div>
+              <p style="margin: 0; font-size: 0.8125rem;" data-i18n="arch_step_3_d">FastAPI backend enforcing boundary clamps, projections, and Redis rate limiting.</p>
+            </div>
+            <span class="post-row-date">FastAPI</span>
+          </div>
+
+          <div class="post-row">
+            <div>
+              <div class="post-row-title" data-i18n="arch_step_4_t">04 · Interactive Workspace</div>
+              <p style="margin: 0; font-size: 0.8125rem;" data-i18n="arch_step_4_d">React 19 frontend with Cytoscape.js canvas and streaming GraphRAG chat.</p>
+            </div>
+            <span class="post-row-date">React 19</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+          <span class="tag">React 19</span>
+          <span class="tag">TypeScript</span>
+          <span class="tag">Cytoscape.js</span>
+          <span class="tag">FastAPI</span>
+          <span class="tag">Python 3.13</span>
+          <span class="tag">Pydantic v2</span>
+          <span class="tag">Neo4j AuraDB</span>
+          <span class="tag">Upstash Redis</span>
+          <span class="tag">Cloudflare</span>
+        </div>
+      </section>
+
+      <!-- Roadmap Timeline -->
+      <section id="roadmap">
+        <div class="section-label" data-i18n="label_roadmap">Evolution & Versions</div>
+        <h2 data-i18n="roadmap_heading">From Prototype to Hardened Production</h2>
+        <p class="section-desc" data-i18n="roadmap_subheading">
+          A continuous milestone journey from prototype to security-hardened production.
+        </p>
+
+        <div class="posts-list">
+          <div class="post-row">
+            <div>
+              <div class="post-row-title">v1.1 · MVP & Graph Foundation</div>
+              <p style="margin: 0; font-size: 0.8125rem;">Dexter S01E01–E03 seed graph, Cytoscape canvas, user notes, and revision tracking.</p>
+            </div>
+            <span class="post-row-date">Shipped</span>
+          </div>
+
+          <div class="post-row">
+            <div>
+              <div class="post-row-title">v1.2 · Spoiler Hardening</div>
+              <p style="margin: 0; font-size: 0.8125rem;">Strict visible_from_order boundary policy, candidate claim review, and ChangeSets.</p>
+            </div>
+            <span class="post-row-date">Shipped</span>
+          </div>
+
+          <div class="post-row">
+            <div>
+              <div class="post-row-title">v1.3 · Production & 4 Projections</div>
+              <p style="margin: 0; font-size: 0.8125rem;">AuraDB/Upstash deployment, 4 projection views (Story/Characters/Evidence/Advanced), GraphRAG.</p>
+            </div>
+            <span class="post-row-date">Shipped</span>
+          </div>
+
+          <div class="post-row">
+            <div>
+              <div class="post-row-title">v1.4 / v1.5 · Security & Code Quality</div>
+              <p style="margin: 0; font-size: 0.8125rem;">Fail-closed boundary audits, rate limiting, SSRF defense, and frontend modularity.</p>
+            </div>
+            <span class="post-row-date">Active</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- CTA Box -->
+      <section style="margin-top: 2rem;">
+        <div class="tactile-card" style="padding: 1.5rem;">
+          <div class="tactile-card-header">
+            <h3 data-i18n="cta_heading">Ready to Explore Without Spoilers?</h3>
+          </div>
+          <p class="tactile-card-desc" data-i18n="cta_desc">
+            Experience the interactive Dexter knowledge graph, test the GraphRAG AI assistant, or inspect the open-source repository on GitHub.
           </p>
-        </div>
-
-        <div class="roadmap-list">
-          <div class="roadmap-card done">
-            <div class="roadmap-badge">v1.1 · Shipped</div>
-            <h4>MVP & Graph Foundation</h4>
-            <p>Dexter S01E01–E03 seed graph, Cytoscape canvas, user notes, and initial revision tracking.</p>
-          </div>
-
-          <div class="roadmap-card done">
-            <div class="roadmap-badge">v1.2 · Shipped</div>
-            <h4>Spoiler Hardening</h4>
-            <p>Strict `visible_from_order` policy, candidate claim review workflow, and ChangeSet protection.</p>
-          </div>
-
-          <div class="roadmap-card done">
-            <div class="roadmap-badge">v1.3 · Shipped</div>
-            <h4>Production & 4 Views</h4>
-            <p>AuraDB/Upstash deployment, 4 projection views (Story/Characters/Evidence/Advanced), and GraphRAG chat.</p>
-          </div>
-
-          <div class="roadmap-card current">
-            <div class="roadmap-badge">v1.4 / v1.5 · Active</div>
-            <h4>Security & Code Judo</h4>
-            <p>Fail-closed boundary audit, rate limiting, SSRF guard, and frontend modularity refactoring.</p>
+          <div class="hero-actions" style="margin: 0.5rem 0 0;">
+            <a class="tactile-btn tactile-btn-primary" href="https://spoilerless.net" target="_blank" rel="noreferrer">
+              <span data-i18n="btn_open_app">Open spoilerless.net</span>
+              <span aria-hidden="true">↗</span>
+            </a>
+            <a class="tactile-btn" href="https://github.com/vinnipukh/spoilerless" target="_blank" rel="noreferrer">
+              <span>GitHub Repository</span>
+              <span aria-hidden="true">↗</span>
+            </a>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </main>
 
-    <!-- Call to Action -->
-    <section id="cta">
-      <div class="container">
-        <div class="cta-box">
-          <div>
-            <h2 data-i18n="cta_heading">Ready to Explore Without Spoilers?</h2>
-            <p data-i18n="cta_desc">
-              Experience the full interactive Dexter knowledge graph, test the GraphRAG AI assistant, or inspect the open-source repository on GitHub.
-            </p>
-            <div class="hero-actions" style="margin-top:24px;">
-              <a class="button primary" href="https://spoilerless.net" target="_blank" rel="noreferrer">
-                <span data-i18n="btn_open_app">Open spoilerless.net</span>
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M7 17L17 7H7M17 7V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </a>
-              <a class="button" href="https://github.com/vinnipukh/hdgrafcehennemi" target="_blank" rel="noreferrer">
-                <span>GitHub Repository</span>
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </a>
-            </div>
-          </div>
-
-          <div style="background:var(--surface-2); border:1px solid var(--line); border-radius:var(--radius-lg); padding:20px; font-size:13px;">
-            <div class="meta-row"><span>Deployment</span><strong>Vercel + Render + AuraDB</strong></div>
-            <div class="meta-row"><span>Production URL</span><strong>spoilerless.net</strong></div>
-            <div class="meta-row"><span>Test Coverage</span><strong>44 Suites · 404 Tests</strong></div>
-            <div class="meta-row"><span>OpenAPI Spec</span><strong>52 Operations</strong></div>
-            <div class="meta-row"><span>License</span><strong>MIT Open Source</strong></div>
-          </div>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <!-- Footer -->
-  <footer>
-    <div class="container footer-inner">
+    <!-- Footer -->
+    <footer class="site-footer">
       <div>
         <strong>Spoilerless</strong> — <span data-i18n="footer_tagline">Grounded narrative knowledge graph with spoiler-safe GraphRAG.</span>
       </div>
       <div>
-        <span>© 2026 Arhan Er · <a href="https://github.com/vinnipukh/hdgrafcehennemi" target="_blank" rel="noreferrer" style="text-decoration:underline;">GitHub</a> · <a href="https://spoilerless.net" target="_blank" rel="noreferrer" style="text-decoration:underline;">spoilerless.net</a></span>
+        <span>© 2026 Arhan Er · <a href="https://github.com/vinnipukh/spoilerless" target="_blank" rel="noreferrer">GitHub</a> · <a href="https://spoilerless.net" target="_blank" rel="noreferrer">spoilerless.net</a></span>
       </div>
-    </div>
-  </footer>
+    </footer>
+  </div>
 
-  <!-- Bilingual Dictionary & Logic -->
+  <!-- Bilingual Dictionary & Interactive Logic -->
   <script>
     const translations = {
       en: {
-        banner_text: "🚀 Spoilerless v1.4 is live in production! Experience the spoiler-safe GraphRAG engine at",
         nav_features: "Features",
         nav_projections: "Projections",
-        nav_chat: "GraphRAG Chat",
-        nav_arch: "Architecture",
-        nav_safety: "Spoiler Model",
+        nav_chat: "GraphRAG",
+        nav_safety: "Security",
         nav_roadmap: "Roadmap",
         btn_launch_app: "Launch App",
         hero_badge: "v1.4 Security Hardened · Live in Production",
-        hero_title_1: "Explore TV narratives.",
-        hero_title_gradient: "Strictly spoiler-safe.",
+        hero_title: "Explore TV narratives. Strictly spoiler-safe.",
         hero_desc: "An interactive narrative knowledge graph, source-grounded evidence provenance, and spoiler-safe GraphRAG chat — strictly bounded to your exact watch progress at the database query layer.",
         btn_try_live: "Open spoilerless.net",
         btn_explore_features: "Explore Features",
-        pill_failclosed: "Fail-Closed Boundary",
-        pill_graphrag: "GraphRAG AI Chat",
-        pill_projections: "4 Projection Views",
-        pill_provenance: "Evidence Provenance",
-        card_platform_title: "Live Production Environment",
         stat_views: "Projections",
         stat_api_ops: "OpenAPI Ops",
         stat_test_suites: "Test Suites",
         stat_database: "Database",
-        meta_frontend_target: "Frontend Host",
-        meta_backend_target: "Backend API",
-        meta_seed_scope: "Seed Content Scope",
-        meta_security_model: "Boundary Model",
         label_core_features: "Platform Capabilities",
-        features_heading: "A Second Brain for Television Narratives.",
+        features_heading: "A Second Brain for Television Narratives",
         features_subheading: "Spoilerless combines temporal knowledge graph architectures, human-in-the-loop editing, and spoiler-safe GraphRAG into a unified narrative exploration platform.",
         feat_1_title: "Fail-Closed Spoiler Safety",
         feat_1_desc: "Data isolation is enforced at the database query layer. Nodes, relationships, search indexes, and LLM context beyond your selected episode never leave the server.",
@@ -1508,80 +1266,70 @@
         feat_5_desc: "Every edit, note, or relationship is recorded in an immutable revision history. Compare before/after diffs and roll back any modification safely.",
         feat_6_title: "Snapshot Sharing & Export",
         feat_6_desc: "Create expiring, read-only token snapshot links to share graph perspectives with friends without spoiling future plot twists. Export graph data to clean Markdown.",
-        label_projections_deep: "Projection Views (v1.3)",
-        projections_heading: "Task-Specific Graph Projections.",
+        label_projections_deep: "Projection Views",
+        projections_heading: "Task-Specific Graph Projections",
         projections_subheading: "Rather than overwhelming users with a 500-node raw graph, Spoilerless computes purpose-built graph projections tailored to narrative exploration.",
-        proj_1_title: "Episode Overview & Synchronized Timeline",
+        proj_1_title: "01 · Story Mode: Episode Overview & Timeline",
         proj_1_desc: "Displays core characters, major plot events, and locations up to your active episode. Synchronized with a chronological Event Timeline rail at the bottom of the screen.",
-        proj_2_title: "Social Dynamics & Local Expansions",
+        proj_2_title: "02 · Character Network: Social Dynamics & Expansions",
         proj_2_desc: "Focuses on interpersonal bonds, workplace hierarchies, and antagonistic conflicts. Semantic expansion lets users unfold family or colleague clusters without global relayout.",
-        proj_3_title: "Clue Chains & Answer Subgraphs",
+        proj_3_title: "03 · Evidence & Investigation: Clue Chains",
         proj_3_desc: "Inspect claims and their backing evidence snippets extracted from subtitles and script PDFs. When chatting with the assistant, GraphRAG highlights temporary Answer Graphs.",
         label_graphrag_chat: "GraphRAG Intelligence",
-        chat_heading: "AI Chat Over Filtered Graph Subgraphs.",
+        chat_heading: "AI Chat Over Filtered Graph Subgraphs",
         chat_subheading: "Unlike generic web search or document RAG, our GraphRAG engine executes tool calls against the temporal graph, grounding answers in exact episode evidence.",
+        chat_user_label: "Viewer (Watch Progress: S01E01):",
         chat_user_q: "Why does Sergeant Doakes suspect Dexter in Episode 1?",
+        chat_bot_label: "Spoilerless Assistant (GraphRAG):",
         chat_bot_a1: "In S01E01, Sergeant James Doakes notices that Dexter exhibits an unnerving lack of genuine emotional reaction at brutal murder scenes and views his friendly persona as a calculated disguise.",
         chat_feat_1_t: "Bring Your Own Key (BYOK)",
         chat_feat_1_d: "Keys remain in your browser localStorage and travel via X-LLM-* headers. Connect Google Gemini, OpenAI GPT-4o, or self-hosted models without third-party key storage.",
-        chat_feat_2_t: "Anti-Spoofing & Citation Chips",
+        chat_feat_2_t: "Anti-Spoofing Citation Chips",
         chat_feat_2_d: "LLM answers are parsed for citation chips that link directly back to Cytoscape graph nodes, instantly framing related characters on the canvas.",
-        label_arch: "Architecture & Pipeline",
-        arch_heading: "From Raw Scripts to Temporal Graphs.",
-        arch_subheading: "Decoupled ingestion, fail-closed FastAPI API services, and a resilient Cytoscape.js canvas state machine.",
-        arch_step_1_t: "Subtitles & Scripts",
-        arch_step_1_d: "OpenSubtitles, script PDFs, scene chunking & timestamps",
-        arch_step_2_t: "Neo4j Database",
-        arch_step_2_d: "Temporal entities, canonical claims & evidence provenance",
-        arch_step_3_t: "FastAPI Backend",
-        arch_step_3_d: "Fail-closed boundary resolver, Redis rate-limiting & projections",
-        arch_step_4_t: "React 19 Frontend",
-        arch_step_4_d: "Cytoscape.js canvas, 4 projections & streaming GraphRAG",
         label_spoiler_model: "Security Boundary",
-        spoiler_heading: "Fail-Closed Boundary Defense.",
+        spoiler_heading: "Fail-Closed Boundary Defense",
         spoiler_subheading: "Spoiler safety is not a polite system prompt hint. It is a mathematical database barrier enforced on every read path.",
         spoiler_rule_1_t: "1. Single Shared Resolver",
         spoiler_rule_1_d: "Every route (/graph, /notes, /revisions, /export, /visualization) passes through resolve_effective_boundary(). Anonymous visitors and missing records fail closed to Order 1.",
         spoiler_rule_2_t: "2. Database-Level Filtering",
         spoiler_rule_2_d: "Cypher queries evaluate WHERE r.visible_from_order <= $order. Data beyond your watch progress never leaves Neo4j, making browser inspection attacks impossible.",
+        label_arch: "Architecture & Pipeline",
+        arch_heading: "From Raw Scripts to Temporal Graphs",
+        arch_subheading: "Decoupled ingestion, fail-closed FastAPI API services, and a resilient Cytoscape.js canvas state machine.",
+        arch_step_1_t: "01 · Ingestion Pipeline",
+        arch_step_1_d: "OpenSubtitles, script PDFs, scene chunking & timestamp extraction.",
+        arch_step_2_t: "02 · Temporal Knowledge Graph",
+        arch_step_2_d: "Neo4j database storing temporal entities, claims, and evidence fragments.",
+        arch_step_3_t: "03 · Service & Protection Layer",
+        arch_step_3_d: "FastAPI backend enforcing boundary clamps, projections, and Redis rate limiting.",
+        arch_step_4_t: "04 · Interactive Workspace",
+        arch_step_4_d: "React 19 frontend with Cytoscape.js canvas and streaming GraphRAG chat.",
         label_roadmap: "Evolution & Versions",
-        roadmap_heading: "From Prototype to Hardened Production.",
+        roadmap_heading: "From Prototype to Hardened Production",
         roadmap_subheading: "A continuous milestone journey from prototype to security-hardened production.",
         cta_heading: "Ready to Explore Without Spoilers?",
-        cta_desc: "Experience the full interactive Dexter knowledge graph, test the GraphRAG AI assistant, or inspect the open-source repository on GitHub.",
+        cta_desc: "Experience the interactive Dexter knowledge graph, test the GraphRAG AI assistant, or inspect the open-source repository on GitHub.",
         btn_open_app: "Open spoilerless.net",
         footer_tagline: "Grounded narrative knowledge graph with spoiler-safe GraphRAG."
       },
       tr: {
-        banner_text: "🚀 Spoilerless v1.4 canlı ortamda yayında! Spoiler korumalı GraphRAG motorunu deneyin:",
         nav_features: "Özellikler",
         nav_projections: "Projeksiyonlar",
-        nav_chat: "GraphRAG Sohbet",
-        nav_arch: "Mimari",
-        nav_safety: "Spoiler Modeli",
+        nav_chat: "GraphRAG",
+        nav_safety: "Güvenlik",
         nav_roadmap: "Yol Haritası",
         btn_launch_app: "Uygulamayı Aç",
-        hero_badge: "v1.4 Güvenlik Sıkılaştırması · Canlı Ortamda Yayında",
-        hero_title_1: "Dizileri bilgi grafıyla keşfet.",
-        hero_title_gradient: "Tamamen spoiler korumalı.",
+        hero_badge: "v1.4 Güvenlik Sıkılaştırması · Canlı Yayında",
+        hero_title: "Dizileri bilgi grafıyla keşfet. Spoiler riski olmadan.",
         hero_desc: "İzlediğin bölüme kadar olan karakterleri, olayları ve ilişkileri; kaynaklı kanıtlarla keşfet. Grafı düzenle ve yalnızca gördüğün bilgilere erişebilen bir GraphRAG LLM ile sohbet et.",
         btn_try_live: "spoilerless.net'i Aç",
         btn_explore_features: "Özellikleri Keşfet",
-        pill_failclosed: "Kayıpsız Spoiler Sınırı",
-        pill_graphrag: "GraphRAG AI Sohbeti",
-        pill_projections: "4 Projeksiyon Görünümü",
-        pill_provenance: "Kanıt & Kaynak Takibi",
-        card_platform_title: "Canlı Üretim Ortamı",
         stat_views: "Projeksiyonlar",
         stat_api_ops: "OpenAPI Rotaları",
         stat_test_suites: "Test Paketleri",
         stat_database: "Veritabanı",
-        meta_frontend_target: "Frontend Sunucusu",
-        meta_backend_target: "Backend API",
-        meta_seed_scope: "Başlangıç Veri Kapsamı",
-        meta_security_model: "Güvenlik Modeli",
         label_core_features: "Platform Yetenekleri",
-        features_heading: "Dizi Anlatıları İçin İkinci Bir Beyin.",
+        features_heading: "Dizi Anlatıları İçin İkinci Bir Beyin",
         features_subheading: "Spoilerless; zamansal bilgi grafı mimarilerini, insan katkılı düzenlemeyi ve spoiler korumalı GraphRAG'i birleşik bir anlatı keşif platformunda buluşturur.",
         feat_1_title: "Fail-Closed Spoiler Güvenliği",
         feat_1_desc: "Veri izolasyonu veritabanı sorgu katmanında uygulanır. İzlediğin bölümün ötesindeki node'lar, ilişkiler, arama indeksleri ve LLM bağlamı sunucudan asla çıkmaz.",
@@ -1595,44 +1343,46 @@
         feat_5_desc: "Her düzenleme, not veya ilişki geriye dönük revizyon geçmişinde saklanır. Değişiklik öncesi/sonrası farkları inceleyin ve güvenle geri alın.",
         feat_6_title: "Anlık Görüntü Paylaşımı ve Dışa Aktarma",
         feat_6_desc: "Graf bakış açınızı arkadaşlarınızla spoiler vermeden paylaşmak için süreli salt okunur linkler oluşturun. Grafı temiz Markdown formatında dışa aktarın.",
-        label_projections_deep: "Projeksiyon Görünümleri (v1.3)",
-        projections_heading: "Göreve Özel Graf Projeksiyonları.",
+        label_projections_deep: "Projeksiyon Görünümleri",
+        projections_heading: "Göreve Özel Graf Projeksiyonları",
         projections_subheading: "Spoilerless, kullanıcıları 500 node'luk karmaşık ham bir grafa boğmak yerine, anlatı keşfine özel optimize edilmiş projeksiyonlar sunar.",
-        proj_1_title: "Bölüm Özeti & Eşzamanlı Zaman Çizelgesi",
+        proj_1_title: "01 · Hikaye Modu: Bölüm Özeti & Çizelge",
         proj_1_desc: "Aktif bölümünüze kadar olan ana karakterleri, kilit olayları ve mekanları listeler. Ekranın altındaki kronolojik Olay Çizelgesi ile senkronize çalışır.",
-        proj_2_title: "Sosyal Dinamikler & Yerel Genişletmeler",
+        proj_2_title: "02 · Karakter Ağı: Sosyal Dinamikler & Genişletmeler",
         proj_2_desc: "Kişilerarası bağlara, işyeri hiyerarşilerine ve çatışmalara odaklanır. Semantik genişletme ile aile veya iş kümeleri tüm grafı bozmadan açılabilir.",
-        proj_3_title: "İpucu Zincirleri & Yanıt Alt Grafları",
+        proj_3_title: "03 · Kanıt & Soruşturma: İpucu Zincirleri",
         proj_3_desc: "Altyazılardan ve senaryo PDF'lerinden çıkarılan iddiaları ve kanıt parçacıklarını inceleyin. Asistanla sohbet ederken geçici Yanıt Grafları aydınlatılır.",
         label_graphrag_chat: "GraphRAG Zekası",
-        chat_heading: "Filtrelenmiş Alt Graf Üzerinde Yapay Zeka Sohbeti.",
+        chat_heading: "Filtrelenmiş Alt Graf Üzerinde Yapay Zeka Sohbeti",
         chat_subheading: "Genel web aramasının veya düz belge RAG'inin aksine GraphRAG motorumuz zamansal graf üzerinde araç çağrıları yürüterek cevapları kanıtlara dayandırır.",
+        chat_user_label: "İzleyici (İlerleme: S01E01):",
         chat_user_q: "Çavuş Doakes, 1. Bölümde Dexter'dan neden şüpheleniyor?",
+        chat_bot_label: "Spoilerless Asistanı (GraphRAG):",
         chat_bot_a1: "S01E01'de Çavuş James Doakes, Dexter'ın vahşi cinayet mahallinde gösterdiği duygu eksikliğini ve cana yakın tavırlarının yapay bir maske olduğunu fark eder.",
         chat_feat_1_t: "Kendi Anahtarını Getir (BYOK)",
         chat_feat_1_d: "API anahtarlarınız tarayıcınızın localStorage'ında saklanır ve X-LLM-* başlıklarıyla iletilir. Google Gemini veya OpenAI modellerini güvenle bağlayın.",
         chat_feat_2_t: "Anti-Spoofing & Alıntı Çipleri",
         chat_feat_2_d: "LLM yanıtları Cytoscape graf node'larına doğrudan bağlanan alıntı çipleri üretir ve tıklanan karakteri anında tuvalde odaklar.",
-        label_arch: "Mimari ve Veri Akışı",
-        arch_heading: "Ham Senaryolardan Zamansal Grafa.",
-        arch_subheading: "Ayrık veri çıkarımı, fail-closed FastAPI servisleri ve dayanıklı Cytoscape.js tuval durum makinesi.",
-        arch_step_1_t: "Altyazı ve Senaryolar",
-        arch_step_1_d: "OpenSubtitles, senaryo PDF'leri, sahne bölütleme ve zaman damgaları",
-        arch_step_2_t: "Neo4j Veritabanı",
-        arch_step_2_d: "Zamansal varlıklar, kanonik iddialar ve kaynak kanıtları",
-        arch_step_3_t: "Servis Katmanı",
-        arch_step_3_d: "Kayıpsız sınır çözümleyici, Redis hız sınırlayıcı ve projeksiyonlar",
-        arch_step_4_t: "Kullanıcı Arayüzü",
-        arch_step_4_d: "Cytoscape.js tuvali, 4 projeksiyon ve akışkan GraphRAG",
         label_spoiler_model: "Güvenlik Sınırı",
-        spoiler_heading: "Kayıpsız Sınır Savunması.",
+        spoiler_heading: "Kayıpsız Sınır Savunması",
         spoiler_subheading: "Spoiler güvenliği nazik bir prompt ricası değildir. Her okuma yolunda uygulanan matematiksel bir veritabanı bariyeridir.",
         spoiler_rule_1_t: "1. Tek Paylaşımlı Çözümleyici",
         spoiler_rule_1_d: "Tüm rotalar (/graph, /notes, /revisions, /export, /visualization) resolve_effective_boundary() fonksiyonundan geçer. Misafirler ve kayıtsızlar Bölüm 1'e kilitlenir.",
         spoiler_rule_2_t: "2. Veritabanı Düzeyinde Filtreleme",
         spoiler_rule_2_d: "Cypher sorguları WHERE r.visible_from_order <= $order kuralını çalıştırır. İlerlemeniz dışındaki veriler Neo4j'den asla çıkmaz.",
+        label_arch: "Mimari ve Veri Akışı",
+        arch_heading: "Ham Senaryolardan Zamansal Grafa",
+        arch_subheading: "Ayrık veri çıkarımı, fail-closed FastAPI servisleri ve dayanıklı Cytoscape.js tuval durum makinesi.",
+        arch_step_1_t: "01 · Veri Çıkarım Hattı",
+        arch_step_1_d: "OpenSubtitles, senaryo PDF'leri, sahne bölütleme ve zaman damgaları.",
+        arch_step_2_t: "02 · Zamansal Bilgi Grafı",
+        arch_step_2_d: "Neo4j veritabanında saklanan zamansal varlıklar, kanonik iddialar ve kaynak kanıtları.",
+        arch_step_3_t: "03 · Servis ve Koruma Katmanı",
+        arch_step_3_d: "FastAPI arka ucu: sınır kilitleme, projeksiyonlar ve Redis hız sınırlaması.",
+        arch_step_4_t: "04 · Etkileşimli Arayüz",
+        arch_step_4_d: "Cytoscape.js tuvali ve akışkan GraphRAG sohbeti sunan React 19 ön ucu.",
         label_roadmap: "Gelişim ve Sürümler",
-        roadmap_heading: "Prototipten Güçlendirilmiş Canlı Üretime.",
+        roadmap_heading: "Prototipten Güçlendirilmiş Canlı Üretime",
         roadmap_subheading: "Prototipten güvenlik sıkılaştırmalı canlı üretime uzanan kilometre taşı yolculuğu.",
         cta_heading: "Spoiler Olmadan Keşfetmeye Hazır mısınız?",
         cta_desc: "Dexter bilgi grafını keşfedin, GraphRAG asistanını deneyin veya GitHub üzerindeki açık kaynaklı repoyu inceleyin.",
@@ -1645,11 +1395,17 @@
 
     function setLanguage(lang) {
       currentLang = lang;
-      localStorage.setItem('spoilerless_lang', lang);
+      try {
+        localStorage.setItem('spoilerless_lang', lang);
+      } catch (e) {}
       document.documentElement.lang = lang;
 
-      document.getElementById('langEn').classList.toggle('active', lang === 'en');
-      document.getElementById('langTr').classList.toggle('active', lang === 'tr');
+      const btnEn = document.getElementById('langEn');
+      const btnTr = document.getElementById('langTr');
+      if (btnEn && btnTr) {
+        btnEn.classList.toggle('active', lang === 'en');
+        btnTr.classList.toggle('active', lang === 'tr');
+      }
 
       document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
@@ -1659,25 +1415,39 @@
       });
     }
 
-    const navWrap = document.getElementById('navWrap');
-    const mobileDrawer = document.getElementById('mobileDrawer');
-    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-
-    window.addEventListener('scroll', () => {
-      navWrap.classList.toggle('scrolled', window.scrollY > 10);
-    });
-
-    mobileMenuBtn.addEventListener('click', () => {
-      mobileDrawer.classList.toggle('open');
-    });
-
-    function closeMobile() {
-      mobileDrawer.classList.remove('open');
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try {
+        localStorage.setItem('theme', next);
+      } catch (e) {}
+      updateThemeIcon(next);
     }
 
-    // Initialize Default Language
-    const savedLang = localStorage.getItem('spoilerless_lang') || 'en';
-    setLanguage(savedLang);
+    function updateThemeIcon(theme) {
+      const icon = document.getElementById('themeIcon');
+      const btn = document.getElementById('themeToggle');
+      if (!icon || !btn) return;
+
+      if (theme === 'light') {
+        // Moon icon when in light mode (action: switch to dark)
+        icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+        btn.setAttribute('aria-label', 'Switch to dark theme');
+      } else {
+        // Sun icon when in dark mode (action: switch to light)
+        icon.innerHTML = '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
+        btn.setAttribute('aria-label', 'Switch to light theme');
+      }
+    }
+
+    // Init language & theme icon
+    try {
+      const savedLang = localStorage.getItem('spoilerless_lang') || 'en';
+      setLanguage(savedLang);
+      const activeTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+      updateThemeIcon(activeTheme);
+    } catch (e) {}
   </script>
 </body>
 </html>

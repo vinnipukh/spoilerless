@@ -34,8 +34,8 @@ npm --version
 1. Clone the repository and enter it:
 
    ```bash
-   git clone https://github.com/vinnipukh/hdgrafcehennemi.git
-   cd hdgrafcehennemi
+   git clone https://github.com/vinnipukh/spoilerless.git
+   cd spoilerless
    ```
 
 2. Create the local configuration file from the committed template. The frontend reads its `VITE_*`
