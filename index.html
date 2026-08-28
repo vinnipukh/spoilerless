@@ -4,14 +4,17 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Spoilerless — A spoiler-aware, source-grounded television-series knowledge graph application with GraphRAG chat." />
-  <meta name="theme-color" content="#09090b" />
+  <meta name="theme-color" content="#0B0B1E" />
   <meta property="og:title" content="Spoilerless — Spoiler-Safe TV Knowledge Graph & GraphRAG" />
   <meta property="og:description" content="Explore television narrative graphs up to your exact watch progress. Source-grounded, editable, and backed by spoiler-safe GraphRAG." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://spoilerless.net" />
   <title>Spoilerless — Spoiler-Safe Narrative Knowledge Graph & GraphRAG</title>
 
-  <!-- Anti-FOUC theme initialization -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+
   <script>
     (function () {
       try {
@@ -23,1431 +26,778 @@
   </script>
 
   <style>
-    /* ==========================================================================
-       SCANDINAVIAN TACTILE MINIMAL — DESIGN SYSTEM & PHYSICS
-       Zero External Fonts • Zero External Frameworks • Pure Semantic Tokens
-       ========================================================================== */
+    /* =========================================================
+       SPOILERLESS — CINEMATIC GLASS + BENTO + GRADIENT MESH
+       Dark OLED base, vibrant violet/rose/cyan accents,
+       glassmorphism + bento grid + aurora orbs
+       ========================================================= */
 
     :root,
     html[data-theme="dark"] {
-      /* Dark Theme Palette (Default) */
-      --bg: #09090b;
-      --surface: #121215;
-      --surface-subtle: #18181c;
-      --text: #f4f4f5;
-      --text-muted: #a1a1aa;
-      --text-subtle: #71717a;
-      --border: #27272a;
-      --border-hover: #52525b;
-      --accent: #f4f4f5;
-      --accent-subtle: #18181b;
-      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-      --shadow-md: 0 6px 20px -2px rgba(0, 0, 0, 0.5), 0 2px 8px -2px rgba(0, 0, 0, 0.3);
-      --code-bg: #141418;
-      --code-border: #27272a;
-      --tag-bg: #1c1c21;
-      --tag-text: #a1a1aa;
-      --status-green: #10b981;
-      --status-green-glow: rgba(16, 185, 129, 0.2);
-
-      /* Tactile Spring Physics */
+      --bg: #080B1A;
+      --bg-2: #0E0F26;
+      --bg-3: #12132E;
+      --surface: rgba(22, 22, 42, 0.72);
+      --surface-solid: #1A1A32;
+      --surface-2: #1E1D3A;
+      --surface-3: #25244A;
+      --text: #F1F5F9;
+      --text-strong: #FFFFFF;
+      --text-muted: #94A3B8;
+      --text-dim: #64748B;
+      --border: rgba(255,255,255,0.06);
+      --border-strong: rgba(255,255,255,0.10);
+      --border-hover: rgba(139,92,246,0.35);
+      --primary: #7C3AED;
+      --primary-soft: rgba(124,58,237,0.12);
+      --accent: #EC4899;
+      --accent-2: #06B6D4;
+      --accent-3: #F59E0B;
+      --success: #10B981;
+      --gradient-primary: linear-gradient(135deg, #7C3AED 0%, #A855F7 25%, #EC4899 55%, #06B6D4 100%);
+      --gradient-soft: linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(236,72,153,0.12) 50%, rgba(6,182,214,0.10) 100%);
+      --gradient-card: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.01) 100%);
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.3);
+      --shadow-md: 0 8px 32px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.3);
+      --shadow-glow: 0 0 40px rgba(124,58,237,0.15);
+      --shadow-violet: 0 8px 32px rgba(124,58,237,0.25);
+      --blur: 20px;
+      --radius-sm: 12px;
+      --radius-md: 16px;
+      --radius-lg: 24px;
+      --radius-xl: 28px;
+      --radius-pill: 999px;
+      --measure: 1200px;
       --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
-      --transition-tactile: transform 0.22s var(--ease-spring), border-color 0.15s ease, box-shadow 0.22s ease, background-color 0.15s ease, color 0.15s ease;
-      --transition-fast: transform 0.05s ease-out, border-color 0.05s ease-out, box-shadow 0.05s ease-out;
-      --measure: 720px;
+      --ease-smooth: cubic-bezier(0.25, 0.1, 0.25, 1);
     }
 
     html[data-theme="light"] {
-      /* Light Theme Palette (Opt-in) */
-      --bg: #fafafa;
-      --surface: #ffffff;
-      --surface-subtle: #f4f4f5;
-      --text: #18181b;
-      --text-muted: #71717a;
-      --text-subtle: #a1a1aa;
-      --border: #e4e4e7;
-      --border-hover: #a1a1aa;
-      --accent: #18181b;
-      --accent-subtle: #f4f4f5;
-      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-      --shadow-md: 0 6px 16px -2px rgba(0, 0, 0, 0.06), 0 2px 6px -2px rgba(0, 0, 0, 0.03);
-      --code-bg: #f4f4f5;
-      --code-border: #e4e4e7;
-      --tag-bg: #f4f4f5;
-      --tag-text: #52525b;
-      --status-green: #059669;
-      --status-green-glow: rgba(5, 150, 105, 0.15);
-    }
-
-    /* Reset & Typography */
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    html {
-      font-size: 16px;
-      line-height: 1.7;
-      -webkit-text-size-adjust: 100%;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      text-rendering: optimizeLegibility;
-      scroll-behavior: smooth;
-      background-color: var(--bg);
-      color: var(--text);
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    /* Centered Layout Shell */
-    .site-wrapper {
-      width: 100%;
-      max-width: var(--measure);
-      margin: 0 auto;
-      padding: 3rem 1.25rem 4rem;
-      display: flex;
-      flex-direction: column;
-      flex-grow: 1;
-    }
-
-    @media (max-width: 540px) {
-      .site-wrapper {
-        padding: 2rem 1rem 3rem;
-      }
-    }
-
-    /* Headings */
-    h1, h2, h3, h4 {
-      color: var(--text);
-      font-weight: 600;
-      letter-spacing: -0.02em;
-      line-height: 1.3;
-    }
-
-    h1 {
-      font-size: 1.875rem;
-      letter-spacing: -0.03em;
-      line-height: 1.25;
-      margin-bottom: 0.85rem;
-    }
-
-    h2 {
-      font-size: 1.3125rem;
-      letter-spacing: -0.02em;
-      margin-top: 3rem;
-      margin-bottom: 0.6rem;
-    }
-
-    h3 {
-      font-size: 1.0625rem;
-      letter-spacing: -0.015em;
-      margin-bottom: 0.4rem;
-    }
-
-    p {
-      margin-bottom: 1.15rem;
-      color: var(--text-muted);
-      font-size: 0.9375rem;
-      line-height: 1.65;
-    }
-
-    p.lead {
-      font-size: 1.0625rem;
-      line-height: 1.7;
-      color: var(--text);
-      margin-bottom: 1.5rem;
-    }
-
-    .section-label {
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-      margin-top: 3rem;
-      margin-bottom: 0.4rem;
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-    }
-
-    .section-desc {
-      font-size: 0.875rem;
-      color: var(--text-muted);
-      margin-bottom: 1.25rem;
-      line-height: 1.6;
-    }
-
-    hr {
-      border: 0;
-      border-top: 1px solid var(--border);
-      margin: 3rem 0;
-    }
-
-    /* Header & Navigation */
-    .site-header {
-      margin-bottom: 2.75rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      flex-wrap: wrap;
-    }
-
-    .brand {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.65rem;
-      color: var(--text);
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 1.0625rem;
-      letter-spacing: -0.02em;
-    }
-
-    .brand-mark {
-      width: 30px;
-      height: 30px;
-      border-radius: 8px;
-      display: grid;
-      place-items: center;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      box-shadow: var(--shadow-sm);
-    }
-
-    .brand-mark svg {
-      width: 17px;
-      height: 17px;
-    }
-
-    .site-nav {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      flex-wrap: wrap;
-    }
-
-    .site-nav a {
-      color: var(--text-muted);
-      text-decoration: none;
-      font-size: 0.875rem;
-      font-weight: 500;
-      transition: color 0.15s ease;
-    }
-
-    .site-nav a:hover {
-      color: var(--text);
-    }
-
-    .nav-actions {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.45rem;
-    }
-
-    /* Tactile 3-State Micro-Interactions */
-    .tactile-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.45rem;
-      padding: 0.45rem 0.85rem;
-      font-size: 0.84375rem;
-      font-weight: 500;
-      line-height: 1.2;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: var(--surface);
-      color: var(--text);
-      text-decoration: none;
-      cursor: pointer;
-      box-shadow: var(--shadow-sm);
-      transition: var(--transition-tactile);
-      will-change: transform;
-      user-select: none;
-      min-height: 36px;
-    }
-
-    .tactile-btn:hover {
-      transform: translateY(-2px);
-      border-color: var(--border-hover);
-      box-shadow: var(--shadow-md);
-      color: var(--text);
-    }
-
-    .tactile-btn:active {
-      transform: translateY(1px) scale(0.97);
-      transition: var(--transition-fast);
-    }
-
-    .tactile-btn-primary {
-      background: var(--text);
-      color: var(--bg);
-      border-color: var(--text);
-      font-weight: 600;
-    }
-
-    .tactile-btn-primary:hover {
-      background: var(--text);
-      color: var(--bg);
-      border-color: var(--text);
-      filter: brightness(1.1);
-    }
-
-    .tactile-btn-sm {
-      padding: 0.3rem 0.6rem;
-      font-size: 0.75rem;
-      min-height: 30px;
-      border-radius: 6px;
-    }
-
-    .tactile-btn-icon {
-      padding: 0.35rem 0.5rem;
-      min-width: 36px;
-      min-height: 36px;
-    }
-
-    .lang-switcher {
-      display: inline-flex;
-      padding: 2px;
-      border-radius: 8px;
-      background: var(--surface-subtle);
-      border: 1px solid var(--border);
-      gap: 2px;
-    }
-
-    .lang-btn {
-      background: transparent;
-      border: 0;
-      color: var(--text-muted);
-      font-size: 0.75rem;
-      font-weight: 600;
-      padding: 0.25rem 0.5rem;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: var(--transition-tactile);
-      will-change: transform;
-    }
-
-    .lang-btn.active {
-      background: var(--surface);
-      color: var(--text);
-      box-shadow: var(--shadow-sm);
-    }
-
-    .lang-btn:hover:not(.active) {
-      color: var(--text);
-    }
-
-    .lang-btn:active {
-      transform: translateY(1px) scale(0.97);
-      transition: var(--transition-fast);
-    }
-
-    /* Tactile Card */
-    .tactile-card {
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1.25rem;
-      text-decoration: none;
-      color: inherit;
-      box-shadow: var(--shadow-sm);
-      transition: var(--transition-tactile);
-      will-change: transform;
-      position: relative;
-    }
-
-    .tactile-card:hover {
-      transform: translateY(-2px);
-      border-color: var(--border-hover);
-      box-shadow: var(--shadow-md);
-      color: inherit;
-    }
-
-    .tactile-card:active {
-      transform: translateY(1px) scale(0.97);
-      transition: var(--transition-fast);
-    }
-
-    .tactile-card-header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 0.5rem;
-      margin-bottom: 0.4rem;
-    }
-
-    .tactile-card-title {
-      font-size: 0.9375rem;
-      font-weight: 600;
-      color: var(--text);
-      letter-spacing: -0.01em;
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-    }
-
-    .tactile-card-arrow {
-      color: var(--text-muted);
-      font-size: 0.875rem;
-      transition: transform 0.2s var(--ease-spring), color 0.15s ease;
-    }
-
-    .tactile-card:hover .tactile-card-arrow {
-      color: var(--text);
-      transform: translate(2px, -2px);
-    }
-
-    .tactile-card-desc {
-      font-size: 0.84375rem;
-      line-height: 1.55;
-      color: var(--text-muted);
-      margin-bottom: 0.85rem;
-    }
-
-    .tactile-card-footer {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      flex-wrap: wrap;
-      margin-top: auto;
-    }
-
-    /* Grids */
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 0.75rem;
-    }
-
-    .grid-4 {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 0.75rem;
-    }
-
-    @media (min-width: 520px) {
-      .grid-2 {
-        grid-template-columns: repeat(2, 1fr);
-      }
-      .grid-4 {
-        grid-template-columns: repeat(4, 1fr);
-      }
-    }
-
-    /* Status Pill */
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.45rem;
-      font-size: 0.75rem;
-      font-weight: 500;
-      color: var(--text-muted);
-      padding: 0.25rem 0.65rem;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 9999px;
-      margin-bottom: 1.25rem;
-      box-shadow: var(--shadow-sm);
-    }
-
-    .status-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background-color: var(--status-green);
-      box-shadow: 0 0 0 2px var(--status-green-glow);
-    }
-
-    /* Tags */
-    .tag {
-      display: inline-block;
-      font-size: 0.6875rem;
-      font-weight: 500;
-      padding: 0.15rem 0.45rem;
-      border-radius: 4px;
-      background: var(--tag-bg);
-      color: var(--tag-text);
-      border: 1px solid var(--border);
-      letter-spacing: 0.02em;
-      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    }
-
-    /* Post / Timeline Rows */
-    .posts-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-    }
-
-    .post-row {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 1rem;
-      padding: 0.75rem 0.85rem;
-      margin-inline: -0.85rem;
-      border-radius: 8px;
-      border: 1px solid transparent;
-      text-decoration: none;
-      color: inherit;
-      transition: var(--transition-tactile);
-      will-change: transform;
-    }
-
-    .post-row:hover {
-      background: var(--surface);
-      border-color: var(--border);
-      transform: translateY(-2px);
-      box-shadow: var(--shadow-sm);
-    }
-
-    .post-row:active {
-      transform: translateY(1px) scale(0.985);
-      transition: var(--transition-fast);
-    }
-
-    .post-row-title {
-      font-size: 0.90625rem;
-      font-weight: 500;
-      color: var(--text);
-      line-height: 1.45;
-    }
-
-    .post-row-date {
-      font-size: 0.78125rem;
-      color: var(--text-muted);
-      white-space: nowrap;
-      font-variant-numeric: tabular-nums;
-      font-family: ui-monospace, "SF Mono", monospace;
-      flex-shrink: 0;
-    }
-
-    /* Hero Action Row */
-    .hero-actions {
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-      flex-wrap: wrap;
-      margin-top: 1.5rem;
-      margin-bottom: 2rem;
-    }
-
-    /* Code Block & Terminal View */
-    .code-block {
-      background: var(--code-bg);
-      border: 1px solid var(--code-border);
-      border-radius: 10px;
-      padding: 1rem 1.15rem;
-      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-      font-size: 0.8125rem;
-      line-height: 1.6;
-      overflow-x: auto;
-      box-shadow: var(--shadow-sm);
-      margin: 0.85rem 0 1.25rem;
-      color: var(--text);
-    }
-
-    .code-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding-bottom: 0.5rem;
-      margin-bottom: 0.65rem;
-      border-bottom: 1px solid var(--border);
-      font-size: 0.6875rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-
-    /* Stat Box Inside Card */
-    .stat-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 0.85rem 1rem;
-      box-shadow: var(--shadow-sm);
-      transition: var(--transition-tactile);
-      will-change: transform;
-    }
-
-    .stat-card:hover {
-      transform: translateY(-2px);
-      border-color: var(--border-hover);
-      box-shadow: var(--shadow-md);
-    }
-
-    .stat-label {
-      font-size: 0.6875rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--text-muted);
-      font-family: ui-monospace, "SF Mono", monospace;
-      margin-bottom: 0.25rem;
-    }
-
-    .stat-value {
-      font-size: 1.125rem;
-      font-weight: 600;
-      color: var(--text);
-    }
-
-    /* Prose link with underline animation */
-    .prose-link {
-      color: var(--text);
-      text-decoration: underline;
-      text-decoration-color: var(--border-hover);
-      text-underline-offset: 3.5px;
-      transition: text-decoration-color 0.15s ease, color 0.15s ease;
-    }
-
-    .prose-link:hover {
-      text-decoration-color: var(--text);
-    }
-
-    /* Mock Chat Interactive Box */
-    .chat-container {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1.25rem;
-      margin: 1rem 0 1.5rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.85rem;
-      box-shadow: var(--shadow-sm);
-    }
-
-    .chat-bubble {
-      padding: 0.75rem 1rem;
-      border-radius: 8px;
-      font-size: 0.84375rem;
-      line-height: 1.55;
-      border: 1px solid var(--border);
-      background: var(--surface-subtle);
-    }
-
-    .chat-bubble.bot {
-      background: var(--accent-subtle);
-      border-color: var(--border-hover);
-    }
-
-    .citation-tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.25rem;
-      padding: 0.15rem 0.4rem;
-      border-radius: 4px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      font-size: 0.6875rem;
-      font-family: ui-monospace, "SF Mono", monospace;
-      color: var(--text);
-      margin-top: 0.4rem;
-      margin-right: 0.3rem;
-    }
-
-    /* Footer */
-    .site-footer {
-      margin-top: auto;
-      padding-top: 3rem;
-      border-top: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      font-size: 0.8125rem;
-      color: var(--text-muted);
-      flex-wrap: wrap;
-    }
-
-    .site-footer a {
-      color: var(--text-muted);
-      text-decoration: underline;
-      text-decoration-color: var(--border);
-      text-underline-offset: 3px;
-      transition: color 0.15s ease, text-decoration-color 0.15s ease;
-    }
-
-    .site-footer a:hover {
-      color: var(--text);
-      text-decoration-color: var(--text);
-    }
-
-    /* Focus Visible & Reduced Motion */
-    :focus-visible {
-      outline: 2px solid var(--text);
-      outline-offset: 2px;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-        scroll-behavior: auto !important;
-        transform: none !important;
-      }
+      --bg: #F8FAFC;
+      --bg-2: #F1F5F9;
+      --bg-3: #E2E8F0;
+      --surface: rgba(255,255,255,0.85);
+      --surface-solid: #FFFFFF;
+      --surface-2: #F8FAFC;
+      --surface-3: #F1F5F9;
+      --text: #0F172A;
+      --text-strong: #020617;
+      --text-muted: #64748B;
+      --text-dim: #94A3B8;
+      --border: rgba(15,23,42,0.06);
+      --border-strong: rgba(15,23,42,0.10);
+      --border-hover: rgba(124,58,237,0.25);
+      --primary: #7C3AED;
+      --primary-soft: rgba(124,58,237,0.08);
+      --shadow-sm: 0 1px 3px rgba(15,23,42,0.06), 0 4px 16px rgba(15,23,42,0.04);
+      --shadow-md: 0 8px 32px rgba(15,23,42,0.08), 0 2px 8px rgba(15,23,42,0.06);
+      --shadow-glow: 0 0 40px rgba(124,58,237,0.08);
+      --shadow-violet: 0 8px 32px rgba(124,58,237,0.15);
+    }
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;scroll-behavior:smooth;background:var(--bg);color:var(--text)}
+    body{font-family:"Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;position:relative}
+    /* Aurora mesh background */
+    body::before{
+      content:"";position:fixed;inset:0;z-index:-2;
+      background:
+        radial-gradient(700px 500px at 15% -10%, rgba(124,58,237,0.18), transparent 60%),
+        radial-gradient(600px 600px at 85% 0%, rgba(236,72,153,0.12), transparent 60%),
+        radial-gradient(800px 400px at 50% 55%, rgba(6,182,214,0.07), transparent 60%),
+        radial-gradient(500px 500px at 90% 85%, rgba(124,58,237,0.10), transparent 60%),
+        var(--bg);
+      pointer-events:none;
+    }
+    body::after{
+      content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:0.015;
+      background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    }
+    a{color:inherit;text-decoration:none}
+    button{font:inherit}
+
+    .container{width:min(calc(100% - 32px), var(--measure));margin-inline:auto}
+    @media(max-width:640px){.container{width:min(calc(100% - 24px), var(--measure))}}
+
+    /* ── Header ── */
+    .site-header{
+      position:sticky;top:0;z-index:50;
+      backdrop-filter: blur(var(--blur)) saturate(1.2);
+      -webkit-backdrop-filter: blur(var(--blur)) saturate(1.2);
+      background: color-mix(in srgb, var(--bg) 70%, transparent);
+      border-bottom:1px solid var(--border);
+    }
+    .header-inner{
+      min-height:64px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-block:10px;
+    }
+    .brand{display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:1.05rem;letter-spacing:-0.02em;color:var(--text-strong)}
+    .brand-mark{
+      width:36px;height:36px;border-radius:11px;display:grid;place-items:center;
+      background: var(--gradient-primary);color:white;box-shadow: var(--shadow-violet);position:relative;overflow:hidden;
+    }
+    .brand-mark::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg, rgba(255,255,255,0.18), transparent 55%);pointer-events:none}
+    .brand-mark svg{width:18px;height:18px;position:relative;z-index:1}
+    .site-nav{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+    .site-nav a{color:var(--text-muted);font-size:0.875rem;font-weight:500;letter-spacing:-0.01em;transition:color .15s}
+    .site-nav a:hover{color:var(--text-strong)}
+    .nav-actions{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+    /* ── Buttons ── */
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      padding:10px 18px;border-radius:var(--radius-pill);font-size:0.875rem;font-weight:600;letter-spacing:-0.01em;
+      border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+      backdrop-filter: blur(12px);-webkit-backdrop-filter: blur(12px);
+      box-shadow: var(--shadow-sm);cursor:pointer;white-space:nowrap;
+      transition: transform .18s var(--ease-spring), border-color .15s, box-shadow .18s, background .15s, filter .15s;
+    }
+    .btn:hover{transform:translateY(-1px);border-color:var(--border-hover);box-shadow:var(--shadow-md)}
+    .btn:active{transform:translateY(1px) scale(0.98)}
+    .btn-primary{
+      background: var(--gradient-primary);color:white;border-color:transparent;
+      box-shadow: 0 4px 20px rgba(124,58,237,0.35), 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .btn-primary:hover{filter:brightness(1.08) saturate(1.1);box-shadow:0 6px 28px rgba(124,58,237,0.45)}
+    .btn-sm{padding:7px 14px;font-size:0.8125rem}
+    .btn-icon{width:38px;height:38px;padding:0;border-radius:11px}
+    .btn-ghost{background:transparent;border-color:transparent;box-shadow:none;backdrop-filter:none}
+    .btn-ghost:hover{background:var(--surface);border-color:var(--border);box-shadow:var(--shadow-sm)}
+
+    .lang-switcher{display:inline-flex;padding:3px;border-radius:999px;background:var(--surface);border:1px solid var(--border);gap:2px;backdrop-filter:blur(12px)}
+    .lang-btn{background:transparent;border:0;color:var(--text-muted);font-size:0.75rem;font-weight:700;padding:6px 12px;border-radius:999px;cursor:pointer;transition:all .15s}
+    .lang-btn.active{background:var(--text);color:var(--bg);box-shadow:var(--shadow-sm)}
+    html[data-theme="light"] .lang-btn.active{background:var(--text-strong);color:white}
+
+    /* ── Hero ── */
+    .hero{padding: 44px 0 0;position:relative}
+    .hero-grid{display:grid;grid-template-columns: 1.05fr 0.95fr;gap:40px;align-items:center}
+    @media(max-width:980px){.hero-grid{grid-template-columns:1fr;gap:28px}}
+    .eyebrow{
+      display:inline-flex;align-items:center;gap:8px;padding:6px 12px 6px 6px;border-radius:var(--radius-pill);
+      background:var(--surface);border:1px solid var(--border);backdrop-filter:blur(12px);
+      font-size:0.75rem;font-weight:600;letter-spacing:0.02em;color:var(--text-muted);margin-bottom:18px;box-shadow:var(--shadow-sm)
+    }
+    .eyebrow-dot{width:22px;height:22px;border-radius:999px;display:grid;place-items:center;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.25);color:var(--success);font-size:10px}
+    .eyebrow strong{color:var(--text);font-weight:700}
+    .hero-title{
+      font-family:"Space Grotesk", "Outfit", sans-serif;
+      font-size: clamp(2.4rem, 5.2vw, 4.2rem);font-weight:800;line-height:0.92;letter-spacing:-0.04em;
+      margin-bottom:16px;color:var(--text-strong)
+    }
+    .hero-title .gradient{
+      background: var(--gradient-primary);-webkit-background-clip:text;background-clip:text;color:transparent;
+      font-family:"Instrument Serif", serif;font-weight:400;font-style:italic;letter-spacing:-0.03em;
+    }
+    .hero-lead{font-size: clamp(1rem, 1.6vw, 1.125rem);line-height:1.6;color:var(--text-muted);max-width:560px;margin-bottom:22px}
+    .hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+    .hero-meta{display:flex;gap:18px;flex-wrap:wrap;color:var(--text-dim);font-size:0.8125rem;font-weight:500}
+    .hero-meta span{display:inline-flex;align-items:center;gap:6px}
+    .hero-meta i{width:6px;height:6px;border-radius:50%;background:var(--accent-2);box-shadow:0 0 8px var(--accent-2)}
+    .hero-meta i.violet{background:var(--primary);box-shadow:0 0 8px var(--primary)}
+    .hero-meta i.rose{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+
+    /* Hero visual */
+    .hero-visual{position:relative;padding:8px}
+    .hero-visual::before{
+      content:"";position:absolute;inset:-10%;z-index:-1;filter:blur(40px);opacity:0.6;
+      background: radial-gradient(400px 300px at 50% 40%, rgba(124,58,237,0.25), transparent 70%), radial-gradient(300px 300px at 80% 80%, rgba(236,72,153,0.18), transparent 70%);
+      pointer-events:none;
+    }
+    .preview-shell{
+      border-radius:var(--radius-xl);overflow:hidden;
+      background: var(--surface);border:1px solid var(--border-strong);
+      backdrop-filter: blur(var(--blur));-webkit-backdrop-filter: blur(var(--blur));
+      box-shadow: var(--shadow-md), var(--shadow-glow);position:relative;
+    }
+    .preview-topbar{
+      height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;
+      border-bottom:1px solid var(--border);background: color-mix(in srgb, var(--surface) 60%, transparent);
+    }
+    .traffic{display:flex;gap:6px}
+    .traffic i{width:10px;height:10px;border-radius:50%;display:block}
+    .traffic i:nth-child(1){background:#FF5F56;border:1px solid rgba(0,0,0,0.1)}
+    .traffic i:nth-child(2){background:#FFBD2E;border:1px solid rgba(0,0,0,0.1)}
+    .traffic i:nth-child(3){background:#27C93F;border:1px solid rgba(0,0,0,0.1)}
+    .preview-title{font-size:0.75rem;font-weight:600;color:var(--text-muted);display:flex;align-items:center;gap:6px}
+    .live-pill{font-size:0.68rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:4px 8px;border-radius:999px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.25);color:var(--success);display:inline-flex;align-items:center;gap:5px}
+    .live-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--success);box-shadow:0 0 6px var(--success);animation:pulse 1.8s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}
+    .preview-body{padding:16px;display:grid;grid-template-columns: 1fr 1fr;gap:12px}
+    .mini-card{border-radius:14px;padding:12px;border:1px solid var(--border);background: var(--gradient-card);backdrop-filter:blur(8px)}
+    .mini-card.full{grid-column:1 / -1}
+    .mini-label{font-size:0.66rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-dim);font-family:"JetBrains Mono", monospace;margin-bottom:8px}
+    .mini-graph{height:112px;border-radius:10px;background: radial-gradient(200px 120px at 30% 30%, rgba(124,58,237,0.18), transparent 60%), radial-gradient(180px 120px at 80% 70%, rgba(6,182,214,0.12), transparent 60%), var(--surface-2);border:1px solid var(--border);position:relative;overflow:hidden;display:grid;place-items:center}
+    .graph-nodes{position:relative;width:100%;height:100%}
+    .gn{position:absolute;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:0.7rem;font-weight:700;color:white;box-shadow:0 4px 12px rgba(0,0,0,0.25);border:2px solid rgba(255,255,255,0.9)}
+    .gn-1{left:22%;top:28%;background:linear-gradient(135deg, #7C3AED, #A78BFA)}
+    .gn-2{left:58%;top:18%;background:linear-gradient(135deg, #EC4899, #F472B6);width:28px;height:28px}
+    .gn-3{left:45%;top:58%;background:linear-gradient(135deg, #06B6D4, #22D3EE);width:30px;height:30px}
+    .gn-4{left:72%;top:52%;background:linear-gradient(135deg, #F59E0B, #FBBF24);width:24px;height:24px}
+    .gn-edge{position:absolute;height:2px;background:linear-gradient(90deg, rgba(124,58,237,0.5), rgba(236,72,153,0.3));border-radius:999px;transform-origin:left}
+    .stat-mini{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+    .stat-mini:last-child{border:0}
+    .stat-mini span{font-size:0.78rem;color:var(--text-muted)}
+    .stat-mini strong{font-size:0.78rem;font-weight:700;color:var(--text-strong);font-family:"JetBrains Mono", monospace}
+    .code-mini{font-family:"JetBrains Mono", monospace;font-size:0.72rem;line-height:1.5;color:var(--text-muted);background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;overflow:hidden}
+    .code-mini b{color:var(--primary)}
+    .code-mini em{color:var(--accent);font-style:normal}
+    .code-mini i{color:var(--accent-2);font-style:normal}
+
+    /* ── Stats bar ── */
+    .stats-bar{margin-top:28px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    @media(max-width:700px){.stats-bar{grid-template-columns:repeat(2,1fr)}}
+    .stat-card{
+      border-radius:var(--radius-md);padding:14px 16px;
+      background: var(--surface);border:1px solid var(--border);backdrop-filter:blur(16px);
+      box-shadow:var(--shadow-sm);position:relative;overflow:hidden;
+    }
+    .stat-card::before{content:"";position:absolute;top:0;left:0;right:0;height:1px;background:var(--gradient-soft);opacity:0.6}
+    .stat-card small{font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-dim);font-family:"JetBrains Mono", monospace}
+    .stat-card strong{font-size:1.35rem;font-weight:800;letter-spacing:-0.02em;color:var(--text-strong);display:block;margin-top:2px}
+    .stat-card span{font-size:0.75rem;color:var(--text-muted)}
+
+    /* ── Sections ── */
+    section{padding: 72px 0}
+    @media(max-width:640px){section{padding:48px 0}}
+    .section-head{display:flex;justify-content:space-between;gap:24px;align-items:end;margin-bottom:28px;flex-wrap:wrap}
+    .section-head h2{font-family:"Space Grotesk", sans-serif;font-size: clamp(1.7rem, 3vw, 2.4rem);font-weight:800;letter-spacing:-0.03em;line-height:1.05;color:var(--text-strong)}
+    .section-head p{color:var(--text-muted);font-size:0.95rem;line-height:1.6;max-width:520px}
+    .kicker{font-size:0.72rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary);font-family:"JetBrains Mono", monospace;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+    .kicker::before{content:"";width:18px;height:2px;border-radius:999px;background:var(--gradient-primary);display:block}
+
+    /* ── Bento grid ── */
+    .bento{ display:grid; grid-template-columns: repeat(12, 1fr); gap:14px; }
+    .bento-card{
+      grid-column: span 6;
+      border-radius: var(--radius-lg);padding:22px;position:relative;overflow:hidden;
+      background: var(--surface);border:1px solid var(--border);backdrop-filter:blur(18px);
+      box-shadow: var(--shadow-sm);transition: transform .18s var(--ease-spring), border-color .15s, box-shadow .18s;
+    }
+    .bento-card:hover{transform:translateY(-2px);border-color:var(--border-hover);box-shadow:var(--shadow-md)}
+    .bento-card.large{grid-column: span 6}
+    .bento-card.small{grid-column: span 6}
+    @media(max-width:900px){.bento-card,.bento-card.large,.bento-card.small{grid-column: span 12}}
+    @media(min-width:901px){
+      .bento-card:nth-child(1){grid-column: span 7}
+      .bento-card:nth-child(2){grid-column: span 5}
+      .bento-card:nth-child(3){grid-column: span 5}
+      .bento-card:nth-child(4){grid-column: span 7}
+      .bento-card:nth-child(5){grid-column: span 6}
+      .bento-card:nth-child(6){grid-column: span 6}
+    }
+    .bento-card::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;background:var(--gradient-soft);-webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:0;transition:opacity .18s;pointer-events:none}
+    .bento-card:hover::before{opacity:1}
+    .icon-box{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;margin-bottom:14px;position:relative;box-shadow:var(--shadow-sm);border:1px solid var(--border)}
+    .icon-box.violet{background: linear-gradient(135deg, rgba(124,58,237,0.18), rgba(168,85,247,0.14));color:#A78BFA}
+    .icon-box.rose{background: linear-gradient(135deg, rgba(236,72,153,0.16), rgba(244,63,94,0.12));color:#F472B6}
+    .icon-box.cyan{background: linear-gradient(135deg, rgba(6,182,214,0.16), rgba(34,211,238,0.12));color:#22D3EE}
+    .icon-box.amber{background: linear-gradient(135deg, rgba(245,158,11,0.16), rgba(251,191,36,0.12));color:#FBBF24}
+    .icon-box svg{width:22px;height:22px}
+    .bento-card h3{font-size:1.05rem;font-weight:700;letter-spacing:-0.02em;margin-bottom:6px;color:var(--text-strong)}
+    .bento-card p{color:var(--text-muted);font-size:0.875rem;line-height:1.6;margin:0 0 14px}
+    .card-tags{display:flex;gap:6px;flex-wrap:wrap}
+    .tag{font-size:0.68rem;font-weight:600;letter-spacing:0.02em;padding:4px 8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-muted);font-family:"JetBrains Mono", monospace}
+
+    /* ── Glass feature rows ── */
+    .feature-row{
+      display:grid;grid-template-columns: 1.05fr 0.95fr;gap:18px;align-items:stretch;
+      padding:18px;border-radius:var(--radius-xl);background:var(--surface);border:1px solid var(--border);
+      backdrop-filter:blur(18px);box-shadow:var(--shadow-sm);margin-bottom:14px;overflow:hidden;
+    }
+    .feature-row.reverse{grid-template-columns: 0.95fr 1.05fr}
+    @media(max-width:900px){.feature-row,.feature-row.reverse{grid-template-columns:1fr}}
+    .feature-copy{padding:10px 8px}
+    .feature-copy h3{font-size:1.25rem;font-weight:800;letter-spacing:-0.02em;margin-bottom:8px}
+    .feature-copy p{font-size:0.9rem;line-height:1.6;color:var(--text-muted);margin-bottom:12px}
+    .code-block{
+      border-radius:14px;overflow:hidden;background: #0B0D1E; border:1px solid rgba(255,255,255,0.07);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);font-family:"JetBrains Mono", monospace;font-size:0.78rem;line-height:1.6;
+    }
+    html[data-theme="light"] .code-block{background:#0B1020}
+    .code-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color:#94A3B8;font-size:0.7rem;letter-spacing:0.06em;text-transform:uppercase}
+    .code-head strong{color:#E2E8F0;font-weight:700}
+    .code-body{padding:14px;overflow-x:auto;color:#CBD5E1}
+    .code-body .kw{color:#C084FC}.code-body .str{color:#6EE7B7}.code-body .num{color:#FDE68A}.code-body .com{color:#64748B}
+    .feature-tags{display:flex;gap:6px;flex-wrap:wrap}
+
+    /* ── Chat demo ── */
+    .chat-grid{display:grid;grid-template-columns: 1.05fr 0.95fr;gap:14px;align-items:start}
+    @media(max-width:900px){.chat-grid{grid-template-columns:1fr}}
+    .chat-shell{
+      border-radius:var(--radius-xl);background:var(--surface);border:1px solid var(--border);backdrop-filter:blur(18px);
+      padding:18px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:12px;
+    }
+    .bubble{padding:12px 14px;border-radius:14px;font-size:0.875rem;line-height:1.55;border:1px solid var(--border);max-width:92%}
+    .bubble.user{align-self:flex-end;background: var(--surface-2);color:var(--text-strong);border-color:var(--border-strong)}
+    .bubble.bot{align-self:flex-start;background: linear-gradient(180deg, rgba(124,58,237,0.10), rgba(124,58,237,0.04));border-color: rgba(124,58,237,0.18)}
+    .bubble strong{font-size:0.75rem;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-muted);font-family:"JetBrains Mono", monospace;display:block;margin-bottom:4px}
+    .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+    .chip{font-size:0.7rem;font-weight:600;padding:4px 8px;border-radius:999px;background:rgba(6,182,214,0.12);border:1px solid rgba(6,182,214,0.25);color:#22D3EE;font-family:"JetBrains Mono", monospace}
+
+    /* ── Pipeline ── */
+    .pipeline{
+      border-radius:var(--radius-xl);background:var(--surface);border:1px solid var(--border);backdrop-filter:blur(18px);
+      padding:18px;box-shadow:var(--shadow-sm);overflow:hidden;
+    }
+    .pipeline-track{display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto 1fr;gap:10px;align-items:center}
+    @media(max-width:900px){.pipeline-track{grid-template-columns:1fr;gap:8px}.pipe-arrow{transform:rotate(90deg)}}
+    .pipe-step{border-radius:14px;padding:14px;text-align:center;background:var(--surface-2);border:1px solid var(--border);position:relative}
+    .pipe-step small{font-size:0.66rem;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--primary);font-family:"JetBrains Mono", monospace}
+    .pipe-step h4{font-size:0.92rem;font-weight:700;margin:4px 0;color:var(--text-strong)}
+    .pipe-step p{font-size:0.78rem;color:var(--text-muted);margin:0}
+    .pipe-arrow{color:var(--text-dim);font-weight:800;display:grid;place-items:center;width:28px;height:28px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border)}
+    .stack-pills{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:16px}
+    .pill{padding:7px 12px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);font-size:0.75rem;font-weight:600;color:var(--text-muted)}
+
+    /* ── Security ── */
+    .security-grid{display:grid;grid-template-columns:1.1fr 0.9fr;gap:14px;align-items:stretch}
+    @media(max-width:900px){.security-grid{grid-template-columns:1fr}}
+
+    /* ── Roadmap ── */
+    .roadmap{ display:grid; grid-template-columns: repeat(4,1fr); gap:14px }
+    @media(max-width:900px){.roadmap{grid-template-columns:1fr 1fr}}
+    @media(max-width:560px){.roadmap{grid-template-columns:1fr}}
+    .road-card{border-radius:var(--radius-lg);padding:18px;background:var(--surface);border:1px solid var(--border);backdrop-filter:blur(16px);box-shadow:var(--shadow-sm);position:relative;overflow:hidden}
+    .road-card::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--gradient-primary);opacity:0.0;transition:opacity .18s}
+    .road-card:hover::before{opacity:1}
+    .road-badge{font-size:0.66rem;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:4px 8px;border-radius:999px;display:inline-block;margin-bottom:10px;font-family:"JetBrains Mono", monospace}
+    .road-card.done .road-badge{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.25);color:var(--success)}
+    .road-card.active .road-badge{background:rgba(6,182,214,0.12);border:1px solid rgba(6,182,214,0.25);color:var(--accent-2)}
+    .road-card h4{font-size:0.95rem;font-weight:700;margin-bottom:6px}
+    .road-card p{font-size:0.82rem;color:var(--text-muted);margin:0}
+
+    /* ── CTA ── */
+    .cta{
+      border-radius: var(--radius-xl);padding:28px;position:relative;overflow:hidden;
+      background: var(--surface);border:1px solid var(--border);backdrop-filter:blur(18px);box-shadow:var(--shadow-md);
+      display:grid;grid-template-columns:1.2fr 0.8fr;gap:18px;align-items:center;
+    }
+    .cta::before{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;background:var(--gradient-primary);-webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:0.5;pointer-events:none}
+    .cta::after{content:"";position:absolute;inset:0;background: var(--gradient-soft);opacity:0.6;pointer-events:none}
+    .cta > *{position:relative;z-index:1}
+    @media(max-width:900px){.cta{grid-template-columns:1fr}}
+    .cta h3{font-family:"Space Grotesk", sans-serif;font-size: clamp(1.4rem, 3vw, 2rem);font-weight:800;letter-spacing:-0.03em;line-height:1.05;margin-bottom:8px}
+    .cta p{color:var(--text-muted);margin:0}
+
+    /* ── Footer ── */
+    .site-footer{margin-top:40px;padding:28px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;color:var(--text-muted);font-size:0.82rem}
+    .site-footer a{text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:3px}
+    .site-footer a:hover{color:var(--text)}
+
+    /* ── Focus & motion ── */
+    :focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+    @media(prefers-reduced-motion: reduce){
+      *,*::before,*::after{animation:none !important;transition:none !important;scroll-behavior:auto !important}
     }
   </style>
 </head>
 <body>
-
-  <div class="site-wrapper">
-    <!-- Header -->
-    <header class="site-header">
-      <a href="#top" class="brand" aria-label="Spoilerless Home">
-        <div class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-          </svg>
-        </div>
-        <span>Spoilerless</span>
-      </a>
-
-      <nav class="site-nav">
-        <a href="#features" data-i18n="nav_features">Features</a>
-        <a href="#projections" data-i18n="nav_projections">Projections</a>
-        <a href="#graphrag" data-i18n="nav_chat">GraphRAG</a>
-        <a href="#security" data-i18n="nav_safety">Security</a>
-        <a href="#roadmap" data-i18n="nav_roadmap">Roadmap</a>
-      </nav>
-
-      <div class="nav-actions">
-        <!-- Language Switcher -->
-        <div class="lang-switcher" role="group" aria-label="Language selector">
-          <button class="lang-btn" id="langTr" onclick="setLanguage('tr')" aria-label="Türkçe">TR</button>
-          <button class="lang-btn active" id="langEn" onclick="setLanguage('en')" aria-label="English">EN</button>
-        </div>
-
-        <!-- Theme Toggle -->
-        <button class="tactile-btn tactile-btn-icon" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme">
-          <svg id="themeIcon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <!-- Sun icon for dark mode (action: switch to light) -->
-            <circle cx="12" cy="12" r="5"></circle>
-            <line x1="12" y1="1" x2="12" y2="3"></line>
-            <line x1="12" y1="21" x2="12" y2="23"></line>
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-            <line x1="1" y1="12" x2="3" y2="12"></line>
-            <line x1="21" y1="12" x2="23" y2="12"></line>
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-          </svg>
-        </button>
-
-        <!-- GitHub -->
-        <a class="tactile-btn tactile-btn-icon" href="https://github.com/vinnipukh/spoilerless" target="_blank" rel="noreferrer" aria-label="GitHub repository">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
-            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-          </svg>
+  <header class="site-header">
+    <div class="container">
+      <div class="header-inner">
+        <a href="#top" class="brand" aria-label="Spoilerless home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          </span>
+          Spoilerless
         </a>
-
-        <!-- Launch App -->
-        <a class="tactile-btn tactile-btn-primary tactile-btn-sm" href="https://spoilerless.net" target="_blank" rel="noreferrer">
-          <span data-i18n="btn_launch_app">Launch App</span>
-          <span aria-hidden="true">↗</span>
-        </a>
-      </div>
-    </header>
-
-    <main id="top">
-      <!-- Live Status Pill -->
-      <div class="status-badge">
-        <span class="status-dot" aria-hidden="true"></span>
-        <span data-i18n="hero_badge">v1.4 Security Hardened · Live in Production</span>
-      </div>
-
-      <!-- Hero Section -->
-      <section>
-        <h1 data-i18n="hero_title">Explore TV narratives. Strictly spoiler-safe.</h1>
-        <p class="lead" data-i18n="hero_desc">
-          An interactive narrative knowledge graph, source-grounded evidence provenance, and spoiler-safe GraphRAG chat — strictly bounded to your exact watch progress at the database query layer.
-        </p>
-
-        <div class="hero-actions">
-          <a class="tactile-btn tactile-btn-primary" href="https://spoilerless.net" target="_blank" rel="noreferrer">
-            <span data-i18n="btn_try_live">Open spoilerless.net</span>
-            <span aria-hidden="true">↗</span>
+        <nav class="site-nav" aria-label="Primary">
+          <a href="#features" data-i18n="nav_features">Features</a>
+          <a href="#projections" data-i18n="nav_projections">Projections</a>
+          <a href="#graphrag" data-i18n="nav_chat">GraphRAG</a>
+          <a href="#security" data-i18n="nav_safety">Security</a>
+          <a href="#roadmap" data-i18n="nav_roadmap">Roadmap</a>
+        </nav>
+        <div class="nav-actions">
+          <div class="lang-switcher" role="group" aria-label="Language">
+            <button class="lang-btn" id="langTr" onclick="setLanguage('tr')">TR</button>
+            <button class="lang-btn active" id="langEn" onclick="setLanguage('en')">EN</button>
+          </div>
+          <button class="btn btn-icon" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme">
+            <svg id="themeIcon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+          </button>
+          <a class="btn btn-icon" href="https://github.com/vinnipukh/spoilerless" target="_blank" rel="noreferrer" aria-label="GitHub">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
           </a>
-          <a class="tactile-btn" href="#features">
-            <span data-i18n="btn_explore_features">Explore Features</span>
-            <span aria-hidden="true">↓</span>
-          </a>
-          <a class="tactile-btn" href="https://github.com/vinnipukh/spoilerless" target="_blank" rel="noreferrer">
-            <span>GitHub</span>
-            <span aria-hidden="true">↗</span>
-          </a>
+          <a class="btn btn-primary btn-sm" href="https://spoilerless.net" target="_blank" rel="noreferrer"><span data-i18n="btn_launch_app">Launch App</span> <span aria-hidden="true">↗</span></a>
         </div>
-      </section>
-
-      <!-- Live Environment Stats -->
-      <section style="margin-top: 1rem;">
-        <div class="grid-4">
-          <div class="stat-card">
-            <div class="stat-label" data-i18n="stat_views">Projections</div>
-            <div class="stat-value">4 Views</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label" data-i18n="stat_api_ops">OpenAPI Ops</div>
-            <div class="stat-value">52 Routes</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label" data-i18n="stat_test_suites">Test Suites</div>
-            <div class="stat-value">44 Passing</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label" data-i18n="stat_database">Database</div>
-            <div class="stat-value">Neo4j Aura</div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Core Features Grid -->
-      <section id="features">
-        <div class="section-label" data-i18n="label_core_features">Platform Capabilities</div>
-        <h2 data-i18n="features_heading">A Second Brain for Television Narratives</h2>
-        <p class="section-desc" data-i18n="features_subheading">
-          Spoilerless combines temporal knowledge graph architectures, human-in-the-loop editing, and spoiler-safe GraphRAG into a unified narrative exploration platform.
-        </p>
-
-        <div class="grid-2">
-          <!-- Feat 1 -->
-          <div class="tactile-card">
-            <div>
-              <div class="tactile-card-header">
-                <span class="tactile-card-title" data-i18n="feat_1_title">Fail-Closed Spoiler Safety</span>
-              </div>
-              <p class="tactile-card-desc" data-i18n="feat_1_desc">
-                Data isolation is enforced at the database query layer. Nodes, relationships, search indexes, and LLM context beyond your selected episode never leave the server.
-              </p>
-            </div>
-            <div class="tactile-card-footer">
-              <span class="tag">visible_from_order</span>
-              <span class="tag">fail-closed</span>
-            </div>
-          </div>
-
-          <!-- Feat 2 -->
-          <div class="tactile-card">
-            <div>
-              <div class="tactile-card-header">
-                <span class="tactile-card-title" data-i18n="feat_2_title">4 Specialized Projections</span>
-              </div>
-              <p class="tactile-card-desc" data-i18n="feat_2_desc">
-                Navigate tailored view modes: Story (Overview + Timeline), Characters (Social Network & Conflict), Evidence (Investigation Chains), and Advanced (Full Graph Explorer).
-              </p>
-            </div>
-            <div class="tactile-card-footer">
-              <span class="tag">cytoscape</span>
-              <span class="tag">4 views</span>
-            </div>
-          </div>
-
-          <!-- Feat 3 -->
-          <div class="tactile-card">
-            <div>
-              <div class="tactile-card-header">
-                <span class="tactile-card-title" data-i18n="feat_3_title">Grounded GraphRAG Chat</span>
-              </div>
-              <p class="tactile-card-desc" data-i18n="feat_3_desc">
-                Chat with an LLM (Gemini or BYOK OpenAI models) that answers strictly from your spoiler-filtered graph context, quoting verified evidence chips and timestamps.
-              </p>
-            </div>
-            <div class="tactile-card-footer">
-              <span class="tag">graphrag</span>
-              <span class="tag">byok</span>
-            </div>
-          </div>
-
-          <!-- Feat 4 -->
-          <div class="tactile-card">
-            <div>
-              <div class="tactile-card-header">
-                <span class="tactile-card-title" data-i18n="feat_4_title">User Notes & Custom Nodes</span>
-              </div>
-              <p class="tactile-card-desc" data-i18n="feat_4_desc">
-                Add private notes, custom entities, and custom relationships directly on the graph. User content is visually distinguished from canonical seed facts.
-              </p>
-            </div>
-            <div class="tactile-card-footer">
-              <span class="tag">notes</span>
-              <span class="tag">custom-nodes</span>
-            </div>
-          </div>
-
-          <!-- Feat 5 -->
-          <div class="tactile-card">
-            <div>
-              <div class="tactile-card-header">
-                <span class="tactile-card-title" data-i18n="feat_5_title">Revisions & One-Click Revert</span>
-              </div>
-              <p class="tactile-card-desc" data-i18n="feat_5_desc">
-                Every edit, note, or relationship is recorded in an immutable revision history. Compare before/after diffs and roll back any modification safely.
-              </p>
-            </div>
-            <div class="tactile-card-footer">
-              <span class="tag">revisions</span>
-              <span class="tag">diff-revert</span>
-            </div>
-          </div>
-
-          <!-- Feat 6 -->
-          <div class="tactile-card">
-            <div>
-              <div class="tactile-card-header">
-                <span class="tactile-card-title" data-i18n="feat_6_title">Snapshot Sharing & Export</span>
-              </div>
-              <p class="tactile-card-desc" data-i18n="feat_6_desc">
-                Create expiring, read-only token snapshot links to share graph perspectives with friends without spoiling future plot twists. Export graph data to clean Markdown.
-              </p>
-            </div>
-            <div class="tactile-card-footer">
-              <span class="tag">share-tokens</span>
-              <span class="tag">export-md</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- 4 Projections Deep Dive -->
-      <section id="projections">
-        <div class="section-label" data-i18n="label_projections_deep">Projection Views</div>
-        <h2 data-i18n="projections_heading">Task-Specific Graph Projections</h2>
-        <p class="section-desc" data-i18n="projections_subheading">
-          Rather than overwhelming users with a 500-node raw graph, Spoilerless computes purpose-built graph projections tailored to narrative exploration.
-        </p>
-
-        <!-- Projection 1: Story -->
-        <div class="tactile-card" style="margin-bottom: 0.75rem;">
-          <div class="tactile-card-header">
-            <h3 data-i18n="proj_1_title">01 · Story Mode: Episode Overview & Timeline</h3>
-          </div>
-          <p class="tactile-card-desc" data-i18n="proj_1_desc">
-            Displays core characters, major plot events, and locations up to your active episode. Synchronized with a chronological Event Timeline rail at the bottom of the screen.
-          </p>
-          <div class="code-block">
-            <div class="code-header">
-              <span>GET /api/series/series_dexter/graph/visualization</span>
-              <span>view_type: episode_overview</span>
-            </div>
-            <code>{ "view_type": "episode_overview", "effective_view_order": 2, "nodes": [{"id": "char:dexter", "display_tier": 1}, {"id": "event:ice_truck", "display_tier": 1}] }</code>
-          </div>
-          <div class="tactile-card-footer">
-            <span class="tag">view: episode_overview</span>
-            <span class="tag">timeline-rail</span>
-          </div>
-        </div>
-
-        <!-- Projection 2: Characters -->
-        <div class="tactile-card" style="margin-bottom: 0.75rem;">
-          <div class="tactile-card-header">
-            <h3 data-i18n="proj_2_title">02 · Character Network: Social Dynamics & Expansions</h3>
-          </div>
-          <p class="tactile-card-desc" data-i18n="proj_2_desc">
-            Focuses on interpersonal bonds, workplace hierarchies, and antagonistic conflicts. Semantic expansion lets users unfold family or colleague clusters without global relayout.
-          </p>
-          <div class="code-block">
-            <div class="code-header">
-              <span>Cypher Expansion Query</span>
-              <span>Safe Boundary Filter</span>
-            </div>
-            <code>MATCH (c:Character {id: $node_id}) OPTIONAL MATCH (c)-[r:FAMILY_OF|WORKS_WITH|CONFLICTS_WITH]-(target) WHERE r.visible_from_order &lt;= $order RETURN c, r, target LIMIT 25</code>
-          </div>
-          <div class="tactile-card-footer">
-            <span class="tag">view: character_network</span>
-            <span class="tag">semantic-expansion</span>
-          </div>
-        </div>
-
-        <!-- Projection 3: Evidence -->
-        <div class="tactile-card">
-          <div class="tactile-card-header">
-            <h3 data-i18n="proj_3_title">03 · Evidence & Investigation: Clue Chains</h3>
-          </div>
-          <p class="tactile-card-desc" data-i18n="proj_3_desc">
-            Inspect claims and their backing evidence snippets extracted from subtitles and script PDFs. When chatting with the assistant, GraphRAG highlights temporary Answer Graphs.
-          </p>
-          <div class="code-block">
-            <div class="code-header">
-              <span>Evidence Provenance Model</span>
-              <span>Pydantic v2 Schema</span>
-            </div>
-            <code>class GraphEvidence(StrictModel): id: Identifier; source_type: str = "subtitle"; locator: str = "00:03:12"; text_snippet: PlainText</code>
-          </div>
-          <div class="tactile-card-footer">
-            <span class="tag">view: investigation</span>
-            <span class="tag">answer-subgraphs</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- GraphRAG Chat Deep Dive -->
-      <section id="graphrag">
-        <div class="section-label" data-i18n="label_graphrag_chat">GraphRAG Intelligence</div>
-        <h2 data-i18n="chat_heading">AI Chat Over Filtered Graph Subgraphs</h2>
-        <p class="section-desc" data-i18n="chat_subheading">
-          Unlike generic web search or document RAG, our GraphRAG engine executes tool calls against the temporal graph, grounding answers in exact episode evidence.
-        </p>
-
-        <!-- Simulated Chat -->
-        <div class="chat-container">
-          <div class="chat-bubble">
-            <strong data-i18n="chat_user_label">Viewer (Watch Progress: S01E01):</strong>
-            <p style="margin: 0.35rem 0 0; color: var(--text);" data-i18n="chat_user_q">
-              Why does Sergeant Doakes suspect Dexter in Episode 1?
-            </p>
-          </div>
-
-          <div class="chat-bubble bot">
-            <strong data-i18n="chat_bot_label">Spoilerless Assistant (GraphRAG):</strong>
-            <p style="margin: 0.35rem 0 0.5rem; color: var(--text);" data-i18n="chat_bot_a1">
-              In S01E01, Sergeant James Doakes notices that Dexter exhibits an unnerving lack of genuine emotional reaction at brutal murder scenes and views his friendly persona as a calculated disguise.
-            </p>
-            <div>
-              <span class="citation-tag"># S01E01 [00:14:22]</span>
-              <span class="citation-tag">rel: DISTRUSTS</span>
-              <span class="citation-tag">claim: #104</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="grid-2">
-          <div class="tactile-card">
-            <div class="tactile-card-header">
-              <span class="tactile-card-title" data-i18n="chat_feat_1_t">Bring Your Own Key (BYOK)</span>
-            </div>
-            <p class="tactile-card-desc" data-i18n="chat_feat_1_d">
-              Keys remain in your browser localStorage and travel via X-LLM-* headers. Connect Google Gemini, OpenAI GPT-4o, or self-hosted models without third-party key storage.
-            </p>
-            <div class="tactile-card-footer">
-              <span class="tag">x-llm-headers</span>
-              <span class="tag">zero-server-storage</span>
-            </div>
-          </div>
-
-          <div class="tactile-card">
-            <div class="tactile-card-header">
-              <span class="tactile-card-title" data-i18n="chat_feat_2_t">Anti-Spoofing Citation Chips</span>
-            </div>
-            <p class="tactile-card-desc" data-i18n="chat_feat_2_d">
-              LLM answers are parsed for citation chips that link directly back to Cytoscape graph nodes, instantly framing related characters on the canvas.
-            </p>
-            <div class="tactile-card-footer">
-              <span class="tag">node-framing</span>
-              <span class="tag">answer-graphs</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Security & Boundary Model -->
-      <section id="security">
-        <div class="section-label" data-i18n="label_spoiler_model">Security Boundary</div>
-        <h2 data-i18n="spoiler_heading">Fail-Closed Boundary Defense</h2>
-        <p class="section-desc" data-i18n="spoiler_subheading">
-          Spoiler safety is not a polite system prompt hint. It is a mathematical database barrier enforced on every read path.
-        </p>
-
-        <div class="code-block">
-          <div class="code-header">
-            <span>spoilerless/app/api/boundary.py</span>
-            <span>PROD ENFORCEMENT</span>
-          </div>
-          <code>async def resolve_effective_boundary(graph_service, progress_service, series_id, user, requested_order) -&gt; int:
-    if not user:
-        return 1  # Anonymous fails closed to Episode 1
-    watched = await progress_service.get_progress(user.id, series_id)
-    if not watched:
-        return 1  # Unwatched series fails closed
-    return min(requested_order, watched.watched_through_order)</code>
-        </div>
-
-        <div class="grid-2">
-          <div class="tactile-card">
-            <div class="tactile-card-header">
-              <span class="tactile-card-title" data-i18n="spoiler_rule_1_t">1. Single Shared Resolver</span>
-            </div>
-            <p class="tactile-card-desc" data-i18n="spoiler_rule_1_d">
-              Every route (/graph, /notes, /revisions, /export, /visualization) passes through resolve_effective_boundary(). Anonymous visitors and missing records fail closed to Order 1.
-            </p>
-          </div>
-
-          <div class="tactile-card">
-            <div class="tactile-card-header">
-              <span class="tactile-card-title" data-i18n="spoiler_rule_2_t">2. Database-Level Filtering</span>
-            </div>
-            <p class="tactile-card-desc" data-i18n="spoiler_rule_2_d">
-              Cypher queries evaluate WHERE r.visible_from_order &lt;= $order. Data beyond your watch progress never leaves Neo4j, making browser inspection attacks impossible.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <!-- Architecture Pipeline -->
-      <section id="architecture">
-        <div class="section-label" data-i18n="label_arch">Architecture & Pipeline</div>
-        <h2 data-i18n="arch_heading">From Raw Scripts to Temporal Graphs</h2>
-        <p class="section-desc" data-i18n="arch_subheading">
-          Decoupled ingestion, fail-closed FastAPI API services, and a resilient Cytoscape.js canvas state machine.
-        </p>
-
-        <div class="posts-list" style="margin-bottom: 1.25rem;">
-          <div class="post-row">
-            <div>
-              <div class="post-row-title" data-i18n="arch_step_1_t">01 · Ingestion Pipeline</div>
-              <p style="margin: 0; font-size: 0.8125rem;" data-i18n="arch_step_1_d">OpenSubtitles, script PDFs, scene chunking & timestamp extraction.</p>
-            </div>
-            <span class="post-row-date">Ingest</span>
-          </div>
-
-          <div class="post-row">
-            <div>
-              <div class="post-row-title" data-i18n="arch_step_2_t">02 · Temporal Knowledge Graph</div>
-              <p style="margin: 0; font-size: 0.8125rem;" data-i18n="arch_step_2_d">Neo4j database storing temporal entities, claims, and evidence fragments.</p>
-            </div>
-            <span class="post-row-date">Neo4j</span>
-          </div>
-
-          <div class="post-row">
-            <div>
-              <div class="post-row-title" data-i18n="arch_step_3_t">03 · Service & Protection Layer</div>
-              <p style="margin: 0; font-size: 0.8125rem;" data-i18n="arch_step_3_d">FastAPI backend enforcing boundary clamps, projections, and Redis rate limiting.</p>
-            </div>
-            <span class="post-row-date">FastAPI</span>
-          </div>
-
-          <div class="post-row">
-            <div>
-              <div class="post-row-title" data-i18n="arch_step_4_t">04 · Interactive Workspace</div>
-              <p style="margin: 0; font-size: 0.8125rem;" data-i18n="arch_step_4_d">React 19 frontend with Cytoscape.js canvas and streaming GraphRAG chat.</p>
-            </div>
-            <span class="post-row-date">React 19</span>
-          </div>
-        </div>
-
-        <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
-          <span class="tag">React 19</span>
-          <span class="tag">TypeScript</span>
-          <span class="tag">Cytoscape.js</span>
-          <span class="tag">FastAPI</span>
-          <span class="tag">Python 3.13</span>
-          <span class="tag">Pydantic v2</span>
-          <span class="tag">Neo4j AuraDB</span>
-          <span class="tag">Upstash Redis</span>
-          <span class="tag">Cloudflare</span>
-        </div>
-      </section>
-
-      <!-- Roadmap Timeline -->
-      <section id="roadmap">
-        <div class="section-label" data-i18n="label_roadmap">Evolution & Versions</div>
-        <h2 data-i18n="roadmap_heading">From Prototype to Hardened Production</h2>
-        <p class="section-desc" data-i18n="roadmap_subheading">
-          A continuous milestone journey from prototype to security-hardened production.
-        </p>
-
-        <div class="posts-list">
-          <div class="post-row">
-            <div>
-              <div class="post-row-title">v1.1 · MVP & Graph Foundation</div>
-              <p style="margin: 0; font-size: 0.8125rem;">Dexter S01E01–E03 seed graph, Cytoscape canvas, user notes, and revision tracking.</p>
-            </div>
-            <span class="post-row-date">Shipped</span>
-          </div>
-
-          <div class="post-row">
-            <div>
-              <div class="post-row-title">v1.2 · Spoiler Hardening</div>
-              <p style="margin: 0; font-size: 0.8125rem;">Strict visible_from_order boundary policy, candidate claim review, and ChangeSets.</p>
-            </div>
-            <span class="post-row-date">Shipped</span>
-          </div>
-
-          <div class="post-row">
-            <div>
-              <div class="post-row-title">v1.3 · Production & 4 Projections</div>
-              <p style="margin: 0; font-size: 0.8125rem;">AuraDB/Upstash deployment, 4 projection views (Story/Characters/Evidence/Advanced), GraphRAG.</p>
-            </div>
-            <span class="post-row-date">Shipped</span>
-          </div>
-
-          <div class="post-row">
-            <div>
-              <div class="post-row-title">v1.4 / v1.5 · Security & Code Quality</div>
-              <p style="margin: 0; font-size: 0.8125rem;">Fail-closed boundary audits, rate limiting, SSRF defense, and frontend modularity.</p>
-            </div>
-            <span class="post-row-date">Active</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- CTA Box -->
-      <section style="margin-top: 2rem;">
-        <div class="tactile-card" style="padding: 1.5rem;">
-          <div class="tactile-card-header">
-            <h3 data-i18n="cta_heading">Ready to Explore Without Spoilers?</h3>
-          </div>
-          <p class="tactile-card-desc" data-i18n="cta_desc">
-            Experience the interactive Dexter knowledge graph, test the GraphRAG AI assistant, or inspect the open-source repository on GitHub.
-          </p>
-          <div class="hero-actions" style="margin: 0.5rem 0 0;">
-            <a class="tactile-btn tactile-btn-primary" href="https://spoilerless.net" target="_blank" rel="noreferrer">
-              <span data-i18n="btn_open_app">Open spoilerless.net</span>
-              <span aria-hidden="true">↗</span>
-            </a>
-            <a class="tactile-btn" href="https://github.com/vinnipukh/spoilerless" target="_blank" rel="noreferrer">
-              <span>GitHub Repository</span>
-              <span aria-hidden="true">↗</span>
-            </a>
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <!-- Footer -->
-    <footer class="site-footer">
-      <div>
-        <strong>Spoilerless</strong> — <span data-i18n="footer_tagline">Grounded narrative knowledge graph with spoiler-safe GraphRAG.</span>
       </div>
-      <div>
-        <span>© 2026 Arhan Er · <a href="https://github.com/vinnipukh/spoilerless" target="_blank" rel="noreferrer">GitHub</a> · <a href="https://spoilerless.net" target="_blank" rel="noreferrer">spoilerless.net</a></span>
-      </div>
-    </footer>
-  </div>
+    </div>
+  </header>
 
-  <!-- Bilingual Dictionary & Interactive Logic -->
+  <main id="top">
+    <!-- HERO -->
+    <div class="container">
+      <section class="hero">
+        <div style="max-width:720px">
+          <div>
+            <div class="eyebrow"><span class="eyebrow-dot">●</span> <span data-i18n="hero_badge"><strong>v1.5</strong> Post-Hardening Remediation · Shipped 2026-08-26</span></div>
+            <h1 class="hero-title"><span data-i18n="hero_title_a">Explore TV</span><br><span data-i18n="hero_title_b">narratives.</span> <span class="gradient" data-i18n="hero_title_c">Strictly spoiler-safe.</span></h1>
+            <p class="hero-lead" data-i18n="hero_desc">A spoiler-safe narrative knowledge graph with a grounded conversational agent — Dexter S01E01–E03, live on Vercel + Render + Neo4j AuraDB + Upstash Redis. Filtering happens in the backend before data reaches the frontend, the LLM, or any tool call.</p>
+            <div class="hero-actions">
+              <a class="btn btn-primary" href="https://spoilerless.net" target="_blank" rel="noreferrer"><span data-i18n="btn_try_live">Open spoilerless.net</span> <span aria-hidden="true">↗</span></a>
+              <a class="btn" href="#features"><span data-i18n="btn_explore_features">Explore Features</span> ↓</a>
+              <a class="btn btn-ghost" href="https://github.com/vinnipukh/spoilerless" target="_blank" rel="noreferrer">GitHub ↗</a>
+            </div>
+            <div class="hero-meta">
+              <span><i class="violet"></i><span data-i18n="pill_failclosed">Fail-Closed Boundary</span></span>
+              <span><i></i><span data-i18n="pill_graphrag">GraphRAG AI Chat</span></span>
+              <span><i class="rose" style="background:var(--accent)"></i><span data-i18n="pill_projections">6 Projections · 4 Views</span></span>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="stats-bar">
+          <div class="stat-card"><small data-i18n="stat_views">Projections</small><strong>6 Types / 4 Views</strong><span>episode_overview · character_network · plot_threads · investigation · full · graphrag_focus</span></div>
+          <div class="stat-card"><small data-i18n="stat_api_ops">OpenAPI</small><strong>52 Ops / 39 Templates</strong><span>Locked by frontend contract tests</span></div>
+          <div class="stat-card"><small data-i18n="stat_test_suites">Progress</small><strong>66 Plans · 100%</strong><span>v1.5 shipped 2026-08-26 · 15/15 verified</span></div>
+          <div class="stat-card"><small data-i18n="stat_database">Stack</small><strong>Vercel + Render + Aura</strong><span>Upstash Redis · Cloudflare DNS</span></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- FEATURES — BENTO -->
+    <section id="features">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <div class="kicker" data-i18n="label_core_features">Platform Capabilities</div>
+            <h2 data-i18n="features_heading">A second brain for<br>television narratives.</h2>
+          </div>
+          <p data-i18n="features_subheading">Spoilerless combines temporal knowledge graphs, human-in-the-loop editing, and spoiler-safe GraphRAG into one cinematic workspace.</p>
+        </div>
+
+        <div class="bento">
+          <div class="bento-card">
+            <div class="icon-box violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+            <h3 data-i18n="feat_1_title">Fail-Closed Spoiler Safety</h3>
+            <p data-i18n="feat_1_desc">Data isolation enforced at the Cypher layer. Nodes, relationships, search indexes and LLM context beyond your episode never leave the server.</p>
+            <div class="card-tags"><span class="tag">visible_from_order</span><span class="tag">fail-closed</span><span class="tag">WHERE ≤ $order</span></div>
+          </div>
+          <div class="bento-card">
+            <div class="icon-box cyan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5L15.4 17.5M15.4 6.5L8.6 10.5"/></svg></div>
+            <h3 data-i18n="feat_2_title">6 Projections · 4 Views</h3>
+            <p data-i18n="feat_2_desc">Story, Characters, Evidence and Advanced — 6 library-neutral DTOs (episode_overview · character_network · plot_threads · investigation · full · graphrag_focus) with allowlisted expansion.</p>
+            <div class="card-tags"><span class="tag">Cytoscape.js</span><span class="tag">cose-bilkent</span></div>
+          </div>
+          <div class="bento-card">
+            <div class="icon-box rose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+            <h3 data-i18n="feat_3_title">Grounded GraphRAG Chat</h3>
+            <p data-i18n="feat_3_desc">Gemini or BYOK OpenAI — answers strictly from your filtered subgraph with citation chips that frame nodes.</p>
+            <div class="card-tags"><span class="tag">GraphRAG</span><span class="tag">BYOK</span><span class="tag">X-LLM-*</span></div>
+          </div>
+          <div class="bento-card">
+            <div class="icon-box amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
+            <h3 data-i18n="feat_4_title">User Notes & Custom Nodes</h3>
+            <p data-i18n="feat_4_desc">Private notes and custom entities visually distinct from canonical seed facts, with full revision history.</p>
+            <div class="card-tags"><span class="tag">UserNote</span><span class="tag">REFERS_TO</span></div>
+          </div>
+          <div class="bento-card">
+            <div class="icon-box violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+            <h3 data-i18n="feat_5_title">Revisions & One-Click Revert</h3>
+            <p data-i18n="feat_5_desc">Immutable before/after snapshots. Compare diffs and revert any mutation safely.</p>
+            <div class="card-tags"><span class="tag">append-only</span><span class="tag">REVERTED</span></div>
+          </div>
+          <div class="bento-card">
+            <div class="icon-box cyan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5L15.4 17.5M15.4 6.5L8.6 10.5"/></svg></div>
+            <h3 data-i18n="feat_6_title">Snapshot Sharing & Export</h3>
+            <p data-i18n="feat_6_desc">Expiring token links share perspectives without spoiling friends. Export clean Markdown.</p>
+            <div class="card-tags"><span class="tag">ShareToken</span><span class="tag">30-day TTL</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROJECTIONS -->
+    <section id="projections" style="background: color-mix(in srgb, var(--bg-2) 60%, transparent); border-block:1px solid var(--border)">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <div class="kicker" data-i18n="label_projections_deep">Projection Views</div>
+            <h2 data-i18n="projections_heading">Task-specific graph projections.</h2>
+          </div>
+          <p data-i18n="projections_subheading">No 500-node hairball. Each view is a purpose-built, library-neutral DTO computed after the boundary clamp.</p>
+        </div>
+
+        <div class="feature-row">
+          <div class="feature-copy">
+            <div class="kicker" style="color:var(--primary)">01 · Story</div>
+            <h3 data-i18n="proj_1_title">Episode Overview & Timeline</h3>
+            <p data-i18n="proj_1_desc">Core characters, plot events and locations up to your episode — synced with the Event Timeline rail.</p>
+            <div class="feature-tags"><span class="tag">episode_overview</span><span class="tag">Variant A</span><span class="tag">timeline rail</span></div>
+          </div>
+          <div class="code-block">
+            <div class="code-head"><strong>GET /graph/visualization</strong><span>200 · view_type: episode_overview</span></div>
+            <div class="code-body">{ <span class="kw">"view_type"</span>: <span class="str">"episode_overview"</span>, <span class="kw">"effective_view_order"</span>: <span class="num">2</span>,<br>  <span class="kw">"nodes"</span>: [{<span class="kw">"id"</span>: <span class="str">"char:dexter"</span>}, {<span class="kw">"id"</span>: <span class="str">"event:ice_truck"</span>}] }</div>
+          </div>
+        </div>
+
+        <div class="feature-row reverse">
+          <div class="code-block">
+            <div class="code-head"><strong>Cypher — expansion</strong><span>allowlisted · ≤25</span></div>
+            <div class="code-body"><span class="kw">MATCH</span> (c:Character {id: $node_id})<br><span class="kw">OPTIONAL MATCH</span> (c)-[r:FAMILY_OF|WORKS_WITH]-(t)<br><span class="kw">WHERE</span> r.visible_from_order &lt;= $order<br><span class="kw">RETURN</span> c, r, t <span class="kw">LIMIT</span> <span class="num">25</span></div>
+          </div>
+          <div class="feature-copy">
+            <div class="kicker" style="color:var(--accent-2)">02 · Characters</div>
+            <h3 data-i18n="proj_2_title">Social Dynamics & Expansions</h3>
+            <p data-i18n="proj_2_desc">Family, work and conflict edges unfolded locally — no global relayout, no hidden spoiler counts.</p>
+            <div class="feature-tags"><span class="tag">character_network</span><span class="tag">semantic expansion</span></div>
+          </div>
+        </div>
+
+        <div class="feature-row">
+          <div class="feature-copy">
+            <div class="kicker" style="color:var(--accent)">03 · Evidence</div>
+            <h3 data-i18n="proj_3_title">Clue Chains & Answer Graphs</h3>
+            <p data-i18n="proj_3_desc">Claims backed by timestamped evidence fragments. GraphRAG highlights temporary answer subgraphs.</p>
+            <div class="feature-tags"><span class="tag">investigation</span><span class="tag">GraphEvidence</span></div>
+          </div>
+          <div class="code-block">
+            <div class="code-head"><strong>Evidence provenance</strong><span>Pydantic v2</span></div>
+            <div class="code-body"><span class="kw">class</span> GraphEvidence(StrictModel):<br>  id: Identifier<br>  source_type: <span class="str">"subtitle"</span><br>  locator: <span class="str">"00:03:12"</span><br>  text_snippet: PlainText</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- GRAPHRAG -->
+    <section id="graphrag">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <div class="kicker" data-i18n="label_graphrag_chat">GraphRAG Intelligence</div>
+            <h2 data-i18n="chat_heading">Chat over your filtered subgraph.</h2>
+          </div>
+          <p data-i18n="chat_subheading">Tool-allowlisted retrieval against Neo4j — not web search. Every answer is grounded in episode evidence.</p>
+        </div>
+
+        <div class="chat-grid">
+          <div class="chat-shell">
+            <div class="bubble user"><strong data-i18n="chat_user_label">You · S01E01</strong><span data-i18n="chat_user_q">Why does Sergeant Doakes suspect Dexter in Episode 1?</span></div>
+            <div class="bubble bot"><strong data-i18n="chat_bot_label">Spoilerless · GraphRAG</strong><span data-i18n="chat_bot_a1">In S01E01, Sergeant James Doakes notices Dexter's lack of genuine emotion at brutal scenes and reads his friendly persona as a calculated disguise.</span><div class="chips"><span class="chip">S01E01 [00:14:22]</span><span class="chip">rel: DISTRUSTS</span><span class="chip">claim #104</span></div></div>
+          </div>
+          <div style="display:grid;gap:14px">
+            <div class="bento-card" style="grid-column:auto">
+              <h3 data-i18n="chat_feat_1_t">Bring Your Own Key</h3>
+              <p data-i18n="chat_feat_1_d">Keys stay in your browser (spoilerless:byok-llm-settings) and travel as X-LLM-* headers. Gemini, OpenAI, or self-hosted — no server key storage.</p>
+              <div class="card-tags"><span class="tag">X-LLM-Api-Key</span><span class="tag">localStorage</span></div>
+            </div>
+            <div class="bento-card" style="grid-column:auto">
+              <h3 data-i18n="chat_feat_2_t">Citation Chips → Graph Framing</h3>
+              <p data-i18n="chat_feat_2_d">Parsed citations link directly to Cytoscape nodes and frame them on the canvas. Inspect → evidence → replay.</p>
+              <div class="card-tags"><span class="tag">node framing</span><span class="tag">answer graph</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECURITY -->
+    <section id="security" style="background: color-mix(in srgb, var(--bg-2) 60%, transparent); border-block:1px solid var(--border)">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <div class="kicker" data-i18n="label_spoiler_model">Security Boundary</div>
+            <h2 data-i18n="spoiler_heading">Fail-closed, not prompt-pink.</h2>
+          </div>
+          <p data-i18n="spoiler_subheading">Spoiler safety is a database barrier enforced on every read path — not a system prompt suggestion.</p>
+        </div>
+        <div class="security-grid">
+          <div class="code-block">
+            <div class="code-head"><strong>spoilerless/app/api/boundary.py</strong><span>shared resolver</span></div>
+            <div class="code-body"><span class="kw">async def</span> <span style="color:#E2E8F0">resolve_effective_boundary</span>(...):<br>  <span class="kw">if not</span> user: <span class="kw">return</span> <span class="num">1</span>  <span class="com"># anon → E01</span><br>  watched = <span class="kw">await</span> progress.get(user.id, series_id)<br>  <span class="kw">if not</span> watched: <span class="kw">return</span> <span class="num">1</span><br>  <span class="kw">return</span> min(requested, watched.through_order)</div>
+          </div>
+          <div style="display:grid;gap:14px">
+            <div class="bento-card" style="grid-column:auto"><h3 data-i18n="spoiler_rule_1_t">1. Single shared resolver</h3><p data-i18n="spoiler_rule_1_d">Every route (/graph, /notes, /revisions, /export, /visualization) goes through resolve_effective_boundary(). Missing progress clamps to 1.</p></div>
+            <div class="bento-card" style="grid-column:auto"><h3 data-i18n="spoiler_rule_2_t">2. Cypher-level filtering</h3><p data-i18n="spoiler_rule_2_d">WHERE r.visible_from_order ≤ $order. Future data never leaves Neo4j — browser inspection can't leak it.</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ARCHITECTURE -->
+    <section id="architecture">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <div class="kicker" data-i18n="label_arch">Architecture & Pipeline</div>
+            <h2 data-i18n="arch_heading">From scripts to temporal graphs.</h2>
+          </div>
+          <p data-i18n="arch_subheading">Decoupled ingestion · fail-closed API · resilient canvas state machine.</p>
+        </div>
+        <div class="pipeline">
+          <div class="pipeline-track">
+            <div class="pipe-step"><small>01 · Ingest</small><h4 data-i18n="arch_step_1_t">Subtitles & Scripts</h4><p data-i18n="arch_step_1_d">OpenSubtitles + PDFs → chunked, timestamped</p></div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step"><small>02 · Graph</small><h4 data-i18n="arch_step_2_t">Neo4j</h4><p data-i18n="arch_step_2_d">Temporal entities & provenance</p></div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step"><small>03 · API</small><h4 data-i18n="arch_step_3_t">FastAPI</h4><p data-i18n="arch_step_3_d">Boundary + projections + cache</p></div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step"><small>04 · UI</small><h4 data-i18n="arch_step_4_t">React 19</h4><p data-i18n="arch_step_4_d">Cytoscape + streaming GraphRAG</p></div>
+          </div>
+          <div class="stack-pills"><span class="pill">React 19</span><span class="pill">TypeScript</span><span class="pill">Vite</span><span class="pill">Cytoscape.js</span><span class="pill">FastAPI</span><span class="pill">Python 3.13</span><span class="pill">Pydantic v2</span><span class="pill">Neo4j Aura</span><span class="pill">Upstash Redis</span><span class="pill">Vercel · Render</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ROADMAP -->
+    <section id="roadmap" style="background: color-mix(in srgb, var(--bg-2) 60%, transparent); border-block:1px solid var(--border)">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <div class="kicker" data-i18n="label_roadmap">Evolution</div>
+            <h2 data-i18n="roadmap_heading">Prototype → hardened production.</h2>
+          </div>
+          <p data-i18n="roadmap_subheading">Milestone history and what's active.</p>
+        </div>
+        <div class="roadmap">
+          <div class="road-card done"><span class="road-badge">v1.1 · Shipped 2026-08-02</span><h4>MVP & GraphRAG</h4><p>Dexter S01 seed, Cytoscape canvas, notes & custom nodes, revisions + GraphRAG chat (13 plans).</p></div>
+          <div class="road-card done"><span class="road-badge">v1.2 · Shipped 2026-08-03</span><h4>Spoiler-Safety Hardening</h4><p>Phase 7 — fail-closed policy, split progress, D-05 enforced.</p></div>
+          <div class="road-card done"><span class="road-badge">v1.3 · Shipped 2026-08-14</span><h4>Production & Visualization</h4><p>Phases 8–10 — Vercel/Render/Aura live, 6 projections (Variant A), expansion & Answer Graph.</p></div>
+          <div class="road-card done"><span class="road-badge">v1.4 · Shipped 2026-08-20</span><h4>Security Hardening</h4><p>Phase 11 — single boundary resolver, trusted proxy, SSRF & cost caps.</p></div>
+          <div class="road-card done"><span class="road-badge">v1.5 · Shipped 2026-08-26</span><h4>Post-Hardening & Quality</h4><p>Phase 12 — 15/15 verified: schema fix, god-components &lt;450 lines, single-query Cypher.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <div class="container">
+      <section style="padding: 28px 0 0">
+        <div class="cta">
+          <div>
+            <h3 data-i18n="cta_heading">Ready to explore without spoilers?</h3>
+            <p data-i18n="cta_desc">Open the interactive Dexter graph, test GraphRAG, or inspect the source on GitHub.</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+              <a class="btn btn-primary" href="https://spoilerless.net" target="_blank" rel="noreferrer"><span data-i18n="btn_open_app">Open spoilerless.net</span> ↗</a>
+              <a class="btn" href="https://github.com/vinnipukh/spoilerless" target="_blank" rel="noreferrer">GitHub Repository ↗</a>
+            </div>
+          </div>
+          <div style="display:grid;gap:8px">
+            <div class="stat-card"><small>Deployment</small><strong style="font-size:0.95rem">Vercel + Render + Aura</strong></div>
+            <div class="stat-card"><small>Production URL</small><strong style="font-size:0.95rem">spoilerless.net</strong></div>
+            <div class="stat-card"><small>License</small><strong style="font-size:0.95rem">MIT · Open Source</strong></div>
+          </div>
+        </div>
+      </section>
+      <footer class="site-footer">
+        <div><strong>Spoilerless</strong> — <span data-i18n="footer_tagline">Grounded narrative knowledge graph with spoiler-safe GraphRAG.</span></div>
+        <div>© 2026 Spoilerless · <a href="https://github.com/vinnipukh/spoilerless" target="_blank" rel="noreferrer">GitHub</a> · <a href="https://spoilerless.net" target="_blank" rel="noreferrer">spoilerless.net</a></div>
+      </footer>
+    </div>
+  </main>
+
   <script>
     const translations = {
       en: {
-        nav_features: "Features",
-        nav_projections: "Projections",
-        nav_chat: "GraphRAG",
-        nav_safety: "Security",
-        nav_roadmap: "Roadmap",
-        btn_launch_app: "Launch App",
-        hero_badge: "v1.4 Security Hardened · Live in Production",
-        hero_title: "Explore TV narratives. Strictly spoiler-safe.",
-        hero_desc: "An interactive narrative knowledge graph, source-grounded evidence provenance, and spoiler-safe GraphRAG chat — strictly bounded to your exact watch progress at the database query layer.",
-        btn_try_live: "Open spoilerless.net",
-        btn_explore_features: "Explore Features",
-        stat_views: "Projections",
-        stat_api_ops: "OpenAPI Ops",
-        stat_test_suites: "Test Suites",
-        stat_database: "Database",
-        label_core_features: "Platform Capabilities",
-        features_heading: "A Second Brain for Television Narratives",
-        features_subheading: "Spoilerless combines temporal knowledge graph architectures, human-in-the-loop editing, and spoiler-safe GraphRAG into a unified narrative exploration platform.",
-        feat_1_title: "Fail-Closed Spoiler Safety",
-        feat_1_desc: "Data isolation is enforced at the database query layer. Nodes, relationships, search indexes, and LLM context beyond your selected episode never leave the server.",
-        feat_2_title: "4 Specialized Projections",
-        feat_2_desc: "Navigate tailored view modes: Story (Overview + Timeline), Characters (Social Network & Conflict), Evidence (Investigation Chains), and Advanced (Full Graph Explorer).",
-        feat_3_title: "Grounded GraphRAG Chat",
-        feat_3_desc: "Chat with an LLM (Gemini or BYOK OpenAI models) that answers strictly from your spoiler-filtered graph context, quoting verified evidence chips and timestamps.",
-        feat_4_title: "User Notes & Custom Nodes",
-        feat_4_desc: "Add private notes, custom entities, and custom relationships directly on the graph. User content is visually distinguished from canonical seed facts.",
-        feat_5_title: "Revisions & One-Click Revert",
-        feat_5_desc: "Every edit, note, or relationship is recorded in an immutable revision history. Compare before/after diffs and roll back any modification safely.",
-        feat_6_title: "Snapshot Sharing & Export",
-        feat_6_desc: "Create expiring, read-only token snapshot links to share graph perspectives with friends without spoiling future plot twists. Export graph data to clean Markdown.",
-        label_projections_deep: "Projection Views",
-        projections_heading: "Task-Specific Graph Projections",
-        projections_subheading: "Rather than overwhelming users with a 500-node raw graph, Spoilerless computes purpose-built graph projections tailored to narrative exploration.",
-        proj_1_title: "01 · Story Mode: Episode Overview & Timeline",
-        proj_1_desc: "Displays core characters, major plot events, and locations up to your active episode. Synchronized with a chronological Event Timeline rail at the bottom of the screen.",
-        proj_2_title: "02 · Character Network: Social Dynamics & Expansions",
-        proj_2_desc: "Focuses on interpersonal bonds, workplace hierarchies, and antagonistic conflicts. Semantic expansion lets users unfold family or colleague clusters without global relayout.",
-        proj_3_title: "03 · Evidence & Investigation: Clue Chains",
-        proj_3_desc: "Inspect claims and their backing evidence snippets extracted from subtitles and script PDFs. When chatting with the assistant, GraphRAG highlights temporary Answer Graphs.",
-        label_graphrag_chat: "GraphRAG Intelligence",
-        chat_heading: "AI Chat Over Filtered Graph Subgraphs",
-        chat_subheading: "Unlike generic web search or document RAG, our GraphRAG engine executes tool calls against the temporal graph, grounding answers in exact episode evidence.",
-        chat_user_label: "Viewer (Watch Progress: S01E01):",
-        chat_user_q: "Why does Sergeant Doakes suspect Dexter in Episode 1?",
-        chat_bot_label: "Spoilerless Assistant (GraphRAG):",
-        chat_bot_a1: "In S01E01, Sergeant James Doakes notices that Dexter exhibits an unnerving lack of genuine emotional reaction at brutal murder scenes and views his friendly persona as a calculated disguise.",
-        chat_feat_1_t: "Bring Your Own Key (BYOK)",
-        chat_feat_1_d: "Keys remain in your browser localStorage and travel via X-LLM-* headers. Connect Google Gemini, OpenAI GPT-4o, or self-hosted models without third-party key storage.",
-        chat_feat_2_t: "Anti-Spoofing Citation Chips",
-        chat_feat_2_d: "LLM answers are parsed for citation chips that link directly back to Cytoscape graph nodes, instantly framing related characters on the canvas.",
-        label_spoiler_model: "Security Boundary",
-        spoiler_heading: "Fail-Closed Boundary Defense",
-        spoiler_subheading: "Spoiler safety is not a polite system prompt hint. It is a mathematical database barrier enforced on every read path.",
-        spoiler_rule_1_t: "1. Single Shared Resolver",
-        spoiler_rule_1_d: "Every route (/graph, /notes, /revisions, /export, /visualization) passes through resolve_effective_boundary(). Anonymous visitors and missing records fail closed to Order 1.",
-        spoiler_rule_2_t: "2. Database-Level Filtering",
-        spoiler_rule_2_d: "Cypher queries evaluate WHERE r.visible_from_order <= $order. Data beyond your watch progress never leaves Neo4j, making browser inspection attacks impossible.",
-        label_arch: "Architecture & Pipeline",
-        arch_heading: "From Raw Scripts to Temporal Graphs",
-        arch_subheading: "Decoupled ingestion, fail-closed FastAPI API services, and a resilient Cytoscape.js canvas state machine.",
-        arch_step_1_t: "01 · Ingestion Pipeline",
-        arch_step_1_d: "OpenSubtitles, script PDFs, scene chunking & timestamp extraction.",
-        arch_step_2_t: "02 · Temporal Knowledge Graph",
-        arch_step_2_d: "Neo4j database storing temporal entities, claims, and evidence fragments.",
-        arch_step_3_t: "03 · Service & Protection Layer",
-        arch_step_3_d: "FastAPI backend enforcing boundary clamps, projections, and Redis rate limiting.",
-        arch_step_4_t: "04 · Interactive Workspace",
-        arch_step_4_d: "React 19 frontend with Cytoscape.js canvas and streaming GraphRAG chat.",
-        label_roadmap: "Evolution & Versions",
-        roadmap_heading: "From Prototype to Hardened Production",
-        roadmap_subheading: "A continuous milestone journey from prototype to security-hardened production.",
-        cta_heading: "Ready to Explore Without Spoilers?",
-        cta_desc: "Experience the interactive Dexter knowledge graph, test the GraphRAG AI assistant, or inspect the open-source repository on GitHub.",
-        btn_open_app: "Open spoilerless.net",
-        footer_tagline: "Grounded narrative knowledge graph with spoiler-safe GraphRAG."
+        nav_features:"Features", nav_projections:"Projections", nav_chat:"GraphRAG", nav_safety:"Security", nav_roadmap:"Roadmap",
+        btn_launch_app:"Launch App",
+        hero_badge:"v1.5 Post-Hardening Remediation · Shipped 2026-08-26",
+        hero_title_a:"Explore TV", hero_title_b:"narratives.", hero_title_c:"Strictly spoiler-safe.",
+        hero_desc:"A spoiler-safe narrative knowledge graph with a grounded conversational agent — Dexter S01E01–E03, live on Vercel + Render + Neo4j AuraDB + Upstash Redis. Filtering happens in the backend before data reaches the frontend, the LLM, or any tool call.",
+        btn_try_live:"Open spoilerless.net", btn_explore_features:"Explore Features",
+        pill_failclosed:"Fail-Closed Boundary", pill_graphrag:"GraphRAG AI Chat", pill_projections:"6 Projections · 4 Views",
+        stat_views:"Projections", stat_api_ops:"OpenAPI Ops", stat_test_suites:"Test Suites", stat_database:"Database",
+        label_core_features:"Platform Capabilities", features_heading:"A second brain for television narratives.", features_subheading:"Spoilerless combines temporal knowledge graphs, human-in-the-loop editing, and spoiler-safe GraphRAG into one cinematic workspace.",
+        feat_1_title:"Fail-Closed Spoiler Safety", feat_1_desc:"Data isolation enforced at the Cypher layer. Nodes, relationships, search indexes and LLM context beyond your episode never leave the server.",
+        feat_2_title:"6 Projections · 4 Views", feat_2_desc:"6 library-neutral DTOs (episode_overview · character_network · plot_threads · investigation · full · graphrag_focus) rendered as 4 UI tabs with allowlisted semantic expansion.",
+        feat_3_title:"Grounded GraphRAG Chat", feat_3_desc:"Gemini or BYOK OpenAI — answers strictly from your filtered subgraph with citation chips that frame nodes.",
+        feat_4_title:"User Notes & Custom Nodes", feat_4_desc:"Private notes and custom entities visually distinct from canonical seed facts, with full revision history.",
+        feat_5_title:"Revisions & One-Click Revert", feat_5_desc:"Immutable before/after snapshots. Compare diffs and revert any mutation safely.",
+        feat_6_title:"Snapshot Sharing & Export", feat_6_desc:"Expiring token links share perspectives without spoiling friends. Export clean Markdown.",
+        label_projections_deep:"Projection Views", projections_heading:"Task-specific graph projections.", projections_subheading:"No 500-node hairball. Each view is a purpose-built, library-neutral DTO computed after the boundary clamp.",
+        proj_1_title:"Episode Overview & Timeline", proj_1_desc:"Core characters, plot events and locations up to your episode — synced with the Event Timeline rail.",
+        proj_2_title:"Social Dynamics & Expansions", proj_2_desc:"Family, work and conflict edges unfolded locally — no global relayout, no hidden spoiler counts.",
+        proj_3_title:"Clue Chains & Answer Graphs", proj_3_desc:"Claims backed by timestamped evidence fragments. GraphRAG highlights temporary answer subgraphs.",
+        label_graphrag_chat:"GraphRAG Intelligence", chat_heading:"Chat over your filtered subgraph.", chat_subheading:"Tool-allowlisted retrieval against Neo4j — not web search. Every answer is grounded in episode evidence.",
+        chat_user_label:"You · S01E01", chat_user_q:"Why does Sergeant Doakes suspect Dexter in Episode 1?",
+        chat_bot_label:"Spoilerless · GraphRAG", chat_bot_a1:"In S01E01, Sergeant James Doakes notices Dexter's lack of genuine emotion at brutal scenes and reads his friendly persona as a calculated disguise.",
+        chat_feat_1_t:"Bring Your Own Key", chat_feat_1_d:"Keys stay in your browser (spoilerless:byok-llm-settings) and travel as X-LLM-* headers. Gemini, OpenAI, or self-hosted — no server key storage.",
+        chat_feat_2_t:"Citation Chips → Graph Framing", chat_feat_2_d:"Parsed citations link directly to Cytoscape nodes and frame them on the canvas. Inspect → evidence → replay.",
+        label_spoiler_model:"Security Boundary", spoiler_heading:"Fail-closed, not prompt-pink.", spoiler_subheading:"Spoiler safety is a database barrier enforced on every read path — not a system prompt suggestion.",
+        spoiler_rule_1_t:"1. Single shared resolver", spoiler_rule_1_d:"Every route (/graph, /notes, /revisions, /export, /visualization) goes through resolve_effective_boundary(). Missing progress clamps to 1.",
+        spoiler_rule_2_t:"2. Cypher-level filtering", spoiler_rule_2_d:"WHERE r.visible_from_order ≤ $order. Future data never leaves Neo4j — browser inspection can't leak it.",
+        label_arch:"Architecture & Pipeline", arch_heading:"From scripts to temporal graphs.", arch_subheading:"Decoupled ingestion · fail-closed API · resilient canvas state machine.",
+        arch_step_1_t:"Subtitles & Scripts", arch_step_1_d:"OpenSubtitles + PDFs → chunked, timestamped",
+        arch_step_2_t:"Neo4j", arch_step_2_d:"Temporal entities & provenance",
+        arch_step_3_t:"FastAPI", arch_step_3_d:"Boundary + projections + cache",
+        arch_step_4_t:"React 19", arch_step_4_d:"Cytoscape + streaming GraphRAG",
+        label_roadmap:"Evolution", roadmap_heading:"Prototype → hardened production.", roadmap_subheading:"All milestones shipped — v1.5 verified 2026-08-26 · 66 plans · 100%.",
+        cta_heading:"Ready to explore without spoilers?", cta_desc:"Open the interactive Dexter graph, test GraphRAG, or inspect the source on GitHub.",
+        btn_open_app:"Open spoilerless.net", footer_tagline:"Grounded narrative knowledge graph with spoiler-safe GraphRAG."
       },
       tr: {
-        nav_features: "Özellikler",
-        nav_projections: "Projeksiyonlar",
-        nav_chat: "GraphRAG",
-        nav_safety: "Güvenlik",
-        nav_roadmap: "Yol Haritası",
-        btn_launch_app: "Uygulamayı Aç",
-        hero_badge: "v1.4 Güvenlik Sıkılaştırması · Canlı Yayında",
-        hero_title: "Dizileri bilgi grafıyla keşfet. Spoiler riski olmadan.",
-        hero_desc: "İzlediğin bölüme kadar olan karakterleri, olayları ve ilişkileri; kaynaklı kanıtlarla keşfet. Grafı düzenle ve yalnızca gördüğün bilgilere erişebilen bir GraphRAG LLM ile sohbet et.",
-        btn_try_live: "spoilerless.net'i Aç",
-        btn_explore_features: "Özellikleri Keşfet",
-        stat_views: "Projeksiyonlar",
-        stat_api_ops: "OpenAPI Rotaları",
-        stat_test_suites: "Test Paketleri",
-        stat_database: "Veritabanı",
-        label_core_features: "Platform Yetenekleri",
-        features_heading: "Dizi Anlatıları İçin İkinci Bir Beyin",
-        features_subheading: "Spoilerless; zamansal bilgi grafı mimarilerini, insan katkılı düzenlemeyi ve spoiler korumalı GraphRAG'i birleşik bir anlatı keşif platformunda buluşturur.",
-        feat_1_title: "Fail-Closed Spoiler Güvenliği",
-        feat_1_desc: "Veri izolasyonu veritabanı sorgu katmanında uygulanır. İzlediğin bölümün ötesindeki node'lar, ilişkiler, arama indeksleri ve LLM bağlamı sunucudan asla çıkmaz.",
-        feat_2_title: "4 Özelleştirilmiş Projeksiyon",
-        feat_2_desc: "İhtiyaca özel görünümleri keşfedin: Hikaye (Özet + Zaman Çizelgesi), Karakterler (Sosyal Ağ ve Çatışma), Kanıtlar (Soruşturma Zinciri) ve Gelişmiş (Tam Graf).",
-        feat_3_title: "Kaynak Bağlantılı GraphRAG Sohbeti",
-        feat_3_desc: "Yalnızca spoiler filtrenizden geçen graf bağlamından beslenen, altyazı ve senaryo zaman damgalarını kanıt olarak gösteren LLM asistanıyla sohbet edin.",
-        feat_4_title: "Kullanıcı Notları ve Özel Node'lar",
-        feat_4_desc: "Graf üzerine kişisel notlar, özel varlıklar ve yeni ilişkiler ekleyin. Kullanıcı içerikleri kanonik tohum verilerden görsel olarak ayırt edilir.",
-        feat_5_title: "Revizyon Geçmişi ve Tek Tıkla Geri Alma",
-        feat_5_desc: "Her düzenleme, not veya ilişki geriye dönük revizyon geçmişinde saklanır. Değişiklik öncesi/sonrası farkları inceleyin ve güvenle geri alın.",
-        feat_6_title: "Anlık Görüntü Paylaşımı ve Dışa Aktarma",
-        feat_6_desc: "Graf bakış açınızı arkadaşlarınızla spoiler vermeden paylaşmak için süreli salt okunur linkler oluşturun. Grafı temiz Markdown formatında dışa aktarın.",
-        label_projections_deep: "Projeksiyon Görünümleri",
-        projections_heading: "Göreve Özel Graf Projeksiyonları",
-        projections_subheading: "Spoilerless, kullanıcıları 500 node'luk karmaşık ham bir grafa boğmak yerine, anlatı keşfine özel optimize edilmiş projeksiyonlar sunar.",
-        proj_1_title: "01 · Hikaye Modu: Bölüm Özeti & Çizelge",
-        proj_1_desc: "Aktif bölümünüze kadar olan ana karakterleri, kilit olayları ve mekanları listeler. Ekranın altındaki kronolojik Olay Çizelgesi ile senkronize çalışır.",
-        proj_2_title: "02 · Karakter Ağı: Sosyal Dinamikler & Genişletmeler",
-        proj_2_desc: "Kişilerarası bağlara, işyeri hiyerarşilerine ve çatışmalara odaklanır. Semantik genişletme ile aile veya iş kümeleri tüm grafı bozmadan açılabilir.",
-        proj_3_title: "03 · Kanıt & Soruşturma: İpucu Zincirleri",
-        proj_3_desc: "Altyazılardan ve senaryo PDF'lerinden çıkarılan iddiaları ve kanıt parçacıklarını inceleyin. Asistanla sohbet ederken geçici Yanıt Grafları aydınlatılır.",
-        label_graphrag_chat: "GraphRAG Zekası",
-        chat_heading: "Filtrelenmiş Alt Graf Üzerinde Yapay Zeka Sohbeti",
-        chat_subheading: "Genel web aramasının veya düz belge RAG'inin aksine GraphRAG motorumuz zamansal graf üzerinde araç çağrıları yürüterek cevapları kanıtlara dayandırır.",
-        chat_user_label: "İzleyici (İlerleme: S01E01):",
-        chat_user_q: "Çavuş Doakes, 1. Bölümde Dexter'dan neden şüpheleniyor?",
-        chat_bot_label: "Spoilerless Asistanı (GraphRAG):",
-        chat_bot_a1: "S01E01'de Çavuş James Doakes, Dexter'ın vahşi cinayet mahallinde gösterdiği duygu eksikliğini ve cana yakın tavırlarının yapay bir maske olduğunu fark eder.",
-        chat_feat_1_t: "Kendi Anahtarını Getir (BYOK)",
-        chat_feat_1_d: "API anahtarlarınız tarayıcınızın localStorage'ında saklanır ve X-LLM-* başlıklarıyla iletilir. Google Gemini veya OpenAI modellerini güvenle bağlayın.",
-        chat_feat_2_t: "Anti-Spoofing & Alıntı Çipleri",
-        chat_feat_2_d: "LLM yanıtları Cytoscape graf node'larına doğrudan bağlanan alıntı çipleri üretir ve tıklanan karakteri anında tuvalde odaklar.",
-        label_spoiler_model: "Güvenlik Sınırı",
-        spoiler_heading: "Kayıpsız Sınır Savunması",
-        spoiler_subheading: "Spoiler güvenliği nazik bir prompt ricası değildir. Her okuma yolunda uygulanan matematiksel bir veritabanı bariyeridir.",
-        spoiler_rule_1_t: "1. Tek Paylaşımlı Çözümleyici",
-        spoiler_rule_1_d: "Tüm rotalar (/graph, /notes, /revisions, /export, /visualization) resolve_effective_boundary() fonksiyonundan geçer. Misafirler ve kayıtsızlar Bölüm 1'e kilitlenir.",
-        spoiler_rule_2_t: "2. Veritabanı Düzeyinde Filtreleme",
-        spoiler_rule_2_d: "Cypher sorguları WHERE r.visible_from_order <= $order kuralını çalıştırır. İlerlemeniz dışındaki veriler Neo4j'den asla çıkmaz.",
-        label_arch: "Mimari ve Veri Akışı",
-        arch_heading: "Ham Senaryolardan Zamansal Grafa",
-        arch_subheading: "Ayrık veri çıkarımı, fail-closed FastAPI servisleri ve dayanıklı Cytoscape.js tuval durum makinesi.",
-        arch_step_1_t: "01 · Veri Çıkarım Hattı",
-        arch_step_1_d: "OpenSubtitles, senaryo PDF'leri, sahne bölütleme ve zaman damgaları.",
-        arch_step_2_t: "02 · Zamansal Bilgi Grafı",
-        arch_step_2_d: "Neo4j veritabanında saklanan zamansal varlıklar, kanonik iddialar ve kaynak kanıtları.",
-        arch_step_3_t: "03 · Servis ve Koruma Katmanı",
-        arch_step_3_d: "FastAPI arka ucu: sınır kilitleme, projeksiyonlar ve Redis hız sınırlaması.",
-        arch_step_4_t: "04 · Etkileşimli Arayüz",
-        arch_step_4_d: "Cytoscape.js tuvali ve akışkan GraphRAG sohbeti sunan React 19 ön ucu.",
-        label_roadmap: "Gelişim ve Sürümler",
-        roadmap_heading: "Prototipten Güçlendirilmiş Canlı Üretime",
-        roadmap_subheading: "Prototipten güvenlik sıkılaştırmalı canlı üretime uzanan kilometre taşı yolculuğu.",
-        cta_heading: "Spoiler Olmadan Keşfetmeye Hazır mısınız?",
-        cta_desc: "Dexter bilgi grafını keşfedin, GraphRAG asistanını deneyin veya GitHub üzerindeki açık kaynaklı repoyu inceleyin.",
-        btn_open_app: "spoilerless.net'i Aç",
-        footer_tagline: "Spoiler korumalı GraphRAG destekli kaynaklı anlatı bilgi grafı."
+        nav_features:"Özellikler", nav_projections:"Projeksiyonlar", nav_chat:"GraphRAG", nav_safety:"Güvenlik", nav_roadmap:"Yol Haritası",
+        btn_launch_app:"Uygulamayı Aç",
+        hero_badge:"v1.5 Post-Hardening · Yayında 2026-08-26",
+        hero_title_a:"Dizileri", hero_title_b:"graf ile keşfet.", hero_title_c:"Spoiler yok.",
+        hero_desc:"Dexter S01E01–E03 için spoiler korumalı bir anlatı bilgi grafı — Vercel + Render + Neo4j AuraDB + Upstash Redis üzerinde canlı, temelli bir sohbet ajanıyla. Filtreleme veri ön uca, LLM'e veya herhangi bir araca ulaşmadan önce arka uçta gerçekleşir.",
+        btn_try_live:"spoilerless.net'i Aç", btn_explore_features:"Özellikleri Keşfet",
+        pill_failclosed:"Kayıpsız Sınır", pill_graphrag:"GraphRAG Sohbet", pill_projections:"6 Projeksiyon · 4 Görünüm",
+        stat_views:"Projeksiyonlar", stat_api_ops:"OpenAPI", stat_test_suites:"Testler", stat_database:"Veritabanı",
+        label_core_features:"Yetenekler", features_heading:"Dizi anlatıları için ikinci beyin.", features_subheading:"Spoilerless; zamansal bilgi graflarını, insan katkısını ve spoiler korumalı GraphRAG'i sinematik bir çalışma alanında buluşturur.",
+        feat_1_title:"Fail-Closed Güvenlik", feat_1_desc:"Veri izolasyonu Cypher katmanında. İzlemediğin bölümün verisi sunucudan çıkmaz.",
+        feat_2_title:"6 Projeksiyon · 4 Görünüm", feat_2_desc:"6 DTO (episode_overview · character_network · plot_threads · investigation · full · graphrag_focus) — 4 sekmede allowlist genişletme ile.",
+        feat_3_title:"Kaynaklı GraphRAG", feat_3_desc:"Gemini veya BYOK OpenAI — yalnızca filtrelenmiş alt grafından yanıtlar, alıntı çipleriyle.",
+        feat_4_title:"Notlar & Özel Nodlar", feat_4_desc:"Kanoniğinden ayrı, özel notlar ve varlıklar — tam revizyon geçmişiyle.",
+        feat_5_title:"Revizyon & Geri Al", feat_5_desc:"Değişmez before/after anlıkları. Farkları gör, tek tıkla geri al.",
+        feat_6_title:"Paylaş & Dışa Aktar", feat_6_desc:"Süreli token linklerle spoiler vermeden paylaş. Markdown'a aktar.",
+        label_projections_deep:"Projeksiyonlar", projections_heading:"Göreve özel graf projeksiyonları.", projections_subheading:"500 düğümlük karmaşa yok. Her görünüm sınır kilitlendikten sonra hesaplanan özel bir DTO.",
+        proj_1_title:"Bölüm Özeti & Zaman Çizelgesi", proj_1_desc:"Bölümüne kadar olan karakterler, olaylar ve mekânlar — zaman çizelgesiyle senkron.",
+        proj_2_title:"Sosyal Dinamikler", proj_2_desc:"Aile, iş ve çatışma kenarları yerel olarak açılır — tüm graf yeniden yerleşmez.",
+        proj_3_title:"İpucu Zincirleri", proj_3_desc:"Zaman damgalı kanıtlarla desteklenen iddialar. GraphRAG geçici yanıt grafları vurgular.",
+        label_graphrag_chat:"GraphRAG", chat_heading:"Filtrelenmiş alt grafında sohbet.", chat_subheading:"Web araması değil — Neo4j'de araç-izinli erişim. Her yanıt bölüm kanıtına dayanır.",
+        chat_user_label:"Sen · S01E01", chat_user_q:"Çavuş Doakes 1. Bölümde neden Dexter'dan şüpheleniyor?",
+        chat_bot_label:"Spoilerless · GraphRAG", chat_bot_a1:"S01E01'de Çavuş Doakes, Dexter'ın vahşet sahnelerindeki duygu yoksunluğunu ve sıcak tavrını hesaplı bir maske olarak görüyor.",
+        chat_feat_1_t:"Kendi Anahtarın (BYOK)", chat_feat_1_d:"Anahtarlar tarayıcında (spoilerless:byok-llm-settings) ve X-LLM-* başlıklarıyla gider. Sunucuda saklanmaz.",
+        chat_feat_2_t:"Alıntı Çipleri", chat_feat_2_d:"Ayrıştırılan alıntılar Cytoscape düğümlerine bağlanır ve tuvalde çerçevelenir.",
+        label_spoiler_model:"Güvenlik Sınırı", spoiler_heading:"Fail-closed — prompt değil, bariyer.", spoiler_subheading:"Spoiler güvenliği her okuma yolunda uygulanan bir veritabanı bariyeridir.",
+        spoiler_rule_1_t:"1. Tek çözümleyici", spoiler_rule_1_d:"Tüm rotalar resolve_effective_boundary()'dan geçer. Eksik ilerleme 1'e kilitlenir.",
+        spoiler_rule_2_t:"2. Cypher filtreleme", spoiler_rule_2_d:"WHERE r.visible_from_order ≤ $order. Gelecek veri Neo4j'den çıkmaz.",
+        label_arch:"Mimari", arch_heading:"Senaryolardan zamansal grafa.", arch_subheading:"Ayrık ingest · fail-closed API · dayanıklı tuval.",
+        arch_step_1_t:"Altyazı & Senaryo", arch_step_1_d:"OpenSubtitles + PDF → parçalı",
+        arch_step_2_t:"Neo4j", arch_step_2_d:"Zamansal varlıklar",
+        arch_step_3_t:"FastAPI", arch_step_3_d:"Sınır + projeksiyon",
+        arch_step_4_t:"React 19", arch_step_4_d:"Cytoscape + GraphRAG",
+        label_roadmap:"Yolculuk", roadmap_heading:"Prototipten üretime.", roadmap_subheading:"Tüm kilometre taşları yayında — v1.5 doğrulandı 2026-08-26 · 66 plan · %100.",
+        cta_heading:"Spoiler olmadan keşfetmeye hazır mısın?", cta_desc:"Dexter grafını aç, GraphRAG'i dene veya kaynağı GitHub'da incele.",
+        btn_open_app:"spoilerless.net'i Aç", footer_tagline:"Spoiler korumalı GraphRAG ile kaynaklı anlatı bilgi grafi."
       }
     };
-
-    let currentLang = 'en';
-
-    function setLanguage(lang) {
-      currentLang = lang;
-      try {
-        localStorage.setItem('spoilerless_lang', lang);
-      } catch (e) {}
-      document.documentElement.lang = lang;
-
-      const btnEn = document.getElementById('langEn');
-      const btnTr = document.getElementById('langTr');
-      if (btnEn && btnTr) {
-        btnEn.classList.toggle('active', lang === 'en');
-        btnTr.classList.toggle('active', lang === 'tr');
-      }
-
-      document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        if (translations[lang] && translations[lang][key]) {
-          el.textContent = translations[lang][key];
-        }
+    function setLanguage(lang){
+      try{localStorage.setItem('spoilerless_lang', lang)}catch(e){}
+      document.documentElement.lang=lang;
+      document.getElementById('langEn')?.classList.toggle('active', lang==='en');
+      document.getElementById('langTr')?.classList.toggle('active', lang==='tr');
+      document.querySelectorAll('[data-i18n]').forEach(el=>{
+        const k=el.getAttribute('data-i18n');
+        if(translations[lang] && translations[lang][k]) el.textContent=translations[lang][k];
       });
     }
-
-    function toggleTheme() {
-      const current = document.documentElement.getAttribute('data-theme') || 'dark';
-      const next = current === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', next);
-      try {
-        localStorage.setItem('theme', next);
-      } catch (e) {}
-      updateThemeIcon(next);
+    function toggleTheme(){
+      const cur=document.documentElement.getAttribute('data-theme')||'dark';
+      const nxt=cur==='dark'?'light':'dark';
+      document.documentElement.setAttribute('data-theme', nxt);
+      try{localStorage.setItem('theme', nxt)}catch(e){}
+      updateIcon(nxt);
     }
-
-    function updateThemeIcon(theme) {
-      const icon = document.getElementById('themeIcon');
-      const btn = document.getElementById('themeToggle');
-      if (!icon || !btn) return;
-
-      if (theme === 'light') {
-        // Moon icon when in light mode (action: switch to dark)
-        icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
-        btn.setAttribute('aria-label', 'Switch to dark theme');
-      } else {
-        // Sun icon when in dark mode (action: switch to light)
-        icon.innerHTML = '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
-        btn.setAttribute('aria-label', 'Switch to light theme');
+    function updateIcon(theme){
+      const icon=document.getElementById('themeIcon');
+      const btn=document.getElementById('themeToggle');
+      if(!icon||!btn) return;
+      if(theme==='light'){
+        icon.innerHTML='<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+        btn.setAttribute('aria-label','Switch to dark theme');
+      }else{
+        icon.innerHTML='<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
+        btn.setAttribute('aria-label','Switch to light theme');
       }
     }
-
-    // Init language & theme icon
-    try {
-      const savedLang = localStorage.getItem('spoilerless_lang') || 'en';
-      setLanguage(savedLang);
-      const activeTheme = document.documentElement.getAttribute('data-theme') || 'dark';
-      updateThemeIcon(activeTheme);
-    } catch (e) {}
+    try{
+      const saved=localStorage.getItem('spoilerless_lang')||'en';
+      setLanguage(saved);
+      updateIcon(document.documentElement.getAttribute('data-theme')||'dark');
+    }catch(e){}
   </script>
 </body>
 </html>
