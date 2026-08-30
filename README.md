@@ -29,7 +29,6 @@ Explore characters, events, locations, claims, and relationships through an inte
 **Render — `api.spoilerless.net`** — service `spoilerless-api` (Blueprint `render.yaml`): build **`uv sync --frozen`**, start **`uv run uvicorn spoilerless.app.main:app --host 0.0.0.0 --port $PORT`**. Required environment unless noted:
 
 ```
-NEO4J_URI=neo4j+s://03a8623b.databases.neo4j.io
 NEO4J_USERNAME=<AuraDB username>
 NEO4J_PASSWORD=<AuraDB password>
 NEO4J_DATABASE=03a8623b
@@ -37,9 +36,6 @@ GOOGLE_CLIENT_ID=<Google OAuth web client ID>
 ALLOWED_EMAILS=<comma-separated sign-in allowlist>
 ADMIN_EMAILS=<comma-separated admin allowlist>
 FRONTEND_ORIGINS=https://app.spoilerless.net
-REDIS_URL=rediss://default:<token>@darling-rat-221809.upstash.io:6379   # optional; empty disables rate limiting + graph cache
-SESSION_COOKIE_SECURE=true                                            # optional
-SESSION_TTL_SECONDS=604800                                            # optional
 ```
 
 <!-- VERIFY: Vercel deployment parameters and target API URL. -->
